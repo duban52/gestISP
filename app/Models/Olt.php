@@ -3,7 +3,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use phpseclib3\Net\SSH2;
+use Illuminate\Support\Facades\Hash;
 
 class Olt extends Model
 {
@@ -28,103 +28,83 @@ class Olt extends Model
         'uptime'
     ];
 
-    //Relación con onts
+    protected $casts = [
+        'active' => 'boolean',
+        'status' => 'boolean',
+        'ssh_port' => 'integer',
+        'telnet_port' => 'integer',
+        'snmp_port' => 'integer',
+    ];
+
+    /**
+     * Los atributos que deben ocultarse para los arrays.
+     */
+    protected $hidden = [
+        'password',
+    ];
+
+    /**
+     * Relación con ONTs
+     */
     public function onts()
     {
         return $this->hasMany(Ont::class);
     }
 
+    /**
+     * Relación con Branch
+     */
     public function branch()
     {
         return $this->belongsTo(Branch::class);
     }
 
     /**
-     * Los atributos que deben ocultarse para los arrays.
-     *
-     * @var array
+     * Obtiene la contraseña sin cifrar para conexiones SSH
+     * NOTA: Solo usar si la contraseña se guarda en texto plano
      */
-    protected $hidden = [
-        'password',
-    ];
-
-    public function obtenerDatosRemotos()
-    {
-        $resultado = [
-            'status' => 'Desconectado',
-            'temperature' => 'N/A',
-            'uptime' => 'N/A',
-        ];
-
-        try {
-            $ssh = new SSH2($this->ip_address, (int) $this->ssh_port);
-
-            // Usar contraseña descifrada para SSH
-            if (!$ssh->login($this->username, $this->getPlainPassword())) {
-                return $resultado;
-            }
-
-            $resultado['status'] = 'Conectado';
-
-            // Ejecutar comandos específicos para Huawei OLT
-            $ssh->setTimeout(2); // Evita quedar esperando eternamente
-            $ssh->write("enable\n");
-            $ssh->read('#');
-
-            // Comando para uptime
-            $ssh->setTimeout(2); // Evita quedar esperando eternamente
-            $ssh->write("display sysuptime\n");
-            $uptimeRaw = $ssh->read('#');
-
-            // Comando para temperatura (ajustado para Huawei)
-            $ssh->setTimeout(2); // Evita quedar esperando eternamente
-            $ssh->write("display temperature 0/1\n");
-            $temperatureRaw = $ssh->read('#');
-
-            // Procesar uptime
-            $resultado['uptime'] = $this->procesarUptime($uptimeRaw);
-
-            // Procesar temperatura
-            $resultado['temperature'] = $this->procesarTemperatura($temperatureRaw);
-
-            // Guardar los datos obtenidos en la base de datos
-            $this->update([
-                'status' => true,
-                'temperature' => is_numeric($resultado['temperature']) ? $resultado['temperature'] : null,
-                'uptime' => $resultado['uptime']
-            ]);
-
-        } catch (\Exception $e) {
-            // Marcar como desconectado en la base de datos
-            $this->update(['status' => false]);
-        }
-
-        return $resultado;
-    }
-
-
-    private function procesarUptime($uptimeRaw)
-    {
-        if (preg_match('/System up time:\s*(.+)/i', $uptimeRaw, $matches)) {
-            return trim($matches[1]);
-        }
-        return 'N/A';
-    }
-
-    private function procesarTemperatura($temperatureRaw)
-    {
-        if (preg_match('/temperature of the board:\s*(\d+)[C]/i', $temperatureRaw, $matches)) {
-            return $matches[1] . '°C';
-        }
-        return 'N/A';
-    }
-
-
     public function getPlainPassword()
     {
-        // NOTA: Esto asume que estás guardando la contraseña en texto plano
-        // Si estás usando bcrypt, esto no funcionará y necesitarás otra estrategia
         return $this->password;
     }
 
+    /**
+     * Verifica si la OLT está activa
+     */
+    public function isActive(): bool
+    {
+        return $this->active ?? false;
+    }
+
+    /**
+     * Verifica si la OLT está conectada según el último estado
+     */
+    public function isConnected(): bool
+    {
+        return $this->status ?? false;
+    }
+
+    /**
+     * Obtiene el texto del estado de conexión
+     */
+    public function getStatusTextAttribute(): string
+    {
+        return $this->isConnected() ? 'Conectado' : 'Desconectado';
+    }
+
+    /**
+     * Scope para obtener solo OLTs activas
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('active', true);
+    }
+
+    /**
+     * Scope para obtener OLTs por branch
+     */
+    public function scopeByBranch($query, $branchId)
+    {
+        return $query->where('branch_id', $branchId);
+    }
 }

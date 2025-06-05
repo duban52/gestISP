@@ -47,7 +47,11 @@
             </div>
         </div>
         <div class="card-footer">
-
+        </div>
+        <div id="loader" class="text-center my-3" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="sr-only">Cargando...</span>
+            </div>
         </div>
     </div>
 
@@ -102,20 +106,28 @@
         document.getElementById('olt').addEventListener('change', function () {
             const oltId = this.value;
             const tbody = document.querySelector('table tbody');
-            tbody.innerHTML = '';
+            const loader = document.getElementById('loader');
 
-            if (!oltId) return;
+            tbody.innerHTML = '';
+            loader.style.display = 'block'; // Mostrar el loader
+
+            if (!oltId) {
+                loader.style.display = 'none'; // Ocultar si no hay selección
+                return;
+            }
 
             fetch(`/public/olts/${oltId}/onts-autofind`)
                 .then(response => response.json())
                 .then(data => {
+                    loader.style.display = 'none'; // Ocultar loader al terminar
+
                     if (data.error) {
-                        tbody.innerHTML = `<tr><td colspan="5" class="text-danger">${data.error}</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${data.error}</td></tr>`;
                         return;
                     }
 
                     if (data.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="5">No hay ONTs en autofind.</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="6">No hay ONTs en autofind.</td></tr>`;
                         return;
                     }
 
@@ -127,40 +139,25 @@
                     <td>${ont.fspon}</td>
                     <td>${ont.autofind_time}</td>
                     <td>
-                  <button
-                    class="btn btn-success activar-btn"
-                    data-sn="${ont.ont_sn}"
-                    data-vendor="${ont.vendor}"
-                    data-model="${ont.equipment_id}"
-                    title="Activar ONT">
-                    <i class="fas fa-check-square"></i>
-                  </button>
-                   </td>
+                        <button
+                            class="btn btn-success activar-btn"
+                            data-sn="${ont.ont_sn}"
+                            data-vendor="${ont.vendor}"
+                            data-model="${ont.equipment_id}"
+                            title="Activar ONT">
+                            <i class="fas fa-check-square"></i>
+                        </button>
+                    </td>
                 </tr>`;
                         tbody.innerHTML += row;
                     });
                 })
                 .catch(error => {
-                    tbody.innerHTML = `<tr><td colspan="5" class="text-danger">Error al cargar ONTs: ${error}</td></tr>`;
+                    loader.style.display = 'none'; // Ocultar en error
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-danger">Error al cargar ONTs: ${error}</td></tr>`;
                 });
         });
-
-        document.addEventListener('click', function (e) {
-            if (e.target.closest('.activar-btn')) {
-                const btn = e.target.closest('.activar-btn');
-                const sn = btn.getAttribute('data-sn');
-                const vendor = btn.getAttribute('data-vendor');
-                const model = btn.getAttribute('data-model');
-
-                // Llenar los datos en el modal
-                document.getElementById('modalOntSn').value = sn;
-                document.getElementById('modalOntSnView').value = sn;
-                document.getElementById('modalVendor').value = vendor;
-                document.getElementById('modalModel').value = model;
-
-                // Mostrar el modal
-                $('#activarOntModal').modal('show');
-            }
-        });
     </script>
+
+
 @endsection

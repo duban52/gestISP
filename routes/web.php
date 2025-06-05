@@ -13,6 +13,7 @@ use App\Http\Controllers\OntController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\TechnicalOrderController;
 use App\Http\Controllers\WarehouseController;
+use App\Models\Olt;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -169,3 +170,4 @@ Route::put('technicals_orders/vertification/{technical_order}', [TechnicalOrderC
 //Rechazar orden por parte del técnico
 Route::put('technicals_orders/reject/{technical_order}', [TechnicalOrderController::class, 'orderReject'])->name('technical_orders.reject');
 
+Route::middleware('auth')->get('/api/olts', [OltController::class, 'apiOlts'])->name('api.olts');
