@@ -83,7 +83,7 @@ class ContractController extends Controller
 
         // Paginación flexible
         $perPage = $request->get('per_page', 8);
-        $contracts = $query->simplePaginate($perPage);
+        $contracts = $query->get();
 
         return view('gestisp.contracts.index', compact('contracts'));
     }

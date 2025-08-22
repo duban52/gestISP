@@ -15,10 +15,10 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Milon\Barcode\Facades\DNS1DFacade;
+use Carbon\Carbon;
 
 class InvoiceController extends Controller
 {
-
     public function __construct()
     {
         $this->middleware('auth');
@@ -32,23 +32,42 @@ class InvoiceController extends Controller
         $this->middleware('check.permission:invoices.generate_max_pdf')->only('generatePendingInvoicesPdf');
         $this->middleware('check.permission:invoices.check-pdf-status')->only('checkPdfStatus');
     }
+
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        //
-        $branchId = session('branch_id'); // ID de la sucursal en sesión
+        // Actualizar facturas vencidas primero
+        Invoice::whereIn('status', ['pendiente', 'Pendiente Parcial'])
+            ->whereDate('due_date', '<', Carbon::today())
+            ->update(['status' => 'vencida']);
 
+        $totalPendding = 0;
+
+        // Total pendiente
+        if (session()->has('branch_id')) {
+            $branchId = session('branch_id');
+
+            $totalPendding = Invoice::whereIn('status', ['pendiente', 'Pendiente con riesgo de corte'])
+                ->whereHas('contract', function ($query) use ($branchId) {
+                    $query->where('branch_id', $branchId);
+                })
+                ->sum('total');
+        }
+
+        $branchId = session('branch_id');
+
+        // Cambiar simplePaginate() por get() para DataTables
         $invoices = Invoice::join('contracts', 'invoices.contract_id', '=', 'contracts.id')
             ->join('clients', 'contracts.client_id', '=', 'clients.id')
-            ->where('clients.branch_id', $branchId) // Filtra por sucursal
-            ->where('contracts.branch_id', $branchId) // Filtra por sucursal
-            ->select('invoices.*') // Solo selecciona columnas de la tabla invoices
-            ->simplePaginate(10); // Paginación
+            ->where('clients.branch_id', $branchId)
+            ->where('contracts.branch_id', $branchId)
+            ->select('invoices.*')
+            ->orderBy('invoices.created_at', 'desc')
+            ->get(); // Cambiado de simplePaginate(10) a get()
 
-
-        return view('gestisp.invoices.index', compact('invoices'));
+        return view('gestisp.invoices.index', compact('invoices', 'totalPendding'));
     }
 
     /**
@@ -72,14 +91,10 @@ class InvoiceController extends Controller
      */
     public function show(Invoice $invoice)
     {
-        //
-        //$items = InvoiceItem::where('invoice_id', $invoice)->get();
-
-        // Usar el modelo Contract en lugar de DB::table
         $invoice->load(['contract.client', 'contract.plan.services', 'invoice_items']);
 
-        $code = '123456789012'; // Número único de la factura.
-        $barcode = DNS1DFacade::getBarcodeHTML($code, 'C128'); // Generar el código de barras.
+        $code = '123456789012';
+        $barcode = DNS1DFacade::getBarcodeHTML($code, 'C128');
 
         return view('gestisp.invoices.show', compact('invoice', 'barcode'));
     }
@@ -110,7 +125,6 @@ class InvoiceController extends Controller
 
     public function generateInvoices()
     {
-        $amount_pending_invoice = 0;
         $branchId = session('branch_id');
         $today = now();
 
@@ -121,9 +135,12 @@ class InvoiceController extends Controller
         $startOfMonth = $today->copy()->startOfMonth();
         $endOfMonth = $today->copy()->endOfMonth();
 
+        // Primero, actualizar facturas vencidas
+        $this->updateOverdueInvoices();
+
         // Obtener contratos activos de la sucursal
         $contracts = Contract::with(['client', 'plan.services', 'additionalCharges'])
-            ->whereIn('status', ['Activo', 'Pre-suspensión']) // Incluimos contratos en pre-suspensión
+            ->whereIn('status', ['Activo', 'Pre-suspensión'])
             ->whereHas('client', function ($query) use ($branchId) {
                 $query->where('branch_id', $branchId);
             })
@@ -134,87 +151,180 @@ class InvoiceController extends Controller
                 ->with('error', 'No hay contratos para generar facturas.');
         }
 
+        $generatedInvoices = 0;
+        $skippedInvoices = 0;
+
         foreach ($contracts as $contract) {
-            // Contar facturas vencidas
-            $overdueInvoices = Invoice::where('contract_id', $contract->id)
-                ->where('status', 'Vencida')
-                ->get();
+            try {
+                $result = $this->processContractInvoice($contract, $today, $startOfMonth, $endOfMonth, $month_name, $year_month);
 
-            $overdueInvoicesCount = $overdueInvoices->count();
+                if ($result['generated']) {
+                    $generatedInvoices++;
+                } else {
+                    $skippedInvoices++;
+                }
+            } catch (\Exception $e) {
+                \Log::error("Error generando factura para contrato {$contract->id}: " . $e->getMessage());
+                continue;
+            }
+        }
 
-            // Si tiene 2 o más facturas vencidas, suspender el servicio
-            if ($overdueInvoicesCount >= 2) {
+        $message = "Proceso completado. Facturas generadas: {$generatedInvoices}, Omitidas: {$skippedInvoices}";
+
+        return redirect()->route('invoices.index')
+            ->with('success', $message);
+    }
+
+    /**
+     * Actualizar facturas vencidas y estados de contratos
+     */
+    private function updateOverdueInvoices()
+    {
+        // Actualizar facturas vencidas
+        Invoice::whereIn('status', ['pendiente', 'Pendiente Parcial'])
+            ->whereDate('due_date', '<', Carbon::today())
+            ->update(['status' => 'vencida']);
+
+        // Actualizar contratos con múltiples facturas vencidas
+        $contracts = Contract::with('invoices')->get();
+
+        foreach ($contracts as $contract) {
+            $overdueCount = $contract->invoices()
+                ->whereIn('status', ['vencida', 'Vencida'])
+                ->count();
+
+            if ($overdueCount >= 2 && $contract->status !== 'Suspendido') {
                 $contract->update([
                     'status' => 'Suspendido',
                     'suspension_date' => now(),
-                    'overdue_invoices_count' => $overdueInvoicesCount
+                    'overdue_invoices_count' => $overdueCount
                 ]);
-                continue; // No generar nueva factura para contratos suspendidos
+            } else {
+                $contract->update([
+                    'overdue_invoices_count' => $overdueCount
+                ]);
             }
+        }
+    }
 
-            // Actualizar el contador en el contrato
+    /**
+     * Procesar facturación para un contrato específico
+     */
+    private function processContractInvoice($contract, $today, $startOfMonth, $endOfMonth, $month_name, $year_month)
+    {
+        // Verificar si el contrato está suspendido
+        if ($contract->status === 'Suspendido') {
+            return ['generated' => false, 'reason' => 'Contract suspended'];
+        }
+
+        // Verificar si ya existe factura para este período
+        $existingInvoice = Invoice::where('contract_id', $contract->id)
+            ->where('billed_year_month', $year_month)
+            ->first();
+
+        if ($existingInvoice) {
+            return ['generated' => false, 'reason' => 'Invoice already exists for this period'];
+        }
+
+        // Obtener facturas vencidas que no han sido incluidas en otras facturas
+        $overdueInvoices = Invoice::where('contract_id', $contract->id)
+            ->whereIn('status', ['vencida', 'Vencida'])
+            ->where('status', '!=', 'Cargada a nueva factura')
+            ->get();
+
+        $overdueInvoicesCount = $overdueInvoices->count();
+
+        // Calcular período de facturación y prorrateo
+        $billingPeriod = $this->calculateBillingPeriod($contract, $startOfMonth, $endOfMonth);
+        $prorateMultiplier = $billingPeriod['prorate_multiplier'];
+
+        // Determinar estado de la factura
+        $hasOverdueInvoice = $overdueInvoicesCount > 0;
+        $suspensionDate = $hasOverdueInvoice ? $today->copy()->addDays(24) : null;
+        $status = $hasOverdueInvoice ? 'Pendiente con riesgo de corte' : 'pendiente';
+
+        // Crear la factura
+        $invoice = Invoice::create([
+            'contract_id' => $contract->id,
+            'user_id' => Auth::id(),
+            'issue_date' => $today,
+            'due_date' => $today->copy()->addDays(20),
+            'billed_period' => $billingPeriod['period_full'],
+            'billed_period_short' => $billingPeriod['period_short'],
+            'billed_month_name' => $month_name,
+            'billed_year_month' => $year_month,
+            'suspension_date' => $suspensionDate,
+            'tax' => 0,
+            'total' => 0,
+            'pending_invoice_amount' => 0,
+            'status' => $status,
+            'service_suspension_warning' => $hasOverdueInvoice,
+        ]);
+
+        // Agregar ítems a la factura
+        $totals = $this->addInvoiceItems($invoice, $contract, $overdueInvoices, $prorateMultiplier);
+
+        // Actualizar totales de la factura
+        $invoice->update([
+            'total' => $totals['total'],
+            'tax' => $totals['tax'],
+            'pending_invoice_amount' => $totals['pending_amount']
+        ]);
+
+        // Actualizar estado del contrato si es necesario
+        if ($hasOverdueInvoice && $contract->status !== 'Pre-suspensión') {
             $contract->update([
-                'overdue_invoices_count' => $overdueInvoicesCount,
+                'status' => 'Pre-suspensión',
+                'suspension_warning_date' => $suspensionDate
             ]);
+        }
 
-            // Validar si ya existe una factura para este contrato y período
-            $existingInvoice = Invoice::where('contract_id', $contract->id)
-                ->whereBetween('issue_date', [$startOfMonth, $endOfMonth])
-                ->first();
+        return ['generated' => true, 'invoice_id' => $invoice->id];
+    }
 
-            if ($existingInvoice) {
-                continue;
-            }
+    /**
+     * Calcular período de facturación y prorrateo
+     */
+    private function calculateBillingPeriod($contract, $startOfMonth, $endOfMonth)
+    {
+        $daysInMonth = $startOfMonth->diffInDays($endOfMonth) + 1;
+        $prorateMultiplier = 1;
 
-            $totalFactura = 0;
-            $totalTax = 0;
+        $billedPeriod = $startOfMonth->format('d M') . ' al ' . $endOfMonth->format('d M Y');
+        $billedPeriodShort = $startOfMonth->format('d') . ' al ' . $endOfMonth->format('d');
 
-            // Prorrateo si el contrato fue activado en el período actual
-            $daysInMonth = $startOfMonth->diffInDays($endOfMonth) + 1;
-            $prorateMultiplier = 1;
+        // Verificar si el contrato fue activado después del inicio del mes
+        if ($contract->activation_date && $contract->activation_date > $startOfMonth) {
+            $activationDate = Carbon::parse($contract->activation_date);
 
-            $billedPeriod = $startOfMonth->format('d M') . ' al ' . $endOfMonth->format('d M Y');
-            $billedPeriodShort = $startOfMonth->format('d') . ' al ' . $endOfMonth->format('d');
-
-            if ($contract->activation_date > $startOfMonth) {
-                $activationDate = now()->parse($contract->activation_date);
+            // Solo prorratear si la activación es en el mes actual
+            if ($activationDate->isSameMonth($startOfMonth)) {
                 $remainingDays = $activationDate->diffInDays($endOfMonth) + 1;
                 $prorateMultiplier = $remainingDays / $daysInMonth;
 
                 $billedPeriod = $activationDate->format('d M') . ' al ' . $endOfMonth->format('d M Y');
                 $billedPeriodShort = $activationDate->format('d') . ' al ' . $endOfMonth->format('d');
             }
+        }
 
-            // Determinar si hay riesgo de suspensión
-            $hasOverdueInvoice = $overdueInvoicesCount > 0;
-            $suspensionDate = $hasOverdueInvoice ? $today->copy()->addDays(24) : null;
-            $status = $hasOverdueInvoice ? 'Pendiente con riesgo de corte' : 'Pendiente';
+        return [
+            'period_full' => $billedPeriod,
+            'period_short' => $billedPeriodShort,
+            'prorate_multiplier' => $prorateMultiplier
+        ];
+    }
 
-            $invoice = Invoice::create([
-                'contract_id' => $contract->id,
-                'user_id' => Auth::id(),
-                'issue_date' => $today,
-                'due_date' => $today->copy()->addDays(20),
-                'billed_period' => $billedPeriod,
-                'billed_period_short' => $billedPeriodShort,
-                'billed_month_name' => $month_name,
-                'billed_year_month' => $year_month,
-                'suspension_date' => $suspensionDate,
-                'tax' => 0,
-                'total' => 0,
-                'status' => $status,
-                'service_suspension_warning' => $hasOverdueInvoice,
-            ]);
+    /**
+     * Agregar ítems a la factura
+     */
+    private function addInvoiceItems($invoice, $contract, $overdueInvoices, $prorateMultiplier)
+    {
+        $totalFactura = 0;
+        $totalTax = 0;
+        $totalPendingAmount = 0;
 
-            // Si hay factura vencida, actualizar el estado del contrato
-            if ($hasOverdueInvoice) {
-                $contract->update([
-                    'status' => 'Pre-suspensión',
-                    'suspension_warning_date' => $suspensionDate
-                ]);
-            }
-
-            // Agregar servicios del plan
+        // Agregar servicios del plan
+        if ($contract->plan && $contract->plan->services) {
             foreach ($contract->plan->services as $service) {
                 $basePrice = $service->base_price * $prorateMultiplier;
                 $taxAmount = $service->tax_percentage > 0 ? $basePrice * ($service->tax_percentage / 100) : 0;
@@ -233,91 +343,97 @@ class InvoiceController extends Controller
                 $totalFactura += $totalItem;
                 $totalTax += $taxAmount;
             }
-
-            // Agregar cargos adicionales pendientes
-            $pendingCharges = $contract->additionalCharges->where('status', 'pendiente');
-
-            foreach ($pendingCharges as $charge) {
-                InvoiceItem::create([
-                    'invoice_id' => $invoice->id,
-                    'description' => $charge->description,
-                    'quantity' => 1,
-                    'unit_price' => $charge->amount,
-                    'percentage_tax' => 0,
-                    'tax' => 0,
-                    'total' => $charge->amount,
-                ]);
-
-                $charge->update(['status' => 'Facturado']);
-                $totalFactura += $charge->amount;
-            }
-
-            // Incluir facturas vencidas como ítems
-            foreach ($overdueInvoices as $pendingInvoice) {
-                InvoiceItem::create([
-                    'invoice_id' => $invoice->id,
-                    'description' => 'Factura vencida #' . $pendingInvoice->id . ' - Período: ' . $pendingInvoice->billed_period,
-                    'quantity' => 1,
-                    'unit_price' => $pendingInvoice->total,
-                    'percentage_tax' => 0,
-                    'tax' => 0,
-                    'total' => $pendingInvoice->total,
-                ]);
-
-                $totalFactura += $pendingInvoice->total;
-                $amount_pending_invoice = $pendingInvoice->total;
-                $pendingInvoice->update(['status' => 'Cargada a nueva factura']);
-            }
-
-            // Actualizar total y tax de la factura
-            $invoice->update([
-                'pending_invoice_amount' => $amount_pending_invoice,
-                'total' => $totalFactura,
-                'tax' => $totalTax,
-            ]);
         }
 
-        return redirect()->route('invoices.index')
-            ->with('success', 'Facturas generadas correctamente.');
-    }
-    //Método para crear PDF
+        // Agregar cargos adicionales pendientes
+        $pendingCharges = $contract->additionalCharges()
+            ->where('status', 'pendiente')
+            ->get();
 
+        foreach ($pendingCharges as $charge) {
+            InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'description' => $charge->description,
+                'quantity' => 1,
+                'unit_price' => $charge->amount,
+                'percentage_tax' => 0,
+                'tax' => 0,
+                'total' => $charge->amount,
+            ]);
+
+            $charge->update(['status' => 'Facturado']);
+            $totalFactura += $charge->amount;
+        }
+
+        // Incluir facturas vencidas como ítems
+        foreach ($overdueInvoices as $pendingInvoice) {
+            // Usar pending_invoice_amount si existe, sino usar total
+            $pendingAmount = $pendingInvoice->pending_invoice_amount ?? $pendingInvoice->total;
+
+            InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'description' => 'Factura vencida #' . $pendingInvoice->id . ' - Período: ' . $pendingInvoice->billed_period,
+                'quantity' => 1,
+                'unit_price' => $pendingAmount,
+                'percentage_tax' => 0,
+                'tax' => 0,
+                'total' => $pendingAmount,
+            ]);
+
+            $totalFactura += $pendingAmount;
+            $totalPendingAmount += $pendingAmount;
+
+            // Marcar la factura como cargada
+            $pendingInvoice->update(['status' => 'Cargada a nueva factura']);
+        }
+
+        return [
+            'total' => $totalFactura,
+            'tax' => $totalTax,
+            'pending_amount' => $totalPendingAmount
+        ];
+    }
+
+    /**
+     * Método para crear PDF
+     */
     public function downloadInvoicePdf($id)
     {
-        // Buscar la factura con los datos relacionados
         $invoice = Invoice::with(['contract.client', 'invoice_items'])->findOrFail($id);
 
-
-        $code = '0100' . $invoice->id . '000000' . $invoice->total; // Número único de la factura.
+        $code = '0100' . str_pad($invoice->id, 8, '0', STR_PAD_LEFT) . str_pad($invoice->total * 100, 10, '0', STR_PAD_LEFT);
         $codeString = $code;
 
-        // Generar la imagen como PNG
-        $barcodeData = DNS1DFacade::getBarcodePNG($code, 'C128');
+        try {
+            // Generar la imagen como PNG
+            $barcodeData = DNS1DFacade::getBarcodePNG($code, 'C128');
 
-        // Guardar la imagen en un archivo temporal
-        $barcodePath = 'barcodes/' . $code . '.png';
-        Storage::disk('public')->put($barcodePath, base64_decode($barcodeData));
+            // Guardar la imagen en un archivo temporal
+            $barcodePath = 'barcodes/' . $code . '.png';
+            Storage::disk('public')->put($barcodePath, base64_decode($barcodeData));
 
-        // Pasar la ruta del archivo a la vista
-        $barcodeUrl = asset('storage/' . $barcodePath);
-        // Generar el PDF usando la vista
-        $pdf = Pdf::loadView('gestisp.invoices.pdf', compact('invoice', 'barcodeUrl', 'codeString'));
+            $barcodeUrl = asset('storage/' . $barcodePath);
 
-        // Configurar tamaño media carta
-        $pdf->setPaper([0, 0, 612.00, 419.53], 'portrait'); // Medidas en puntos (5.5" x 8.5")
+            // Generar el PDF usando la vista
+            $pdf = Pdf::loadView('gestisp.invoices.pdf', compact('invoice', 'barcodeUrl', 'codeString'));
+            $pdf->setPaper([0, 0, 612.00, 419.53], 'portrait');
+            $pdf->getDomPDF()->set_option('isRemoteEnabled', true);
 
-        $pdf->getDomPDF()->set_option('isRemoteEnabled', true);
+            return $pdf->download('factura_' . $invoice->id . '.pdf');
 
-        // Descargar el PDF
-        return $pdf->download('factura_' . $invoice->id . '.pdf');
+        } catch (\Exception $e) {
+            \Log::error("Error generando PDF para factura {$id}: " . $e->getMessage());
+            return redirect()->back()->with('error', 'Error al generar el PDF de la factura.');
+        }
     }
 
-    //PDF Masivo
+    /**
+     * PDF Masivo
+     */
     public function generatePendingInvoicesPdf()
     {
         $branchId = session('branch_id');
 
-        // Dispatch the job
         GeneratePendingInvoicesPdf::dispatch($branchId);
 
         return redirect()->route('invoices.index')
@@ -326,15 +442,12 @@ class InvoiceController extends Controller
 
     public function checkPdfStatus(Request $request)
     {
-        // Obtener el ID de la sucursal desde la sesión
         $branchId = session('branch_id');
 
-        // Buscar el último PDF generado para la sucursal
         $pdfReport = PdfReport::where('branch_id', $branchId)
             ->orderBy('created_at', 'desc')
             ->first();
 
-        // Devolver la ruta del PDF si está disponible
         if ($pdfReport) {
             return response()->json([
                 'pdfPath' => asset("storage/{$pdfReport->pdf_path}"),
@@ -342,7 +455,6 @@ class InvoiceController extends Controller
             ]);
         }
 
-        // Devolver un mensaje indicheck.permissiondo que el PDF aún no está listo
         return response()->json([
             'pdfPath' => null,
             'message' => 'El PDF aún no está listo.',

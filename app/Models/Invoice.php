@@ -34,6 +34,14 @@ class Invoice extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Relación con los items de la factura
+     */
+    public function invoice_items()
+    {
+        return $this->hasMany(InvoiceItem::class, 'invoice_id');
+    }
+
     //Relación con contrato
     public function contract(){
         return $this->belongsTo(Contract::class);
@@ -45,11 +53,7 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
-    //Relación con Items de factura
-    public function invoice_items()
-    {
-        return $this->hasMany(InvoiceItem::class);
-    }
+
 
     public function generateInvoices()
     {
@@ -101,6 +105,8 @@ class Invoice extends Model
             $invoice->update(['total' => $totalInvoice]);
         }
     }
+
+
     public function getPendingAmount()
     {
         return $this->total - $this->payments()

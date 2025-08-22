@@ -78,5 +78,31 @@ class Contract extends Model
         return $this->hasOne(Ont::class);
     }
 
+    /**
+     * Relación con las facturas del contrato
+     */
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class, 'contract_id');
+    }
+
+    /**
+     * Relación con facturas vencidas específicamente
+     */
+    public function overdueInvoices()
+    {
+        return $this->hasMany(Invoice::class, 'contract_id')
+            ->whereIn('status', ['vencida', 'vencida']);
+    }
+
+    /**
+     * Relación con facturas pendientes
+     */
+    public function pendingInvoices()
+    {
+        return $this->hasMany(Invoice::class, 'contract_id')
+            ->whereIn('status', ['pendiente', 'Pendiente con riesgo de corte']);
+    }
+
 
 }
