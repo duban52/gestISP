@@ -59,6 +59,24 @@ class Olt extends Model
         return $this->belongsTo(Branch::class);
     }
 
+    //Relación con lineProfile
+    public function lineProfiles()
+    {
+        return $this->hasMany(LineProfile::class);
+    }
+
+    //Relación con srvProfile
+    public function srvProfiles()
+    {
+        return $this->hasMany(SrvProfile::class);
+    }
+
+    //Relación con vlan olt
+    public function vlans()
+    {
+        return $this->hasMany(VlanOlt::class);
+    }
+
     /**
      * Obtiene la contraseña sin cifrar para conexiones SSH
      * NOTA: Solo usar si la contraseña se guarda en texto plano

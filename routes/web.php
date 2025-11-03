@@ -171,3 +171,9 @@ Route::put('technicals_orders/vertification/{technical_order}', [TechnicalOrderC
 Route::put('technicals_orders/reject/{technical_order}', [TechnicalOrderController::class, 'orderReject'])->name('technical_orders.reject');
 
 Route::middleware('auth')->get('/api/olts', [OltController::class, 'apiOlts'])->name('api.olts');
+Route::middleware('auth')->get('/api/vlansolt/{olt}', [OltController::class, 'viewVlans'])->name('api.vlansolt');
+Route::middleware('auth')->get('/api/lineprofiles/{olt}', [OltController::class, 'viewLineProfiles'])->name('api.lineProfile');
+Route::middleware('auth')->get('/api/srvprofiles/{olt}', [OltController::class, 'viewSrvProfiles'])->name('api.srvProfile');
+
+//VlanOlt
+Route::post('/vlans', [OltController::class, 'storeVlan'])->name('olt.vlans.store');

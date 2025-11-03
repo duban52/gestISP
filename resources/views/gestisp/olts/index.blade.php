@@ -7,6 +7,10 @@
 @endsection
 @section('content')
 
+    <div class="card p-3 text-right">
+        <a href="{{route('olts.create')}}"><button class="btn btn-primary">Agregar OLT</button></a>
+    </div>
+
     <!-- Loader -->
     <div id="loader" class="text-center my-5">
         <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
@@ -61,7 +65,7 @@
                             <td>${olt.uptime ?? 'N/A'}</td>
                             <td><a href="#">ONUs</a></td>
                             <td>
-                                <a href="#" class="btn btn-sm btn-primary">Editar</a>
+                                <a href="olts/${olt.id}/edit" class="btn btn-sm btn-primary">Editar</a>
                             </td>
                         </tr>
                     `;

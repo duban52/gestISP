@@ -88,8 +88,26 @@
                             <input type="text" name="client_name" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label>Plan</label>
-                            <input type="text" name="service_plan" class="form-control" required>
+                            <label>Vlan</label>
+                            <select name="vlan" id="" class="form-control">
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Lineprofile</label>
+                            <select name="ont-lineprofile" id="" class="form-control">
+                                <option value="Gpon">GPON</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>SrvProfile</label>
+                            <select name="ont-srvprofile" id="" class="form-control">
+                                <option value="Adaptativo">Adaptativo</option>
+                                <option value="Huawei">Huawei</option>
+                                <option value="BTPON">BTPON</option>
+                            </select>
                         </div>
                         <!-- Agrega los campos que necesites -->
                     </div>
@@ -158,6 +176,29 @@
                 });
         });
     </script>
+
+    <script>
+        // Cuando se hace clic en el botón "Activar"
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.activar-btn')) {
+                const btn = e.target.closest('.activar-btn');
+                const sn = btn.getAttribute('data-sn');
+                const vendor = btn.getAttribute('data-vendor');
+                const model = btn.getAttribute('data-model');
+
+                // Rellenar campos del modal
+                document.getElementById('modalOntSn').value = sn;
+                document.getElementById('modalOntSnView').value = sn;
+                document.getElementById('modalVendor').value = vendor;
+                document.getElementById('modalModel').value = model;
+
+                // Abrir modal con Bootstrap 4
+                $('#activarOntModal').modal('show');
+            }
+        });
+    </script>
+
+
 
 
 @endsection

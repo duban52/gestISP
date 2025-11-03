@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LineProfile;
 use App\Models\Olt;
+use App\Models\SrvProfile;
+use App\Models\VlanOlt;
 use App\Services\OltSshService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +30,10 @@ class OltController extends Controller
     public function create(): View
     {
         return view('gestisp.olts.create');
+    }
+    public function edit(Olt $olt)
+    {
+        return view('gestisp.olts.edit', compact('olt'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -63,6 +70,7 @@ class OltController extends Controller
         $data = $olts->map(function ($olt) {
             $remoteData = $this->getRemoteData($olt);
             return [
+                'id' => $olt->id,
                 'name' => $olt->name,
                 'ip_address' => $olt->ip_address,
                 'status_text' => $remoteData['status'],
@@ -73,6 +81,7 @@ class OltController extends Controller
 
         return response()->json($data);
     }
+
 
     /**
      * Obtiene datos remotos de la OLT via SSH
@@ -133,4 +142,68 @@ class OltController extends Controller
             'model' => 'nullable|string|max:255',
         ]);
     }
+    //Muestra las vlans en la vista de editar las olt
+    public function viewVlans(Olt $olt): JsonResponse
+    {
+        $vlans_olt = VlanOlt::where('olt_id', $olt->id)->get();
+
+        $data = $vlans_olt->map(function ($vlan) {
+            return [
+                'id' => $vlan->id,
+                'id_vlan' => $vlan->id_vlan,
+                'name' => $vlan->name,
+                'description' => $vlan->description,
+            ];
+        });
+
+        return response()->json($data);
+    }
+    //Muestra los lineprofiles en la vista de editar las olt
+    public function viewLineProfiles(Olt $olt): JsonResponse
+    {
+        $line_profile = LineProfile::where('olt_id', $olt->id)->get();
+
+        $data = $line_profile->map(function ($lineProfile) {
+            return [
+                'id' => $lineProfile->id,
+                'id_line_profile' => $lineProfile->id_line_profile,
+                'name' => $lineProfile->name,
+                'description' => $lineProfile->description,
+            ];
+        });
+
+        return response()->json($data);
+    }
+
+    //Muestra los svrprofiles en la vista de editar las olt
+    public function viewSrvProfiles(Olt $olt): JsonResponse
+    {
+        $srv_profiles = SrvProfile::where('olt_id', $olt->id)->get();
+
+        $data = $srv_profiles->map(function ($srvProfile) {
+            return [
+                'id' => $srvProfile->id,
+                'id_srv_profile' => $srvProfile->id_srv_pofile,
+                'name' => $srvProfile->name,
+                'description' => $srvProfile->description,
+            ];
+        });
+
+        return response()->json($data);
+    }
+
+    //Crear nueva vlan (por el momento sólo va a la base de datos, en la olt se debe crear manual
+    public function storeVlan(Request $request)
+    {
+        $validated = $request->validate([
+            'olt_id' => 'required|exists:olts,id',
+            'id_vlan' => 'required|integer|unique:vlan_olts,id_vlan',
+            'name' => 'required|string|max:100',
+            'description' => 'nullable|string',
+        ]);
+
+        VlanOlt::create($validated);
+        return redirect()->back()->with('success', '¡La VLAN se creó correctamente!');
+    }
+
 }
