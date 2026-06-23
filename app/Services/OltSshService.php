@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Olt;
+use App\Models\Ont;
+use Illuminate\Support\Facades\Log;
 use phpseclib3\Net\SSH2;
 
 class OltSshService
@@ -188,5 +190,199 @@ class OltSshService
         }
 
         return $ont;
+    }
+
+    /**
+     * Activa una ONT en la OLT via SSH y retorna el ont_id asignado
+     */
+    public function activateOnt(Olt $olt, array $data): array
+    {
+        $parts     = explode('/', $data['fspon']);
+        $interface = $parts[0] . '/' . $parts[1];
+        $port      = $parts[2];
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("config\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("interface gpon {$interface}\n");
+            $ssh->read('/[>#]/');
+
+            // 1. Agregar ONT
+            $ssh->write(
+                "ont add {$port} sn-auth {$data['ont_sn']} omci " .
+                "ont-lineprofile-id {$data['ont_lineprofile']} " .
+                "ont-srvprofile-id {$data['ont_srvprofile']} " .
+                "desc \"{$data['client_name']}\"\n"
+            );
+            $ssh->read('/\}:/');
+            $ssh->write("\n");
+            $ontAddOutput = $ssh->read('/[>#]/');
+
+            Log::debug('ONT ADD OUTPUT', ['olt' => $olt->name, 'output' => $ontAddOutput]);
+
+            $ontId = $this->parseOntId($ontAddOutput);
+            if ($ontId === null) {
+                throw new \Exception("No se pudo obtener el ONT-ID. Respuesta: {$ontAddOutput}");
+            }
+
+            // 2. Salir de la interfaz GPON
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            // 3. Crear service-port — definir el comando en variable
+            $servicePortCmd = implode(' ', [
+                'service-port',
+                'vlan', $data['vlan'],
+                'gpon', "{$interface}/{$port}",
+                'ont', $ontId,
+                'gemport', '1',
+                'multi-service',
+                'user-vlan', $data['vlan'],
+                'tag-transform', 'translate',
+            ]);
+
+            $ssh->write($servicePortCmd . "\n\n");
+            $ssh->read('/[>#]/');
+
+            // 4. Consultar el INDEX del service-port recién creado
+            $displayCmd = implode(' ', [
+                'display service-port port',
+                "{$interface}/{$port}",
+                'ont', $ontId,
+            ]);
+
+            $ssh->write($displayCmd . "\n");
+            $ssh->read('/\}:/');
+            $ssh->write("\n");
+            $servicePortOutput = $ssh->read('/[>#]/');
+
+            Log::debug('SERVICE PORT DISPLAY OUTPUT', ['olt' => $olt->name, 'output' => $servicePortOutput]);
+
+            $servicePortId = $this->parseServicePortId($servicePortOutput);
+
+            // 5. Salir
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            return [
+                'ont_id'       => $ontId,
+                'service_port' => $servicePortId,
+            ];
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+    private function parseOntId(string $output): ?int
+    {
+        $patterns = [
+            '/ONTID\s*:\s*(\d+)/i',
+            '/ont-id\s*:\s*(\d+)/i',
+            '/ontid\s*=\s*(\d+)/i',
+            '/Add\s+ONT\s+successfully.*?(\d+)/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $output, $matches)) {
+                return (int) $matches[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extrae el service-port ID de la respuesta
+     * Huawei responde algo como: "Add service-port successfully, index: 5"
+     */
+    private function parseServicePortId(string $output): ?int
+    {
+        // Busca la primera línea de datos de la tabla
+        // Formato:  "  2299  150 common   gpon ..."
+        // El INDEX es el primer número en esa línea
+        if (preg_match('/^\s+(\d+)\s+\d+\s+\w+\s+gpon/m', $output, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Elimina una ONT de la OLT via SSH
+     */
+    public function deleteOnt(Olt $olt, Ont $ont): void
+    {
+        $interface = "0/{$ont->slot}";
+        $port      = $ont->port;
+
+        Log::debug('DELETE ONT - Iniciando', [
+            'olt'          => $olt->name,
+            'interface'    => $interface,
+            'port'         => $port,
+            'onu_id'       => $ont->onu_id,
+            'service_port' => $ont->service_port,
+        ]);
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $output = $ssh->read('/[>#]/');
+            Log::debug('DELETE ONT - enable', ['output' => $output]);
+
+            $ssh->write("config\n");
+            $output = $ssh->read('/[>#]/');
+            Log::debug('DELETE ONT - config', ['output' => $output]);
+
+            // 1. Eliminar el service-port
+            $ssh->write("undo service-port {$ont->service_port}\n");
+            $output = $ssh->read('/\}:/');
+            Log::debug('DELETE ONT - undo service-port (prompt)', ['output' => $output]);
+
+            $ssh->write("y\n");
+            $output = $ssh->read('/[>#]/');
+            Log::debug('DELETE ONT - undo service-port (confirmación)', ['output' => $output]);
+
+            // 2. Entrar a la interfaz GPON
+            $ssh->write("interface gpon {$interface}\n");
+            $output = $ssh->read('/[>#]/');
+            Log::debug('DELETE ONT - interface gpon', ['output' => $output]);
+
+            // 3. Eliminar la ONT
+            $ssh->write("ont delete {$port} {$ont->onu_id}\n");
+            $output = $ssh->read('/\}:/');
+            Log::debug('DELETE ONT - ont delete (prompt)', ['output' => $output]);
+
+            $ssh->write("y\n");
+            $output = $ssh->read('/[>#]/');
+            Log::debug('DELETE ONT - ont delete (confirmación)', ['output' => $output]);
+
+            // 4. Salir
+            $ssh->write("quit\n");
+            $output = $ssh->read('/[>#]/');
+            Log::debug('DELETE ONT - quit interfaz', ['output' => $output]);
+
+            $ssh->write("quit\n");
+            $output = $ssh->read('/[>#]/');
+            Log::debug('DELETE ONT - quit config', ['output' => $output]);
+
+            Log::debug('DELETE ONT - Finalizado correctamente', [
+                'olt'    => $olt->name,
+                'onu_id' => $ont->onu_id,
+            ]);
+
+        } finally {
+            $ssh->disconnect();
+        }
     }
 }

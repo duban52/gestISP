@@ -1,3 +1,4 @@
+@php use Illuminate\Support\Facades\Storage; @endphp
 @extends('adminlte::page')
 
 @section('title', 'Dashboard')
@@ -11,7 +12,7 @@
         </div>
         <div class="card-body">
             <div class="text-center p-4">
-                <img src="{{ asset('storage/'.$branch->image) }}" alt="Logo de la sucursal" width="200px">
+                <img src="{{ Storage::url($branch->image) }}" width="200" alt="logo de la sucursal">
             </div>
         </div>
     </div>

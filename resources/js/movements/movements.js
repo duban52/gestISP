@@ -40,7 +40,7 @@ $(document).ready(function() {
 
         if (warehouseId && materialId && typeSelect.val() !== 'Entrada') {
             $.ajax({
-                url: `/public/inventories/${warehouseId}/materials/${materialId}/quantity`,
+                url: `/inventories/${warehouseId}/materials/${materialId}/quantity`,
                 type: 'GET',
                 success: function(response) {
                     availableQuantityText.show();
@@ -151,7 +151,7 @@ $(document).ready(function() {
 
         if (warehouseId && materialId) {
             $.ajax({
-                url: `/public/inventories/${warehouseId}/materials/${materialId}/serial-numbers`,
+                url: `/inventories/${warehouseId}/materials/${materialId}/serial-numbers`,
                 type: 'GET',
                 success: function(serialNumbers) {
                     serialNumberSelect.empty();

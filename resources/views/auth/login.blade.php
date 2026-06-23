@@ -60,7 +60,7 @@
                                     const branchSelect = document.getElementById('branch');
 
                                     if (email) {
-                                        fetch(`/public/user/branches?email=${encodeURIComponent(email)}`)
+                                        fetch(`/user/branches?email=${encodeURIComponent(email)}`)
                                     .then(response => {
                                             if (!response.ok) {
                                                 throw new Error('Error en la respuesta del servidor');

@@ -177,3 +177,13 @@ Route::middleware('auth')->get('/api/srvprofiles/{olt}', [OltController::class, 
 
 //VlanOlt
 Route::post('/vlans', [OltController::class, 'storeVlan'])->name('olt.vlans.store');
+
+//Activar ONT
+Route::post('/onts/activate', [OntController::class, 'activate'])->name('onts.activate');
+//eliminar ONT
+Route::delete('/onts/{ont}', [OntController::class, 'destroy'])->name('onts.destroy');
+//Refrescar potencia de la ont
+Route::post('/onts/{ont}/sync-power', [OntController::class, 'syncPower'])->name('onts.sync-power');
+Route::post('/onts/{ont}/sync-power', [OntController::class, 'syncPower'])->name('onts.sync-power');
+//Buscar contratos para activar ONT
+Route::get('/api/contratos/buscar', [OntController::class, 'buscarContrato'])->name('contratos.buscar');
