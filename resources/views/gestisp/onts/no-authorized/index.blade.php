@@ -1,79 +1,73 @@
 @extends('adminlte::page')
-@section('title', 'OLTs')
+@section('title', 'ONTs Pendientes')
+
 @section('content_header')
     <div class="card p-3">
         <h2>ONT´s Pendientes por activación</h2>
     </div>
 @endsection
+
 @section('content')
     @if(session('success'))
-        <div class="alert alert-success">
-            {{ session('success') }}
-        </div>
+        <div class="alert alert-success">{{ session('success') }}</div>
     @elseif(session('success-update'))
-        <div class="alert alert-warning">
-            {{ session('success-update') }}
-        </div>
+        <div class="alert alert-warning">{{ session('success-update') }}</div>
     @elseif(session('success-delete'))
-        <div class="alert alert-danger">
-            {{ session('success-delete') }}
-        </div>
+        <div class="alert alert-danger">{{ session('success-delete') }}</div>
+    @elseif(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
+
     <div class="card">
         <div class="card-body">
-            <div class="table-responsive">
-
+            <div class="form-group">
                 <select class="form-control" name="olt" id="olt">
                     <option value="">Seleccione una OLT</option>
                     @foreach($olts as $olt)
-                        <option value="{{$olt->id}}">{{ $olt->name }}</option>
+                        <option value="{{ $olt->id }}">{{ $olt->name }}</option>
                     @endforeach
                 </select>
-                <table class="table table-hover">
+            </div>
+
+            <div id="loader" class="text-center my-3" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only">Cargando...</span>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table id="autofindTable" class="table table-hover table-bordered" style="width:100%">
                     <thead>
                     <tr>
                         <th>SN</th>
                         <th>Marca</th>
                         <th>Modelo</th>
                         <th>Ubicación (F/S/P)</th>
-                        <th>Econtrada el</th>
+                        <th>Encontrada el</th>
                         <th>Acción</th>
                     </tr>
                     </thead>
-                    <tbody>
-
-                    </tbody>
+                    <tbody></tbody>
                 </table>
             </div>
         </div>
-        <div class="card-footer">
-        </div>
-        <div id="loader" class="text-center my-3" style="display: none;">
-            <div class="spinner-border text-primary" role="status">
-                <span class="sr-only">Cargando...</span>
-            </div>
-        </div>
     </div>
-    @if(session('error'))
-        <div class="alert alert-danger">
-            {{ session('error') }}
-        </div>
-    @endif
+
     <!-- Modal de Activación de ONT -->
-    <div class="modal fade" id="activarOntModal" tabindex="-1" role="dialog" aria-labelledby="activarOntModalLabel" aria-hidden="true">
+    <div class="modal fade" id="activarOntModal" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <form id="formActivarOnt" method="POST" action="{{ route('onts.activate') }}">
                 @csrf
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Activar ONT</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
-                            <span aria-hidden="true">&times;</span>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
                         </button>
                     </div>
                     <div class="modal-body">
-                        <!-- Datos de la ONT -->
                         <input type="hidden" name="ont_sn" id="modalOntSn">
+
                         <div class="form-group">
                             <label>Ubicación</label>
                             <input type="text" class="form-control" id="modalOntLocationView" name="ont_location" readonly>
@@ -90,8 +84,7 @@
                             <label>Modelo</label>
                             <input type="text" class="form-control" id="modalModel" disabled>
                         </div>
-                        <!-- Datos adicionales -->
-                        <!-- Datos adicionales -->
+
                         <div class="form-group">
                             <label>Buscar Contrato</label>
                             <input
@@ -99,10 +92,11 @@
                                 id="buscarContrato"
                                 class="form-control"
                                 placeholder="Buscar por identificación, nombre o # contrato...">
-                            <div id="resultadosContrato" class="list-group mt-1" style="display:none; position:absolute; z-index:9999; width:90%;">
+                            <div id="resultadosContrato"
+                                 class="list-group mt-1"
+                                 style="display:none; position:absolute; z-index:9999; width:90%;">
                             </div>
                         </div>
-
                         <div class="form-group">
                             <label>Cliente seleccionado</label>
                             <input
@@ -113,8 +107,9 @@
                                 placeholder="Ninguno seleccionado">
                         </div>
 
-                        <input type="hidden" name="contract_id"  id="selectedContractId">
+                        <input type="hidden" name="contract_id" id="selectedContractId">
                         <input type="hidden" name="description"  id="selectedDescription">
+
                         <div class="form-group">
                             <label>VLAN</label>
                             <select name="vlan" id="vlanSelect" class="form-control" required>
@@ -133,8 +128,8 @@
                                 <option value="">Seleccione un Srv Profile</option>
                             </select>
                         </div>
+
                         <input type="hidden" id="selectedOltId" name="olt_id">
-                        <!-- Agrega los campos que necesites -->
                     </div>
                     <div class="modal-footer">
                         <button type="submit" class="btn btn-primary">Activar</button>
@@ -144,191 +139,154 @@
             </form>
         </div>
     </div>
+@endsection
+
+@section('css')
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+@endsection
+
+@section('js')
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
 
     <script>
+        let autofindDT = null;
 
+        // Inicializar DataTable vacío
+        $(document).ready(function () {
+            autofindDT = $('#autofindTable').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
+                    emptyTable: 'Seleccione una OLT para ver las ONTs pendientes.'
+                },
+                pageLength: 25,
+                columnDefs: [
+                    { orderable: false, targets: [5] }
+                ]
+            });
+        });
+
+        // Cambio de OLT
         document.getElementById('olt').addEventListener('change', function () {
-
             const oltId = this.value;
-
             document.getElementById('selectedOltId').value = oltId;
-
-            const tbody = document.querySelector('table tbody');
             const loader = document.getElementById('loader');
 
-            tbody.innerHTML = '';
+            // Limpiar tabla
+            autofindDT.clear().draw();
+
+            // Limpiar selects
+            ['vlanSelect', 'lineProfileSelect', 'srvProfileSelect'].forEach(id => {
+                const el = document.getElementById(id);
+                el.innerHTML = `<option value="">Seleccione...</option>`;
+            });
+
+            if (!oltId) return;
+
             loader.style.display = 'block';
 
-            if (!oltId) {
-
-                loader.style.display = 'none';
-
-                document.getElementById('vlanSelect').innerHTML =
-                    '<option value="">Seleccione una VLAN</option>';
-
-                document.getElementById('lineProfileSelect').innerHTML =
-                    '<option value="">Seleccione un Line Profile</option>';
-
-                document.getElementById('srvProfileSelect').innerHTML =
-                    '<option value="">Seleccione un Srv Profile</option>';
-
-                return;
-            }
-
-            // ==========================
             // ONTs Autofind
-            // ==========================
-
             fetch(`/olts/${oltId}/onts-autofind`)
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
-
                     loader.style.display = 'none';
 
                     if (data.error) {
-                        tbody.innerHTML =
-                            `<tr><td colspan="6" class="text-danger">${data.error}</td></tr>`;
-                        return;
-                    }
-
-                    if (data.length === 0) {
-                        tbody.innerHTML =
-                            `<tr><td colspan="6">No hay ONTs en autofind.</td></tr>`;
+                        autofindDT.row.add([
+                            `<span class="text-danger">${data.error}</span>`,
+                            '', '', '', '', ''
+                        ]).draw();
                         return;
                     }
 
                     data.forEach(ont => {
-
-                        tbody.innerHTML += `
-                    <tr>
-                        <td>${ont.ont_sn}</td>
-                        <td>${ont.vendor}</td>
-                        <td>${ont.equipment_id}</td>
-                        <td>${ont.fspon}</td>
-                        <td>${ont.autofind_time}</td>
-                        <td>
-                            <button
-                                class="btn btn-success activar-btn"
+                        autofindDT.row.add([
+                            ont.ont_sn,
+                            ont.vendor,
+                            ont.equipment_id,
+                            ont.fspon,
+                            ont.autofind_time,
+                            `<button
+                                class="btn btn-success btn-sm activar-btn"
                                 data-location="${ont.fspon}"
                                 data-sn="${ont.ont_sn}"
                                 data-vendor="${ont.vendor}"
                                 data-model="${ont.equipment_id}">
-                                <i class="fas fa-check-square"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                                <i class="fas fa-check-square"></i> Activar
+                            </button>`
+                        ]);
                     });
 
+                    autofindDT.draw();
                 })
-                .catch(error => {
-
+                .catch(() => {
                     loader.style.display = 'none';
-
-                    tbody.innerHTML =
-                        `<tr><td colspan="6" class="text-danger">${error}</td></tr>`;
+                    autofindDT.row.add([
+                        '<span class="text-danger">Error al conectar con la OLT</span>',
+                        '', '', '', '', ''
+                    ]).draw();
                 });
 
-            // ==========================
-            // VLANS
-            // ==========================
-
+            // VLANs
             fetch(`/api/vlansolt/${oltId}`)
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
-
-                    let html =
-                        '<option value="">Seleccione una VLAN</option>';
-
-                    data.forEach(vlan => {
-
-                        html += `
-                    <option value="${vlan.id_vlan}">
-                        ${vlan.id_vlan} - ${vlan.name}
-                    </option>
-                `;
+                    let html = '<option value="">Seleccione una VLAN</option>';
+                    data.forEach(v => {
+                        html += `<option value="${v.id_vlan}">${v.id_vlan} - ${v.name}</option>`;
                     });
-
                     document.getElementById('vlanSelect').innerHTML = html;
                 });
 
-            // ==========================
-            // LINE PROFILES
-            // ==========================
-
+            // Line Profiles
             fetch(`/api/lineprofiles/${oltId}`)
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
-
-                    let html =
-                        '<option value="">Seleccione un Line Profile</option>';
-
-                    data.forEach(profile => {
-
-                        html += `
-                    <option value="${profile.id_line_profile}">
-                       ${profile.id_line_profile} - ${profile.name}
-                    </option>
-                `;
+                    let html = '<option value="">Seleccione un Line Profile</option>';
+                    data.forEach(p => {
+                        html += `<option value="${p.id_line_profile}">${p.id_line_profile} - ${p.name}</option>`;
                     });
-
                     document.getElementById('lineProfileSelect').innerHTML = html;
                 });
 
-            // ==========================
-            // SRV PROFILES
-            // ==========================
-
+            // Srv Profiles
             fetch(`/api/srvprofiles/${oltId}`)
-                .then(response => response.json())
+                .then(r => r.json())
                 .then(data => {
-
-                    let html =
-                        '<option value="">Seleccione un Srv Profile</option>';
-
-                    data.forEach(profile => {
-
-                        html += `
-                    <option value="${profile.id_srv_profile}">
-                        ${profile.id_srv_profile} - ${profile.name}
-                    </option>
-                `;
+                    let html = '<option value="">Seleccione un Srv Profile</option>';
+                    data.forEach(p => {
+                        html += `<option value="${p.id_srv_profile}">${p.id_srv_profile} - ${p.name}</option>`;
                     });
-
                     document.getElementById('srvProfileSelect').innerHTML = html;
                 });
-
         });
-    </script>
 
-    <script>
-        // Cuando se hace clic en el botón "Activar"
+        // Botón activar → abrir modal
         document.addEventListener('click', function (e) {
             if (e.target.closest('.activar-btn')) {
                 const btn = e.target.closest('.activar-btn');
-                const location = btn.getAttribute('data-location');
-                const sn = btn.getAttribute('data-sn');
-                const vendor = btn.getAttribute('data-vendor');
-                const model = btn.getAttribute('data-model');
+                document.getElementById('modalOntLocationView').value = btn.getAttribute('data-location');
+                document.getElementById('modalOntSn').value           = btn.getAttribute('data-sn');
+                document.getElementById('modalOntSnView').value       = btn.getAttribute('data-sn');
+                document.getElementById('modalVendor').value          = btn.getAttribute('data-vendor');
+                document.getElementById('modalModel').value           = btn.getAttribute('data-model');
 
-                // Rellenar campos del modal
-                document.getElementById('modalOntLocationView').value = location;
-                document.getElementById('modalOntSn').value = sn;
-                document.getElementById('modalOntSnView').value = sn;
-                document.getElementById('modalVendor').value = vendor;
-                document.getElementById('modalModel').value = model;
+                // Limpiar búsqueda de contrato al abrir modal
+                document.getElementById('buscarContrato').value         = '';
+                document.getElementById('clienteSeleccionadoView').value = '';
+                document.getElementById('selectedContractId').value      = '';
+                document.getElementById('selectedDescription').value     = '';
 
-                // Abrir modal con Bootstrap 4
                 $('#activarOntModal').modal('show');
             }
         });
-    </script>
-    <script>
+
+        // Buscador de contratos
         let buscarTimeout = null;
 
         document.getElementById('buscarContrato').addEventListener('input', function () {
-            const q           = this.value.trim();
-            const resultados  = document.getElementById('resultadosContrato');
+            const q          = this.value.trim();
+            const resultados = document.getElementById('resultadosContrato');
 
             clearTimeout(buscarTimeout);
 
@@ -352,16 +310,16 @@
                         }
 
                         data.forEach(contrato => {
-                            const item = document.createElement('button');
-                            item.type      = 'button';
-                            item.className = 'list-group-item list-group-item-action';
+                            const item       = document.createElement('button');
+                            item.type        = 'button';
+                            item.className   = 'list-group-item list-group-item-action';
                             item.textContent = contrato.label;
 
                             item.addEventListener('click', function () {
-                                document.getElementById('selectedContractId').value    = contrato.id;
-                                document.getElementById('selectedDescription').value   = contrato.description;
+                                document.getElementById('selectedContractId').value      = contrato.id;
+                                document.getElementById('selectedDescription').value     = contrato.description;
                                 document.getElementById('clienteSeleccionadoView').value = contrato.label;
-                                document.getElementById('buscarContrato').value        = '';
+                                document.getElementById('buscarContrato').value          = '';
                                 resultados.style.display = 'none';
                                 resultados.innerHTML     = '';
                             });
@@ -371,7 +329,7 @@
 
                         resultados.style.display = 'block';
                     });
-            }, 300); // espera 300ms después de que el usuario deja de escribir
+            }, 300);
         });
 
         // Cerrar resultados al hacer click fuera
@@ -381,8 +339,4 @@
             }
         });
     </script>
-
-
-
-
 @endsection
