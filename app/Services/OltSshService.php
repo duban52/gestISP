@@ -541,6 +541,69 @@ class OltSshService
             $ssh->disconnect();
         }
     }
+/**
+ * Consulta el estado del puerto CATV de una ONT
+ * Retorna 'on', 'off' o null si no se pudo determinar
+ */
+    public function getCatvPortState(Olt $olt, Ont $ont): ?string
+    {
+        $interface = "0/{$ont->slot}";
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("config\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("interface gpon {$interface}\n");
+            $ssh->read('/[>#]/');
+
+            $output = $this->executeDisplayCommand(
+                $ssh,
+                "display ont port state {$ont->port} {$ont->onu_id} catv-port 1"
+            );
+
+            Log::debug('CATV PORT STATE OUTPUT', ['output' => $output]);
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            return $this->parseCatvState($output);
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+
+    /**
+     * Parsea el estado del puerto CATV
+     * Formato real de la tabla:
+     *   ONT-ID   ONT      ONT       LinkState  TxPower
+     *            port-ID  Port-type            (dBmV)
+     *   --------------------------------------------------
+     *       22         1       CATV up         -
+     */
+    private function parseCatvState(string $output): ?string
+    {
+        // La fila de datos: número(s), número, CATV, up/down
+        if (preg_match('/\d+\s+\d+\s+CATV\s+(up|down)/i', $output, $m)) {
+            return strtolower($m[1]) === 'up' ? 'on' : 'off';
+        }
+
+        // Fallback para firmwares que usan "Operational state : on/off"
+        if (preg_match('/Operational state\s*:\s*(on|off)/i', $output, $m)) {
+            return strtolower($m[1]);
+        }
+
+        return null;
+    }
     /**
      * Ejecuta un comando display y lee toda la salida manejando la paginación "---- More ----"
      */
@@ -605,15 +668,28 @@ class OltSshService
 
             Log::debug('ONT INFO', ['length' => strlen($infoOutput)]);
 
+            $optical = $this->parseOpticalInfo($opticalOutput);
+            $info    = $this->parseOntInfo($infoOutput);
+
+            // Estado del puerto CATV — solo si la ONT tiene módulo CATV
+            $catvState = null;
+            if ($optical['has_catv']) {
+                $catvOutput = $this->executeDisplayCommand(
+                    $ssh,
+                    "display ont port state {$ont->port} {$ont->onu_id} catv-port 1"
+                );
+
+                Log::debug('CATV PORT STATE OUTPUT', ['output' => $catvOutput]);
+
+                $catvState = $this->parseCatvState($catvOutput);
+            }
+
             $ssh->write("quit\n");
             $ssh->read('/[>#]/');
             $ssh->write("quit\n");
             $ssh->read('/[>#]/');
 
-            return array_merge(
-                $this->parseOpticalInfo($opticalOutput),
-                $this->parseOntInfo($infoOutput)
-            );
+            return array_merge($optical, $info, ['catv_state' => $catvState]);
 
         } finally {
             $ssh->disconnect();
@@ -694,6 +770,7 @@ class OltSshService
 
         return $data;
     }
+
     /**
      * Habilita o deshabilita el puerto CATV de una ONT
      */

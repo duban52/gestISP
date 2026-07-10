@@ -199,7 +199,19 @@
                     <div class="card-body p-0">
                         <table class="table table-striped mb-0">
                             <tr>
-                                <th style="width:40%">Potencia Rx CATV</th>
+                                <th style="width:40%">Estado del puerto</th>
+                                <td>
+                                    @if($realtime['catv_state'] === 'on')
+                                        <span class="badge badge-success">Habilitado</span>
+                                    @elseif($realtime['catv_state'] === 'off')
+                                        <span class="badge badge-danger">Deshabilitado</span>
+                                    @else
+                                        <span class="badge badge-secondary">Desconocido</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Potencia Rx CATV</th>
                                 <td>
                                     @if($realtime['catv_rx_power'] !== null && $realtime['catv_rx_power'] > -35)
                                         <span class="{{ $realtime['catv_rx_power'] < -8 ? 'text-danger' : 'text-success' }}">
@@ -213,18 +225,35 @@
                             <tr>
                                 <th>Acciones</th>
                                 <td>
-                                    <form method="POST" action="{{ route('onts.catv.enable', $ont) }}" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-success btn-sm">
-                                            <i class="fas fa-toggle-on"></i> Habilitar CATV
-                                        </button>
-                                    </form>
-                                    <form method="POST" action="{{ route('onts.catv.disable', $ont) }}" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-danger btn-sm">
-                                            <i class="fas fa-toggle-off"></i> Deshabilitar CATV
-                                        </button>
-                                    </form>
+                                    @if($realtime['catv_state'] === 'on')
+                                        <form method="POST" action="{{ route('onts.catv.disable', $ont) }}" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-danger btn-sm">
+                                                <i class="fas fa-toggle-off"></i> Deshabilitar CATV
+                                            </button>
+                                        </form>
+                                    @elseif($realtime['catv_state'] === 'off')
+                                        <form method="POST" action="{{ route('onts.catv.enable', $ont) }}" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-success btn-sm">
+                                                <i class="fas fa-toggle-on"></i> Habilitar CATV
+                                            </button>
+                                        </form>
+                                    @else
+                                        {{-- Estado desconocido → mostrar ambos --}}
+                                        <form method="POST" action="{{ route('onts.catv.enable', $ont) }}" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-success btn-sm">
+                                                <i class="fas fa-toggle-on"></i> Habilitar
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ route('onts.catv.disable', $ont) }}" class="d-inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn-danger btn-sm">
+                                                <i class="fas fa-toggle-off"></i> Deshabilitar
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         </table>
