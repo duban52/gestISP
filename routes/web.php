@@ -187,3 +187,12 @@ Route::post('/onts/{ont}/sync-power', [OntController::class, 'syncPower'])->name
 Route::post('/onts/{ont}/sync-power', [OntController::class, 'syncPower'])->name('onts.sync-power');
 //Buscar contratos para activar ONT
 Route::get('/api/contratos/buscar', [OntController::class, 'buscarContrato'])->name('contratos.buscar');
+//Verificar si una ont ya exixte
+Route::get('/api/onts/check-sn/{sn}', [OntController::class, 'checkSn'])->name('onts.check-sn');
+//Mover la ONT
+Route::post('/onts/{ont}/relocate', [OntController::class, 'relocate'])->name('onts.relocate');
+//Mostrar la ONT individual
+Route::get('/onts/{ont}', [OntController::class, 'show'])->name('onts.show');
+//Activar y desactivar CATV en ONTS
+Route::post('/onts/{ont}/catv/enable',  [OntController::class, 'enableCatv'])->name('onts.catv.enable');
+Route::post('/onts/{ont}/catv/disable', [OntController::class, 'disableCatv'])->name('onts.catv.disable');

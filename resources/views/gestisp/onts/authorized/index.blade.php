@@ -68,9 +68,9 @@
                             </td>
                             <td>{{ $ont->vlan }}</td>
                             <td>
-                                <button class="btn btn-primary btn-sm" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
+                                <a href="{{ route('onts.show', $ont) }}" class="btn btn-info btn-sm" title="Ver detalle">
+                                    <i class="fas fa-eye"></i>
+                                </a>
                             </td>
                             <td>
                                 <button

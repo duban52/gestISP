@@ -53,7 +53,7 @@
         </div>
     </div>
 
-    <!-- Modal de Activación de ONT -->
+    {{-- Modal Activar ONT --}}
     <div class="modal fade" id="activarOntModal" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <form id="formActivarOnt" method="POST" action="{{ route('onts.activate') }}">
@@ -139,6 +139,65 @@
             </form>
         </div>
     </div>
+
+    {{-- Modal Mover ONT --}}
+    <div class="modal fade" id="moverOntModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <form id="formMoverOnt" method="POST" action="">
+                @csrf
+                <div class="modal-content">
+                    <div class="modal-header bg-warning">
+                        <h5 class="modal-title">Mover ONT a nuevo puerto</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            Esta acción eliminará la ONT del puerto actual y la activará en el nuevo puerto.
+                        </div>
+                        <div class="form-group">
+                            <label>Serial</label>
+                            <input type="text" id="moverSn" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Puerto actual</label>
+                            <input type="text" id="moverPortActual" class="form-control" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Nuevo puerto</label>
+                            <input type="text" name="ont_location" id="moverPortNuevo" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>VLAN</label>
+                            <select name="vlan" id="moverVlanSelect" class="form-control" required>
+                                <option value="">Seleccione una VLAN</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Line Profile</label>
+                            <select name="ont_lineprofile" id="moverLineProfileSelect" class="form-control" required>
+                                <option value="">Seleccione un Line Profile</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Srv Profile</label>
+                            <select name="ont_srvprofile" id="moverSrvProfileSelect" class="form-control" required>
+                                <option value="">Seleccione un Srv Profile</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-exchange-alt"></i> Mover ONT
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 @endsection
 
 @section('css')
@@ -152,7 +211,6 @@
     <script>
         let autofindDT = null;
 
-        // Inicializar DataTable vacío
         $(document).ready(function () {
             autofindDT = $('#autofindTable').DataTable({
                 language: {
@@ -161,7 +219,8 @@
                 },
                 pageLength: 25,
                 columnDefs: [
-                    { orderable: false, targets: [5] }
+                    { orderable: false, targets: [5] },
+                    { defaultContent: '—', targets: '_all' }
                 ]
             });
         });
@@ -172,20 +231,17 @@
             document.getElementById('selectedOltId').value = oltId;
             const loader = document.getElementById('loader');
 
-            // Limpiar tabla
             autofindDT.clear().draw();
 
-            // Limpiar selects
             ['vlanSelect', 'lineProfileSelect', 'srvProfileSelect'].forEach(id => {
-                const el = document.getElementById(id);
-                el.innerHTML = `<option value="">Seleccione...</option>`;
+                document.getElementById(id).innerHTML = '<option value="">Seleccione...</option>';
             });
 
             if (!oltId) return;
 
             loader.style.display = 'block';
 
-            // ONTs Autofind
+            // ONTs Autofind + verificación de SN
             fetch(`/olts/${oltId}/onts-autofind`)
                 .then(r => r.json())
                 .then(data => {
@@ -194,36 +250,71 @@
                     if (data.error) {
                         autofindDT.row.add([
                             `<span class="text-danger">${data.error}</span>`,
-                            '', '', '', '', ''
+                            '—', '—', '—', '—', '—'
                         ]).draw();
                         return;
                     }
 
-                    data.forEach(ont => {
+                    if (data.length === 0) {
                         autofindDT.row.add([
-                            ont.ont_sn,
-                            ont.vendor,
-                            ont.equipment_id,
-                            ont.fspon,
-                            ont.autofind_time,
-                            `<button
-                                class="btn btn-success btn-sm activar-btn"
-                                data-location="${ont.fspon}"
-                                data-sn="${ont.ont_sn}"
-                                data-vendor="${ont.vendor}"
-                                data-model="${ont.equipment_id}">
-                                <i class="fas fa-check-square"></i> Activar
-                            </button>`
-                        ]);
-                    });
+                            '<span class="text-muted">No hay ONTs en autofind.</span>',
+                            '—', '—', '—', '—', '—'
+                        ]).draw();
+                        return;
+                    }
 
-                    autofindDT.draw();
+                    // Verificar cada SN contra la DB
+                    const checks = data.map(ont =>
+                        fetch(`/api/onts/check-sn/${encodeURIComponent(ont.ont_sn)}`)
+                            .then(r => r.json())
+                            .then(check => ({ ont, check }))
+                    );
+
+                    Promise.all(checks).then(results => {
+                        results.forEach(({ ont, check }) => {
+                            let accionBtn;
+
+                            if (check.exists) {
+                                accionBtn = `
+                                    <button
+                                        class="btn btn-warning btn-sm mover-btn"
+                                        data-ont-id="${check.ont_id}"
+                                        data-location="${ont.fspon}"
+                                        data-sn="${ont.ont_sn}"
+                                        data-current="${check.current_location}"
+                                        title="Puerto actual: ${check.current_location}">
+                                        <i class="fas fa-exchange-alt"></i> Mover a este puerto
+                                    </button>`;
+                            } else {
+                                accionBtn = `
+                                    <button
+                                        class="btn btn-success btn-sm activar-btn"
+                                        data-location="${ont.fspon}"
+                                        data-sn="${ont.ont_sn}"
+                                        data-vendor="${ont.vendor}"
+                                        data-model="${ont.equipment_id}">
+                                        <i class="fas fa-check-square"></i> Activar
+                                    </button>`;
+                            }
+
+                            autofindDT.row.add([
+                                ont.ont_sn,
+                                ont.vendor,
+                                ont.equipment_id,
+                                ont.fspon,
+                                ont.autofind_time,
+                                accionBtn
+                            ]);
+                        });
+
+                        autofindDT.draw();
+                    });
                 })
                 .catch(() => {
                     loader.style.display = 'none';
                     autofindDT.row.add([
                         '<span class="text-danger">Error al conectar con la OLT</span>',
-                        '', '', '', '', ''
+                        '—', '—', '—', '—', '—'
                     ]).draw();
                 });
 
@@ -261,23 +352,44 @@
                 });
         });
 
-        // Botón activar → abrir modal
+        // Botón activar → modal activación
         document.addEventListener('click', function (e) {
             if (e.target.closest('.activar-btn')) {
                 const btn = e.target.closest('.activar-btn');
-                document.getElementById('modalOntLocationView').value = btn.getAttribute('data-location');
-                document.getElementById('modalOntSn').value           = btn.getAttribute('data-sn');
-                document.getElementById('modalOntSnView').value       = btn.getAttribute('data-sn');
-                document.getElementById('modalVendor').value          = btn.getAttribute('data-vendor');
-                document.getElementById('modalModel').value           = btn.getAttribute('data-model');
-
-                // Limpiar búsqueda de contrato al abrir modal
+                document.getElementById('modalOntLocationView').value   = btn.getAttribute('data-location');
+                document.getElementById('modalOntSn').value             = btn.getAttribute('data-sn');
+                document.getElementById('modalOntSnView').value         = btn.getAttribute('data-sn');
+                document.getElementById('modalVendor').value            = btn.getAttribute('data-vendor');
+                document.getElementById('modalModel').value             = btn.getAttribute('data-model');
                 document.getElementById('buscarContrato').value         = '';
                 document.getElementById('clienteSeleccionadoView').value = '';
-                document.getElementById('selectedContractId').value      = '';
-                document.getElementById('selectedDescription').value     = '';
+                document.getElementById('selectedContractId').value     = '';
+                document.getElementById('selectedDescription').value    = '';
 
                 $('#activarOntModal').modal('show');
+            }
+        });
+
+        // Botón mover → modal traslado
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.mover-btn')) {
+                const btn = e.target.closest('.mover-btn');
+
+                document.getElementById('moverSn').value         = btn.getAttribute('data-sn');
+                document.getElementById('moverPortActual').value = btn.getAttribute('data-current');
+                document.getElementById('moverPortNuevo').value  = btn.getAttribute('data-location');
+
+                document.getElementById('moverVlanSelect').innerHTML =
+                    document.getElementById('vlanSelect').innerHTML;
+                document.getElementById('moverLineProfileSelect').innerHTML =
+                    document.getElementById('lineProfileSelect').innerHTML;
+                document.getElementById('moverSrvProfileSelect').innerHTML =
+                    document.getElementById('srvProfileSelect').innerHTML;
+
+                document.getElementById('formMoverOnt').action =
+                    `/onts/${btn.getAttribute('data-ont-id')}/relocate`;
+
+                $('#moverOntModal').modal('show');
             }
         });
 

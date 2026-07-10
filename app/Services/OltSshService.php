@@ -53,7 +53,41 @@ class OltSshService
         try {
             $this->enablePrivilegedMode($ssh);
 
-            $output = $this->executeCommand($ssh, "display ont autofind all", $olt, self::SSH_LONG_TIMEOUT);
+            $ssh->setTimeout(self::SSH_TIMEOUT);
+
+            // Deshabilitar paginación en Huawei MA5800
+            $ssh->write("undo terminal more\n");
+            $ssh->read('#');
+
+            // Ejecutar autofind con timeout largo (método que funciona)
+            $output = $this->executeCommand($ssh, "display ont autofind all", $olt, 10);
+
+            // Si la salida quedó paginada, seguir presionando espacio hasta el final
+            $maxPages = 50;
+            for ($i = 0; $i < $maxPages; $i++) {
+
+                // ¿La salida termina con el resumen final o el prompt? → ya está completa
+                if (str_contains($output, 'The number of GPON')) {
+                    break;
+                }
+
+                // ¿Hay paginación pendiente? → enviar espacio y leer el siguiente bloque
+                if (str_contains($output, '---- More')) {
+                    $ssh->write(' ');
+                    $ssh->setTimeout(10);
+                    $output .= $ssh->read('#');
+                    continue;
+                }
+
+                // No hay More ni resumen → no hay más que leer
+                break;
+            }
+
+            Log::debug('AUTOFIND RAW', [
+                'length' => strlen($output),
+                'output' => $output,
+            ]);
+
             return $this->processOntsAutofind($output);
 
         } finally {
@@ -380,6 +414,326 @@ class OltSshService
                 'olt'    => $olt->name,
                 'onu_id' => $ont->onu_id,
             ]);
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+    /**
+     * Mueve una ONT de un puerto a otro en la misma OLT
+     * 1. Elimina service-port y ONT del puerto viejo
+     * 2. Activa la ONT en el puerto nuevo
+     * Retorna array con ont_id y service_port nuevos
+     */
+    public function moveOnt(Olt $olt, Ont $ont, array $newData): array
+    {
+        $oldInterface = "0/{$ont->slot}";
+        $oldPort      = $ont->port;
+
+        $newParts     = explode('/', $newData['fspon']);
+        $newInterface = $newParts[0] . '/' . $newParts[1];
+        $newPort      = $newParts[2];
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("config\n");
+            $ssh->read('/[>#]/');
+
+            // 1. Eliminar service-port viejo
+            $ssh->write("undo service-port {$ont->service_port}\n");
+            $ssh->read('/\}:/');
+            $ssh->write("y\n");
+            $ssh->read('/[>#]/');
+
+            Log::debug('MOVE ONT - service-port eliminado', [
+                'service_port' => $ont->service_port,
+            ]);
+
+            // 2. Entrar al puerto viejo y eliminar la ONT
+            $ssh->write("interface gpon {$oldInterface}\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("ont delete {$oldPort} {$ont->onu_id}\n");
+            $ssh->read('/\}:/');
+            $ssh->write("y\n");
+            $ssh->read('/[>#]/');
+
+            Log::debug('MOVE ONT - ONT eliminada del puerto viejo', [
+                'old_interface' => $oldInterface,
+                'old_port'      => $oldPort,
+                'onu_id'        => $ont->onu_id,
+            ]);
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            // 3. Entrar al puerto nuevo y activar la ONT
+            $ssh->write("interface gpon {$newInterface}\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write(
+                "ont add {$newPort} sn-auth {$ont->sn} omci " .
+                "ont-lineprofile-id {$newData['ont_lineprofile']} " .
+                "ont-srvprofile-id {$newData['ont_srvprofile']} " .
+                "desc \"{$ont->description}\"\n"
+            );
+            $ssh->read('/\}:/');
+            $ssh->write("\n");
+            $ontAddOutput = $ssh->read('/[>#]/');
+
+            Log::debug('MOVE ONT - ont add output', ['output' => $ontAddOutput]);
+
+            $newOntId = $this->parseOntId($ontAddOutput);
+
+            if ($newOntId === null) {
+                throw new \Exception("No se pudo obtener el nuevo ONT-ID. Respuesta: {$ontAddOutput}");
+            }
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            // 4. Crear nuevo service-port
+            $servicePortCmd = implode(' ', [
+                'service-port',
+                'vlan', $newData['vlan'],
+                'gpon', "{$newInterface}/{$newPort}",
+                'ont', $newOntId,
+                'gemport', '1',
+                'multi-service',
+                'user-vlan', $newData['vlan'],
+                'tag-transform', 'translate',
+            ]);
+
+            $ssh->write($servicePortCmd . "\n\n");
+            $ssh->read('/[>#]/');
+
+            // 5. Consultar el nuevo INDEX del service-port
+            $displayCmd = implode(' ', [
+                'display service-port port',
+                "{$newInterface}/{$newPort}",
+                'ont', $newOntId,
+            ]);
+
+            $ssh->write($displayCmd . "\n");
+            $ssh->read('/\}:/');
+            $ssh->write("\n");
+            $servicePortOutput = $ssh->read('/[>#]/');
+
+            Log::debug('MOVE ONT - service-port output', ['output' => $servicePortOutput]);
+
+            $newServicePort = $this->parseServicePortId($servicePortOutput);
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            return [
+                'ont_id'       => $newOntId,
+                'service_port' => $newServicePort,
+            ];
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+    /**
+     * Ejecuta un comando display y lee toda la salida manejando la paginación "---- More ----"
+     */
+    private function executeDisplayCommand(SSH2 $ssh, string $command, bool $confirmPrompt = true): string
+    {
+        $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+        $ssh->write($command . "\n");
+
+        if ($confirmPrompt) {
+            // Comandos display de Huawei muestran el prompt { <cr>||<K> }:
+            $ssh->read('/\}:/');
+            $ssh->write("\n");
+        }
+
+        $output   = '';
+        $maxPages = 100;
+
+        for ($i = 0; $i < $maxPages; $i++) {
+            $ssh->setTimeout(10);
+            $chunk  = $ssh->read('/[>#]|---- More/');
+            $output .= $chunk;
+
+            // Verificar solo el final de lo acumulado
+            $tail = substr($output, -100);
+
+            if (str_contains($tail, '---- More')) {
+                $ssh->write(' ');
+                continue;
+            }
+
+            // Llegó el prompt → salida completa
+            break;
+        }
+
+        return $output;
+    }
+    public function getOntOpticalInfo(Olt $olt, Ont $ont): array
+    {
+        $interface = "0/{$ont->slot}";
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("config\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("interface gpon {$interface}\n");
+            $ssh->read('/[>#]/');
+
+            // Info óptica — salida corta, sin paginación normalmente
+            $opticalOutput = $this->executeDisplayCommand($ssh, "display ont optical-info {$ont->port} {$ont->onu_id}");
+
+            Log::debug('ONT OPTICAL INFO', ['length' => strlen($opticalOutput)]);
+
+            // Info general — salida larga, con paginación
+            $infoOutput = $this->executeDisplayCommand($ssh, "display ont info {$ont->port} {$ont->onu_id}");
+
+            Log::debug('ONT INFO', ['length' => strlen($infoOutput)]);
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            return array_merge(
+                $this->parseOpticalInfo($opticalOutput),
+                $this->parseOntInfo($infoOutput)
+            );
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+
+    private function parseOpticalInfo(string $output): array
+    {
+        $data = [
+            'rx_power'      => null,
+            'tx_power'      => null,
+            'olt_rx_power'  => null,
+            'temperature'   => null,
+            'voltage'       => null,
+            'current'       => null,
+            'catv_rx_power' => null,
+            'has_catv'      => false,
+        ];
+
+        $patterns = [
+            'rx_power'      => '/Rx optical power\(dBm\)\s+:\s+(-?[\d.]+)/i',
+            'tx_power'      => '/Tx optical power\(dBm\)\s+:\s+(-?[\d.]+)/i',
+            'olt_rx_power'  => '/OLT Rx ONT optical power\(dBm\)\s+:\s+(-?[\d.]+)/i',
+            'temperature'   => '/Temperature\(C\)\s+:\s+(-?[\d.]+)/i',
+            'voltage'       => '/Voltage\(V\)\s+:\s+([\d.]+)/i',
+            'current'       => '/Laser bias current\(mA\)\s+:\s+([\d.]+)/i',
+            'catv_rx_power' => '/CATV Rx optical power\(dBm\)\s+:\s+(-?[\d.]+)/i',
+        ];
+
+        foreach ($patterns as $key => $pattern) {
+            if (preg_match($pattern, $output, $m)) {
+                $data[$key] = (float) $m[1];
+            }
+        }
+
+        // -40.00 en CATV significa sin señal / módulo CATV presente pero apagado
+        // Si el campo apareció en la salida, la ONT tiene CATV
+        $data['has_catv'] = str_contains($output, 'CATV Rx optical power');
+
+        return $data;
+    }
+
+    private function parseOntInfo(string $output): array
+    {
+        $data = [
+            'run_state'       => null,
+            'config_state'    => null,
+            'match_state'     => null,
+            'distance'        => null,
+            'last_down_time'  => null,
+            'last_up_time'    => null,
+            'last_down_cause' => null,
+            'online_duration' => null,
+            'battery_state'   => null,
+            'line_profile'    => null,
+            'srv_profile'     => null,
+        ];
+
+        $patterns = [
+            'run_state'       => '/Run state\s+:\s+(\S+)/i',
+            'config_state'    => '/Config state\s+:\s+(\S+)/i',
+            'match_state'     => '/Match state\s+:\s+(\S+)/i',
+            'distance'        => '/ONT distance\(m\)\s+:\s+(\d+)/i',
+            'last_down_time'  => '/Last down time\s+:\s+(.+?)\s*$/mi',
+            'last_up_time'    => '/Last up time\s+:\s+(.+?)\s*$/mi',
+            'last_down_cause' => '/Last down cause\s+:\s+(.+?)\s*$/mi',
+            'online_duration' => '/ONT online duration\s+:\s+(.+?)\s*$/mi',
+            'battery_state'   => '/ONT battery state\s+:\s+(.+?)\s*$/mi',
+            'line_profile'    => '/Line profile name\s+:\s+(\S+)/i',
+            'srv_profile'     => '/Service profile name\s+:\s+(\S+)/i',
+        ];
+
+        foreach ($patterns as $key => $pattern) {
+            if (preg_match($pattern, $output, $m)) {
+                $data[$key] = trim($m[1]);
+            }
+        }
+
+        return $data;
+    }
+    /**
+     * Habilita o deshabilita el puerto CATV de una ONT
+     */
+    public function setCatvPort(Olt $olt, Ont $ont, bool $enable): void
+    {
+        $interface = "0/{$ont->slot}";
+        $state     = $enable ? 'on' : 'off';
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("config\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("interface gpon {$interface}\n");
+            $ssh->read('/[>#]/');
+
+            // Cambiar estado del puerto CATV 1
+            $ssh->write("ont port attribute {$ont->port} {$ont->onu_id} catv 1 operational-state {$state}\n");
+            $output = $ssh->read('/[>#]/');
+
+            Log::debug('CATV PORT STATE', [
+                'sn'     => $ont->sn,
+                'state'  => $state,
+                'output' => $output,
+            ]);
+
+            if (str_contains($output, 'Failure') || str_contains($output, 'error')) {
+                throw new \Exception("La OLT rechazó el cambio de estado CATV: {$output}");
+            }
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
 
         } finally {
             $ssh->disconnect();

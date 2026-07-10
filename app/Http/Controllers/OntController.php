@@ -8,6 +8,7 @@ use App\Models\Ont;
 use App\Services\OltSnmpService;
 use App\Services\OltSshService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class OntController extends Controller
 {
@@ -185,5 +186,113 @@ class OntController extends Controller
                 ? "Potencia actualizada: {$ont->rx_power} dBm"
                 : 'ONT sin señal.',
         ]);
+    }
+    //Buscar si una ont ya existe para moverla de puerto
+    public function checkSn(string $sn): \Illuminate\Http\JsonResponse
+    {
+        Log::debug('CHECK SN', [
+            'sn_recibido' => $sn,
+            'sn_length'   => strlen($sn),
+        ]);
+
+        $ont = Ont::where('branch_id', session('branch_id'))
+            ->where('sn', $sn)
+            ->with('olt')
+            ->first();
+
+        Log::debug('CHECK SN RESULT', [
+            'found'  => $ont ? true : false,
+            'sn_db'  => $ont?->sn,
+        ]);
+
+        if (!$ont) {
+            return response()->json(['exists' => false]);
+        }
+
+        return response()->json([
+            'exists'           => true,
+            'ont_id'           => $ont->id,
+            'current_location' => "0/{$ont->slot}/{$ont->port}",
+            'onu_id'           => $ont->onu_id,
+            'description'      => $ont->description,
+            'olt_name'         => $ont->olt->name ?? 'N/A',
+        ]);
+    }
+    //Mover la ont
+
+    public function relocate(Request $request, Ont $ont): \Illuminate\Http\RedirectResponse
+    {
+        $validated = $request->validate([
+            'ont_location'    => 'required|string',
+            'vlan'            => 'required|integer',
+            'ont_lineprofile' => 'required|integer',
+            'ont_srvprofile'  => 'required|integer',
+        ]);
+
+        $olt = Olt::findOrFail($ont->olt_id);
+
+        $validated['fspon'] = $validated['ont_location'];
+
+        try {
+            $result = $this->oltSshService->moveOnt($olt, $ont, $validated);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Error al mover la ONT: ' . $e->getMessage());
+        }
+
+        $parts   = explode('/', $validated['fspon']);
+        $ifIndex = $this->resolveIfIndex($olt, $parts[1], $parts[2]);
+
+        $ont->update([
+            'slot'         => $parts[1],
+            'port'         => $parts[2],
+            'onu_id'       => $result['ont_id'],
+            'service_port' => $result['service_port'],
+            'vlan'         => $validated['vlan'],
+            'if_index'     => $ifIndex,
+            'status'       => 1,
+        ]);
+
+        return back()->with('success', 'ONT movida y actualizada correctamente.');
+    }
+    public function show(Ont $ont)
+    {
+        $ont->load(['olt', 'contract.client']);
+
+        $realtime = null;
+        $error    = null;
+
+        try {
+            $olt      = $ont->olt;
+            $realtime = $this->oltSshService->getOntOpticalInfo($olt, $ont);
+        } catch (\Exception $e) {
+            $error = 'No se pudo obtener información en tiempo real: ' . $e->getMessage();
+        }
+
+        return view('gestisp.onts.show', compact('ont', 'realtime', 'error'));
+    }
+    public function enableCatv(Ont $ont): \Illuminate\Http\RedirectResponse
+    {
+        $olt = Olt::findOrFail($ont->olt_id);
+
+        try {
+            $this->oltSshService->setCatvPort($olt, $ont, true);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Error al habilitar CATV: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Puerto CATV habilitado correctamente.');
+    }
+
+    public function disableCatv(Ont $ont): \Illuminate\Http\RedirectResponse
+    {
+        $olt = Olt::findOrFail($ont->olt_id);
+
+        try {
+            $this->oltSshService->setCatvPort($olt, $ont, false);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Error al deshabilitar CATV: ' . $e->getMessage());
+        }
+
+        return back()->with('success-update', 'Puerto CATV deshabilitado.');
     }
 }
