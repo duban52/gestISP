@@ -4,11 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\File;
+use Illuminate\View\View;
 
+/**
+ * Controlador de Sucursales (Branches)
+ *
+ * Gestiona el CRUD completo de las sucursales del sistema.
+ * Cada sucursal agrupa clientes, contratos, OLTs, routers, cajas y almacenes,
+ * funcionando como unidad de negocio independiente dentro de GestISP.
+ */
 class BranchController extends Controller
 {
-    //Proteger rutas
+    /**
+     * Constructor: protege las rutas con autenticación y permisos.
+     *
+     * Cada acción del CRUD requiere el permiso correspondiente,
+     * validado por el middleware check.permission.
+     */
     public function __construct()
     {
         $this->middleware('auth');
@@ -17,122 +31,136 @@ class BranchController extends Controller
         $this->middleware('check.permission:branches.edit')->only('edit', 'update');
         $this->middleware('check.permission:branches.destroy')->only('destroy');
     }
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //listar las sucursales
-        $branches = Branch::simplePaginate(8);
 
-        //Retornar en la vista
+    /**
+     * Lista todas las sucursales.
+     *
+     * Retorna la colección completa (sin paginar) porque la tabla
+     * usa DataTables del lado del cliente, que se encarga de la
+     * paginación, búsqueda y ordenamiento en el navegador.
+     */
+    public function index(): View
+    {
+        $branches = Branch::all();
+
         return view('gestisp.branches.index', compact('branches'));
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Muestra el formulario de creación de sucursal.
      */
-    public function create()
+    public function create(): View
     {
-        //
         return view('gestisp.branches.create');
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Guarda una nueva sucursal en la base de datos.
+     *
+     * Si el request incluye una imagen (logo de la sucursal),
+     * se almacena en storage/app/public/branches y se guarda la ruta.
      */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
+        $validated = $this->validateBranch($request);
 
-
-        //
-        $validated = $request->validate([
-            'nit' => 'required|string|max:20',
-            'name' => 'required|string|max:40|unique:branches',
-            'country' => 'required|string|max:60',
-            'department' => 'required|string|max:60',
-            'municipality' => 'required|string|max:60',
-            'address' => 'required|string|max:255',
-            'number_phone' => 'required|string|max:20',
-            'additional_number' => 'nullable|string|max:20',
-            'image' => 'nullable|image',
-            'moving_price' => 'nullable|numeric',
-            'reconnection_price' => 'nullable|numeric',
-            'message_custom_invoice' => 'nullable|string',
-            'observation' => 'nullable|string',
-        ]);
-
-        //Validar si hay un archivo en el request
-        if($request->hasFile('image')){
+        // Almacenar la imagen si fue enviada
+        if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('branches', 'public');
         }
 
         Branch::create($validated);
 
-        return redirect()->route('branches.index')->with('success', 'Sucursal creada exitosamente.');
+        return redirect()
+            ->route('branches.index')
+            ->with('success', 'Sucursal creada exitosamente.');
     }
 
     /**
-     * Display the specified resource.
+     * Muestra el detalle de una sucursal específica.
      */
-    public function show(Branch $branch)
+    public function show(Branch $branch): View
     {
-        //
         return view('gestisp.branches.show', compact('branch'));
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Muestra el formulario de edición de una sucursal.
      */
-    public function edit(Branch $branch)
+    public function edit(Branch $branch): View
     {
-        //
         return view('gestisp.branches.edit', compact('branch'));
     }
 
     /**
-     * Update the specified resource in storage.
+     * Actualiza los datos de una sucursal existente.
+     *
+     * Si el usuario sube una nueva imagen, la anterior se elimina
+     * del disco antes de guardar la nueva, evitando archivos huérfanos.
      */
-    public function update(Request $request, Branch $branch)
+    public function update(Request $request, Branch $branch): RedirectResponse
     {
-        //
-        $validated = $request->validate([
-            'nit' => 'required|string|max:20',
-            'name' => 'required|string|max:40|unique:branches,name,' . $branch->id,
-            'country' => 'required|string|max:60',
-            'department' => 'required|string|max:60',
-            'municipality' => 'required|string|max:60',
-            'address' => 'required|string|max:255',
-            'number_phone' => 'required|string|max:20',
-            'additional_number' => 'nullable|string|max:20',
-            'image' => 'nullable|image',
-            'moving_price' => 'nullable|numeric',
-            'reconnection_price' => 'nullable|numeric',
-            'message_custom_invoice' => 'nullable|string',
-            'observation' => 'nullable|string',
-        ]);
+        $validated = $this->validateBranch($request, $branch->id);
 
-        //Si el usuario sube una nueva imagen
-        if ($request->hasFile('image')){
-            //Eliminar la imagen anterior
+        // Reemplazar la imagen si se envió una nueva
+        if ($request->hasFile('image')) {
+            // Eliminar la imagen anterior del disco
             File::delete(public_path('storage/' . $branch->image));
-            //Asigna la nueva imagen
+
+            // Almacenar la nueva imagen
             $validated['image'] = $request->file('image')->store('branches', 'public');
         }
 
         $branch->update($validated);
 
-        return redirect()->route('branches.index')->with('success', 'Sucursal actualizada exitosamente.');
+        return redirect()
+            ->route('branches.index')
+            ->with('success', 'Sucursal actualizada exitosamente.');
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Elimina una sucursal.
+     *
+     * NOTA: si la sucursal tiene registros relacionados (clientes,
+     * contratos, OLTs, etc.) la eliminación fallará por las llaves
+     * foráneas de la base de datos.
      */
-    public function destroy(Branch $branch)
+    public function destroy(Branch $branch): RedirectResponse
     {
-        //
         $branch->delete();
 
-        return redirect()->route('branches.index')->with('success', 'Sucursal eliminada exitosamente.');
+        return redirect()
+            ->route('branches.index')
+            ->with('success', 'Sucursal eliminada exitosamente.');
+    }
+
+    /**
+     * Reglas de validación compartidas entre store y update.
+     *
+     * @param Request  $request  Datos del formulario
+     * @param int|null $ignoreId ID de la sucursal a excluir de la regla
+     *                           unique (solo en update, para permitir
+     *                           conservar el mismo nombre)
+     */
+    private function validateBranch(Request $request, ?int $ignoreId = null): array
+    {
+        // La regla unique excluye el registro actual cuando se está editando
+        $uniqueName = 'unique:branches,name' . ($ignoreId ? ',' . $ignoreId : '');
+
+        return $request->validate([
+            'nit'                    => 'required|string|max:20',
+            'name'                   => "required|string|max:40|{$uniqueName}",
+            'country'                => 'required|string|max:60',
+            'department'             => 'required|string|max:60',
+            'municipality'           => 'required|string|max:60',
+            'address'                => 'required|string|max:255',
+            'number_phone'           => 'required|string|max:20',
+            'additional_number'      => 'nullable|string|max:20',
+            'image'                  => 'nullable|image',
+            'moving_price'           => 'nullable|numeric',
+            'reconnection_price'     => 'nullable|numeric',
+            'message_custom_invoice' => 'nullable|string',
+            'observation'            => 'nullable|string',
+        ]);
     }
 }
