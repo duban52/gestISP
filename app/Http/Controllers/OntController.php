@@ -55,9 +55,13 @@ class OntController extends Controller
             ->get();
 
         return response()->json($contratos->map(fn($c) => [
-            'id'          => $c->id,
-            'label'       => $c->client->identity_number . ' - ' . $c->client->name . ' ' . $c->client->last_name . ' - Contrato #' . $c->id,
-            'description' => $c->client->identity_number . '-' . $c->client->name . ' ' . $c->client->last_name . '-' . $c->id,
+            'id'              => $c->id,
+            'label'           => $c->client->identity_number . ' - ' . $c->client->name . ' ' . $c->client->last_name . ' - Contrato #' . $c->id,
+            'description'     => $c->client->identity_number . '-' . $c->client->name . ' ' . $c->client->last_name . '-' . $c->id,
+            // Datos para autogenerar credenciales pppoe
+            'client_name'     => $c->client->name,
+            'client_lastname' => $c->client->last_name,
+            'identity_number' => $c->client->identity_number,
         ]));
     }
 
@@ -256,19 +260,32 @@ class OntController extends Controller
     }
     public function show(Ont $ont)
     {
+        // Carga instantánea: solo datos de la DB
         $ont->load(['olt', 'contract.client']);
 
-        $realtime = null;
-        $error    = null;
+        return view('gestisp.onts.show', compact('ont'));
+    }
+
+    /**
+     * Endpoint AJAX: información en tiempo real de la ONT via SSH
+     */
+    public function realtimeInfo(Ont $ont): \Illuminate\Http\JsonResponse
+    {
+        $olt = Olt::findOrFail($ont->olt_id);
 
         try {
-            $olt      = $ont->olt;
             $realtime = $this->oltSshService->getOntOpticalInfo($olt, $ont);
-        } catch (\Exception $e) {
-            $error = 'No se pudo obtener información en tiempo real: ' . $e->getMessage();
-        }
 
-        return view('gestisp.onts.show', compact('ont', 'realtime', 'error'));
+            return response()->json([
+                'ok'   => true,
+                'data' => $realtime,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'No se pudo obtener información en tiempo real: ' . $e->getMessage(),
+            ]);
+        }
     }
     public function enableCatv(Ont $ont): \Illuminate\Http\RedirectResponse
     {

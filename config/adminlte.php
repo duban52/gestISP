@@ -494,15 +494,15 @@ return [
             'submenu' => [
                 [
                     'text' => 'Routers',
-                    'route' => 'technicals_orders.index',
-                    'active' => ['gestisp/technicals_orders*'],
+                    'route' => 'routers.index',
+                    'active' => ['gestisp/routers*'],
                     'icon' => 'fas  fa-ethernet',
                     'can' => 'technicals_orders.index',
                 ],
                 [
                     'text' => 'PPPoE',
-                    'route' => 'technicals_orders.my_technical_orders',
-                    'active' => ['gestisp/technicals_orders*'],
+                    'route' => 'pppoe.index',
+                    'active' => ['gestisp/pppoe*'],
                     'icon' => 'fas  fa-user-check',
                     'can' => 'technicals_orders.my_technical_orders',
                 ],

@@ -19,14 +19,14 @@
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
 
-    @if($error)
-        <div class="alert alert-warning">
-            <i class="fas fa-exclamation-triangle"></i> {{ $error }}
-        </div>
-    @endif
+    {{-- Alerta de error en tiempo real (oculta por defecto) --}}
+    <div id="realtimeError" class="alert alert-warning" style="display:none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="realtimeErrorMsg"></span>
+    </div>
 
     <div class="row">
-        {{-- Columna izquierda: datos generales --}}
+        {{-- Columna izquierda: datos de la DB (carga instantánea) --}}
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header bg-primary text-white">
@@ -76,7 +76,6 @@
                 </div>
             </div>
 
-            {{-- Cliente / Contrato --}}
             <div class="card">
                 <div class="card-header bg-info text-white">
                     <i class="fas fa-user"></i> Cliente y Contrato
@@ -115,188 +114,250 @@
             </div>
         </div>
 
-        {{-- Columna derecha: datos en tiempo real --}}
+        {{-- Columna derecha: datos en tiempo real (AJAX) --}}
         <div class="col-md-6">
             <div class="card">
-                <div class="card-header bg-success text-white">
-                    <i class="fas fa-broadcast-tower"></i> Estado en Tiempo Real
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-broadcast-tower"></i> Estado en Tiempo Real</span>
+                    <button id="btnRefreshRealtime" class="btn btn-sm btn-light" title="Refrescar">
+                        <i class="fas fa-sync"></i>
+                    </button>
                 </div>
                 <div class="card-body p-0">
-                    @if($realtime)
-                        <table class="table table-striped mb-0">
-                            <tr>
-                                <th style="width:40%">Estado operativo</th>
-                                <td>
-                                    @if(strtolower($realtime['run_state'] ?? '') === 'online')
-                                        <span class="badge badge-success">Online</span>
-                                    @else
-                                        <span class="badge badge-danger">{{ $realtime['run_state'] ?? 'Desconocido' }}</span>
-                                    @endif
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Potencia Rx (ONT)</th>
-                                <td>
-                                    @if($realtime['rx_power'] !== null)
-                                        <span class="{{ $realtime['rx_power'] < -25 ? 'text-danger font-weight-bold' : 'text-success' }}">
-                                            {{ $realtime['rx_power'] }} dBm
-                                        </span>
-                                        @if($realtime['rx_power'] < -25)
-                                            <i class="fas fa-exclamation-triangle text-danger" title="Potencia baja"></i>
-                                        @endif
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Potencia Tx (ONT)</th>
-                                <td>{{ $realtime['tx_power'] !== null ? $realtime['tx_power'] . ' dBm' : '—' }}</td>
-                            </tr>
-                            <tr>
-                                <th>Potencia Rx en OLT</th>
-                                <td>{{ $realtime['olt_rx_power'] !== null ? $realtime['olt_rx_power'] . ' dBm' : '—' }}</td>
-                            </tr>
-                            <tr>
-                                <th>Temperatura</th>
-                                <td>
-                                    @if($realtime['temperature'] !== null)
-                                        <span class="{{ $realtime['temperature'] > 50 ? 'text-danger' : '' }}">
-                                            {{ $realtime['temperature'] }} °C
-                                        </span>
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Voltaje</th>
-                                <td>{{ $realtime['voltage'] !== null ? $realtime['voltage'] . ' V' : '—' }}</td>
-                            </tr>
-                            <tr>
-                                <th>Corriente</th>
-                                <td>{{ $realtime['current'] !== null ? $realtime['current'] . ' mA' : '—' }}</td>
-                            </tr>
-                            <tr>
-                                <th>Distancia</th>
-                                <td>{{ $realtime['distance'] !== null ? $realtime['distance'] . ' m' : '—' }}</td>
-                            </tr>
-                        </table>
-                    @else
-                        <div class="p-3 text-muted">
-                            No hay información en tiempo real disponible.
-                        </div>
-                    @endif
+                    {{-- Loader --}}
+                    <div id="realtimeLoader" class="text-center p-4">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <p class="mt-2 text-muted">Consultando la OLT...</p>
+                    </div>
+
+                    {{-- Tabla (oculta hasta que lleguen los datos) --}}
+                    <table id="realtimeTable" class="table table-striped mb-0" style="display:none;">
+                        <tr>
+                            <th style="width:40%">Estado operativo</th>
+                            <td id="rt-run-state">—</td>
+                        </tr>
+                        <tr>
+                            <th>Potencia Rx (ONT)</th>
+                            <td id="rt-rx-power">—</td>
+                        </tr>
+                        <tr>
+                            <th>Potencia Tx (ONT)</th>
+                            <td id="rt-tx-power">—</td>
+                        </tr>
+                        <tr>
+                            <th>Potencia Rx en OLT</th>
+                            <td id="rt-olt-rx-power">—</td>
+                        </tr>
+                        <tr>
+                            <th>Temperatura</th>
+                            <td id="rt-temperature">—</td>
+                        </tr>
+                        <tr>
+                            <th>Voltaje</th>
+                            <td id="rt-voltage">—</td>
+                        </tr>
+                        <tr>
+                            <th>Corriente</th>
+                            <td id="rt-current">—</td>
+                        </tr>
+                        <tr>
+                            <th>Distancia</th>
+                            <td id="rt-distance">—</td>
+                        </tr>
+                    </table>
                 </div>
             </div>
 
-            {{-- CATV (solo si la ONT tiene el módulo) --}}
-            @if($realtime && $realtime['has_catv'])
-                <div class="card">
-                    <div class="card-header bg-dark text-white">
-                        <i class="fas fa-tv"></i> CATV (Televisión)
-                    </div>
-                    <div class="card-body p-0">
-                        <table class="table table-striped mb-0">
-                            <tr>
-                                <th style="width:40%">Estado del puerto</th>
-                                <td>
-                                    @if($realtime['catv_state'] === 'on')
-                                        <span class="badge badge-success">Habilitado</span>
-                                    @elseif($realtime['catv_state'] === 'off')
-                                        <span class="badge badge-danger">Deshabilitado</span>
-                                    @else
-                                        <span class="badge badge-secondary">Desconocido</span>
-                                    @endif
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Potencia Rx CATV</th>
-                                <td>
-                                    @if($realtime['catv_rx_power'] !== null && $realtime['catv_rx_power'] > -35)
-                                        <span class="{{ $realtime['catv_rx_power'] < -8 ? 'text-danger' : 'text-success' }}">
-                                            {{ $realtime['catv_rx_power'] }} dBm
-                                        </span>
-                                    @else
-                                        <span class="text-muted">Sin señal ({{ $realtime['catv_rx_power'] }} dBm)</span>
-                                    @endif
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Acciones</th>
-                                <td>
-                                    @if($realtime['catv_state'] === 'on')
-                                        <form method="POST" action="{{ route('onts.catv.disable', $ont) }}" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn-danger btn-sm">
-                                                <i class="fas fa-toggle-off"></i> Deshabilitar CATV
-                                            </button>
-                                        </form>
-                                    @elseif($realtime['catv_state'] === 'off')
-                                        <form method="POST" action="{{ route('onts.catv.enable', $ont) }}" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn-success btn-sm">
-                                                <i class="fas fa-toggle-on"></i> Habilitar CATV
-                                            </button>
-                                        </form>
-                                    @else
-                                        {{-- Estado desconocido → mostrar ambos --}}
-                                        <form method="POST" action="{{ route('onts.catv.enable', $ont) }}" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn-success btn-sm">
-                                                <i class="fas fa-toggle-on"></i> Habilitar
-                                            </button>
-                                        </form>
-                                        <form method="POST" action="{{ route('onts.catv.disable', $ont) }}" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn-danger btn-sm">
-                                                <i class="fas fa-toggle-off"></i> Deshabilitar
-                                            </button>
-                                        </form>
-                                    @endif
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
+            {{-- CATV (oculta hasta confirmar que la ONT tiene módulo) --}}
+            <div class="card" id="catvCard" style="display:none;">
+                <div class="card-header bg-dark text-white">
+                    <i class="fas fa-tv"></i> CATV (Televisión)
                 </div>
-            @endif
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0">
+                        <tr>
+                            <th style="width:40%">Estado del puerto</th>
+                            <td id="rt-catv-state">—</td>
+                        </tr>
+                        <tr>
+                            <th>Potencia Rx CATV</th>
+                            <td id="rt-catv-power">—</td>
+                        </tr>
+                        <tr>
+                            <th>Acciones</th>
+                            <td id="rt-catv-actions">—</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
 
-            {{-- Historial de conexión --}}
-            @if($realtime)
-                <div class="card">
-                    <div class="card-header bg-secondary text-white">
-                        <i class="fas fa-history"></i> Historial de Conexión
-                    </div>
-                    <div class="card-body p-0">
-                        <table class="table table-striped mb-0">
-                            <tr>
-                                <th style="width:40%">Última conexión</th>
-                                <td>{{ $realtime['last_up_time'] ?? '—' }}</td>
-                            </tr>
-                            <tr>
-                                <th>Última desconexión</th>
-                                <td>{{ $realtime['last_down_time'] ?? '—' }}</td>
-                            </tr>
-                            <tr>
-                                <th>Causa última caída</th>
-                                <td>
-                                    @if(($realtime['last_down_cause'] ?? null) === 'dying-gasp')
-                                        <span class="badge badge-warning">Corte de energía (dying-gasp)</span>
-                                    @elseif(($realtime['last_down_cause'] ?? null) === 'LOSi/LOBi')
-                                        <span class="badge badge-danger">Pérdida de señal óptica (LOSi)</span>
-                                    @else
-                                        {{ $realtime['last_down_cause'] ?? '—' }}
-                                    @endif
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Tiempo en línea</th>
-                                <td>{{ $realtime['online_duration'] ?? '—' }}</td>
-                            </tr>
-                        </table>
-                    </div>
+            {{-- Historial (oculta hasta que lleguen los datos) --}}
+            <div class="card" id="historyCard" style="display:none;">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-history"></i> Historial de Conexión
                 </div>
-            @endif
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0">
+                        <tr>
+                            <th style="width:40%">Última conexión</th>
+                            <td id="rt-last-up">—</td>
+                        </tr>
+                        <tr>
+                            <th>Última desconexión</th>
+                            <td id="rt-last-down">—</td>
+                        </tr>
+                        <tr>
+                            <th>Causa última caída</th>
+                            <td id="rt-down-cause">—</td>
+                        </tr>
+                        <tr>
+                            <th>Tiempo en línea</th>
+                            <td id="rt-online-duration">—</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
+@endsection
+
+@section('js')
+    <script>
+        const ontId          = {{ $ont->id }};
+        const realtimeUrl    = `/onts/${ontId}/realtime`;
+        const catvEnableUrl  = `/onts/${ontId}/catv/enable`;
+        const catvDisableUrl = `/onts/${ontId}/catv/disable`;
+        const csrfToken      = document.querySelector('meta[name="csrf-token"]').content;
+
+        function setText(id, value, suffix = '') {
+            document.getElementById(id).innerHTML =
+                (value !== null && value !== undefined && value !== '') ? value + suffix : '—';
+        }
+
+        function loadRealtime() {
+            const loader = document.getElementById('realtimeLoader');
+            const table  = document.getElementById('realtimeTable');
+            const errBox = document.getElementById('realtimeError');
+
+            loader.style.display = 'block';
+            table.style.display  = 'none';
+            errBox.style.display = 'none';
+            document.getElementById('catvCard').style.display    = 'none';
+            document.getElementById('historyCard').style.display = 'none';
+
+            fetch(realtimeUrl)
+                .then(r => r.json())
+                .then(res => {
+                    loader.style.display = 'none';
+
+                    if (!res.ok) {
+                        document.getElementById('realtimeErrorMsg').textContent = res.message;
+                        errBox.style.display = 'block';
+                        return;
+                    }
+
+                    const d = res.data;
+                    table.style.display = 'table';
+
+                    // Estado operativo
+                    if ((d.run_state || '').toLowerCase() === 'online') {
+                        setText('rt-run-state', '<span class="badge badge-success">Online</span>');
+                    } else {
+                        setText('rt-run-state', `<span class="badge badge-danger">${d.run_state ?? 'Desconocido'}</span>`);
+                    }
+
+                    // Potencia Rx con color según umbral
+                    if (d.rx_power !== null) {
+                        const cls  = d.rx_power < -25 ? 'text-danger font-weight-bold' : 'text-success';
+                        const warn = d.rx_power < -25 ? ' <i class="fas fa-exclamation-triangle text-danger"></i>' : '';
+                        setText('rt-rx-power', `<span class="${cls}">${d.rx_power} dBm</span>${warn}`);
+                    } else {
+                        setText('rt-rx-power', null);
+                    }
+
+                    setText('rt-tx-power',     d.tx_power,     ' dBm');
+                    setText('rt-olt-rx-power', d.olt_rx_power, ' dBm');
+
+                    // Temperatura con alerta
+                    if (d.temperature !== null) {
+                        const cls = d.temperature > 50 ? 'text-danger' : '';
+                        setText('rt-temperature', `<span class="${cls}">${d.temperature} °C</span>`);
+                    } else {
+                        setText('rt-temperature', null);
+                    }
+
+                    setText('rt-voltage',  d.voltage,  ' V');
+                    setText('rt-current',  d.current,  ' mA');
+                    setText('rt-distance', d.distance, ' m');
+
+                    // Historial
+                    document.getElementById('historyCard').style.display = 'block';
+                    setText('rt-last-up',   d.last_up_time);
+                    setText('rt-last-down', d.last_down_time);
+                    setText('rt-online-duration', d.online_duration);
+
+                    if (d.last_down_cause === 'dying-gasp') {
+                        setText('rt-down-cause', '<span class="badge badge-warning">Corte de energía (dying-gasp)</span>');
+                    } else if (d.last_down_cause === 'LOSi/LOBi') {
+                        setText('rt-down-cause', '<span class="badge badge-danger">Pérdida de señal óptica (LOSi)</span>');
+                    } else {
+                        setText('rt-down-cause', d.last_down_cause);
+                    }
+
+                    // CATV
+                    if (d.has_catv) {
+                        document.getElementById('catvCard').style.display = 'block';
+
+                        if (d.catv_state === 'on') {
+                            setText('rt-catv-state', '<span class="badge badge-success">Habilitado</span>');
+                        } else if (d.catv_state === 'off') {
+                            setText('rt-catv-state', '<span class="badge badge-danger">Deshabilitado</span>');
+                        } else {
+                            setText('rt-catv-state', '<span class="badge badge-secondary">Desconocido</span>');
+                        }
+
+                        if (d.catv_rx_power !== null && d.catv_rx_power > -35) {
+                            const cls = d.catv_rx_power < -8 ? 'text-danger' : 'text-success';
+                            setText('rt-catv-power', `<span class="${cls}">${d.catv_rx_power} dBm</span>`);
+                        } else {
+                            setText('rt-catv-power', `<span class="text-muted">Sin señal (${d.catv_rx_power} dBm)</span>`);
+                        }
+
+                        // Botones según estado
+                        let actions = '';
+                        if (d.catv_state === 'on') {
+                            actions = catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-off', 'Deshabilitar CATV');
+                        } else if (d.catv_state === 'off') {
+                            actions = catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-on', 'Habilitar CATV');
+                        } else {
+                            actions = catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-on', 'Habilitar') + ' ' +
+                                catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-off', 'Deshabilitar');
+                        }
+                        document.getElementById('rt-catv-actions').innerHTML = actions;
+                    }
+                })
+                .catch(() => {
+                    loader.style.display = 'none';
+                    document.getElementById('realtimeErrorMsg').textContent =
+                        'Error de conexión al consultar la OLT.';
+                    errBox.style.display = 'block';
+                });
+        }
+
+        function catvButton(url, btnClass, icon, label) {
+            return `
+                <form method="POST" action="${url}" class="d-inline">
+                    <input type="hidden" name="_token" value="${csrfToken}">
+                    <button type="submit" class="btn ${btnClass} btn-sm">
+                        <i class="fas ${icon}"></i> ${label}
+                    </button>
+                </form>`;
+        }
+
+        // Cargar al abrir la página
+        document.addEventListener('DOMContentLoaded', loadRealtime);
+
+        // Botón de refresco manual
+        document.getElementById('btnRefreshRealtime').addEventListener('click', loadRealtime);
+    </script>
 @endsection

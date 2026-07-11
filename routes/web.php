@@ -11,6 +11,8 @@ use App\Http\Controllers\MaterialMovementController;
 use App\Http\Controllers\OltController;
 use App\Http\Controllers\OntController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PppoeAccountController;
+use App\Http\Controllers\RouterController;
 use App\Http\Controllers\TechnicalOrderController;
 use App\Http\Controllers\WarehouseController;
 use App\Models\Olt;
@@ -196,3 +198,28 @@ Route::get('/onts/{ont}', [OntController::class, 'show'])->name('onts.show');
 //Activar y desactivar CATV en ONTS
 Route::post('/onts/{ont}/catv/enable',  [OntController::class, 'enableCatv'])->name('onts.catv.enable');
 Route::post('/onts/{ont}/catv/disable', [OntController::class, 'disableCatv'])->name('onts.catv.disable');
+//Cargar información de onts
+Route::get('/onts/{ont}/realtime', [OntController::class, 'realtimeInfo'])->name('onts.realtime');
+
+// Routers
+Route::get('/routers',                 [RouterController::class, 'index'])->name('routers.index');
+Route::get('/routers/create',          [RouterController::class, 'create'])->name('routers.create');
+Route::post('/routers',                [RouterController::class, 'store'])->name('routers.store');
+Route::get('/routers/{router}/edit',   [RouterController::class, 'edit'])->name('routers.edit');
+Route::put('/routers/{router}',        [RouterController::class, 'update'])->name('routers.update');
+Route::delete('/routers/{router}',     [RouterController::class, 'destroy'])->name('routers.destroy');
+Route::get('/api/routers',                     [RouterController::class, 'apiRouters'])->name('api.routers');
+Route::get('/api/routers/{router}/profiles',   [RouterController::class, 'apiProfiles'])->name('api.routers.profiles');
+
+//Ver estados de sesiones pppoe
+Route::get('/pppoe/{pppoe}',                  [PppoeAccountController::class, 'show'])->name('pppoe.show');
+Route::get('/pppoe/{pppoe}/realtime-session', [PppoeAccountController::class, 'realtimeSession'])->name('pppoe.realtime');
+Route::post('/pppoe/{pppoe}/restart-session', [PppoeAccountController::class, 'restartSession'])->name('pppoe.restart');
+// PPPoE
+Route::get('/pppoe',                       [PppoeAccountController::class, 'index'])->name('pppoe.index');
+Route::post('/pppoe',                      [PppoeAccountController::class, 'store'])->name('pppoe.store');
+Route::put('/pppoe/{pppoe}',               [PppoeAccountController::class, 'update'])->name('pppoe.update');
+Route::post('/pppoe/{pppoe}/toggle',       [PppoeAccountController::class, 'toggleState'])->name('pppoe.toggle');
+Route::delete('/pppoe/{pppoe}',            [PppoeAccountController::class, 'destroy'])->name('pppoe.destroy');
+Route::post('/pppoe/import/{router}',      [PppoeAccountController::class, 'importFromRouter'])->name('pppoe.import');
+Route::get('/api/routers/{router}/active-sessions', [PppoeAccountController::class, 'apiActiveSessions'])->name('api.routers.sessions');
