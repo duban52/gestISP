@@ -6,328 +6,316 @@ use App\Exports\MaterialsMovementsExport;
 use App\Models\Inventory;
 use App\Models\Material;
 use App\Models\MaterialMovement;
-use App\Models\User;
 use App\Models\Warehouse;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\View\View;
 
+/**
+ * Controlador de Movimientos de Material
+ *
+ * Gestiona el registro de movimientos de inventario (Entrada, Salida,
+ * Transferencia) y su historial. Cada movimiento actualiza el stock
+ * en la tabla inventories de forma atómica (transacción DB):
+ *
+ * - Entrada:        crea/incrementa stock en el almacén destino
+ * - Salida:         elimina/decrementa stock en el almacén origen
+ * - Transferencia:  mueve stock del origen al destino
+ *
+ * Los EQUIPOS (material con is_equipment) se mueven por número de
+ * serie: cada serial genera su propio registro de movimiento y su
+ * propia fila de inventario. Los CONSUMIBLES se mueven por cantidad.
+ *
+ * Al registrar un movimiento se genera un PDF de resumen que la
+ * vista muestra en un modal.
+ */
 class MaterialMovementController extends Controller
 {
+    /**
+     * Constructor: protege las rutas con autenticación y permisos.
+     */
     public function __construct()
     {
         $this->middleware('auth');
         $this->middleware('check.permission:movements.index')->only('index');
         $this->middleware('check.permission:movements.create')->only('create', 'store');
-        $this->middleware('check.permission:movements.edit')->only('edit', 'update');
-        $this->middleware('check.permission:movements.destroy')->only('destroy');
         $this->middleware('check.permission:movements.query_sn')->only('getAvailableSerialNumbers');
         $this->middleware('check.permission:movements.material_quantity')->only('getAvailableQuantity');
         $this->middleware('check.permission:movements.history')->only('history');
-        $this->middleware('check.permission:movements.history_data')->only('history');
         $this->middleware('check.permission:movements.pdf')->only('exportMovementsPDF');
         $this->middleware('check.permission:movements.excel')->only('export');
     }
+
     /**
-     * Display a listing of the resource.
+     * Formulario de registro de movimientos.
+     *
+     * Envía el catálogo de materiales (ordenado para el select2)
+     * y los almacenes de la sucursal activa.
      */
-    public function index()
+    public function index(): View
     {
-        $materials = Material::all();
+        $materials  = Material::orderBy('name')->get();
         $warehouses = Warehouse::where('branch_id', session('branch_id'))->get();
+
         return view('gestisp.materials.movements.index', compact('materials', 'warehouses'));
     }
 
     /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
+     * Registra un movimiento de material (uno o varios materiales).
+     *
+     * Todo el proceso corre en una transacción: si un material falla
+     * (stock insuficiente, seriales incompletos), se revierte todo.
+     *
+     * Flujo por material:
+     * 1. Salidas/Transferencias: validar stock disponible en origen
+     *    - Equipos: contar unidades y exigir tantos seriales como
+     *      cantidad solicitada
+     *    - Consumibles: comparar contra la cantidad en inventario
+     * 2. Crear el/los registros de movimiento
+     *    - Equipos: un movimiento por serial (quantity = 1)
+     *    - Consumibles: un movimiento con la cantidad total
+     * 3. Actualizar el inventario según el tipo (updateInventory)
+     *
+     * Al final genera el PDF de resumen y lo pasa a la vista por
+     * sesión para mostrarlo en el modal.
      */
     public function store(Request $request)
     {
         try {
-            \Log::info('Iniciando registro de movimiento de material', ['request' => $request->all()]);
-
             $request->validate([
-                'type' => 'required|in:Entrada,Salida,Transferencia',
-                'materials.*.material_id' => 'required|exists:materials,id',
-                'materials.*.quantity' => 'required|numeric|min:1',
+                'type'                            => 'required|in:Entrada,Salida,Transferencia',
+                'materials'                       => 'required|array|min:1',
+                'materials.*.material_id'         => 'required|exists:materials,id',
+                'materials.*.quantity'            => 'required|numeric|min:1',
                 'materials.*.unit_of_measurement' => 'required|string',
-                'warehouse_origin_id' => 'nullable|exists:warehouses,id',
-                'warehouse_destination_id' => 'nullable|exists:warehouses,id',
-                'materials.*.serial_numbers.*' => 'nullable|string|required_if:is_equipment,1',
-                'reason' => 'required|string|max:100'
+                'materials.*.serial_numbers'      => 'nullable|array',
+                'materials.*.serial_numbers.*'    => 'string',
+                'warehouse_origin_id'             => 'nullable|exists:warehouses,id|required_if:type,Salida,Transferencia',
+                'warehouse_destination_id'        => 'nullable|exists:warehouses,id|required_if:type,Entrada,Transferencia',
+                'reason'                          => 'required|string|max:100',
             ]);
 
-            \Log::info('Validación pasada correctamente');
-
             $movements = [];
-            $result = DB::transaction(function () use ($request, &$movements) {
-                try {
-                    foreach ($request->materials as $materialData) {
-                        \Log::info('Procesando material', ['material_data' => $materialData]);
 
-                        $material = Material::findOrFail($materialData['material_id']);
-                        $quantity = $materialData['quantity'];
-                        $isEquipment = $material->is_equipment;
+            DB::transaction(function () use ($request, &$movements) {
+                foreach ($request->materials as $materialData) {
+                    $material    = Material::findOrFail($materialData['material_id']);
+                    $quantity    = $materialData['quantity'];
+                    $isEquipment = $material->is_equipment;
 
-                        // Validar cantidad en inventario para salidas y transferencias
-                        if (in_array($request->type, ['Salida', 'Transferencia'])) {
-                            if ($isEquipment) {
-                                // Para equipos, contar el número total de equipos disponibles
-                                $availableQuantity = Inventory::where('warehouse_id', $request->warehouse_origin_id)
-                                    ->where('material_id', $material->id)
-                                    ->count();
+                    // ---- Validar stock en origen (salidas y transferencias) ----
+                    if (in_array($request->type, ['Salida', 'Transferencia'])) {
+                        if ($isEquipment) {
+                            // Equipos: una fila de inventario por serial → contar
+                            $availableQuantity = Inventory::where('warehouse_id', $request->warehouse_origin_id)
+                                ->where('material_id', $material->id)
+                                ->count();
 
-                                \Log::info('Verificando cantidad de equipos', [
-                                    'disponible' => $availableQuantity,
-                                    'solicitada' => $quantity
-                                ]);
-
-                                if ($availableQuantity < $quantity) {
-                                    throw new \Exception("Cantidad insuficiente de equipos en el almacén de origen. Disponibles: {$availableQuantity}, Solicitados: {$quantity}");
-                                }
-
-                                // Validar que la cantidad de números de serie coincida con la cantidad solicitada
-                                if (!isset($materialData['serial_numbers']) || count($materialData['serial_numbers']) != $quantity) {
-                                    throw new \Exception("La cantidad de números de serie seleccionados debe ser igual a la cantidad solicitada");
-                                }
-                            } else {
-                                // Para materiales normales
-                                $inventory = Inventory::where('warehouse_id', $request->warehouse_origin_id)
-                                    ->where('material_id', $material->id)
-                                    ->first();
-
-                                \Log::info('Verificando inventario de material', [
-                                    'inventory' => $inventory,
-                                    'required_quantity' => $quantity
-                                ]);
-
-                                if (!$inventory || $inventory->quantity < $quantity) {
-                                    throw new \Exception("Cantidad insuficiente en el almacén de origen. Disponible: {$inventory->quantity}, Solicitado: {$quantity}");
-                                }
-                            }
-                        }
-
-                        // Crear movimiento
-                        if ($isEquipment && isset($materialData['serial_numbers'])) {
-                            \Log::info('Procesando equipo con números de serie', [
-                                'serial_numbers' => $materialData['serial_numbers']
-                            ]);
-
-                            foreach ($materialData['serial_numbers'] as $serialNumber) {
-                                $movement = MaterialMovement::create([
-                                    'type' => $request->type,
-                                    'material_id' => $material->id,
-                                    'quantity' => 1,
-                                    'unit_of_measurement' => $materialData['unit_of_measurement'],
-                                    'warehouse_origin_id' => $request->warehouse_origin_id,
-                                    'warehouse_destination_id' => $request->warehouse_destination_id,
-                                    'serial_number' => $serialNumber,
-                                    'user_id' => auth()->id(),
-                                    'reason' => $request->reason,
-                                ]);
-
-                                \Log::info('Movimiento creado para equipo', ['movement' => $movement]);
-
-                                // Actualizar inventario
-                                $this->updateInventory(
-                                    $request->type,
-                                    $request->warehouse_origin_id,
-                                    $request->warehouse_destination_id,
-                                    $material->id,
-                                    1,
-                                    $materialData['unit_of_measurement'],
-                                    $serialNumber
+                            if ($availableQuantity < $quantity) {
+                                throw new \Exception(
+                                    "Cantidad insuficiente de equipos en el almacén de origen. " .
+                                    "Disponibles: {$availableQuantity}, Solicitados: {$quantity}"
                                 );
+                            }
 
-                                $movements[] = $movement;
+                            // Los seriales seleccionados deben coincidir con la cantidad
+                            if (!isset($materialData['serial_numbers']) || count($materialData['serial_numbers']) != $quantity) {
+                                throw new \Exception(
+                                    'La cantidad de números de serie seleccionados debe ser igual a la cantidad solicitada.'
+                                );
                             }
                         } else {
-                            \Log::info('Procesando material sin números de serie');
+                            // Consumibles: comparar contra la cantidad acumulada
+                            $inventory = Inventory::where('warehouse_id', $request->warehouse_origin_id)
+                                ->where('material_id', $material->id)
+                                ->first();
 
-                            $movement = MaterialMovement::create([
-                                'type' => $request->type,
-                                'material_id' => $material->id,
-                                'quantity' => $quantity,
-                                'unit_of_measurement' => $materialData['unit_of_measurement'],
-                                'warehouse_origin_id' => $request->warehouse_origin_id,
+                            if (!$inventory || $inventory->quantity < $quantity) {
+                                $available = $inventory->quantity ?? 0;
+                                throw new \Exception(
+                                    "Cantidad insuficiente en el almacén de origen. " .
+                                    "Disponible: {$available}, Solicitado: {$quantity}"
+                                );
+                            }
+                        }
+                    }
+
+                    // ---- Crear movimientos y actualizar inventario ----
+                    if ($isEquipment && isset($materialData['serial_numbers'])) {
+                        // Equipos: un movimiento por cada serial
+                        foreach ($materialData['serial_numbers'] as $serialNumber) {
+                            $movements[] = MaterialMovement::create([
+                                'type'                     => $request->type,
+                                'material_id'              => $material->id,
+                                'quantity'                 => 1,
+                                'unit_of_measurement'      => $materialData['unit_of_measurement'],
+                                'warehouse_origin_id'      => $request->warehouse_origin_id,
                                 'warehouse_destination_id' => $request->warehouse_destination_id,
-                                'user_id' => auth()->id(),
-                                'reason' => $request->reason,
+                                'serial_number'            => $serialNumber,
+                                'user_id'                  => auth()->id(),
+                                'reason'                   => $request->reason,
                             ]);
 
-                            \Log::info('Movimiento creado', ['movement' => $movement]);
-
-                            // Actualizar inventario
                             $this->updateInventory(
                                 $request->type,
                                 $request->warehouse_origin_id,
                                 $request->warehouse_destination_id,
                                 $material->id,
-                                $quantity,
-                                $materialData['unit_of_measurement']
+                                1,
+                                $materialData['unit_of_measurement'],
+                                $serialNumber
                             );
-
-                            $movements[] = $movement;
                         }
-                    }
+                    } else {
+                        // Consumibles: un movimiento con la cantidad total
+                        $movements[] = MaterialMovement::create([
+                            'type'                     => $request->type,
+                            'material_id'              => $material->id,
+                            'quantity'                 => $quantity,
+                            'unit_of_measurement'      => $materialData['unit_of_measurement'],
+                            'warehouse_origin_id'      => $request->warehouse_origin_id,
+                            'warehouse_destination_id' => $request->warehouse_destination_id,
+                            'user_id'                  => auth()->id(),
+                            'reason'                   => $request->reason,
+                        ]);
 
-                    return true;
-                } catch (\Exception $e) {
-                    \Log::error('Error en la transacción', [
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                    throw $e;
+                        $this->updateInventory(
+                            $request->type,
+                            $request->warehouse_origin_id,
+                            $request->warehouse_destination_id,
+                            $material->id,
+                            $quantity,
+                            $materialData['unit_of_measurement']
+                        );
+                    }
                 }
             });
 
-            \Log::info('Movimiento completado exitosamente');
-
-            // Generar el PDF utilizando la vista
-            $pdf = Pdf::loadView('gestisp.materials.movements.pdf_summary', compact('movements'));
-
-            // Guardar el PDF en un archivo temporal
+            // ---- PDF de resumen del movimiento ----
+            $pdf     = Pdf::loadView('gestisp.materials.movements.pdf_summary', compact('movements'));
             $pdfPath = storage_path('app/public/movimiento_' . time() . '.pdf');
             $pdf->save($pdfPath);
 
             return redirect()->route('movements.index')->with([
                 'success-create' => 'Movimiento registrado exitosamente.',
-                'pdfPath' => $pdfPath
+                'pdfPath'        => $pdfPath,
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error al procesar el movimiento', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+            Log::error('Error al procesar movimiento de material', [
+                'error'   => $e->getMessage(),
+                'request' => $request->all(),
             ]);
 
-            // Mostrar el error en pantalla de manera amigable
             return back()
                 ->withErrors(['error' => $e->getMessage()])
                 ->withInput();
         }
     }
 
-    protected function updateInventory($type, $warehouseOriginId, $warehouseDestinationId, $materialId, $quantity, $unitOfMeasurement, $serialNumber = null)
-    {
-        try {
-            \Log::info('Iniciando actualización de inventario', [
-                'type' => $type,
-                'warehouse_origin' => $warehouseOriginId,
-                'warehouse_destination' => $warehouseDestinationId,
-                'material' => $materialId,
-                'quantity' => $quantity,
-                'serial_number' => $serialNumber
-            ]);
-
-            if ($type === 'Entrada') {
-                if ($serialNumber) {
-                    $inventory = Inventory::create([
-                        'warehouse_id' => $warehouseDestinationId,
-                        'material_id' => $materialId,
-                        'quantity' => 1,
+    /**
+     * Actualiza el inventario según el tipo de movimiento.
+     *
+     * Entrada:
+     *   - Equipo: crea una fila nueva con el serial
+     *   - Consumible: incrementa (o crea) la fila acumulada del material
+     * Salida:
+     *   - Equipo: elimina la fila del serial
+     *   - Consumible: decrementa la cantidad
+     * Transferencia:
+     *   - Equipo: cambia el warehouse_id de la fila del serial
+     *   - Consumible: decrementa en origen e incrementa en destino
+     *
+     * Se ejecuta dentro de la transacción del store, por lo que
+     * cualquier excepción revierte también los movimientos creados.
+     */
+    protected function updateInventory(
+        string $type,
+        ?int $warehouseOriginId,
+        ?int $warehouseDestinationId,
+        int $materialId,
+        int $quantity,
+        string $unitOfMeasurement,
+        ?string $serialNumber = null
+    ): void {
+        if ($type === 'Entrada') {
+            if ($serialNumber) {
+                Inventory::create([
+                    'warehouse_id'        => $warehouseDestinationId,
+                    'material_id'         => $materialId,
+                    'quantity'            => 1,
+                    'unit_of_measurement' => $unitOfMeasurement,
+                    'serial_number'       => $serialNumber,
+                ]);
+            } else {
+                Inventory::updateOrCreate(
+                    [
+                        'warehouse_id'  => $warehouseDestinationId,
+                        'material_id'   => $materialId,
+                        'serial_number' => null,
+                    ],
+                    [
+                        'quantity'            => DB::raw("COALESCE(quantity, 0) + $quantity"),
                         'unit_of_measurement' => $unitOfMeasurement,
-                        'serial_number' => $serialNumber
-                    ]);
-                    \Log::info('Entrada de equipo creada', ['inventory' => $inventory]);
-                } else {
-                    $inventory = Inventory::updateOrCreate(
-                        [
-                            'warehouse_id' => $warehouseDestinationId,
-                            'material_id' => $materialId,
-                            'serial_number' => null
-                        ],
-                        [
-                            'quantity' => DB::raw("COALESCE(quantity, 0) + $quantity"),
-                            'unit_of_measurement' => $unitOfMeasurement,
-                        ]
-                    );
-                    \Log::info('Entrada de material actualizada', ['inventory' => $inventory]);
-                }
-            } elseif ($type === 'Salida') {
-                if ($serialNumber) {
-                    $inventory = Inventory::where('warehouse_id', $warehouseOriginId)
-                        ->where('material_id', $materialId)
-                        ->where('serial_number', $serialNumber)
-                        ->first();
-
-                    if ($inventory) {
-                        $inventory->delete();
-                        \Log::info('Equipo eliminado del inventario', ['serial_number' => $serialNumber]);
-                    }
-                } else {
-                    $inventory = Inventory::where('warehouse_id', $warehouseOriginId)
-                        ->where('material_id', $materialId)
-                        ->first();
-
-                    if ($inventory) {
-                        $inventory->update([
-                            'quantity' => $inventory->quantity - $quantity
-                        ]);
-                        \Log::info('Cantidad actualizada en salida', ['inventory' => $inventory]);
-                    }
-                }
-            } elseif ($type === 'Transferencia') {
-                if ($serialNumber) {
-                    $inventory = Inventory::where('warehouse_id', $warehouseOriginId)
-                        ->where('material_id', $materialId)
-                        ->where('serial_number', $serialNumber)
-                        ->first();
-
-                    if ($inventory) {
-                        $inventory->update(['warehouse_id' => $warehouseDestinationId]);
-                        \Log::info('Equipo transferido', ['inventory' => $inventory]);
-                    }
-                } else {
-                    DB::transaction(function () use ($warehouseOriginId, $warehouseDestinationId, $materialId, $quantity, $unitOfMeasurement) {
-                        // Reducir en origen
-                        $originInventory = Inventory::where('warehouse_id', $warehouseOriginId)
-                            ->where('material_id', $materialId)
-                            ->first();
-
-                        if ($originInventory) {
-                            $originInventory->update([
-                                'quantity' => $originInventory->quantity - $quantity
-                            ]);
-                            \Log::info('Cantidad reducida en origen', ['inventory' => $originInventory]);
-                        }
-
-                        // Aumentar en destino
-                        $destinationInventory = Inventory::updateOrCreate(
-                            [
-                                'warehouse_id' => $warehouseDestinationId,
-                                'material_id' => $materialId,
-                                'serial_number' => null
-                            ],
-                            [
-                                'quantity' => DB::raw("COALESCE(quantity, 0) + $quantity"),
-                                'unit_of_measurement' => $unitOfMeasurement,
-                            ]
-                        );
-                        \Log::info('Cantidad aumentada en destino', ['inventory' => $destinationInventory]);
-                    });
-                }
+                    ]
+                );
             }
+        } elseif ($type === 'Salida') {
+            if ($serialNumber) {
+                Inventory::where('warehouse_id', $warehouseOriginId)
+                    ->where('material_id', $materialId)
+                    ->where('serial_number', $serialNumber)
+                    ->first()?->delete();
+            } else {
+                $inventory = Inventory::where('warehouse_id', $warehouseOriginId)
+                    ->where('material_id', $materialId)
+                    ->first();
 
-            \Log::info('Actualización de inventario completada exitosamente');
-        } catch (\Exception $e) {
-            \Log::error('Error en actualización de inventario', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            throw $e;
+                $inventory?->update([
+                    'quantity' => $inventory->quantity - $quantity,
+                ]);
+            }
+        } elseif ($type === 'Transferencia') {
+            if ($serialNumber) {
+                // El equipo conserva su fila, solo cambia de almacén
+                Inventory::where('warehouse_id', $warehouseOriginId)
+                    ->where('material_id', $materialId)
+                    ->where('serial_number', $serialNumber)
+                    ->first()?->update(['warehouse_id' => $warehouseDestinationId]);
+            } else {
+                // Consumible: restar en origen, sumar en destino
+                $originInventory = Inventory::where('warehouse_id', $warehouseOriginId)
+                    ->where('material_id', $materialId)
+                    ->first();
+
+                $originInventory?->update([
+                    'quantity' => $originInventory->quantity - $quantity,
+                ]);
+
+                Inventory::updateOrCreate(
+                    [
+                        'warehouse_id'  => $warehouseDestinationId,
+                        'material_id'   => $materialId,
+                        'serial_number' => null,
+                    ],
+                    [
+                        'quantity'            => DB::raw("COALESCE(quantity, 0) + $quantity"),
+                        'unit_of_measurement' => $unitOfMeasurement,
+                    ]
+                );
+            }
         }
     }
 
-    public function getAvailableSerialNumbers($warehouseId, $materialId)
+    /**
+     * API JSON: seriales disponibles de un material en un almacén.
+     * Alimenta el select de seriales del modal de registro.
+     */
+    public function getAvailableSerialNumbers($warehouseId, $materialId): JsonResponse
     {
         $serialNumbers = Inventory::where('warehouse_id', $warehouseId)
             ->where('material_id', $materialId)
@@ -337,138 +325,158 @@ class MaterialMovementController extends Controller
         return response()->json($serialNumbers);
     }
 
-    //Obtener la cantidad de un material
-
-    public function getAvailableQuantity($warehouseId, $materialId)
+    /**
+     * API JSON: cantidad disponible de un material en un almacén.
+     * Equipos: número de filas (una por serial).
+     * Consumibles: suma de la columna quantity.
+     */
+    public function getAvailableQuantity($warehouseId, $materialId): JsonResponse
     {
-        // Obtener la cantidad total disponible en el inventario
         $material = Material::findOrFail($materialId);
-        $quantity = 0;
 
-        if ($material->is_equipment) {
-            // Contar el número de equipos individuales en el inventario
-            $quantity = Inventory::where('warehouse_id', $warehouseId)
+        $quantity = $material->is_equipment
+            ? Inventory::where('warehouse_id', $warehouseId)
                 ->where('material_id', $materialId)
-                ->count();
-        } else {
-            // Sumar la cantidad total del material en el inventario
-            $quantity = Inventory::where('warehouse_id', $warehouseId)
+                ->count()
+            : Inventory::where('warehouse_id', $warehouseId)
                 ->where('material_id', $materialId)
                 ->sum('quantity');
-        }
 
         return response()->json(['quantity' => $quantity]);
     }
 
-    //Mostrar historial de movimientos de almacén:
-
-    public function history(Request $request)
+    /**
+     * Historial de movimientos con filtros.
+     *
+     * La tabla usa DataTables del lado del cliente. Como los
+     * movimientos crecen sin límite, si el usuario no especifica
+     * un rango de fechas se muestra solo el mes actual.
+     */
+    public function history(Request $request): View
     {
-        $branchId = session('branch_id');
-        // Inicializar la consulta base con las relaciones necesarias
-        $query = MaterialMovement::with(['warehouseOrigin', 'warehouseDestination', 'material', 'user']);
+        $query = $this->applyFilters($request);
 
-        // Inicializar la consulta base con las relaciones necesarias y filtrando por la sucursal
-        $query = MaterialMovement::with(['warehouseOrigin', 'warehouseDestination', 'material', 'user'])
-            ->whereHas('warehouseOrigin', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            })->orWhereHas('warehouseDestination', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
+        // Sin rango de fechas explícito → limitar al mes actual
+        $usingDefaultRange = !($request->filled('start_date') || $request->filled('end_date'));
 
-        // Aplicar filtro por campo específico si se ha establecido
-        if ($request->filled('filter_field') && $request->filled('filter_value')) {
-            $query->where($request->filter_field, 'LIKE', "%{$request->filter_value}%");
+        if ($usingDefaultRange) {
+            $query->whereBetween('created_at', [
+                now()->startOfMonth(),
+                now()->endOfMonth(),
+            ]);
         }
 
-        // Aplicar filtro de rango de fechas si se han establecido
-        if ($request->filled('start_date')) {
-            $query->whereDate('created_at', '>=', $request->start_date);
-        }
-        if ($request->filled('end_date')) {
-            $query->whereDate('created_at', '<=', $request->end_date);
-        }
+        $movements = $query
+            ->with(['warehouseOrigin', 'warehouseDestination', 'material', 'user'])
+            ->orderByDesc('created_at')
+            ->get();
 
-        // Aplicar paginación
-        $perPage = $request->input('per_page', 12);
-        $movements = $query->orderBy('created_at', 'desc')->simplePaginate($perPage);
-
-        // Retornar la vista con los movimientos filtrados
-        return view('gestisp.materials.movements.history', compact('movements'));
+        return view('gestisp.materials.movements.history', compact('movements', 'usingDefaultRange'));
     }
 
-    //Exportar filtrado en PDF
+    /**
+     * Exporta el historial filtrado a PDF.
+     * Usa exactamente los mismos filtros que history() vía
+     * applyFilters(), sin el límite del mes actual.
+     */
     public function exportMovementsPDF(Request $request)
     {
-        // Inicializar la consulta base con las relaciones necesarias
-        $query = MaterialMovement::with(['warehouseOrigin', 'warehouseDestination', 'material', 'user']);
+        $movements = $this->applyFilters($request)
+            ->with(['warehouseOrigin', 'warehouseDestination', 'material', 'user'])
+            ->orderByDesc('created_at')
+            ->get();
 
-        if (session()->has('branch_id')) {
-            $query->whereHas('warehouseDestination', function ($query) {
-                $query->where('branch_id', session('branch_id'));
-            });
-        }
-
-
-        // Aplicar filtro por campo específico si se ha establecido
-        if ($request->filled('filter_field') && $request->filled('filter_value')) {
-            $query->where($request->filter_field, 'LIKE', "%{$request->filter_value}%");
-        }
-
-        // Aplicar filtro de rango de fechas si se han establecido
-        if ($request->filled('start_date')) {
-            $query->whereDate('created_at', '>=', $request->start_date);
-        }
-        if ($request->filled('end_date')) {
-            $query->whereDate('created_at', '<=', $request->end_date);
-        }
-
-        // Obtener los movimientos filtrados sin paginación
-        $movements = $query->orderBy('created_at', 'desc')->get();
-
-        // Generar el PDF utilizando la vista
         $pdf = Pdf::loadView('gestisp.materials.movements.pdf', compact('movements'));
 
-        // Descargar el PDF con un nombre de archivo adecuado
         return $pdf->download('historial_movimientos.pdf');
     }
 
-    //Exportar todos los movimientos en PDF
-
+    /**
+     * Exporta todos los movimientos a Excel.
+     */
     public function export()
     {
-        //Función para exportar los movimientos a un excel
         return (new MaterialsMovementsExport)->download('listado_de_movimientos_de_almacen.xlsx');
     }
-    /**
-     * Display the specified resource.
-     */
-    public function show(MaterialMovement $materialMovement)
-    {
-        //
-    }
 
     /**
-     * Show the form for editing the specified resource.
+     * Construye la consulta del historial con los filtros del request.
+     *
+     * Única fuente de verdad de los filtros: history y
+     * exportMovementsPDF la comparten, garantizando que el PDF
+     * exporta lo mismo que se ve en pantalla.
+     *
+     * CORRECCIONES respecto a la versión anterior:
+     * 1. El alcance por sucursal (origen O destino en la sucursal)
+     *    va agrupado en un where(function(...)) — antes el
+     *    orWhereHas sin agrupar anulaba el resto de condiciones.
+     * 2. filter_field pasa por una lista blanca: antes se usaba
+     *    directo como columna, y las opciones warehouse_origin /
+     *    warehouse_destination de la vista no existen como columnas
+     *    (causaban error SQL); ahora buscan por la DESCRIPCIÓN del
+     *    almacén a través de la relación.
      */
-    public function edit(MaterialMovement $materialMovement)
+    private function applyFilters(Request $request): Builder
     {
-        //
-    }
+        $branchId = session('branch_id');
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, MaterialMovement $materialMovement)
-    {
-        //
-    }
+        $query = MaterialMovement::query();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(MaterialMovement $materialMovement)
-    {
-        //
+        // Alcance por sucursal: el movimiento pertenece a la sucursal
+        // si su almacén de origen O el de destino son de ella.
+        // El agrupamiento con where(closure) es imprescindible para
+        // que el OR no rompa los demás filtros.
+        $query->where(function ($q) use ($branchId) {
+            $q->whereHas('warehouseOrigin', function ($w) use ($branchId) {
+                $w->where('branch_id', $branchId);
+            })->orWhereHas('warehouseDestination', function ($w) use ($branchId) {
+                $w->where('branch_id', $branchId);
+            });
+        });
+
+        // Búsqueda por campo (lista blanca)
+        if ($request->filled('filter_field') && $request->filled('filter_value')) {
+            $field = $request->filter_field;
+            $value = $request->filter_value;
+
+            switch ($field) {
+                // Columnas directas de la tabla
+                case 'type':
+                case 'serial_number':
+                case 'reason':
+                    $query->where($field, 'like', "%{$value}%");
+                    break;
+
+                // Búsqueda por descripción del almacén (vía relación)
+                case 'warehouse_origin':
+                    $query->whereHas('warehouseOrigin', function ($w) use ($value) {
+                        $w->where('description', 'like', "%{$value}%");
+                    });
+                    break;
+
+                case 'warehouse_destination':
+                    $query->whereHas('warehouseDestination', function ($w) use ($value) {
+                        $w->where('description', 'like', "%{$value}%");
+                    });
+                    break;
+
+                // Búsqueda por nombre del material (vía relación)
+                case 'material':
+                    $query->whereHas('material', function ($m) use ($value) {
+                        $m->where('name', 'like', "%{$value}%");
+                    });
+                    break;
+            }
+        }
+
+        // Rango de fechas
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->end_date);
+        }
+
+        return $query;
     }
 }

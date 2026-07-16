@@ -9,355 +9,307 @@
 @endsection
 
 @section('content')
+    @if(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @elseif(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
+    {{-- ============================================================
+         Filtros de servidor (compartidos con el export a Excel).
+         El input de valor cambia dinámicamente según el criterio:
+         select con opciones fijas para estado/tipo/detalle/técnico,
+         texto libre para cliente.
+         ============================================================ --}}
     <div class="card">
-        <div class="card-head p-3">
-            <!-- Formulario para filtrar -->
-            <div class="card">
-                <div class="card-header">
-                    <form method="GET" action="{{ route('technicals_orders.index') }}">
-                        <div class="row align-items-center">
-                            <!-- Select para el campo a buscar -->
-                            <div class="col-md-2">
-                                <label for="start_date" class="form-label">Criterio</label>
-                                <select id="filterField" class="form-control" name="filter_field">
-                                    <option value="status" {{ request('filter_field') == 'status' ? 'selected' : '' }}>Estado</option>
-                                    <option value="client_name" {{ request('filter_field') == 'client_name' ? 'selected' : '' }}>Nombre de cliente</option>
-                                    <option value="order_number" {{ request('filter_field') == 'order_number' ? 'selected' : '' }}>Número de orden</option>
-                                    <option value="contract_number" {{ request('filter_field') == 'contract_number' ? 'selected' : '' }}>Número de contrato</option>
-                                    <option value="type" {{ request('filter_field') == 'type' ? 'selected' : '' }}>Tipo de orden</option>
-                                    <option value="detail" {{ request('filter_field') == 'detail' ? 'selected' : '' }}>Detalle de orden</option>
-                                    <option value="assigned_user" {{ request('filter_field') == 'assigned_user' ? 'selected' : '' }}>Técnico asignado</option>
-                                </select>
-                            </div>
+        <div class="card-header">
+            <form method="GET" action="{{ route('technicals_orders.index') }}">
+                <div class="row align-items-end">
+                    <div class="col-md-2">
+                        <label for="filterField" class="form-label">Criterio</label>
+                        <select id="filterField" class="form-control" name="filter_field">
+                            <option value="status" {{ request('filter_field') == 'status' ? 'selected' : '' }}>Estado</option>
+                            <option value="client" {{ request('filter_field') == 'client' ? 'selected' : '' }}>Cliente</option>
+                            <option value="type" {{ request('filter_field') == 'type' ? 'selected' : '' }}>Tipo de orden</option>
+                            <option value="detail" {{ request('filter_field') == 'detail' ? 'selected' : '' }}>Detalle de orden</option>
+                            <option value="assigned_user" {{ request('filter_field') == 'assigned_user' ? 'selected' : '' }}>Técnico asignado</option>
+                        </select>
+                    </div>
 
-                            <!-- Input dinámico -->
-                            <div class="col-md-2 mt-1 mb-1" id="filterValueContainer">
-                                <label for="filterValue" class="form-label">Valor</label>
-                                <input
-                                    type="text"
-                                    id="filterInput"
-                                    name="filter_value"
-                                    class="form-control"
-                                    placeholder="Ingrese un valor"
-                                    value="{{ request('filter_value') }}">
-                            </div>
+                    <div class="col-md-2 mt-1 mb-1" id="filterValueContainer">
+                        <label class="form-label">Valor</label>
+                        <input type="text" id="filterInput" name="filter_value" class="form-control"
+                               placeholder="Ingrese un valor" value="{{ request('filter_value') }}">
+                    </div>
 
-                            <!-- Filtros por rango de fechas -->
-                            <div class="col-md-1 mt-1 mb-1">
-                                <label for="start_date" class="form-label">Fecha Inicial</label>
-                                <input
-                                    type="date"
-                                    id="start_date"
-                                    name="start_date"
-                                    class="form-control"
-                                    value="{{ request('start_date') }}">
-                            </div>
+                    <div class="col-md-2 mt-1 mb-1">
+                        <label for="start_date" class="form-label">Fecha Inicial</label>
+                        <input type="date" id="start_date" name="start_date" class="form-control"
+                               value="{{ request('start_date') }}">
+                    </div>
 
-                            <div class="col-md-1 mt-1 mb-1">
-                                <label for="end_date" class="form-label">Fecha Final</label>
-                                <input
-                                    type="date"
-                                    id="end_date"
-                                    name="end_date"
-                                    class="form-control"
-                                    value="{{ request('end_date') }}">
-                            </div>
+                    <div class="col-md-2 mt-1 mb-1">
+                        <label for="end_date" class="form-label">Fecha Final</label>
+                        <input type="date" id="end_date" name="end_date" class="form-control"
+                               value="{{ request('end_date') }}">
+                    </div>
 
-                            <!--Formulario de paginación-->
-                            <div class="col-md-2 mt-1 mb-1">
-                                <label for="start_date" class="form-label">Cantidad de resultados</label>
-                                <form method="GET" action="{{ route('technicals_orders.index') }}" class="form-inline">
-                                    <select name="per_page" id="per_page" class="form-control mr-2" onchange="this.form.submit()">
-                                        <option value="">Resultados por página</option>
-                                        <option value="8" {{ request('per_page') == 12 ? 'selected' : '' }}>12</option>
-                                        <option value="15" {{ request('per_page') == 20 ? 'selected' : '' }}>15</option>
-                                        <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25</option>
-                                        <option value="25" {{ request('per_page') == 50 ? 'selected' : '' }}>50</option>
-                                    </select>
-                                </form>
-                            </div>
-
-                            <!-- Botones -->
-                            <div class="col-md-4 text-center text-md-right">
-                                <button type="submit" class="btn btn-primary" title="Aplicar filtro">
-                                    <i class="fas fa-filter"></i> Filtrar
-                                </button>
-                                <a href="{{ route('technicals_orders.index') }}" class="btn btn-secondary" title="Limpiar filtros">
-                                    <i class="fas fa-times"></i> Limpiar
-                                </a>
-
-                                <a href="{{ route('orders.export', request()->all()) }}" class="btn btn-success" title="Exportar órdenes filtradas a Excel">
-                                    <i class="fas fa-file-excel"></i> Exportar
-                                </a>
-
-
-                            </div>
-                        </div>
-                    </form>
+                    <div class="col-md-4 text-center text-md-right mt-1 mb-1">
+                        <button type="submit" class="btn btn-primary" title="Aplicar filtro">
+                            <i class="fas fa-filter"></i> Filtrar
+                        </button>
+                        <a href="{{ route('technicals_orders.index') }}" class="btn btn-secondary" title="Limpiar filtros">
+                            <i class="fas fa-times"></i> Limpiar
+                        </a>
+                        <a href="{{ route('orders.export', request()->all()) }}" class="btn btn-success"
+                           title="Exportar órdenes filtradas a Excel">
+                            <i class="fas fa-file-excel"></i> Exportar
+                        </a>
+                    </div>
                 </div>
-            </div>
+            </form>
         </div>
+    </div>
+
+    {{-- Aviso del comportamiento por defecto: solo órdenes activas --}}
+    @if($showingActiveOnly)
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            Mostrando las órdenes <strong>activas</strong> (no cerradas).
+            Para consultar órdenes cerradas use el filtro de estado o el rango de fechas.
+        </div>
+    @endif
+
+    {{-- ============================================================
+         Tabla de órdenes (DataTables)
+         ============================================================ --}}
+    <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover">
-                    <tbody>
+                <table id="ordersTable" class="table table-hover table-bordered" style="width:100%">
+                    <thead>
                     <tr>
-                        <th>Número de orden</th>
-                        <th>Número de contrato</th>
+                        <th># Orden</th>
+                        <th># Contrato</th>
                         <th>Cliente</th>
-                        <th>Tipo de orden</th>
+                        <th>Tipo</th>
                         <th>Detalle</th>
-                        <th>Comentario inicial</th>
                         <th>Estado</th>
-                        <th>Fecha de creación</th>
-                        <th>Técnico asignado</th>
-                        <th></th>
+                        <th>Creación</th>
+                        <th>Técnico</th>
+                        <th>Acciones</th>
                     </tr>
+                    </thead>
+                    <tbody>
                     @foreach($technical_orders as $technical_order)
                         <tr>
                             <td>{{ $technical_order->id }}</td>
                             <td>{{ $technical_order->contract->id }}</td>
-                            <td>{{ $technical_order->contract->client->name }} {{ $technical_order->contract->client->last_name }}</td>
+                            <td>
+                                {{ $technical_order->contract->client->name }}
+                                {{ $technical_order->contract->client->last_name }}
+                            </td>
                             <td>{{ $technical_order->type }}</td>
                             <td>{{ $technical_order->detail }}</td>
-                            <td>{{ $technical_order->initial_comment }}</td>
-                            <td>{{ $technical_order->status }}</td>
-                            <td>{{ $technical_order->created_at }}</td>
-                            <td>{{ $technical_order->assignedUser->name ?? 'N/A' }} {{ $technical_order->assignedUser->last_name ?? 'N/A' }}</td>
+                            <td>@include('gestisp.technicals_orders.partials.status_badge', ['status' => $technical_order->status])</td>
+                            <td>{{ $technical_order->created_at->format('Y-m-d H:i') }}</td>
                             <td>
+                                {{ $technical_order->assignedUser->name ?? '—' }}
+                                {{ $technical_order->assignedUser->last_name ?? '' }}
+                            </td>
+                            <td>
+                                {{-- Asignar/reasignar según el estado --}}
                                 @if($technical_order->status === 'Pendiente')
-                                    <button class="btn btn-info" data-toggle="modal" data-target="#assignOrderModal{{ $technical_order->id }}">
-                                        Asignar Orden
+                                    <button class="btn btn-sm btn-info" data-toggle="modal"
+                                            data-target="#assignOrderModal{{ $technical_order->id }}">
+                                        Asignar
                                     </button>
-                                @elseif($technical_order->status === 'Asignada')
-                                    <button class="btn btn-warning" data-toggle="modal" data-target="#assignOrderModal{{ $technical_order->id }}">
-                                        Reasignar Orden
+                                @elseif(in_array($technical_order->status, ['Asignada', 'Rechazada']))
+                                    <button class="btn btn-sm btn-warning" data-toggle="modal"
+                                            data-target="#assignOrderModal{{ $technical_order->id }}">
+                                        Reasignar
                                     </button>
                                 @endif
-                                    <!-- Button trigger modal -->
-                                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#detailModal{{ $technical_order->id }}">
-                                        Ver detalles
-                                    </button>
 
-                                    <div class="modal fade" id="detailModal{{ $technical_order->id }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-                                        <div class="modal-dialog" role="document">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title" id="exampleModalLabel">Detalles de orden {{ $technical_order->id }}</h5>
-                                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                        <span aria-hidden="true">&times;</span>
-                                                    </button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <div class="">
-                                                        <div class="mt-2">
-                                                            <p><strong>Datos del cliente</strong></p>
-                                                        </div>
-                                                        <div>Cliente: {{ $technical_order->contract->client->name }} {{ $technical_order->contract->client->last_name }}</div>
-                                                        <div>Barrio y dirección: {{ $technical_order->contract->neighborhood }} {{ $technical_order->contract->address }}</div>
-                                                        <div>Detalles de plan: {{ $technical_order->contract->plan->name }}</div>
-                                                        <div class="mt-2">
-                                                            <p><strong>Datos de orden</strong></p>
-                                                        </div>
-                                                        <div>Tipo de orden: {{ $technical_order->type }}</div>
-                                                        <div>Detalle: {{ $technical_order->detail }}</div>
-                                                        <div>Detalle: {{ $technical_order->detail }}</div>
-                                                        <div>Comentario inicial: {{ $technical_order->initial_comment }}</div>
-                                                        <div class="mt-2">
-                                                            <p><strong>Datos de solución</strong></p>
-                                                        </div>
-                                                        <div>Observaciones técnicas: {{ $technical_order->observations_technical }}</div>
-                                                        <div>Observaciones del cliente: {{ $technical_order->client_observation }}</div>
-                                                        <div>Solución: {{ $technical_order->solution }}</div>
-                                                        <div>Fecha de creación: {{ $technical_order->created_at }}</div>
-                                                        <div>Motivo de rechazo por el técnico: {{ $technical_order->rejection_reason ?? 'N/A' }}</div>
-                                                        <div>Última acción: {{ $technical_order->updated_at }}</div>
-                                                        <div class="mt-2">
-                                                            <p><strong>Fotos</strong></p>
-                                                            <div class="card">
-                                                                <div id="carouselExample" class="carousel slide">
-                                                                    <div class="carousel-inner">
-                                                                        @php
-                                                                            $images = is_string($technical_order->images) ? json_decode($technical_order->images) : [];
-                                                                        @endphp
-
-                                                                        @forelse($images as $index => $image)
-                                                                            <div class="carousel-item {{ $index == 0 ? 'active' : '' }}">
-                                                                                <img src="{{ asset($image) }}" class="d-block w-100" alt="Imagen técnica {{ $index + 1 }}">
-                                                                            </div>
-                                                                        @empty
-                                                                            <div class="carousel-item active">
-                                                                                <img src="{{ asset('path/to/default-image.jpg') }}" class="d-block w-100" alt="No hay imágenes disponibles">
-                                                                            </div>
-                                                                        @endforelse
-                                                                    </div>
-                                                                    <button class="carousel-control-prev" type="button" data-bs-target="#carouselExample" data-bs-slide="prev">
-                                                                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                                                                        <span class="visually-hidden">Anterior</span>
-                                                                    </button>
-                                                                    <button class="carousel-control-next" type="button" data-bs-target="#carouselExample" data-bs-slide="next">
-                                                                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                                                                        <span class="visually-hidden">Siguiente</span>
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="table-responsive">
-                                                        <table class="table table-hover">
-                                                            <tr>
-                                                                <th>Material</th>
-                                                                <th>Cantidad</th>
-                                                                <th>SN</th>
-                                                            </tr>
-                                                            @foreach($technical_order->materials as $material_to_order)
-                                                                <tr>
-                                                                    <td>{{ $material_to_order->material->name }}</td>
-                                                                    <td>{{ $material_to_order->quantity }}</td>
-                                                                    <td>{{ $material_to_order->serial_number }}</td>
-                                                                </tr>
-                                                            @endforeach
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <button type="button" class="btn btn-sm btn-primary" data-toggle="modal"
+                                        data-target="#detailModal{{ $technical_order->id }}">
+                                    Ver detalles
+                                </button>
                             </td>
                         </tr>
-
-                        <!-- Modal para asignar/reasignar orden -->
-                        <div class="modal fade" id="assignOrderModal{{ $technical_order->id }}" tabindex="-1" role="dialog" aria-labelledby="assignOrderModalLabel{{ $technical_order->id }}" aria-hidden="true">
-                            <div class="modal-dialog" role="document">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title" id="assignOrderModalLabel{{ $technical_order->id }}">
-                                            {{ $technical_order->status === 'Pendiente' ? 'Asignar Orden' : 'Reasignar Orden' }}
-                                        </h5>
-                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                            <span aria-hidden="true">&times;</span>
-                                        </button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <form action="{{ route('technicals_orders.update', $technical_order->id) }}" method="POST">
-                                            @csrf
-                                            @method('PUT')
-                                            <div class="form-group">
-                                                <label for="assigned_user_id">Seleccione un técnico:</label>
-                                                <select name="assigned_user_id" id="assigned_user_id" class="form-control" required>
-                                                    @foreach($users as $user)
-                                                        <option value="{{ $user->id }}">{{ $user->name }}</option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <button type="submit" class="btn btn-primary">
-                                                {{ $technical_order->status === 'Pendiente' ? 'Asignar' : 'Reasignar' }}
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     @endforeach
                     </tbody>
                 </table>
             </div>
         </div>
-        <div class="text-center">
-            {{ $technical_orders->links() }}
-        </div>
     </div>
+
+    {{-- ============================================================
+         Modales (fuera de la tabla: DataTables reordena/oculta filas
+         y los modales dentro de <td> pueden quedar inaccesibles)
+         ============================================================ --}}
+    @foreach($technical_orders as $technical_order)
+        {{-- Modal de detalles --}}
+        <div class="modal fade" id="detailModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">Detalles de orden {{ $technical_order->id }}</h5>
+                        <button type="button" class="close text-white" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        @include('gestisp.technicals_orders.partials.order_details', ['technical_order' => $technical_order])
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Modal de asignación/reasignación --}}
+        <div class="modal fade" id="assignOrderModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            {{ $technical_order->status === 'Pendiente' ? 'Asignar Orden' : 'Reasignar Orden' }}
+                            #{{ $technical_order->id }}
+                        </h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form action="{{ route('technicals_orders.update', $technical_order->id) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <div class="form-group">
+                                <label for="assigned_user_id_{{ $technical_order->id }}">Seleccione un técnico:</label>
+                                <select name="assigned_user_id" id="assigned_user_id_{{ $technical_order->id }}"
+                                        class="form-control" required>
+                                    @foreach($users as $user)
+                                        <option value="{{ $user->id }}"
+                                            {{ $technical_order->user_assigned == $user->id ? 'selected' : '' }}>
+                                            {{ $user->name }} {{ $user->last_name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                {{ $technical_order->status === 'Pendiente' ? 'Asignar' : 'Reasignar' }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endforeach
 @endsection
+
+@section('css')
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+@endsection
+
 @section('js')
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
+
     <script>
+        $(document).ready(function () {
+            $('#ordersTable').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
+                    emptyTable: 'No hay órdenes técnicas para mostrar.'
+                },
+                pageLength: 25,
+                // Orden inicial: por fecha de creación descendente
+                order: [[6, 'desc']],
+                columnDefs: [
+                    { orderable: false, targets: [8] },
+                    { defaultContent: '—', targets: '_all' }
+                ]
+            });
+        });
+
+        /**
+         * Input dinámico del filtro: select con opciones fijas para
+         * estado/tipo/detalle/técnico, texto libre para cliente.
+         *
+         * El valor del técnico es su NOMBRE (no el id): el controlador
+         * busca por nombre vía la relación assignedUser.
+         */
         document.addEventListener('DOMContentLoaded', () => {
-            const filterField = document.getElementById('filterField');
+            const filterField          = document.getElementById('filterField');
             const filterValueContainer = document.getElementById('filterValueContainer');
-            const users = @json($users); // Pasar los usuarios desde PHP a JavaScript
+            const users                = @json($users->map(fn($u) => ['name' => $u->name . ' ' . $u->last_name, 'search' => $u->name]));
+            const currentField         = @json(request('filter_field'));
+            const currentValue         = @json(request('filter_value'));
 
-            filterField.addEventListener('change', () => {
-                const selectedField = filterField.value;
+            const selectOptions = {
+                status: ['Pendiente', 'Asignada', 'Rechazada', 'Prefinalizada', 'Cerrada'],
+                type:   ['Servicio', 'Incidencia'],
+                detail: [
+                    'Instalación de servicio', 'Retiro de servicio', 'Corte de servicio',
+                    'Traslado de servicio', 'Adición de servicio', 'Reconexión',
+                    'Sin servicio de TV', 'Sin servicio de Internet', 'Sin servicio',
+                    'Configuraciones', 'Otros'
+                ],
+            };
 
-                // Limpiar el contenedor
+            function buildInput() {
+                const field = filterField.value;
                 filterValueContainer.innerHTML = '';
 
-                let inputElement;
+                const label       = document.createElement('label');
+                label.className   = 'form-label';
+                label.textContent = 'Valor';
+                filterValueContainer.appendChild(label);
 
-                switch (selectedField) {
-                    case 'status':
-                    case 'type':
-                    case 'detail':
-                        inputElement = document.createElement('select');
-                        inputElement.id = 'filterInput';
-                        inputElement.name = 'filter_value';
-                        inputElement.className = 'form-control';
+                let input;
 
-                        // Agregar opciones según el campo seleccionado
-                        let options = [];
-                        if (selectedField === 'status') {
-                            options = ['Pendiente', 'Asignada', 'Rechazada', 'Prefinalizada', 'Cerrada'];
-                        } else if (selectedField === 'type') {
-                            options = ['Servicio', 'Incidencia'];
-                        } else if (selectedField === 'detail') {
-                            options = [
-                                'Instalación de servicio', 'Retiro de servicio', 'Corte de servicio',
-                                'Traslado de servicio', 'Adición de servicio', 'Sin servicio de TV',
-                                'Sin servicio de Internet', 'Sin servicio', 'Configuraciones', 'Otros'
-                            ];
-                        }
-
-                        options.forEach(option => {
-                            const optionElement = document.createElement('option');
-                            optionElement.value = option;
-                            optionElement.textContent = option;
-                            inputElement.appendChild(optionElement);
-                        });
-
-                        break;
-
-                    case 'assigned_user':
-                        inputElement = document.createElement('select');
-                        inputElement.id = 'filterInput';
-                        inputElement.name = 'filter_value';
-                        inputElement.className = 'form-control';
-
-                        // Agregar opciones de usuarios
-                        users.forEach(user => {
-                            const optionElement = document.createElement('option');
-                            optionElement.value = user.id; // Usar el ID del usuario
-                            optionElement.textContent = user.name; // Mostrar el nombre del usuario
-                            inputElement.appendChild(optionElement);
-                        });
-
-                        break;
-
-                    default:
-                        inputElement = document.createElement('input');
-                        inputElement.type = 'text';
-                        inputElement.id = 'filterInput';
-                        inputElement.name = 'filter_value';
-                        inputElement.className = 'form-control';
-                        inputElement.placeholder = 'Ingrese un valor';
+                if (selectOptions[field]) {
+                    // Select con opciones predefinidas
+                    input = document.createElement('select');
+                    selectOptions[field].forEach(opt => {
+                        const o = document.createElement('option');
+                        o.value = opt;
+                        o.textContent = opt;
+                        input.appendChild(o);
+                    });
+                } else if (field === 'assigned_user') {
+                    // Select de técnicos (el valor es el nombre)
+                    input = document.createElement('select');
+                    users.forEach(u => {
+                        const o = document.createElement('option');
+                        o.value = u.search;
+                        o.textContent = u.name;
+                        input.appendChild(o);
+                    });
+                } else {
+                    // Texto libre (cliente: nombre, apellido o identidad)
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.placeholder = 'Nombre, apellido o identidad';
                 }
 
-                // Crear el label
-                const labelElement = document.createElement('label');
-                labelElement.htmlFor = 'filterValue';
-                labelElement.className = 'form-label';
-                labelElement.textContent = 'Valor';
+                input.id        = 'filterInput';
+                input.name      = 'filter_value';
+                input.className = 'form-control';
 
-                // Agregar el label y el input/select al contenedor
-                filterValueContainer.appendChild(labelElement);
-                filterValueContainer.appendChild(inputElement);
-            });
+                // Conservar el valor cuando la página carga con un
+                // filtro ya aplicado (la versión anterior lo borraba)
+                if (field === currentField && currentValue) {
+                    input.value = currentValue;
+                }
 
-            // Inicializar el campo de filtro al cargar la página
-            filterField.dispatchEvent(new Event('change'));
+                filterValueContainer.appendChild(input);
+            }
+
+            filterField.addEventListener('change', buildInput);
+            buildInput();
         });
     </script>
 @endsection

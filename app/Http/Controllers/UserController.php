@@ -5,15 +5,34 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\User;
 use Exception;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 use Spatie\Permission\Models\Role;
 
+/**
+ * Controlador de Usuarios
+ *
+ * Gestiona el CRUD de los usuarios internos del sistema (empleados
+ * del ISP). Cada usuario puede pertenecer a varias sucursales y
+ * tener un rol distinto en cada una; esa asignación vive en la
+ * tabla pivote user_branch (branch_id + role_id).
+ *
+ * Los roles y permisos se manejan con Spatie Permission: al iniciar
+ * sesión el usuario elige sucursal y el rol asociado queda activo
+ * en sesión (current_role_id); el middleware check.permission
+ * valida cada acción contra ese rol activo.
+ */
 class UserController extends Controller
 {
-    //Proteger rutas
+    /**
+     * Constructor: protege las rutas con autenticación y permisos.
+     */
     public function __construct()
     {
         $this->middleware('auth');
@@ -22,33 +41,48 @@ class UserController extends Controller
         $this->middleware('check.permission:users.edit')->only('edit', 'update');
         $this->middleware('check.permission:users.destroy')->only('destroy');
     }
+
     /**
-     * Display a listing of the resource.
+     * Lista los usuarios del sistema.
+     *
+     * Se precargan las sucursales (la pivote incluye role_id) para
+     * mostrarlas como badges sin caer en consultas N+1, y se pasa
+     * el catálogo de roles indexado por id para resolver el nombre
+     * del rol de cada asignación.
+     *
+     * Retorna la colección completa (sin paginar) porque la tabla
+     * usa DataTables del lado del cliente.
      */
-    public function index()
+    public function index(): View
     {
-        //
-        $users = User::simplePaginate(12);
-        return view('gestisp.users.index', compact('users'));
+        $users = User::with('branches')->get();
+        $roleNames = Role::pluck('name', 'id');
+
+        return view('gestisp.users.index', compact('users', 'roleNames'));
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Muestra el formulario de creación con sucursales y roles disponibles.
      */
-    public function create()
+    public function create(): View
     {
         $branches = Branch::all();
         $roles = Role::all();
+
         return view('gestisp.users.create', compact('branches', 'roles'));
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Guarda un nuevo usuario con sus asignaciones de sucursal/rol.
+     *
+     * Todo corre dentro de una transacción: si falla la asignación
+     * de sucursales o roles, el usuario no queda creado a medias.
+     * Los roles de Spatie se sincronizan a partir de los roles
+     * elegidos por sucursal.
      */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         try {
-            // Validación de los datos con mensajes personalizados
             $validatedData = $request->validate([
                 'identity_number' => 'required|string|max:20|unique:users,identity_number',
                 'name' => 'required|string|max:255',
@@ -57,41 +91,36 @@ class UserController extends Controller
                 'address' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email',
                 'password' => 'required|string|min:6',
-                'branches' => 'required|array', // Ahora esperamos un array de sucursales
-                'branches.*.branch_id' => 'required|exists:branches,id', // Cada sucursal debe existir
-                'branches.*.role_id' => 'required|exists:roles,id', // Cada sucursal debe tener un rol válido
+                'branches' => 'required|array|min:1',
+                'branches.*.branch_id' => 'required|exists:branches,id|distinct',
+                'branches.*.role_id' => 'required|exists:roles,id',
             ], [
                 'identity_number.unique' => 'El número de identidad ya está en uso.',
                 'email.unique' => 'El correo electrónico ya está registrado.',
+                'password.min' => 'La contraseña debe tener al menos 6 caracteres.',
+                'branches.required' => 'Debe asignar al menos una sucursal.',
+                'branches.*.branch_id.required' => 'Debe seleccionar una sucursal en cada asignación.',
                 'branches.*.branch_id.exists' => 'La sucursal seleccionada no es válida.',
+                'branches.*.branch_id.distinct' => 'No puede asignar la misma sucursal dos veces.',
+                'branches.*.role_id.required' => 'Debe seleccionar un rol en cada asignación.',
                 'branches.*.role_id.exists' => 'El rol seleccionado no es válido.',
             ]);
 
-            // Creación del usuario
-            $user = User::create([
-                'identity_number' => $validatedData['identity_number'],
-                'name' => $validatedData['name'],
-                'last_name' => $validatedData['last_name'],
-                'number_phone' => $validatedData['number_phone'],
-                'address' => $validatedData['address'],
-                'email' => $validatedData['email'],
-                'password' => Hash::make($validatedData['password']),
-            ]);
+            $user = DB::transaction(function () use ($validatedData) {
+                $user = User::create([
+                    'identity_number' => $validatedData['identity_number'],
+                    'name' => $validatedData['name'],
+                    'last_name' => $validatedData['last_name'],
+                    'number_phone' => $validatedData['number_phone'],
+                    'address' => $validatedData['address'],
+                    'email' => $validatedData['email'],
+                    'password' => Hash::make($validatedData['password']),
+                ]);
 
-            // Asignar sucursales y roles
-            foreach ($validatedData['branches'] as $branchData) {
-                $user->branches()->attach($branchData['branch_id'], ['role_id' => $branchData['role_id']]);
+                $this->syncBranchesAndRoles($user, $validatedData['branches']);
 
-                // Obtener el nombre del rol a partir del role_id
-                $role = Role::find($branchData['role_id']);
-
-                if ($role) {
-                    // Asignar el rol al usuario
-                    $user->assignRole($role->name);
-                } else {
-                    throw new \Exception("El rol con ID {$branchData['role_id']} no existe.");
-                }
-            }
+                return $user;
+            });
 
             Log::info("Usuario creado con éxito: ID {$user->id}, Email: {$user->email}");
 
@@ -106,6 +135,7 @@ class UserController extends Controller
             return redirect()->back()->with('error', 'Ocurrió un error inesperado. Inténtalo nuevamente.')->withInput();
         }
     }
+
     /**
      * Display the specified resource.
      */
@@ -115,63 +145,132 @@ class UserController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Muestra el formulario de edición con las asignaciones actuales.
      */
-    public function edit(User $user)
+    public function edit(User $user): View
     {
         $branches = Branch::all();
         $roles = Role::all();
-        $userBranches = $user->branches()->withPivot('role_id')->get(); // Sucursales con su rol asignado
+        // La relación ya trae role_id en la pivote (withPivot en el modelo)
+        $userBranches = $user->branches;
+
         return view('gestisp.users.edit', compact('user', 'branches', 'roles', 'userBranches'));
     }
 
     /**
-     * Update the specified resource in storage.
+     * Actualiza los datos del usuario y sus asignaciones.
+     *
+     * La contraseña solo se cambia si se envía un valor; el campo
+     * vacío conserva la actual. Las asignaciones de sucursal/rol
+     * se reemplazan por completo y los roles de Spatie se vuelven
+     * a sincronizar (antes solo se actualizaba la pivote y los
+     * roles quedaban desactualizados).
      */
-    public function update(Request $request, User $user)
+    public function update(Request $request, User $user): RedirectResponse
     {
-        // Validación de datos
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'number_phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'password' => 'nullable|min:6',
-            'branches' => 'nullable|array',
-            'branches.*.branch_id' => 'exists:branches,id',
-            'branches.*.role_id' => 'exists:roles,id',
-        ]);
+        try {
+            $validatedData = $request->validate([
+                'name' => 'required|string|max:255',
+                'last_name' => 'required|string|max:255',
+                'number_phone' => 'nullable|string|max:20',
+                'address' => 'nullable|string|max:255',
+                'email' => 'required|email|unique:users,email,' . $user->id,
+                'password' => 'nullable|string|min:6',
+                'branches' => 'required|array|min:1',
+                'branches.*.branch_id' => 'required|exists:branches,id|distinct',
+                'branches.*.role_id' => 'required|exists:roles,id',
+            ], [
+                'email.unique' => 'El correo electrónico ya está registrado.',
+                'password.min' => 'La contraseña debe tener al menos 6 caracteres.',
+                'branches.required' => 'El usuario debe conservar al menos una sucursal asignada.',
+                'branches.*.branch_id.required' => 'Debe seleccionar una sucursal en cada asignación.',
+                'branches.*.branch_id.exists' => 'La sucursal seleccionada no es válida.',
+                'branches.*.branch_id.distinct' => 'No puede asignar la misma sucursal dos veces.',
+                'branches.*.role_id.required' => 'Debe seleccionar un rol en cada asignación.',
+                'branches.*.role_id.exists' => 'El rol seleccionado no es válido.',
+            ]);
 
-        // Actualizar datos del usuario
-        $user->update([
-            'name' => $request->name,
-            'last_name' => $request->last_name,
-            'number_phone' => $request->number_phone,
-            'address' => $request->address,
-            'email' => $request->email,
-            'password' => $request->password ? bcrypt($request->password) : $user->password,
-        ]);
+            DB::transaction(function () use ($request, $user, $validatedData) {
+                $data = [
+                    'name' => $validatedData['name'],
+                    'last_name' => $validatedData['last_name'],
+                    'number_phone' => $validatedData['number_phone'],
+                    'address' => $validatedData['address'],
+                    'email' => $validatedData['email'],
+                ];
 
-        // Actualizar relación de sucursales y roles
-        $user->branches()->detach(); // Eliminar relaciones actuales
-
-        if ($request->has('branches')) {
-            foreach ($request->branches as $branch) {
-                if (!empty($branch['branch_id']) && !empty($branch['role_id'])) {
-                    $user->branches()->attach($branch['branch_id'], ['role_id' => $branch['role_id']]);
+                if ($request->filled('password')) {
+                    $data['password'] = Hash::make($validatedData['password']);
                 }
-            }
-        }
 
-        return redirect()->route('users.index')->with('success-update', 'Usuario actualizado correctamente.');
+                $user->update($data);
+
+                // Reemplazar por completo las asignaciones actuales
+                $user->branches()->detach();
+                $this->syncBranchesAndRoles($user, $validatedData['branches']);
+            });
+
+            return redirect()->route('users.index')->with('success-update', 'Usuario actualizado correctamente.');
+
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors())->withInput();
+
+        } catch (Exception $e) {
+            Log::error("Error al actualizar usuario {$user->id}: " . $e->getMessage());
+            return redirect()->back()->with('error', 'Ocurrió un error inesperado. Inténtalo nuevamente.')->withInput();
+        }
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Elimina un usuario del sistema.
+     *
+     * Restricciones:
+     *  - Un usuario no puede eliminarse a sí mismo.
+     *  - Si el usuario tiene registros asociados (pagos, órdenes,
+     *    movimientos, etc.) la base de datos bloquea la eliminación
+     *    por integridad referencial y se informa el motivo.
      */
-    public function destroy(User $user)
+    public function destroy(User $user): RedirectResponse
     {
-        //
+        if ($user->id === auth()->id()) {
+            return redirect()->route('users.index')
+                ->with('error', 'No puedes eliminar tu propio usuario.');
+        }
+
+        try {
+            DB::transaction(function () use ($user) {
+                $user->branches()->detach();
+                $user->syncRoles([]);
+                $user->delete();
+            });
+
+            return redirect()->route('users.index')->with('success-delete', 'Usuario eliminado correctamente.');
+
+        } catch (QueryException $e) {
+            Log::warning("Eliminación de usuario {$user->id} bloqueada por registros asociados: " . $e->getMessage());
+
+            return redirect()->route('users.index')
+                ->with('error', 'No se puede eliminar el usuario porque tiene registros asociados (pagos, órdenes, movimientos, etc.).');
+        }
+    }
+
+    /**
+     * Asigna las sucursales al usuario y sincroniza sus roles de
+     * Spatie con los roles elegidos por sucursal, de modo que
+     * model_has_roles siempre refleje lo que dice user_branch.
+     *
+     * @param array<int, array{branch_id: int|string, role_id: int|string}> $branches
+     */
+    private function syncBranchesAndRoles(User $user, array $branches): void
+    {
+        $roleIds = [];
+
+        foreach ($branches as $branchData) {
+            $user->branches()->attach($branchData['branch_id'], ['role_id' => $branchData['role_id']]);
+            $roleIds[] = $branchData['role_id'];
+        }
+
+        $roles = Role::whereIn('id', array_unique($roleIds))->pluck('name')->all();
+        $user->syncRoles($roles);
     }
 }

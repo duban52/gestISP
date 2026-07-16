@@ -9,51 +9,50 @@
 @endsection
 
 @section('content')
+    {{-- ============================================================
+         Formulario de edición de rol
+
+         Muestra los permisos agrupados por módulo (parcial
+         compartido) con los del rol ya marcados. La eliminación
+         del rol se hace desde el índice, con su modal de
+         confirmación.
+         ============================================================ --}}
+
+    {{-- Errores de validación --}}
+    @if ($errors->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="card">
         <div class="card-body">
-            <form method="POST" action="{{ route('roles.update', $role->id) }}">
+            <form method="POST" action="{{ route('roles.update', $role) }}">
                 @csrf
                 @method('PUT')
+
                 <div class="form-group">
-                    <label>Nombre</label>
-                    <input type="text" class="form-control" id="name" name='name'
-                           placeholder="Nombre del rol" value="{{ $role->name  }}">
-
-                    @error('name')
-                    <span class="alert-red">
-                    <span>*{{ $message }}</span>
-                </span>
-                    @enderror
-
+                    <label for="name">Nombre</label>
+                    <input type="text" class="form-control" id="name" name="name"
+                           placeholder="Nombre del rol" value="{{ old('name', $role->name) }}" required>
                 </div>
-                <h3>Lista de permisos</h3>
-                @foreach($permmisions as $permmision)
-                    <div>
-                        <label>
-                            <input type="checkbox" name="permissions[]" id="" value="{{ $permmision->id }}"
-                                   {{ $role->hasPermissionTo($permmision->name) ? 'checked' : '' }}
-                                   class="mr-1"> {{ $permmision->description }}
 
-                        </label>
-                    </div>
-                @endforeach
+                {{-- Permisos agrupados por módulo; old() conserva la
+                     selección si la validación falla, si no se marcan
+                     los permisos actuales del rol --}}
+                @include('gestisp.roles.partials.permissions_checklist', [
+                    'permissionGroups' => $permissionGroups,
+                    'checkedPermissions' => old('permissions', $rolePermissionIds),
+                ])
 
-                <input type="submit" value="Modificar rol" class="btn btn-primary">
-            </form>
-        </div>
-        <div>
-            <form action="{{ route('roles.destroy', $role) }}" method="POST" onclick="return confirmDelete();">
-                @csrf
-                @method('DELETE')
-                <input type="submit" value="Eliminar" class="btn btn-danger m-3">
+                <button type="submit" class="btn btn-success mt-2">
+                    <i class="fas fa-save"></i> Guardar cambios
+                </button>
             </form>
         </div>
     </div>
-@endsection
-@section('js')
-    <script>
-        function confirmDelete() {
-            return confirm('Esta es una acción drástica, después de eliminar no habrá vuelta atrás, ¿está seguro?');
-        }
-    </script>
 @endsection

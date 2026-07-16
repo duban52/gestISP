@@ -9,18 +9,11 @@
 @endsection
 
 @section('content')
+    {{-- ============================================================
+         Alertas de sesión y errores de validación
+         ============================================================ --}}
     @if(session('success-create'))
-        <div class="alert alert-info">
-            {{ session('success-create') }}
-        </div>
-    @elseif(session('success-update'))
-        <div class="alert alert-info">
-            {{ session('success-update') }}
-        </div>
-    @elseif(session('success-delete'))
-        <div class="alert alert-info">
-            {{ session('success-delete') }}
-        </div>
+        <div class="alert alert-success">{{ session('success-create') }}</div>
     @endif
 
     @if($errors->any())
@@ -31,11 +24,23 @@
         </div>
     @endif
 
+    {{-- ============================================================
+         Formulario principal de movimiento
+
+         El flujo lo controla resources/js/movements/movements.js:
+         - Según el tipo, muestra/oculta almacén origen y destino
+           (Entrada: solo destino, Salida: solo origen,
+            Transferencia: ambos)
+         - Filtra los motivos según el tipo (clases option-*)
+         - El modal agrega materiales a la tabla como inputs ocultos
+           con la notación materials[i][campo]
+         ============================================================ --}}
     <div class="card p-3">
         <form action="{{ route('movements.store') }}" method="POST" id="movementForm">
             @csrf
 
             <div class="row">
+                {{-- Tipo de movimiento: determina qué almacenes se piden --}}
                 <div class="form-group col-md-4">
                     <label for="type">Tipo de Movimiento</label>
                     <select name="type" id="type" class="form-control" required>
@@ -46,6 +51,7 @@
                     </select>
                 </div>
 
+                {{-- Almacén de origen (Salida y Transferencia) --}}
                 <div class="form-group col-md-4" id="warehouse-origin-group" style="display: none;">
                     <label for="warehouse_origin_id">Almacén de Origen</label>
                     <select name="warehouse_origin_id" id="warehouse_origin_id" class="form-control">
@@ -56,6 +62,7 @@
                     </select>
                 </div>
 
+                {{-- Almacén de destino (Entrada y Transferencia) --}}
                 <div class="form-group col-md-4" id="warehouse-destination-group" style="display: none;">
                     <label for="warehouse_destination_id">Almacén de Destino</label>
                     <select name="warehouse_destination_id" id="warehouse_destination_id" class="form-control">
@@ -66,6 +73,8 @@
                     </select>
                 </div>
 
+                {{-- Motivo: las opciones se filtran por tipo con las
+                     clases option-Entrada / option-Salida / option-Transferencia --}}
                 <div class="form-group col-md-12">
                     <label for="reason">Motivo del movimiento</label>
                     <select name="reason" id="reason" class="form-control" required>
@@ -81,12 +90,14 @@
                 </div>
             </div>
 
+            {{-- Abre el modal para agregar un material al movimiento --}}
             <div class="form-group">
                 <button type="button" class="btn btn-primary" id="open-modal-btn">
                     <i class="fas fa-plus"></i> Agregar Material
                 </button>
             </div>
 
+            {{-- Tabla de materiales agregados (filas dinámicas desde movements.js) --}}
             <div class="table-responsive">
                 <table class="table table-bordered" id="materials-table">
                     <thead>
@@ -99,16 +110,24 @@
                     </tr>
                     </thead>
                     <tbody>
-                    <!-- Filas de materiales agregados dinámicamente -->
+                    {{-- Filas agregadas dinámicamente por movements.js --}}
                     </tbody>
                 </table>
             </div>
 
-            <button type="submit" class="btn btn-success">Registrar Movimiento</button>
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-save"></i> Registrar Movimiento
+            </button>
         </form>
     </div>
 
-    <!-- Modal para agregar material -->
+    {{-- ============================================================
+         Modal para agregar material al movimiento
+
+         movements.js consulta vía AJAX:
+         - /movements/quantity/{warehouse}/{material}: disponibilidad
+         - /movements/serials/{warehouse}/{material}: seriales (equipos)
+         ============================================================ --}}
     <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -131,6 +150,7 @@
                                 </option>
                             @endforeach
                         </select>
+                        {{-- Disponibilidad consultada por AJAX según almacén origen --}}
                         <small id="available-quantity-text" class="text-info mt-1" style="display: none;">
                             Cantidad disponible: <span id="available-quantity">0</span>
                         </small>
@@ -152,13 +172,14 @@
                         </select>
                     </div>
 
+                    {{-- Solo visible para equipos: selección de seriales --}}
                     <div id="modal-serial-numbers-container" style="display:none;">
                         <label for="serial-number-select">Números de Serie Disponibles</label>
                         <select id="serial-number-select" class="form-control" multiple>
-                            <!-- Números de serie disponibles se agregarán aquí -->
+                            {{-- Seriales cargados por AJAX --}}
                         </select>
                         <ul id="serial-number-list" style="list-style-type: none; padding: 0; margin-top: 10px;">
-                            <!-- Lista de números de serie disponibles se agregarán aquí -->
+                            {{-- Seriales seleccionados --}}
                         </ul>
                     </div>
                 </div>
@@ -170,7 +191,9 @@
         </div>
     </div>
 
-    <!-- Modal para mostrar el PDF -->
+    {{-- ============================================================
+         Modal del PDF de resumen (aparece tras registrar)
+         ============================================================ --}}
     @if(session('pdfPath'))
         <div class="modal fade" id="pdfModal" tabindex="-1" role="dialog" aria-labelledby="pdfModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-lg" role="document">
@@ -205,6 +228,7 @@
     <script src="@vite('resources/js/movements/movements.js')"></script>
 
     <script>
+        {{-- Mostrar automáticamente el PDF de resumen tras registrar --}}
         @if(session('pdfPath'))
         $(document).ready(function() {
             $('#pdfModal').modal('show');

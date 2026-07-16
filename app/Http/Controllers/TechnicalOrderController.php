@@ -7,17 +7,46 @@ use App\Models\Contract;
 use App\Models\Inventory;
 use App\Models\Material;
 use App\Models\TechnicalOrder;
-use App\Models\TechnicalOrderMaterial;
 use App\Models\User;
 use App\Models\Warehouse;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 
+/**
+ * Controlador de Órdenes Técnicas
+ *
+ * Gestiona el ciclo de vida completo de los trabajos de campo:
+ *
+ *   Pendiente → Asignada → Prefinalizada → Cerrada
+ *                  ↓             ↓
+ *              Rechazada     Pendiente (devuelta por supervisor)
+ *
+ * Flujo:
+ * 1. Oficina crea la orden desde el contrato (store) o el sistema la
+ *    genera automáticamente (ej: reconexión al registrar un pago).
+ * 2. Oficina asigna un técnico (update) → estado "Asignada".
+ * 3. El técnico la ve en "Mis órdenes" (myTechnicalOrders), la ejecuta
+ *    y la procesa (processOrder): reporta observaciones, solución,
+ *    evidencia fotográfica y material usado — que se descuenta de SU
+ *    almacén personal (cada técnico tiene un Warehouse con user_id).
+ *    El estado pasa a "Prefinalizada". El técnico también puede
+ *    rechazarla (orderReject).
+ * 4. Un supervisor la verifica (orderVerification →
+ *    verificationOrderProcess): la cierra (y actualiza el estado del
+ *    contrato según el detalle de la orden) o la devuelve a Pendiente.
+ */
 class TechnicalOrderController extends Controller
 {
+    /**
+     * Constructor: protege las rutas con autenticación y permisos.
+     */
     public function __construct()
     {
         $this->middleware('auth');
@@ -34,354 +63,379 @@ class TechnicalOrderController extends Controller
         $this->middleware('check.permission:technical_order.verification_process')->only('verificationOrderProcess');
         $this->middleware('check.permission:technical_orders.reject')->only('orderReject');
     }
-    /**
-     * Display a listing of the resource.
-     */
-    public function index(Request $request, TechnicalOrder $technicalOrder)
-    {
-        // Obtener los parámetros de filtrado
-        $filterField = $request->input('filter_field');
-        $filterValue = $request->input('filter_value');
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
-        $perPage = $request->input('per_page', 12); // Valor por defecto: 12
 
-        /// Obtener los usuarios de la sucursal en sesión
-        $branchId = Session('branch_id');
+    /**
+     * Listado de órdenes técnicas de la sucursal con filtros.
+     *
+     * COMPORTAMIENTO POR DEFECTO: sin filtros se muestran solo las
+     * órdenes ACTIVAS (todo excepto "Cerrada"). Las cerradas crecen
+     * sin límite con los años; para consultarlas se usa el filtro de
+     * estado o el rango de fechas. Así el tablero operativo siempre
+     * muestra el trabajo en curso sin ocultar órdenes viejas pendientes.
+     *
+     * La tabla usa DataTables del lado del cliente, por eso se retorna
+     * la colección completa filtrada (no paginada). Las relaciones se
+     * precargan con with() para evitar consultas N+1.
+     */
+    public function index(Request $request): View
+    {
+        $branchId = session('branch_id');
+
+        // Técnicos de la sucursal (para el modal de asignación)
         $users = User::whereHas('branches', function ($query) use ($branchId) {
-            $query->where('branch_id', $branchId); // Filtrar por la sucursal en sesión
+            $query->where('branch_id', $branchId);
         })->get();
 
-        // Iniciar la consulta base
-        $query = TechnicalOrder::where('branch_id', Session('branch_id'));
+        $query = TechnicalOrder::where('branch_id', $branchId);
 
-        // Aplicar filtros dinámicos
-        if ($filterField && $filterValue) {
-            // Si el campo es 'assigned_user', buscar por el nombre del técnico asignado
-            if ($filterField === 'assigned_user') {
-                $query->whereHas('assignedUser', function ($q) use ($filterValue) {
-                    $q->where('name', 'like', "%$filterValue%");
-                });
-            } else {
-                // Para otros campos, aplicar el filtro directamente
-                $query->where($filterField, 'like', "%$filterValue%");
+        // Búsqueda por campo (lista blanca — evita usar columnas
+        // arbitrarias del request como nombre de columna SQL)
+        if ($request->filled('filter_field') && $request->filled('filter_value')) {
+            $field = $request->filter_field;
+            $value = $request->filter_value;
+
+            switch ($field) {
+                // Columnas directas de la tabla
+                case 'type':
+                case 'detail':
+                case 'status':
+                    $query->where($field, 'like', "%{$value}%");
+                    break;
+
+                // Nombre del técnico asignado (vía relación)
+                case 'assigned_user':
+                    $query->whereHas('assignedUser', function ($q) use ($value) {
+                        $q->where('name', 'like', "%{$value}%");
+                    });
+                    break;
+
+                // Cliente del contrato (vía relación anidada)
+                case 'client':
+                    $query->whereHas('contract.client', function ($q) use ($value) {
+                        $q->where('name', 'like', "%{$value}%")
+                            ->orWhere('last_name', 'like', "%{$value}%")
+                            ->orWhere('identity_number', 'like', "%{$value}%");
+                    });
+                    break;
             }
         }
 
-        // Filtrar por rango de fechas (si se proporcionan ambas fechas)
-        if ($startDate && $endDate) {
-            $query->whereBetween('created_at', [$startDate, $endDate]);
+        // Rango de fechas de creación
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('created_at', [$request->start_date, $request->end_date]);
         }
 
-        // Paginar los resultados
-        $technical_orders = $query->orderBy('created_at', 'desc')->simplePaginate($perPage);
+        // Sin filtros explícitos → solo órdenes activas (no cerradas)
+        $showingActiveOnly = !$request->filled('filter_field') && !$request->filled('start_date');
 
-        // Pasar los filtros actuales a la vista para mantenerlos en el formulario
-        $filters = [
-            'filter_field' => $filterField,
-            'filter_value' => $filterValue,
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-            'per_page' => $perPage,
-        ];
+        if ($showingActiveOnly) {
+            $query->where('status', '!=', 'Cerrada');
+        }
 
+        $technical_orders = $query
+            ->with(['contract.client', 'assignedUser', 'createdBy'])
+            ->orderByDesc('created_at')
+            ->get();
 
-
-        return view('gestisp.technicals_orders.index', compact('technical_orders', 'filters', 'users'));
+        return view('gestisp.technicals_orders.index', compact(
+            'technical_orders', 'users', 'showingActiveOnly'
+        ));
     }
 
-    //Ver ordenes para verificacion
+    /**
+     * Listado de órdenes Prefinalizadas pendientes de verificación
+     * por un supervisor.
+     */
+    public function orderVerification(): View
+    {
+        $branchId = session('branch_id');
 
-    public function orderVerification(Request $request){
-
-        /// Obtener los usuarios de la sucursal en sesión
-        $branchId = Session('branch_id');
         $users = User::whereHas('branches', function ($query) use ($branchId) {
-            $query->where('branch_id', $branchId); // Filtrar por la sucursal en sesión
+            $query->where('branch_id', $branchId);
         })->get();
 
         $technical_orders = TechnicalOrder::where('branch_id', $branchId)
-                ->where('status', 'Prefinalizada')
-                ->orderBy('created_at', 'desc')
-                ->simplePaginate(12);
-
-
+            ->where('status', 'Prefinalizada')
+            ->with(['contract.client', 'assignedUser', 'materials.material'])
+            ->orderByDesc('created_at')
+            ->get();
 
         return view('gestisp.technicals_orders.verification_orders', compact('technical_orders', 'users'));
     }
 
-    //Proceso de verificación de orden
-    public function verificationOrderProcess(Request $request, TechnicalOrder $technicalOrder)
+    /**
+     * Procesa la verificación de una orden Prefinalizada.
+     *
+     * Dos acciones posibles según el botón pulsado:
+     * - close_order: cierra la orden, registra la verificación y
+     *   actualiza el estado del contrato según el detalle:
+     *     · Instalación/Reconexión → contrato "Activo"
+     *     · Corte/Suspensión temporal → contrato "Suspendido"
+     * - reject_order: devuelve la orden a "Pendiente" para corrección,
+     *   registrando el comentario del supervisor.
+     */
+    public function verificationOrderProcess(Request $request, TechnicalOrder $technicalOrder): RedirectResponse
     {
-        // Validar el comentario de verificación
         $request->validate([
             'verification_comment' => 'required|string',
         ]);
 
-        // Obtener el usuario autenticado
         $user = auth()->user();
 
-        // Determinar la acción (Cerrar o Rechazar)
         if ($request->has('close_order')) {
-            // Cambiar el estado de la orden a "Cerrado"
-            $technicalOrder->status = 'Cerrada';
-            $technicalOrder->save();
+            $technicalOrder->update(['status' => 'Cerrada']);
 
-            // Guardar la verificación en la tabla TechnicalOrderVerification
+            // Registrar la verificación (trazabilidad del cierre)
             $technicalOrder->verifications()->create([
                 'verified_by' => $user->id,
-                'status' => 'Cerrada',
-                'comments' => $request->input('verification_comment'),
+                'status'      => 'Cerrada',
+                'comments'    => $request->input('verification_comment'),
             ]);
 
-            //Si la orden que se está trabajando tiene como detalle 'Instalacion de servicio' o 'Reconexion', actualizar el estado del contrato al que pertece a Activo
-            if($technicalOrder->detail == 'Instalacion de servicio' ||  $technicalOrder->detail == 'Reconexión' || $technicalOrder->detail == 'Instalación de servicio (creación automática)' ){
-                $contract = Contract::where('id', $technicalOrder->contract_id)->first();
-                $contract->update(['status' => 'Activo', 'activation_date' => now()]);
+            // Actualizar el estado del contrato según el tipo de trabajo
+            $contract = Contract::find($technicalOrder->contract_id);
 
-                //Si la orden es por corte o suspensión temporal
-            }elseif ($technicalOrder->detail == 'Corte de servicio' ||  $technicalOrder->detail == 'Suspensión temporal'){
-                $contract = Contract::where('id', $technicalOrder->contract_id)->first();
-                $contract->update(['status' => 'Suspendido']);
+            if ($contract) {
+                $activationDetails = [
+                    'Instalacion de servicio',
+                    'Reconexión',
+                    'Instalación de servicio (creación automática)',
+                ];
+
+                $suspensionDetails = [
+                    'Corte de servicio',
+                    'Suspensión temporal',
+                ];
+
+                if (in_array($technicalOrder->detail, $activationDetails)) {
+                    $contract->update([
+                        'status'          => 'Activo',
+                        'activation_date' => now(),
+                    ]);
+                } elseif (in_array($technicalOrder->detail, $suspensionDetails)) {
+                    $contract->update(['status' => 'Suspendido']);
+                }
             }
 
-            return redirect()->route('technicals_orders.verification')->with('success', 'La orden ha sido cerrada exitosamente.');
-
-        } elseif ($request->has('reject_order')) {
-            // Cambiar el estado de la orden a "Pendiente"
-            $technicalOrder->status = 'Pendiente';
-            $technicalOrder->save();
-
-            // Guardar la verificación en la tabla TechnicalOrderVerification
-            $technicalOrder->verifications()->create([
-                'verified_by' => $user->id,
-                'status' => 'Pendiente',
-                'comments' => $request->input('verification_comment'),
-            ]);
-
-            return redirect()->route('technicals_orders.verification')->with('warning', 'La orden ha sido rechazada y está pendiente de corrección.');
+            return redirect()->route('technicals_orders.verification')
+                ->with('success', 'La orden ha sido cerrada exitosamente.');
         }
 
-        // Si no se selecciona ninguna acción, redirigir con un mensaje de error
-        return redirect()->route('technicals_orders.verification')->with('error', 'No se seleccionó ninguna acción.');
+        if ($request->has('reject_order')) {
+            // Devolver a Pendiente para que se corrija el trabajo
+            $technicalOrder->update(['status' => 'Pendiente']);
+
+            $technicalOrder->verifications()->create([
+                'verified_by' => $user->id,
+                'status'      => 'Pendiente',
+                'comments'    => $request->input('verification_comment'),
+            ]);
+
+            return redirect()->route('technicals_orders.verification')
+                ->with('warning', 'La orden ha sido rechazada y está pendiente de corrección.');
+        }
+
+        return redirect()->route('technicals_orders.verification')
+            ->with('error', 'No se seleccionó ninguna acción.');
     }
 
-    //Rechazar orden por parte del técnico
-
-    public function orderReject(TechnicalOrder $technicalOrder, Request $request){
-
-        // Validar el motivo del rechazo
+    /**
+     * El técnico rechaza una orden asignada (no puede ejecutarla).
+     * Queda en estado "Rechazada" con el motivo, visible para que
+     * oficina la reasigne o gestione.
+     */
+    public function orderReject(TechnicalOrder $technicalOrder, Request $request): RedirectResponse
+    {
         $request->validate([
             'reason' => 'required|string',
         ]);
 
-        // Cambiar el estado de la orden a "Pendiente"
-        $technicalOrder->status = 'Rechazada';
-        $technicalOrder->rejection_reason = $request->input('reason'); // Guardar el motivo del rechazo
-        $technicalOrder->save();
+        $technicalOrder->update([
+            'status'           => 'Rechazada',
+            'rejection_reason' => $request->input('reason'),
+        ]);
 
-        // Redirigir con un mensaje de éxito
-        return redirect()->route('technicals_orders.my_technical_orders')->with('success', 'La orden ha sido rechazada.');
+        return redirect()->route('technicals_orders.my_technical_orders')
+            ->with('success', 'La orden ha sido rechazada.');
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Formulario de creación de orden desde un contrato.
      */
-    public function create(Contract $contract)
+    public function create(Contract $contract): View
     {
         return view('gestisp.technicals_orders.create', compact('contract'));
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Crea una orden técnica para un contrato.
+     *
+     * Regla de negocio: un contrato solo puede tener UNA orden en
+     * curso (estado distinto de "Cerrada") a la vez.
      */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        try {
-            // Obtén el ID de la sucursal y el usuario autenticado
-            $branchId = session('branch_id');
-            $createdBy = Auth::id();
+        $validated = $request->validate([
+            'contract_id'     => 'required|exists:contracts,id',
+            'order_type'      => 'required|string|max:100',
+            'order_detail'    => 'required|string|max:255',
+            'initial_comment' => 'nullable|string',
+        ]);
 
-            // Validar si existe una orden técnica en curso para el contrato
-            $existingOrder = TechnicalOrder::where('contract_id', $request->contract_id)
+        try {
+            // Bloquear si ya hay una orden en curso para el contrato
+            $existingOrder = TechnicalOrder::where('contract_id', $validated['contract_id'])
                 ->where('status', '!=', 'Cerrada')
                 ->exists();
 
             if ($existingOrder) {
-                return redirect()->route('contracts.show', $request->contract_id)
+                return redirect()->route('contracts.show', $validated['contract_id'])
                     ->with('error', 'Ya existe una orden técnica en curso para este contrato.');
             }
 
-            // Log: Información de depuración
-            Log::info('Creando orden técnica', [
-                'contract_id' => $request->contract_id,
-                'branch_id' => $branchId,
-                'created_by' => $createdBy,
-                'order_type' => $request->order_type,
-                'order_detail' => $request->order_detail,
-                'initial_comment' => $request->initial_comment,
-            ]);
-
-            // Crea la orden técnica
             TechnicalOrder::create([
-                'contract_id' => $request->contract_id,
-                'branch_id' => $branchId,
-                'created_by' => $createdBy,
-                'type' => $request->order_type,
-                'detail' => $request->order_detail,
-                'initial_comment' => $request->initial_comment,
-                'status' => 'Pendiente', // O cualquier estado inicial que uses
+                'contract_id'     => $validated['contract_id'],
+                'branch_id'       => session('branch_id'),
+                'created_by'      => Auth::id(),
+                'type'            => $validated['order_type'],
+                'detail'          => $validated['order_detail'],
+                'initial_comment' => $validated['initial_comment'] ?? null,
+                'status'          => 'Pendiente',
             ]);
 
-            // Log: Éxito
-            Log::info('Orden técnica creada exitosamente.');
-
-            // Redirige a la ruta contracts.show con el ID del contrato
-            return redirect()->route('contracts.show', $request->contract_id)
+            return redirect()->route('contracts.show', $validated['contract_id'])
                 ->with('success', 'La orden técnica se ha creado correctamente.');
-        } catch (\Exception $e) {
-            // Log: Error
-            Log::error('Error al crear la orden técnica: ' . $e->getMessage(), [
-                'exception' => $e,
-            ]);
 
-            // Redirige con un mensaje de error
-            return redirect()->route('contracts.show', $request->contract_id)
+        } catch (\Exception $e) {
+            Log::error('Error al crear orden técnica: ' . $e->getMessage());
+
+            return redirect()->route('contracts.show', $validated['contract_id'])
                 ->with('error', 'Hubo un error al crear la orden técnica: ' . $e->getMessage());
         }
     }
 
+    /**
+     * "Mis órdenes": listado de órdenes asignadas al técnico
+     * autenticado, junto con los materiales disponibles en su
+     * almacén personal para reportar al procesar.
+     */
+    public function myTechnicalOrders(): View
+    {
+        $materials = $this->getTechnicianMaterials();
 
-    //Manejar las órdenes del usuario técnico
-
-    public function myTechnicalOrders(TechnicalOrder $technicalOrder){
-
-        // Obtener el ID de la sucursal del usuario en sesión
-        $branchId = session('branch_id');
-
-        // Obtener el almacén de la sucursal
-        $warehouse = Warehouse::where('user_id', Auth::user()->id)->first();
-
-        if ($warehouse) {
-            // Obtener los materiales que tienen inventario en ese almacén
-            $materials = Material::whereHas('inventories', function ($query) use ($warehouse) {
-                $query->where('warehouse_id', $warehouse->id)
-                    ->where('quantity', '>', 0); // Solo materiales con cantidad mayor a 0
-            })->with(['inventories' => function ($query) use ($warehouse) {
-                $query->where('warehouse_id', $warehouse->id);
-            }])->get();
-
-            // Totalizar las cantidades para materiales de tipo "equipo"
-            foreach ($materials as $material) {
-                if ($material->is_equipment) {
-                    $totalQuantity = $material->inventories->sum('quantity');
-                    $material->total_quantity = $totalQuantity;
-                } else {
-                    $material->total_quantity = $material->inventories->first()->quantity ?? 0;
-                }
-            }
-        } else {
-            // Si no hay almacén, devolver una colección vacía
-            $materials = collect();
-        }
-
-        $technical_orders = TechnicalOrder::where('branch_id', Session('branch_id'))
-            ->where('user_assigned', Auth::user()->id)
+        $technical_orders = TechnicalOrder::where('branch_id', session('branch_id'))
+            ->where('user_assigned', Auth::id())
             ->where('status', 'Asignada')
-            ->simplePaginate(12);
-
+            ->with('contract.client')
+            ->orderByDesc('created_at')
+            ->get();
 
         return view('gestisp.technicals_orders.my_technical_orders', compact('technical_orders', 'materials'));
-
     }
 
-    public function getSerialNumbers($materialId)
+    /**
+     * API JSON: seriales disponibles de un material en el almacén
+     * personal del técnico autenticado.
+     */
+    public function getSerialNumbers($materialId): JsonResponse
     {
-        // Obtener el almacén del usuario en sesión
-        $warehouse = Warehouse::where('user_id', Auth::user()->id)->first();
+        $warehouse = Warehouse::where('user_id', Auth::id())->first();
 
-        if ($warehouse) {
-            // Obtener los números de serie disponibles para el material en el almacén
-            $serialNumbers = Inventory::where('warehouse_id', $warehouse->id)
-                ->where('material_id', $materialId)
-                ->whereNotNull('serial_number')
-                ->pluck('serial_number');
-
-            return response()->json($serialNumbers);
+        if (!$warehouse) {
+            return response()->json([]);
         }
 
-        return response()->json([]);
+        $serialNumbers = Inventory::where('warehouse_id', $warehouse->id)
+            ->where('material_id', $materialId)
+            ->whereNotNull('serial_number')
+            ->pluck('serial_number');
+
+        return response()->json($serialNumbers);
     }
 
-    public function processOrder(Request $request, $id)
+    /**
+     * El técnico procesa (ejecuta) una orden asignada.
+     *
+     * Corre en transacción: si algo falla (stock insuficiente,
+     * inventario inexistente) se revierte todo.
+     *
+     * Flujo:
+     * 1. Guardar el reporte del técnico (observaciones, solución,
+     *    evidencia fotográfica) y pasar a "Prefinalizada".
+     * 2. Descontar cada material reportado del almacén personal:
+     *    - Equipos: cantidad obligatoria 1, se elimina la fila del
+     *      serial del inventario.
+     *    - Consumibles: se decrementa la cantidad.
+     * 3. Si se instaló un equipo con serial, actualizar el cpe_sn
+     *    del contrato con ESE serial.
+     */
+    public function processOrder(Request $request, $id): RedirectResponse
     {
-
         try {
-            // Validar la solicitud
             $request->validate([
                 'observations_technical' => 'required|string',
-                'client_observation' => 'required|string',
-                'solution' => 'required|string',
-                'material_id' => 'nullable|array',
-                'quantity' => 'nullable|array',
-                'serial_number' => 'nullable|array',
-                'images' => 'nullable|array'
+                'client_observation'     => 'required|string',
+                'solution'               => 'required|string',
+                'material_id'            => 'nullable|array',
+                'quantity'               => 'nullable|array',
+                'serial_number'          => 'nullable|array',
+                'images'                 => 'nullable|array',
             ]);
 
-            // Iniciar transacción
             DB::beginTransaction();
 
-            // Obtener la orden técnica
             $technicalOrder = TechnicalOrder::findOrFail($id);
 
-            // Obtener el almacén del usuario en sesión
-            $warehouse = Warehouse::where('user_id', Auth::user()->id)->first();
+            // Almacén personal del técnico (de ahí sale el material)
+            $warehouse = Warehouse::where('user_id', Auth::id())->first();
 
             if (!$warehouse) {
                 throw new \Exception('No se encontró un almacén asociado al usuario.');
             }
 
-            if($request->hasFile('images')){
+            // ---- Reporte del técnico + evidencia fotográfica ----
+            $orderData = [
+                'observations_technical' => $request->input('observations_technical'),
+                'client_observation'     => $request->input('client_observation'),
+                'solution'               => $request->input('solution'),
+                'status'                 => 'Prefinalizada',
+            ];
 
-                $imagPaths = [];
+            if ($request->hasFile('images')) {
+                $imagePaths = [];
 
                 foreach ($request->file('images') as $image) {
-                    $path = $image->store('technical_orders/images', 'public');
-                    $imagPaths[]= 'storage/' .$path;
+                    $path         = $image->store('technical_orders/images', 'public');
+                    $imagePaths[] = 'storage/' . $path;
                 }
 
-                // Actualizar la orden técnica
-                $technicalOrder->update([
-                    'observations_technical' => $request->input('observations_technical'),
-                    'client_observation' => $request->input('client_observation'),
-                    'solution' => $request->input('solution'),
-                    'status' => 'Prefinalizada',
-                    'images' => json_encode($imagPaths),
-
-                ]);
-
-            }else{
-
-                // Actualizar la orden técnica sin imágenes
-                $technicalOrder->update([
-                    'observations_technical' => $request->input('observations_technical'),
-                    'client_observation' => $request->input('client_observation'),
-                    'solution' => $request->input('solution'),
-                    'status' => 'Prefinalizada',
-                ]);
+                $orderData['images'] = json_encode($imagePaths);
             }
 
+            $technicalOrder->update($orderData);
 
+            // ---- Materiales usados ----
+            // Rastrear el serial del equipo instalado (si lo hay)
+            // para actualizar el cpe_sn del contrato al final.
+            $installedEquipmentSn = null;
 
-            // Procesar los materiales
             if ($request->has('material_id')) {
                 foreach ($request->input('material_id') as $index => $materialId) {
-                    if (empty($materialId)) continue; // Saltar entradas vacías
+                    if (empty($materialId)) {
+                        continue; // Saltar filas vacías del formulario
+                    }
 
-                    $quantity = $request->input('quantity')[$index];
+                    $quantity     = $request->input('quantity')[$index];
                     $serialNumber = $request->input('serial_number')[$index] ?? null;
 
-                    // Obtener el inventario actual del material
+                    // Los equipos con serial se reportan de a una unidad
+                    // (validar ANTES de tocar el inventario)
+                    if ($serialNumber && $quantity != 1) {
+                        throw new \Exception('Los equipos con número de serie solo pueden tener cantidad 1.');
+                    }
+
+                    // Buscar el inventario en el almacén del técnico
+                    // (por serial exacto si es equipo)
                     $inventory = Inventory::where('warehouse_id', $warehouse->id)
                         ->where('material_id', $materialId)
                         ->when($serialNumber, function ($query) use ($serialNumber) {
@@ -393,130 +447,132 @@ class TechnicalOrderController extends Controller
                         throw new \Exception('No se encontró inventario para el material seleccionado.');
                     }
 
-                    // Verificar si hay suficiente stock
                     if ($inventory->quantity < $quantity) {
                         throw new \Exception("No hay suficiente stock para el material ID: {$materialId}");
                     }
 
-                    // Crear el registro en technical_orders_materials
+                    // Registrar el material en la orden (trazabilidad)
                     $technicalOrder->materials()->create([
-                        'material_id' => $materialId,
-                        'quantity' => $quantity,
+                        'material_id'   => $materialId,
+                        'quantity'      => $quantity,
                         'serial_number' => $serialNumber,
                     ]);
 
-                    // Actualizar el inventario
-                    $inventory->quantity -= $quantity;
-                    $inventory->save();
-
-                    // Si es un equipo y tiene número de serie, actualizar o eliminar el registro específico
+                    // Descontar del inventario del técnico
                     if ($serialNumber) {
-                        if ($quantity == 1) {
-                            $inventory->delete(); // Eliminar el registro si se usa completamente
-                        } else {
-                            throw new \Exception('Los equipos con número de serie solo pueden tener cantidad 1.');
-                        }
+                        // Equipo: la fila del serial se elimina completa
+                        $inventory->delete();
+                        $installedEquipmentSn = $serialNumber;
+                    } else {
+                        // Consumible: decrementar la cantidad
+                        $inventory->update([
+                            'quantity' => $inventory->quantity - $quantity,
+                        ]);
                     }
                 }
-                //Insertar el número de SN que trae la orden al contrato
-                $contract = Contract::where('id', $technicalOrder->contract_id)->first();
-                $contract->update(['cpe_sn' => $serialNumber]);
+
+                // Vincular el serial del equipo instalado al contrato.
+                // CORRECCIÓN: antes se usaba la variable de la última
+                // iteración del foreach — si el último material era un
+                // consumible, el cpe_sn quedaba en null aunque sí se
+                // hubiera instalado un equipo.
+                if ($installedEquipmentSn) {
+                    Contract::where('id', $technicalOrder->contract_id)
+                        ->update(['cpe_sn' => $installedEquipmentSn]);
+                }
             }
 
-
-
-            // Confirmar transacción
             DB::commit();
 
-            // Redirigir con mensaje de éxito
             return redirect()->route('technicals_orders.my_technical_orders')
                 ->with('success', 'Orden procesada correctamente.');
 
         } catch (\Exception $e) {
-            // Revertir cambios en caso de error
             DB::rollBack();
 
-            // Redirigir con mensaje de error
+            Log::error('Error al procesar orden técnica', [
+                'order_id' => $id,
+                'error'    => $e->getMessage(),
+            ]);
+
             return redirect()->back()
                 ->with('error', 'Error al procesar la orden: ' . $e->getMessage())
                 ->withInput();
         }
     }
-    /**
-     * Display the specified resource.
-     */
-    public function show(TechnicalOrder $technicalOrder)
-    {
-        // Obtener el almacén del usuario
-        $warehouse = Warehouse::where('user_id', Auth::user()->id)->first();
-
-        if ($warehouse) {
-            // Obtener los materiales que tienen inventario en ese almacén
-            $materials = Material::whereHas('inventories', function ($query) use ($warehouse) {
-                $query->where('warehouse_id', $warehouse->id)
-                    ->where('quantity', '>', 0); // Solo materiales con cantidad mayor a 0
-            })->with(['inventories' => function ($query) use ($warehouse) {
-                $query->where('warehouse_id', $warehouse->id);
-            }])->get();
-
-            // Totalizar las cantidades para materiales de tipo "equipo"
-            foreach ($materials as $material) {
-                if ($material->is_equipment) {
-                    $totalQuantity = $material->inventories->sum('quantity');
-                    $material->total_quantity = $totalQuantity;
-                } else {
-                    $material->total_quantity = $material->inventories->first()->quantity ?? 0;
-                }
-            }
-        } else {
-            // Si no hay almacén, devolver una colección vacía
-            $materials = collect();
-        }
-
-        return view('gestisp.technicals_orders.show_and_process_order', compact('technicalOrder', 'materials', 'warehouse'));
-    }
-
 
     /**
-     * Show the form for editing the specified resource.
+     * Detalle de una orden para su procesamiento por el técnico.
+     * Incluye los materiales disponibles en su almacén personal.
      */
-    public function edit(TechnicalOrder $technicalOrder)
+    public function show(TechnicalOrder $technicalOrder): View
     {
-        //
+        $materials = $this->getTechnicianMaterials();
+        $warehouse = Warehouse::where('user_id', Auth::id())->first();
+
+        return view('gestisp.technicals_orders.show_and_process_order', compact(
+            'technicalOrder', 'materials', 'warehouse'
+        ));
     }
 
     /**
-     * Update the specified resource in storage.
+     * Asigna (o reasigna) un técnico a la orden → estado "Asignada".
      */
-    public function update(Request $request, TechnicalOrder $technicalOrder)
+    public function update(Request $request, TechnicalOrder $technicalOrder): RedirectResponse
     {
-        // Validar la solicitud
         $request->validate([
-            'assigned_user_id' => 'required|exists:users,id', // Asegurar que el usuario exista
+            'assigned_user_id' => 'required|exists:users,id',
         ]);
 
-        // Actualizar la orden
         $technicalOrder->update([
             'user_assigned' => $request->input('assigned_user_id'),
-            'status' => 'Asignada', // Cambiar el estado a "Asignada"
+            'status'        => 'Asignada',
         ]);
 
-        // Redirigir con un mensaje de éxito
         return redirect()->route('technicals_orders.index')
             ->with('success', 'Orden asignada correctamente.');
     }
 
+    /**
+     * Exporta las órdenes a Excel (respeta los filtros del request,
+     * manejados dentro del export).
+     */
     public function export(Request $request)
     {
-        //Función para exportar las ordenes a un excel
         return Excel::download(new TechnicalOrdersExport($request), 'ordenes_tecnicas.xlsx');
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Materiales con stock disponible en el almacén personal del
+     * técnico autenticado, con la cantidad total calculada.
+     *
+     * Lógica extraída aquí porque myTechnicalOrders y show la
+     * duplicaban línea por línea.
+     *
+     * - Equipos: total = suma de filas (una por serial)
+     * - Consumibles: total = cantidad de su fila única
      */
-    public function destroy(TechnicalOrder $technicalOrder)
+    private function getTechnicianMaterials(): Collection
     {
-        //
+        $warehouse = Warehouse::where('user_id', Auth::id())->first();
+
+        if (!$warehouse) {
+            return new Collection();
+        }
+
+        $materials = Material::whereHas('inventories', function ($query) use ($warehouse) {
+            $query->where('warehouse_id', $warehouse->id)
+                ->where('quantity', '>', 0);
+        })->with(['inventories' => function ($query) use ($warehouse) {
+            $query->where('warehouse_id', $warehouse->id);
+        }])->get();
+
+        foreach ($materials as $material) {
+            $material->total_quantity = $material->is_equipment
+                ? $material->inventories->sum('quantity')
+                : ($material->inventories->first()->quantity ?? 0);
+        }
+
+        return $materials;
     }
 }

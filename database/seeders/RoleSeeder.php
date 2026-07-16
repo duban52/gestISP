@@ -107,6 +107,7 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'warehouses.edit', 'description' => 'Editar almacenes']);
         Permission::create(['name' => 'warehouses.destroy', 'description' => 'Eliminar almacenes']);
         Permission::create(['name' => 'warehouse.pdf', 'description' => 'Generar PDF de inventario']);
+        Permission::create(['name' => 'warehouses.show', 'description' => 'Ver inventarios']);
 
         // Materiales
         Permission::create(['name' => 'materials.index', 'description' => 'Ver materiales']);
