@@ -8,7 +8,7 @@ body{
     position: relative; /* Opcional: útil para posicionar contenido dentro del div */
 
     /* Imagen de fondo */
-    background-image: url('/public/img/background-gestisp.jpg'); /* Cambia por la ruta de tu imagen */
+    background-image: url('/img/background-gestisp.jpg'); /* Cambia por la ruta de tu imagen */
     background-size: cover; /* Ajusta la imagen para cubrir todo el div */
     background-position: center; /* Centra la imagen */
     background-repeat: no-repeat; /* Evita que la imagen se repita */
