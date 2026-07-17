@@ -131,7 +131,7 @@ class RoleController extends Controller
 
         $role = Role::create(['name' => $validated['name']]);
 
-        $role->syncPermissions($validated['permissions'] ?? []);
+        $role->syncPermissions($this->permissionsFromIds($validated['permissions'] ?? []));
 
         return redirect()->route('roles.index')
             ->with('success-create', 'Rol creado con éxito');
@@ -174,7 +174,7 @@ class RoleController extends Controller
 
         $role->update(['name' => $validated['name']]);
 
-        $role->syncPermissions($validated['permissions'] ?? []);
+        $role->syncPermissions($this->permissionsFromIds($validated['permissions'] ?? []));
 
         return redirect()->route('roles.index')
             ->with('success-update', 'Rol modificado con éxito');
@@ -206,6 +206,20 @@ class RoleController extends Controller
 
         return redirect()->route('roles.index')
             ->with('success-delete', 'Rol eliminado con éxito');
+    }
+
+    /**
+     * Convierte los ids que envía el formulario (llegan como
+     * strings) en modelos Permission. syncPermissions() interpreta
+     * los strings como NOMBRES de permiso, así que pasarle los ids
+     * directamente lanza PermissionDoesNotExist.
+     *
+     * @param array<int, int|string> $ids
+     * @return Collection<int, Permission>
+     */
+    private function permissionsFromIds(array $ids): Collection
+    {
+        return Permission::whereIn('id', $ids)->get();
     }
 
     /**

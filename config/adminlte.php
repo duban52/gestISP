@@ -580,14 +580,18 @@ return [
     */
 
     'filters' => [
-        JeroenNoten\LaravelAdminLte\Menu\Filters\GateFilter::class,
+        // El GateFilter de AdminLTE se reemplazó por RoleBasedMenuFilter:
+        // este evalúa 'can' contra el rol activo de la sesión (igual que
+        // el middleware check.permission); el GateFilter lo hacía contra
+        // todos los roles Spatie del usuario y ambos combinados
+        // recortaban el menú de más.
         JeroenNoten\LaravelAdminLte\Menu\Filters\HrefFilter::class,
         JeroenNoten\LaravelAdminLte\Menu\Filters\SearchFilter::class,
         JeroenNoten\LaravelAdminLte\Menu\Filters\ActiveFilter::class,
         JeroenNoten\LaravelAdminLte\Menu\Filters\ClassesFilter::class,
         JeroenNoten\LaravelAdminLte\Menu\Filters\LangFilter::class,
         JeroenNoten\LaravelAdminLte\Menu\Filters\DataFilter::class,
-        App\Filters\RoleBasedMenuFilter::class, //Filtro personalizado
+        App\Filters\RoleBasedMenuFilter::class, // Filtro por rol de sesión
     ],
 
     /*
