@@ -33,7 +33,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Auth::routes();
+// Registro público deshabilitado: los usuarios se crean desde el
+// módulo de usuarios (requiere permiso users.create).
+Auth::routes(['register' => false]);
 
 
 

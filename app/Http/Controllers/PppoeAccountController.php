@@ -11,10 +11,30 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
+/**
+ * Controlador de cuentas PPPoE
+ *
+ * Gestiona los secrets PPPoE de la sucursal activa: creación y
+ * edición sincronizada con el router Mikrotik, activación/
+ * desactivación, importación masiva desde el router y monitoreo
+ * de sesiones en tiempo real.
+ */
 class PppoeAccountController extends Controller
 {
+    /**
+     * Constructor: inyecta el servicio Mikrotik y protege las
+     * rutas con autenticación y permisos.
+     */
     public function __construct(protected MikrotikApiService $mikrotik)
     {
+        $this->middleware('auth');
+        $this->middleware('check.permission:pppoe.index')->only('index', 'apiActiveSessions');
+        $this->middleware('check.permission:pppoe.show')->only('show', 'realtimeSession');
+        $this->middleware('check.permission:pppoe.create')->only('store');
+        $this->middleware('check.permission:pppoe.edit')->only('update', 'toggleState');
+        $this->middleware('check.permission:pppoe.destroy')->only('destroy');
+        $this->middleware('check.permission:pppoe.import')->only('importFromRouter');
+        $this->middleware('check.permission:pppoe.restart')->only('restartSession');
     }
 
     public function index(): View

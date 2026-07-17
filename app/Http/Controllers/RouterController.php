@@ -9,10 +9,29 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
+/**
+ * Controlador de Routers (Mikrotik)
+ *
+ * Gestiona el CRUD de los routers de la sucursal activa y expone
+ * endpoints JSON con estado y perfiles PPP consultados en tiempo
+ * real vía la API de Mikrotik.
+ */
 class RouterController extends Controller
 {
+    /**
+     * Constructor: inyecta el servicio Mikrotik y protege las
+     * rutas con autenticación y permisos.
+     *
+     * apiProfiles queda solo con auth porque lo consume el
+     * formulario de cuentas PPPoE (otro módulo/permiso).
+     */
     public function __construct(protected MikrotikApiService $mikrotik)
     {
+        $this->middleware('auth');
+        $this->middleware('check.permission:routers.index')->only('index', 'apiRouters');
+        $this->middleware('check.permission:routers.create')->only('create', 'store');
+        $this->middleware('check.permission:routers.edit')->only('edit', 'update');
+        $this->middleware('check.permission:routers.destroy')->only('destroy');
     }
 
     public function index(): View

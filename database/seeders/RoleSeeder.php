@@ -145,6 +145,35 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'technical_order.verification_process', 'description' => 'Procesar verificación de órdenes']);
         Permission::create(['name' => 'technical_orders.reject', 'description' => 'Rechazar órdenes técnicas']);
 
+        // Routers (Mikrotik)
+        Permission::create(['name' => 'routers.index', 'description' => 'Ver routers']);
+        Permission::create(['name' => 'routers.create', 'description' => 'Crear routers']);
+        Permission::create(['name' => 'routers.edit', 'description' => 'Editar routers']);
+        Permission::create(['name' => 'routers.destroy', 'description' => 'Eliminar routers']);
+
+        // OLTs
+        Permission::create(['name' => 'olts.index', 'description' => 'Ver OLTs']);
+        Permission::create(['name' => 'olts.create', 'description' => 'Crear OLTs']);
+        Permission::create(['name' => 'olts.edit', 'description' => 'Editar OLTs']);
+        Permission::create(['name' => 'olts.vlans', 'description' => 'Crear VLANs en la OLT']);
+
+        // ONTs
+        Permission::create(['name' => 'onts.index', 'description' => 'Ver ONTs (autorizadas y por autorizar)']);
+        Permission::create(['name' => 'onts.show', 'description' => 'Ver detalle y estado de ONT']);
+        Permission::create(['name' => 'onts.activate', 'description' => 'Activar/autorizar ONTs']);
+        Permission::create(['name' => 'onts.destroy', 'description' => 'Eliminar ONTs']);
+        Permission::create(['name' => 'onts.relocate', 'description' => 'Mover ONTs de puerto']);
+        Permission::create(['name' => 'onts.catv', 'description' => 'Activar/desactivar CATV en ONTs']);
+
+        // Cuentas PPPoE
+        Permission::create(['name' => 'pppoe.index', 'description' => 'Ver cuentas PPPoE']);
+        Permission::create(['name' => 'pppoe.show', 'description' => 'Ver detalle de cuenta PPPoE']);
+        Permission::create(['name' => 'pppoe.create', 'description' => 'Crear cuentas PPPoE']);
+        Permission::create(['name' => 'pppoe.edit', 'description' => 'Editar cuentas PPPoE']);
+        Permission::create(['name' => 'pppoe.destroy', 'description' => 'Eliminar cuentas PPPoE']);
+        Permission::create(['name' => 'pppoe.import', 'description' => 'Importar cuentas PPPoE desde el router']);
+        Permission::create(['name' => 'pppoe.restart', 'description' => 'Reiniciar sesiones PPPoE']);
+
         //Usuarios
         Permission::create(['name' => 'users.index', 'description' => 'Ver usuarios']);
         Permission::create(['name' => 'users.create', 'description' => 'Crear usuarios']);
@@ -175,7 +204,11 @@ class RoleSeeder extends Seeder
             'materials.index', 'materials.create', 'materials.edit',
             'categories.index', 'categories.create', 'categories.edit',
             'movements.index', 'movements.create', 'movements.edit', 'movements.query_sn', 'movements.material_quantity', 'movements.history', 'movements.history_data', 'movements.pdf', 'movements.excel',
-            'technicals_orders.index', 'technicals_orders.create', 'technicals_orders.store', 'technicals_orders.update', 'technicals_orders.my_technical_orders', 'technicals_orders.process', 'technicals_orders.getSerialNumbers', 'technicals_orders.verification', 'technical_order.verification_process', 'technical_orders.reject'
+            'technicals_orders.index', 'technicals_orders.create', 'technicals_orders.store', 'technicals_orders.update', 'technicals_orders.my_technical_orders', 'technicals_orders.process', 'technicals_orders.getSerialNumbers', 'technicals_orders.verification', 'technical_order.verification_process', 'technical_orders.reject',
+            'routers.index', 'routers.create', 'routers.edit', 'routers.destroy',
+            'olts.index', 'olts.create', 'olts.edit', 'olts.vlans',
+            'onts.index', 'onts.show', 'onts.activate', 'onts.destroy', 'onts.relocate', 'onts.catv',
+            'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart'
         ]);
 
         $aux_admin->givePermissionTo([

@@ -8,9 +8,14 @@ use Spatie\Permission\Models\Role;
 
 class AdminController extends Controller
 {
+    /**
+     * Constructor: protege el dashboard con autenticación y el
+     * permiso gestisp.index (todos los roles del seeder lo tienen).
+     */
     public function __construct()
     {
         $this->middleware('auth');
+        $this->middleware('check.permission:gestisp.index')->only('index');
     }
     //
     public function index(){

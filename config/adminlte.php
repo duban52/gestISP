@@ -260,7 +260,9 @@ return [
     'dashboard_url' => '/',
     'logout_url' => 'logout',
     'login_url' => 'login',
-    'register_url' => 'register',
+    // Registro público deshabilitado: los usuarios se crean desde
+    // el módulo de usuarios (la ruta register tampoco existe ya)
+    'register_url' => false,
     'password_reset_url' => 'password/reset',
     'password_email_url' => 'password/email',
     'profile_url' => false,
@@ -497,36 +499,40 @@ return [
                     'route' => 'routers.index',
                     'active' => ['gestisp/routers*'],
                     'icon' => 'fas  fa-ethernet',
-                    'can' => 'technicals_orders.index',
+                    'can' => 'routers.index',
                 ],
                 [
                     'text' => 'PPPoE',
                     'route' => 'pppoe.index',
                     'active' => ['gestisp/pppoe*'],
                     'icon' => 'fas  fa-user-check',
-                    'can' => 'technicals_orders.my_technical_orders',
+                    'can' => 'pppoe.index',
                 ],
                 [
                     'text' => 'OLT´s',
                     'route' => 'olts.index',
                     'active' => ['gestisp/olts*'],
                     'icon' => 'fas  fa-server',
+                    'can' => 'olts.index',
                 ],
                 [
                     'text' => 'ONT´s',
                     'icon' => 'fas  fa-hdd',
+                    'can' => 'onts.index',
                     'submenu' =>[
                         [
                             'text' => 'Por Autorizar',
                             'route' => 'onts.no-authorized',
                             'icon' => 'fas  fa-ban',
                             'active' => ['gestisp/onts/no-autorized'],
+                            'can' => 'onts.index',
                         ],
                         [
                             'text' => 'Autorizadas',
                             'route' => 'onts.authorized',
                             'icon' => 'fas  fa-check-square',
                             'active' => ['gestisp/onts/authorized'],
+                            'can' => 'onts.index',
                         ],
                     ]
                 ],

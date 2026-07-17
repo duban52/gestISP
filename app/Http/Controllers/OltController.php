@@ -12,13 +12,35 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
+/**
+ * Controlador de OLTs
+ *
+ * Gestiona el registro de OLTs y su configuración (VLANs, perfiles
+ * de línea y de servicio) consultada por SSH, además del autofind
+ * de ONTs nuevas conectadas.
+ */
 class OltController extends Controller
 {
     protected $oltSshService;
 
+    /**
+     * Constructor: inyecta el servicio SSH y protege las rutas
+     * con autenticación y permisos.
+     *
+     * Las consultas de VLANs/perfiles pertenecen al formulario de
+     * edición (olts.edit) y el autofind lo consume la vista de
+     * ONTs por autorizar (onts.index).
+     */
     public function __construct(OltSshService $oltSshService)
     {
         $this->oltSshService = $oltSshService;
+
+        $this->middleware('auth');
+        $this->middleware('check.permission:olts.index')->only('index', 'apiOlts');
+        $this->middleware('check.permission:olts.create')->only('create', 'store');
+        $this->middleware('check.permission:olts.edit')->only('edit', 'viewVlans', 'viewLineProfiles', 'viewSrvProfiles');
+        $this->middleware('check.permission:olts.vlans')->only('storeVlan');
+        $this->middleware('check.permission:onts.index')->only('ontsAutofind');
     }
 
     public function index(): View

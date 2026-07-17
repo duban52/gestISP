@@ -52,6 +52,10 @@ class RoleController extends Controller
         'technicals_orders' => 'Órdenes técnicas',
         'technical_order' => 'Órdenes técnicas',
         'technical_orders' => 'Órdenes técnicas',
+        'routers' => 'Routers',
+        'olts' => 'OLTs',
+        'onts' => 'ONTs',
+        'pppoe' => 'Cuentas PPPoE',
         'users' => 'Usuarios',
         'roles' => 'Roles',
     ];

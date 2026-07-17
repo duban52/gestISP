@@ -10,15 +10,37 @@ use App\Services\OltSshService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Controlador de ONTs
+ *
+ * Gestiona el ciclo de vida de las ONTs de la sucursal activa:
+ * autorización (activate), consulta de estado y potencia (SSH/SNMP),
+ * reubicación de puerto, CATV y eliminación.
+ */
 class OntController extends Controller
 {
     protected OltSshService $oltSshService;
     protected OltSnmpService $snmpService;
 
+    /**
+     * Constructor: inyecta los servicios SSH/SNMP y protege las
+     * rutas con autenticación y permisos.
+     *
+     * buscarContrato y checkSn quedan solo con auth porque son
+     * consultas compartidas con el flujo de cuentas PPPoE.
+     */
     public function __construct(OltSshService $oltSshService, OltSnmpService $snmpService)
     {
         $this->oltSshService = $oltSshService;
         $this->snmpService   = $snmpService;
+
+        $this->middleware('auth');
+        $this->middleware('check.permission:onts.index')->only('authorized_ont_index', 'no_authorized_ont_index');
+        $this->middleware('check.permission:onts.show')->only('show', 'realtimeInfo', 'syncPower');
+        $this->middleware('check.permission:onts.activate')->only('activate');
+        $this->middleware('check.permission:onts.destroy')->only('destroy');
+        $this->middleware('check.permission:onts.relocate')->only('relocate');
+        $this->middleware('check.permission:onts.catv')->only('enableCatv', 'disableCatv');
     }
 
     public function no_authorized_ont_index()
