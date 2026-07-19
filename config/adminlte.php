@@ -418,6 +418,13 @@ return [
                             'icon' => 'fas  fa-receipt',
                             'can' => 'payments.index',
                         ],
+                        [
+                            'text' => 'Resumen de cajas',
+                            'route' => 'cash_register.summary',
+                            'active' => ['cash-register/summary'],
+                            'icon' => 'fas  fa-balance-scale',
+                            'can' => 'cash_register.summary',
+                        ],
 
                     ]
                 ],

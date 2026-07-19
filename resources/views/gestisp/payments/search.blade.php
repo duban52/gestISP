@@ -16,69 +16,155 @@
         </div>
     @endif
 
-    <!-- Formulario para buscar -->
+    {{-- ============================================================
+         Estado de la caja del usuario: todo cobro exige caja
+         abierta, así que se recuerda aquí ANTES de buscar.
+         ============================================================ --}}
+    @if($activeCashRegister ?? null)
+        <div class="alert alert-success d-flex justify-content-between align-items-center">
+            <span>
+                <i class="fas fa-cash-register"></i>
+                <strong>Caja #{{ $activeCashRegister->id }} abierta</strong>
+                desde {{ $activeCashRegister->opened_at->format('d/m/Y h:i a') }}
+                — base inicial ${{ number_format($activeCashRegister->initial_amount, 2) }}
+            </span>
+            <span class="badge badge-success" style="font-size: 0.95rem;">Listo para cobrar</span>
+        </div>
+    @else
+        <div class="alert alert-danger d-flex justify-content-between align-items-center">
+            <span>
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>No tienes una caja abierta.</strong>
+                Ningún cobro será aceptado hasta que abras tu caja.
+            </span>
+            <a href="{{ route('cashRegisters.index') }}" class="btn btn-light btn-sm">
+                <i class="fas fa-cash-register"></i> Ir a Gestión de caja
+            </a>
+        </div>
+    @endif
+
+    {{-- ============================================================
+         Buscador de facturas para cobro
+
+         Búsqueda amplia: por defecto el término se busca en TODOS
+         los campos a la vez (cédula, nombre, contrato, número de
+         factura, teléfono, usuario PPPoE, dirección); el selector
+         permite restringir a un criterio específico. El formulario
+         es GET para que la paginación conserve la búsqueda.
+         ============================================================ --}}
     <div class="card">
         <div class="card-header">
-            <form method="POST" action="{{ route('payments.search') }}">
-                @csrf
-                <div class="row align-items-center">
+            <form method="GET" action="{{ route('payments.searchView') }}">
+                <div class="row align-items-end">
+                    <div class="col-md-3 mt-1 mb-1">
+                        <label for="search_field" class="mb-1">Buscar por</label>
+                        <select name="search_field" id="search_field" class="form-control">
+                            <option value="all" {{ request('search_field', 'all') == 'all' ? 'selected' : '' }}>Todos los campos</option>
+                            <option value="identity" {{ request('search_field') == 'identity' ? 'selected' : '' }}>Identificación del cliente</option>
+                            <option value="name" {{ request('search_field') == 'name' ? 'selected' : '' }}>Nombre del cliente</option>
+                            <option value="contract" {{ request('search_field') == 'contract' ? 'selected' : '' }}>Número de contrato</option>
+                            <option value="invoice" {{ request('search_field') == 'invoice' ? 'selected' : '' }}>Número de factura</option>
+                            <option value="phone" {{ request('search_field') == 'phone' ? 'selected' : '' }}>Teléfono</option>
+                            <option value="pppoe" {{ request('search_field') == 'pppoe' ? 'selected' : '' }}>Usuario PPPoE</option>
+                            <option value="address" {{ request('search_field') == 'address' ? 'selected' : '' }}>Dirección / barrio</option>
+                        </select>
+                    </div>
                     <div class="col-md-4 mt-1 mb-1">
+                        <label for="search_term" class="mb-1">Criterio</label>
                         <input
                             type="text"
                             id="search_term"
                             name="search_term"
                             class="form-control"
-                            placeholder="Número de documento o ID del contrato"
-                            value="{{ request('search_term') }}">
+                            placeholder="Cédula, nombre, contrato, factura, teléfono..."
+                            value="{{ request('search_term') }}"
+                            autofocus>
                     </div>
                     <div class="col-md-2 mt-1 mb-1">
-                        <select name="per_page" id="per_page" class="form-control" onchange="this.form.submit()">
-                            <option value="">Resultados por página</option>
+                        <label for="per_page" class="mb-1">Por página</label>
+                        <select name="per_page" id="per_page" class="form-control">
                             <option value="8" {{ request('per_page') == 8 ? 'selected' : '' }}>8</option>
                             <option value="15" {{ request('per_page') == 15 ? 'selected' : '' }}>15</option>
                             <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25</option>
                             <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50</option>
                         </select>
                     </div>
-                    <div class="col-md-6 text-center text-md-right">
-                        <button type="submit" class="btn btn-primary" title="Aplicar filtro">
-                            <i class="fas fa-filter"></i> Buscar
+                    <div class="col-md-3 text-center text-md-right mt-1 mb-1">
+                        <button type="submit" class="btn btn-primary" title="Buscar">
+                            <i class="fas fa-search"></i> Buscar
                         </button>
+                        <a href="{{ route('payments.searchView') }}" class="btn btn-secondary" title="Limpiar búsqueda">
+                            <i class="fas fa-eraser"></i>
+                        </a>
                     </div>
                 </div>
+                <small class="form-text text-muted">
+                    Ejemplos: <code>1042770586</code> (cédula) · <code>Duban</code> (nombre) ·
+                    <code>FAC1-25</code> (factura) · <code>312...</code> (teléfono) ·
+                    <code>pepito.perez</code> (usuario PPPoE)
+                </small>
             </form>
         </div>
     </div>
 
     @if(isset($invoices) && $invoices->isNotEmpty())
-        <!-- Tabla para listar los pagos -->
+        {{-- Resumen de la búsqueda: cuántas facturas abiertas y
+             cuánto suman sus saldos (deuda total encontrada) --}}
+        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+            <span>
+                <i class="fas fa-file-invoice-dollar"></i>
+                <strong>{{ $resultCount }}</strong> factura(s) abierta(s) encontrada(s)
+            </span>
+            <span class="h5 mb-0">
+                Deuda total: <strong>${{ number_format($totalBalance, 2) }}</strong>
+            </span>
+        </div>
+
         <div class="card">
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
                     <tr>
-                        <th>Factura #</th>
+                        <th>Factura</th>
                         <th>Cliente</th>
-                        <th>Documento</th>
                         <th>Contrato</th>
-                        <th>Fecha Emisión</th>
-                        <th>Fecha Vencimiento</th>
+                        <th>Período</th>
+                        <th>Vencimiento</th>
+                        <th>Estado</th>
                         <th>Total</th>
-                        <th>Pendiente</th>
+                        <th>Saldo</th>
                         <th>Acciones</th>
                     </tr>
                     </thead>
                     <tbody>
                     @foreach($invoices as $invoice)
-                        <tr>
-                            <td>{{ $invoice->id }}</td>
-                            <td>{{ $invoice->contract->client->name ?? 'N/A' }}</td>
-                            <td>{{ $invoice->contract->client->identity_number ?? 'N/A' }}</td>
-                            <td>{{ $invoice->contract_id }}</td>
-                            <td>{{ $invoice->issue_date }}</td>
-                            <td>{{ $invoice->due_date }}</td>
-                            <td>{{ $invoice->total }}</td>
-                            <td>{{ $invoice->getPendingAmount() }}</td>
+                        <tr data-invoice-id="{{ $invoice->id }}"
+                            class="{{ $invoice->status === \App\Billing\Enums\InvoiceStatus::Vencida->value ? 'table-danger' : '' }}">
+                            <td><strong>{{ $invoice->displayNumber() }}</strong></td>
+                            <td>
+                                {{ $invoice->contract->client->name ?? 'N/A' }} {{ $invoice->contract->client->last_name ?? '' }}
+                                <small class="d-block text-muted">CC {{ $invoice->contract->client->identity_number ?? '—' }}</small>
+                            </td>
+                            <td>#{{ $invoice->contract_id }}</td>
+                            <td>{{ $invoice->billed_period_short }} {{ $invoice->billed_month_name }}</td>
+                            <td>{{ $invoice->due_date->format('d/m/Y') }}</td>
+                            <td>
+                                @switch($invoice->status)
+                                    @case(\App\Billing\Enums\InvoiceStatus::Vencida->value)
+                                        <span class="badge badge-danger">Vencida</span>
+                                        @break
+                                    @case(\App\Billing\Enums\InvoiceStatus::PendienteRiesgoCorte->value)
+                                        <span class="badge badge-danger">Riesgo de corte</span>
+                                        @break
+                                    @case(\App\Billing\Enums\InvoiceStatus::PendienteParcial->value)
+                                        <span class="badge badge-info">Abonada</span>
+                                        @break
+                                    @default
+                                        <span class="badge badge-warning">{{ $invoice->status }}</span>
+                                @endswitch
+                            </td>
+                            <td>${{ number_format($invoice->total, 2) }}</td>
+                            <td class="saldo-cell">${{ number_format($invoice->getPendingAmount(), 2) }}</td>
                             <td>
                                 @if($invoice->getPendingAmount() > 0)
                                     <button
@@ -86,9 +172,10 @@
                                         data-toggle="modal"
                                         data-target="#paymentModal"
                                         data-invoice-id="{{ $invoice->id }}"
+                                        data-invoice-number="{{ $invoice->displayNumber() }}"
                                         data-total="{{ $invoice->total }}"
                                         data-pending="{{ $invoice->getPendingAmount() }}">
-                                        Pagar
+                                        <i class="fas fa-hand-holding-usd"></i> Pagar
                                     </button>
                                 @else
                                     <span class="badge badge-success">Pagada</span>
@@ -103,9 +190,10 @@
         <div class="text-center mt-3">
             {{ $invoices->links() }}
         </div>
-    @else
+    @elseif(request()->filled('search_term'))
         <div class="alert alert-info mt-3">
-            No se encontraron facturas pendientes.
+            No se encontraron facturas abiertas con ese criterio.
+            Verifique el término o pruebe con "Todos los campos".
         </div>
     @endif
 
@@ -220,10 +308,12 @@
         $('#paymentModal').on('show.bs.modal', function (event) {
             var button = $(event.relatedTarget);
             var invoiceId = button.data('invoice-id');
+            var invoiceNumber = button.data('invoice-number');
             var total = button.data('total');
             var pending = button.data('pending');
 
             var modal = $(this);
+            modal.find('#paymentModalLabel').text('Registrar Pago — Factura ' + invoiceNumber);
             modal.find('#invoice_id').val(invoiceId);
             modal.find('#amount').attr('max', pending).val(pending);
             modal.find('#pending_amount').text(pending);
@@ -265,9 +355,10 @@
                                 location.reload();
                             });
                         } else {
-                            // Actualizar la fila en la tabla
-                            var row = $('tr').find('td:contains(' + response.payment.invoice_id + ')').first().parent();
-                            row.find('td:eq(7)').text(response.new_balance);
+                            // Actualizar el saldo de la fila (la fila se
+                            // identifica por data-invoice-id, no por posición)
+                            $('tr[data-invoice-id="' + response.payment.invoice_id + '"] .saldo-cell')
+                                .text('$' + response.new_balance);
                         }
                     }
                 },

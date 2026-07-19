@@ -93,6 +93,7 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'cash_register.status', 'description' => 'Ver estado de la caja']);
         Permission::create(['name' => 'cash_register.open', 'description' => 'Abrir caja']);
         Permission::create(['name' => 'cash_register.close', 'description' => 'Cerrar caja']);
+        Permission::create(['name' => 'cash_register.summary', 'description' => 'Ver resumen de cajas por período']);
 
         // Movimientos de caja
         Permission::create(['name' => 'transactions.index', 'description' => 'Ver movimientos de caja']);
@@ -198,7 +199,7 @@ class RoleSeeder extends Seeder
             'invoices.index', 'invoices.show', 'invoices.create', 'invoices.edit', 'invoices.generate', 'invoices.download-pdf', 'invoices.generate_max_pdf', 'invoices.check-pdf-status',
             'additionalCharges.index', 'additionalCharges.create', 'additionalCharges.edit',
             'payments.index', 'payments.create', 'payments.edit', 'payments.search', 'payments.searchView', 'payments.export', 'payments.export-excel',
-            'cashRegisters.index', 'cashRegisters.create', 'cashRegisters.edit', 'cash_register.status', 'cash_register.open', 'cash_register.close',
+            'cashRegisters.index', 'cashRegisters.create', 'cashRegisters.edit', 'cash_register.status', 'cash_register.open', 'cash_register.close', 'cash_register.summary',
             'transactions.index', 'transactions.store', 'transactions.history', 'transactions.export', 'transactions.export-excel',
             'warehouses.index', 'warehouses.create', 'warehouses.edit', 'warehouse.pdf',
             'materials.index', 'materials.create', 'materials.edit',

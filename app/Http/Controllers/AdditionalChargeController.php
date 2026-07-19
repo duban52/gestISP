@@ -48,15 +48,22 @@ class AdditionalChargeController extends Controller
             'user_id' => 'nullable|exists:users,id', // Debe existir en la tabla users
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
+            // Cuotas: null/vacío = de contado; 2-36 = diferido
+            'installments_total' => 'nullable|integer|min:2|max:36',
             'status' => 'nullable|string|in:pendiente,Facturado,Anulado', // Opcional, valores permitidos
+        ], [
+            'installments_total.min' => 'Para diferir, el número de cuotas debe ser al menos 2.',
+            'installments_total.max' => 'El máximo de cuotas es 36.',
         ]);
-
-
 
         AditionalCharge::create($validatedData);
 
+        $message = !empty($validatedData['installments_total'])
+            ? "Cargo diferido a {$validatedData['installments_total']} cuotas: cada factura mensual incluirá una cuota hasta completarlo."
+            : 'Se ha guardado correctamente el cargo adicional';
+
         return redirect()->route('contracts.show', $contract)
-                    ->with('success', 'Se ha guardado correctamente el cargo adicional');
+                    ->with('success', $message);
     }
 
     /**

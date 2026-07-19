@@ -8,10 +8,11 @@ use App\Models\Invoice;
 
 /**
  * Regresión del flujo de registro de pagos
- * (PaymentController::store) tras la fase 1 de fundaciones.
+ * (PaymentController::store).
  *
- * Los pagos se hacen por transferencia para no requerir caja
- * abierta (regla real: efectivo/tarjeta exigen caja).
+ * Regla de control interno: TODO cobro exige caja abierta del
+ * usuario, sin importar el método de pago — cada peso recaudado
+ * queda dentro del cuadre de una caja.
  */
 class PaymentRegistrationTest extends BillingTestCase
 {
@@ -29,6 +30,7 @@ class PaymentRegistrationTest extends BillingTestCase
     public function test_pago_total_marca_la_factura_como_pagada(): void
     {
         $invoice = $this->generateInvoice(price: 100000);
+        $register = $this->openCashRegister();
 
         $response = $this->postJson(route('payments.store'), [
             'invoice_id' => $invoice->id,
@@ -37,6 +39,14 @@ class PaymentRegistrationTest extends BillingTestCase
         ]);
 
         $response->assertOk()->assertJson(['success' => true]);
+
+        // El pago quedó dentro de la caja abierta, con su
+        // movimiento de ingreso registrado
+        $this->assertDatabaseHas('cash_register_transactions', [
+            'cash_register_id' => $register->id,
+            'transaction_type' => 'Ingreso',
+        ]);
+        $this->assertEqualsWithDelta(100000, (float) $register->fresh()->total_income, 0.01);
 
         $invoice->refresh();
         $this->assertSame(InvoiceStatus::Pagada->value, $invoice->status);
@@ -55,6 +65,7 @@ class PaymentRegistrationTest extends BillingTestCase
     public function test_pago_parcial_deja_la_factura_en_pendiente_parcial(): void
     {
         $invoice = $this->generateInvoice(price: 100000);
+        $this->openCashRegister();
 
         $this->postJson(route('payments.store'), [
             'invoice_id' => $invoice->id,
@@ -81,6 +92,7 @@ class PaymentRegistrationTest extends BillingTestCase
     public function test_rechaza_pagos_que_exceden_el_saldo(): void
     {
         $invoice = $this->generateInvoice(price: 100000);
+        $this->openCashRegister();
 
         $this->postJson(route('payments.store'), [
             'invoice_id' => $invoice->id,
@@ -93,15 +105,19 @@ class PaymentRegistrationTest extends BillingTestCase
         $this->assertSame(0, $invoice->payments()->count());
     }
 
-    public function test_rechaza_pagos_en_efectivo_sin_caja_abierta(): void
+    public function test_rechaza_cualquier_pago_sin_caja_abierta(): void
     {
         $invoice = $this->generateInvoice(price: 100000);
 
-        $this->postJson(route('payments.store'), [
-            'invoice_id' => $invoice->id,
-            'amount' => 100000,
-            'payment_method' => 'cash',
-        ])->assertStatus(422);
+        // Sin caja abierta NINGÚN método es válido, incluidas las
+        // transferencias (antes se colaban por fuera del cuadre)
+        foreach (['cash', 'card', 'transferencia'] as $method) {
+            $this->postJson(route('payments.store'), [
+                'invoice_id' => $invoice->id,
+                'amount' => 100000,
+                'payment_method' => $method,
+            ])->assertStatus(422);
+        }
 
         $this->assertSame(0, $invoice->payments()->count());
     }

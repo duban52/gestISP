@@ -6,6 +6,7 @@ use App\Models\CashRegister;
 use App\Models\CashRegisterTransaction;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class CashRegisterController extends Controller
@@ -21,6 +22,60 @@ class CashRegisterController extends Controller
         $this->middleware('check.permission:cash_register.status')->only('status');
         $this->middleware('check.permission:cash_register.open')->only('open');
         $this->middleware('check.permission:cash_register.close')->only('close');
+        $this->middleware('check.permission:cash_register.summary')->only('summary');
+    }
+
+    /**
+     * Resumen/cuadre de cajas de la sucursal por período.
+     *
+     * Lista todas las cajas abiertas en el rango de fechas (por
+     * defecto, hoy) con sus totales, el desglose de ingresos por
+     * método de pago y una fila de totales generales — el cuadre
+     * entre los distintos puntos de cobro.
+     */
+    public function summary(Request $request)
+    {
+        $validated = $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        $from = $validated['start_date'] ?? now()->toDateString();
+        $to = $validated['end_date'] ?? $from;
+
+        $registers = CashRegister::with('user')
+            ->where('branch_id', session('branch_id'))
+            ->whereBetween('opened_at', ["{$from} 00:00:00", "{$to} 23:59:59"])
+            ->orderBy('opened_at')
+            ->get();
+
+        // Desglose de ingresos por método de pago, por caja
+        $methodBreakdown = CashRegisterTransaction::whereIn('cash_register_id', $registers->pluck('id'))
+            ->where('transaction_type', 'Ingreso')
+            ->select('cash_register_id', 'payment_method', DB::raw('SUM(amount) AS total'))
+            ->groupBy('cash_register_id', 'payment_method')
+            ->get()
+            ->groupBy('cash_register_id');
+
+        // Totales generales del período (todas las cajas del rango)
+        $totals = [
+            'initial' => $registers->sum('initial_amount'),
+            'income' => $registers->sum('total_income'),
+            'expenses' => $registers->sum('total_expenses'),
+            'expected' => $registers->sum('expected_amount'),
+            'final' => $registers->whereNotNull('final_amount')->sum('final_amount'),
+            'difference' => $registers->whereNotNull('final_amount')->sum('difference'),
+            'open_count' => $registers->where('status', 'open')->count(),
+        ];
+
+        // Totales por método de pago del período completo
+        $methodTotals = $methodBreakdown->flatten()
+            ->groupBy('payment_method')
+            ->map(fn ($rows) => $rows->sum('total'));
+
+        return view('gestisp.cashRegisters.summary', compact(
+            'registers', 'methodBreakdown', 'totals', 'methodTotals', 'from', 'to'
+        ));
     }
     /**
      * Display a listing of the resource.

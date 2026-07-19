@@ -136,7 +136,7 @@ class InvoiceGenerator
 
         InvoiceIssued::dispatch($invoice);
 
-        return ['generated' => true, 'invoice_id' => $invoice->id];
+        return ['generated' => true, 'invoice_id' => $invoice->id, 'invoice' => $invoice];
     }
 
     /**
@@ -212,25 +212,52 @@ class InvoiceGenerator
             }
         }
 
-        // Cargos adicionales pendientes del contrato
+        // Cargos adicionales pendientes del contrato.
+        // De contado: monto completo y el cargo queda Facturado.
+        // Diferido a cuotas: entra UNA cuota por mes ("cuota X/N",
+        // la última ajusta el redondeo); el cargo sigue pendiente
+        // hasta completar las cuotas.
         $pendingCharges = $contract->additionalCharges()
             ->where('status', 'pendiente')
             ->get();
 
         foreach ($pendingCharges as $charge) {
-            InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'description' => $charge->description,
-                'quantity' => 1,
-                'unit_price' => $charge->amount,
-                'percentage_tax' => 0,
-                'tax' => 0,
-                'total' => $charge->amount,
-            ]);
+            if ($charge->isDeferred()) {
+                $n = $charge->installments_billed + 1;
+                $installment = $charge->amountForInstallment($n);
 
-            $charge->update(['status' => 'Facturado']);
-            $subtotal += $charge->amount;
-            $total += $charge->amount;
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => "{$charge->description} (cuota {$n}/{$charge->installments_total})",
+                    'quantity' => 1,
+                    'unit_price' => $installment,
+                    'percentage_tax' => 0,
+                    'tax' => 0,
+                    'total' => $installment,
+                ]);
+
+                $charge->update([
+                    'installments_billed' => $n,
+                    'status' => $n >= $charge->installments_total ? 'Facturado' : 'pendiente',
+                ]);
+
+                $subtotal += $installment;
+                $total += $installment;
+            } else {
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'description' => $charge->description,
+                    'quantity' => 1,
+                    'unit_price' => $charge->amount,
+                    'percentage_tax' => 0,
+                    'tax' => 0,
+                    'total' => $charge->amount,
+                ]);
+
+                $charge->update(['status' => 'Facturado']);
+                $subtotal += $charge->amount;
+                $total += $charge->amount;
+            }
         }
 
         return [

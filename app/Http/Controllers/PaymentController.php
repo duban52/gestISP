@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Services\PaymentRegistrar;
 use App\Exports\PaymentsExport;
+use App\Models\CashRegister;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -176,51 +177,149 @@ class PaymentController extends Controller
     }
 
     /**
-     * Vista de búsqueda de facturas pendientes para registrar pagos.
+     * Vista de búsqueda de facturas para cobro. Si llegan
+     * parámetros de búsqueda (GET), ejecuta la búsqueda — así la
+     * paginación funciona con enlaces normales.
      */
-    public function searchView(): View
+    public function searchView(Request $request): View
     {
-        return view('gestisp.payments.search');
+        if ($request->filled('search_term')) {
+            return $this->performSearch($request);
+        }
+
+        return view('gestisp.payments.search', [
+            'activeCashRegister' => $this->activeCashRegister(),
+        ]);
     }
 
     /**
-     * Busca facturas pendientes de pago por identidad o ID de cliente.
-     *
-     * Excluye facturas ya pagadas o refinanciadas ("Cargada a nueva
-     * factura"), que no admiten pagos adicionales.
+     * Búsqueda vía POST (compatibilidad con el formulario clásico).
      */
     public function search(Request $request): View
     {
-        $request->validate([
-            'search_term' => 'required|string',
+        return $this->performSearch($request);
+    }
+
+    /**
+     * Busca facturas abiertas (cobrables) con criterios amplios:
+     * identificación, nombre del cliente, número de contrato,
+     * número de factura, teléfono, usuario PPPoE o dirección —
+     * o todos a la vez ("todos los campos", el default).
+     *
+     * Las vencidas aparecen primero (orden por fecha de
+     * vencimiento) y se calcula el saldo total de los resultados
+     * para que el cajero vea de una vez cuánto debe el cliente.
+     */
+    private function performSearch(Request $request): View
+    {
+        $validated = $request->validate([
+            'search_term' => 'required|string|max:100',
+            'search_field' => 'nullable|string|in:all,identity,name,contract,invoice,phone,pppoe,address',
+            'per_page' => 'nullable|integer|in:8,15,25,50',
+        ], [
+            'search_term.required' => 'Escriba un criterio de búsqueda.',
         ]);
 
-        $query = Invoice::query();
+        $term = trim($validated['search_term']);
+        $field = $validated['search_field'] ?? 'all';
 
-        // Restringir a la sucursal activa
+        $query = Invoice::query()->with('contract.client');
+
+        // Restringir a la sucursal activa (columna propia, con índice)
         if (session()->has('branch_id')) {
-            $query->whereHas('contract', function ($q) {
-                $q->where('branch_id', session('branch_id'));
-            });
+            $query->where('branch_id', session('branch_id'));
         }
 
-        // Buscar por identidad o ID del cliente
-        if ($request->filled('search_term')) {
-            $term = $request->search_term;
-
-            $query->whereHas('contract.client', function ($q) use ($term) {
-                $q->where('identity_number', 'like', "%{$term}%")
-                    ->orWhere('id', 'like', "%{$term}%");
-            });
-        }
+        $this->applySearchCriteria($query, $term, $field);
 
         // Solo facturas que aún admiten pagos
         $query->whereNotIn('status', InvoiceStatus::notPayable());
 
-        $perPage  = $request->get('per_page', 8);
-        $invoices = $query->simplePaginate($perPage);
+        // Saldo total de TODOS los resultados (no solo la página)
+        $totalBalance = (clone $query)->sum('pending_invoice_amount');
+        $resultCount = (clone $query)->count();
 
-        return view('gestisp.payments.search', compact('invoices'));
+        // Vencidas y próximas a vencer primero
+        $invoices = $query->orderBy('due_date')
+            ->simplePaginate($validated['per_page'] ?? 8)
+            ->appends($request->only(['search_term', 'search_field', 'per_page']));
+
+        return view('gestisp.payments.search', array_merge(
+            compact('invoices', 'totalBalance', 'resultCount'),
+            ['activeCashRegister' => $this->activeCashRegister()],
+        ));
+    }
+
+    /**
+     * Caja abierta del usuario autenticado (null si no tiene).
+     * La vista de cobro la muestra como recordatorio: sin caja
+     * abierta ningún cobro será aceptado.
+     */
+    private function activeCashRegister(): ?CashRegister
+    {
+        return CashRegister::where('status', 'open')
+            ->where('user_id', auth()->id())
+            ->first();
+    }
+
+    /**
+     * Aplica el criterio de búsqueda elegido. Con 'all' se busca
+     * el término en todos los campos a la vez.
+     */
+    private function applySearchCriteria($query, string $term, string $field): void
+    {
+        $like = "%{$term}%";
+
+        match ($field) {
+            'identity' => $query->whereHas('contract.client',
+                fn ($q) => $q->where('identity_number', 'like', $like)),
+
+            'name' => $query->whereHas('contract.client',
+                fn ($q) => $q->whereRaw("CONCAT(name, ' ', last_name) LIKE ?", [$like])),
+
+            'contract' => $query->where('contract_id', is_numeric($term) ? (int) $term : 0),
+
+            'invoice' => $query->where(function ($q) use ($like, $term) {
+                $q->where('full_number', 'like', $like);
+                if (is_numeric($term)) {
+                    $q->orWhere('id', (int) $term);
+                }
+            }),
+
+            'phone' => $query->whereHas('contract.client', function ($q) use ($like) {
+                $q->where('number_phone', 'like', $like)
+                    ->orWhere('aditional_phone', 'like', $like);
+            }),
+
+            'pppoe' => $query->whereHas('contract',
+                fn ($q) => $q->where('user_pppoe', 'like', $like)),
+
+            'address' => $query->whereHas('contract', function ($q) use ($like) {
+                $q->where('address', 'like', $like)
+                    ->orWhere('neighborhood', 'like', $like);
+            }),
+
+            // Todos los campos a la vez
+            default => $query->where(function ($q) use ($like, $term) {
+                $q->where('full_number', 'like', $like)
+                    ->orWhereHas('contract.client', function ($c) use ($like) {
+                        $c->where('identity_number', 'like', $like)
+                            ->orWhereRaw("CONCAT(name, ' ', last_name) LIKE ?", [$like])
+                            ->orWhere('number_phone', 'like', $like)
+                            ->orWhere('aditional_phone', 'like', $like);
+                    })
+                    ->orWhereHas('contract', function ($c) use ($like) {
+                        $c->where('user_pppoe', 'like', $like)
+                            ->orWhere('address', 'like', $like)
+                            ->orWhere('neighborhood', 'like', $like);
+                    });
+
+                if (is_numeric($term)) {
+                    $q->orWhere('contract_id', (int) $term)
+                        ->orWhere('id', (int) $term);
+                }
+            }),
+        };
     }
 
     /**

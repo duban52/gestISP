@@ -13,25 +13,33 @@
     <div class="card mt-3">
         <div class="card-head pt-3">
             <div class="row d-flex justify-content-between mb-4 pr-3">
-                <div class="col-md-8">
+                <div class="col-md-6">
                     <h2 class="ml-2 P3">LISTADO DE FACTURAS</h2>
                     @if($totalPendding > 0)
+                        {{-- Suma de los SALDOS de todas las facturas
+                             abiertas de la sucursal (pendientes,
+                             parciales, con riesgo y vencidas) --}}
                         <div class="ml-2">
                             <span class="badge badge-warning badge-lg">
-                                Total Pendiente: ${{ number_format($totalPendding, 2) }}
+                                Por recaudar: ${{ number_format($totalPendding, 2) }}
                             </span>
                         </div>
                     @endif
                 </div>
                 <div class="col-md-2 text-center text-md-right mb-2">
+                    <a href="{{ route('invoices.billing_runs') }}" class="btn btn-info col-10" title="Historial de corridas de facturación">
+                        Reportes <i class="fas fa-chart-bar"></i>
+                    </a>
+                </div>
+                <div class="col-md-2 text-center text-md-right mb-2">
                     <form action="{{ route('invoices.generate') }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas generar las facturas?');">
                         @csrf
-                        <button type="submit" class="btn btn-primary col-8">Generar Facturas</button>
+                        <button type="submit" class="btn btn-primary col-10">Generar Facturas</button>
                     </form>
                 </div>
 
                 <div class="col-md-2 text-center text-md-left">
-                    <a href="{{ route('invoices.generate_max_pdf') }}" id="generatePdfButton" class="btn btn-danger col-8" title="Generar PDF de facturas pendientes">
+                    <a href="{{ route('invoices.generate_max_pdf') }}" id="generatePdfButton" class="btn btn-danger col-10" title="Generar PDF de facturas pendientes">
                         Generar PDF <i class="far fa-file-pdf"></i>
                     </a>
                 </div>

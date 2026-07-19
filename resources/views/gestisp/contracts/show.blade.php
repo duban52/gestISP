@@ -371,6 +371,41 @@
                                             <div class="invalid-feedback">{{ $message }}</div>
                                             @enderror
                                         </div>
+
+                                        {{-- Diferir a cuotas: cada factura mensual
+                                             incluirá una cuota hasta completar el cargo --}}
+                                        <div class="form-group mb-2 text-left">
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input" id="defer_charge"
+                                                       {{ old('installments_total') ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="defer_charge">
+                                                    Diferir a cuotas
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group mb-3 text-left" id="installments_group"
+                                             style="{{ old('installments_total') ? '' : 'display:none;' }}">
+                                            <label for="installments_total">Número de cuotas (2 a 36):</label>
+                                            <input type="number" min="2" max="36"
+                                                   class="form-control @error('installments_total') is-invalid @enderror"
+                                                   id="installments_total" name="installments_total"
+                                                   value="{{ old('installments_total') }}">
+                                            <small class="form-text text-muted">
+                                                Cada factura mensual incluirá una cuota
+                                                (la última ajusta el redondeo) hasta completar el valor.
+                                            </small>
+                                            @error('installments_total')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                        <script>
+                                            document.getElementById('defer_charge').addEventListener('change', function () {
+                                                const group = document.getElementById('installments_group');
+                                                const input = document.getElementById('installments_total');
+                                                group.style.display = this.checked ? '' : 'none';
+                                                if (!this.checked) input.value = '';
+                                            });
+                                        </script>
                                         <hr>
                                         <div class="form-group">
                                             <button type="submit" class="btn btn-success">Agregar cargo</button>
@@ -458,6 +493,7 @@
                                                 <tr>
                                                     <th>Concepto</th>
                                                     <th>Valor</th>
+                                                    <th>Cuotas</th>
                                                     <th>Estado</th>
                                                     <th>Fecha de creación</th>
                                                     <th>Creado por</th>
@@ -465,7 +501,20 @@
                                                 @foreach($additionalCharges as $addionalChrage)
                                                     <tr>
                                                         <td>{{ $addionalChrage->description }}</td>
-                                                        <td>{{ $addionalChrage->amount }}</td>
+                                                        <td>${{ number_format($addionalChrage->amount, 2) }}</td>
+
+                                                        {{-- Progreso de cuotas de cargos diferidos --}}
+                                                        <td>
+                                                            @if($addionalChrage->isDeferred())
+                                                                <span class="badge badge-info">
+                                                                    {{ $addionalChrage->installments_billed }}/{{ $addionalChrage->installments_total }}
+                                                                    (${{ number_format($addionalChrage->installmentAmount(), 2) }} c/u)
+                                                                </span>
+                                                            @else
+                                                                Contado
+                                                            @endif
+                                                        </td>
+
                                                         <td>{{ $addionalChrage->status }}</td>
                                                         <td>{{ $addionalChrage->created_at }}</td>
                                                         <td>{{ $addionalChrage->user->name }} {{ $addionalChrage->user->last_name }}</td>

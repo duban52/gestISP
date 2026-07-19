@@ -20,8 +20,11 @@ use RuntimeException;
  * Encapsula las reglas de negocio que vivían en
  * PaymentController::store:
  *
+ *  - TODO cobro exige caja abierta del usuario, sin importar el
+ *    método de pago: cada peso recaudado queda en una caja y en
+ *    el cuadre del punto de cobro. (Antes las transferencias
+ *    podían cobrarse sin caja y quedaban por fuera del cuadre.)
  *  - El monto no puede exceder el saldo pendiente.
- *  - Efectivo y tarjeta exigen caja abierta del usuario.
  *  - Pago total → factura Pagada + transición del contrato:
  *    Pre-suspensión → Activo (reactivación directa) o
  *    Suspendido → Por Reconexión (+ orden técnica automática).
@@ -36,8 +39,6 @@ use RuntimeException;
  */
 class PaymentRegistrar
 {
-    /** Métodos de pago presenciales que exigen caja abierta */
-    private const METHODS_REQUIRING_CASH_REGISTER = ['cash', 'card'];
 
     /**
      * Registra un pago validado sobre una factura.
@@ -66,18 +67,20 @@ class PaymentRegistrar
             throw new RuntimeException('El monto del pago excede el saldo pendiente.');
         }
 
+        // Caja abierta OBLIGATORIA para cualquier método de pago:
+        // todo recaudo debe quedar dentro del cuadre de una caja
         $activeCashRegister = CashRegister::where('status', 'open')
             ->where('user_id', $userId)
             ->first();
 
-        if (!$activeCashRegister && in_array($data['payment_method'], self::METHODS_REQUIRING_CASH_REGISTER)) {
-            throw new RuntimeException('No hay una caja abierta para recibir pagos.');
+        if (!$activeCashRegister) {
+            throw new RuntimeException('No hay una caja abierta para recibir pagos. Abra su caja antes de cobrar.');
         }
 
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
             'user_id' => $userId,
-            'cash_register_id' => $activeCashRegister->id ?? null,
+            'cash_register_id' => $activeCashRegister->id,
             'amount' => $data['amount'],
             'payment_method' => $data['payment_method'],
             'payment_date' => now(),
@@ -95,19 +98,19 @@ class PaymentRegistrar
             $invoice->update(['status' => InvoiceStatus::PendienteParcial->value]);
         }
 
-        if ($activeCashRegister) {
-            CashRegisterTransaction::create([
-                'cash_register_id' => $activeCashRegister->id,
-                'payment_id' => $payment->id,
-                'transaction_type' => 'Ingreso',
-                'amount' => $data['amount'],
-                'payment_method' => $data['payment_method'],
-                'description' => "Pago de factura #{$invoice->id}",
-                'created_by' => $userId,
-            ]);
+        // El movimiento de caja se registra siempre (la caja es
+        // obligatoria), identificando la factura por su número
+        CashRegisterTransaction::create([
+            'cash_register_id' => $activeCashRegister->id,
+            'payment_id' => $payment->id,
+            'transaction_type' => 'Ingreso',
+            'amount' => $data['amount'],
+            'payment_method' => $data['payment_method'],
+            'description' => "Pago de factura {$invoice->displayNumber()}",
+            'created_by' => $userId,
+        ]);
 
-            $activeCashRegister->calculateTotals();
-        }
+        $activeCashRegister->calculateTotals();
 
         return $payment;
     }

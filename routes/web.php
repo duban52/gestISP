@@ -119,6 +119,12 @@ Route::post('/invoices/generate', [InvoiceController::class, 'generateInvoices']
 // Anulación de facturas (nunca se eliminan: cambian a estado Anulada)
 Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'voidInvoice'])->name('invoices.void');
 
+// Reporte gerencial de corridas de facturación
+Route::get('/invoices/billing-runs', [InvoiceController::class, 'billingRuns'])->name('invoices.billing_runs');
+
+// Resumen de cajas por período (cuadre entre puntos de cobro)
+Route::get('/cash-register/summary', [CashRegisterController::class, 'summary'])->name('cash_register.summary');
+
 // Descarga de PDF
 Route::get('/invoices/{id}/download-pdf', [InvoiceController::class, 'downloadInvoicePdf'])->name('invoices.download-pdf');
 //generacion de PDF másivo

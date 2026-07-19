@@ -7,6 +7,7 @@ use App\Billing\Services\InvoiceVoider;
 use App\Billing\Services\MonthlyBillingRun;
 use App\Billing\Services\OverdueProcessor;
 use App\Jobs\GeneratePendingInvoicesPdf;
+use App\Models\BillingRun;
 use App\Models\Invoice;
 use App\Models\PdfReport;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class InvoiceController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('check.permission:invoices.index')->only('index');
+        $this->middleware('check.permission:invoices.index')->only('index', 'billingRuns');
         $this->middleware('check.permission:invoices.create')->only('create', 'store');
         $this->middleware('check.permission:invoices.edit')->only('edit', 'update');
         $this->middleware('check.permission:invoices.show')->only('show');
@@ -50,18 +51,14 @@ class InvoiceController extends Controller
 
         $totalPendding = 0;
 
-        // Total pendiente
+        // Total POR RECAUDAR de la sucursal: la suma de los saldos
+        // de todas las facturas abiertas (pendientes, parciales,
+        // con riesgo y vencidas). Antes solo sumaba el total de
+        // las pendientes e ignoraba vencidas y abonos.
         if (session()->has('branch_id')) {
-            $branchId = session('branch_id');
-
-            $totalPendding = Invoice::whereIn('status', [
-                    InvoiceStatus::Pendiente->value,
-                    InvoiceStatus::PendienteRiesgoCorte->value,
-                ])
-                ->whereHas('contract', function ($query) use ($branchId) {
-                    $query->where('branch_id', $branchId);
-                })
-                ->sum('total');
+            $totalPendding = Invoice::whereIn('status', InvoiceStatus::payable())
+                ->where('branch_id', session('branch_id'))
+                ->sum('pending_invoice_amount');
         }
 
         $branchId = session('branch_id');
@@ -168,10 +165,30 @@ class InvoiceController extends Controller
                 ->with('error', 'No hay contratos para generar facturas.');
         }
 
-        $message = "Proceso completado. Facturas generadas: {$result['generated']}, Omitidas: {$result['skipped']}";
+        $message = sprintf(
+            'Proceso completado. Facturas generadas: %d, Omitidas: %d. Total facturado: $%s (IVA: $%s)',
+            $result['generated'],
+            $result['skipped'],
+            number_format($result['total_billed'], 2),
+            number_format($result['total_tax'], 2)
+        );
 
         return redirect()->route('invoices.index')
             ->with('success', $message);
+    }
+
+    /**
+     * Reporte gerencial de corridas de facturación de la sucursal:
+     * cada generación con sus conteos y totales facturados.
+     */
+    public function billingRuns()
+    {
+        $runs = BillingRun::with('user')
+            ->where('branch_id', session('branch_id'))
+            ->orderByDesc('executed_at')
+            ->get();
+
+        return view('gestisp.invoices.billing_runs', compact('runs'));
     }
 
 

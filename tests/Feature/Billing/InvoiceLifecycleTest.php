@@ -105,7 +105,8 @@ class InvoiceLifecycleTest extends BillingTestCase
         $this->post(route('invoices.generate'));
         $invoice = Invoice::where('contract_id', $contract->id)->firstOrFail();
 
-        // Abono parcial
+        // Abono parcial (con caja abierta, requisito de todo cobro)
+        $this->openCashRegister();
         $this->postJson(route('payments.store'), [
             'invoice_id' => $invoice->id,
             'amount' => 30000,

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Billing;
 
 use App\Models\Branch;
+use App\Models\CashRegister;
 use App\Models\Client;
 use App\Models\Contract;
 use App\Models\Plan;
@@ -57,6 +58,22 @@ abstract class BillingTestCase extends TestCase
         ]);
 
         return $user;
+    }
+
+    /**
+     * Abre una caja para el usuario autenticado del test.
+     * Todo cobro exige caja abierta, así que los tests de pago
+     * deben llamar esto antes de cobrar.
+     */
+    protected function openCashRegister(float $initialAmount = 0): CashRegister
+    {
+        return CashRegister::create([
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->admin->id,
+            'initial_amount' => $initialAmount,
+            'status' => 'open',
+            'opened_at' => now(),
+        ]);
     }
 
     /**
