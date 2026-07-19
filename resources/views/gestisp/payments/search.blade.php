@@ -99,7 +99,7 @@
                     </div>
                 </div>
                 <small class="form-text text-muted">
-                    Ejemplos: <code>1042770586</code> (cédula) · <code>Duban</code> (nombre) ·
+                    Ejemplos: <code>12345678</code> (cédula) · <code>Juan Rodríguez</code> (nombre) ·
                     <code>FAC1-25</code> (factura) · <code>312...</code> (teléfono) ·
                     <code>pepito.perez</code> (usuario PPPoE)
                 </small>
