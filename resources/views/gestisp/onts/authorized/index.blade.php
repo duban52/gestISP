@@ -98,7 +98,7 @@
                                 <span>&times;</span>
                             </button>
                         </div>
-                        <div class="modal-body">
+                        <div class="modal-body" id="eliminarCampos">
                             <p>¿Está seguro que desea eliminar la siguiente ONT?</p>
                             <ul>
                                 <li><strong>Serial:</strong> <span id="eliminarSn"></span></li>
@@ -109,7 +109,25 @@
                                 Esta acción eliminará la ONT de la OLT y de la base de datos.
                             </p>
                         </div>
-                        <div class="modal-footer">
+
+                        {{-- ============================================================
+                             Progreso de la eliminación
+
+                             Borrar la ONT implica desconfigurarla en la OLT por
+                             consola, lo que toma varios segundos. Sin este aviso
+                             el modal quedaba estático y parecía bloqueado.
+                             ============================================================ --}}
+                        <div class="modal-body text-center py-5" id="eliminarProgreso" style="display:none;">
+                            <div class="spinner-border text-danger" role="status" style="width:3.5rem;height:3.5rem;"></div>
+                            <h5 class="mt-4 mb-2">Eliminando la ONT de la OLT...</h5>
+                            <p class="text-muted mb-0">
+                                Se está desconfigurando el equipo. Este proceso puede tardar
+                                hasta un minuto.<br>
+                                <strong>No cierre esta ventana ni recargue la página.</strong>
+                            </p>
+                        </div>
+
+                        <div class="modal-footer" id="eliminarBotones">
                             <form id="formEliminarOnt" method="POST">
                                 @csrf
                                 @method('DELETE')
@@ -163,8 +181,29 @@
                 document.getElementById('eliminarDesc').textContent = desc;
                 document.getElementById('formEliminarOnt').action  = `/onts/${id}`;
 
+                // Restaurar el formulario por si el intento anterior falló
+                document.getElementById('eliminarCampos').style.display = 'block';
+                document.getElementById('eliminarBotones').style.display = 'flex';
+                document.getElementById('eliminarProgreso').style.display = 'none';
+
                 $('#modalEliminarOnt').modal('show');
             }
+        });
+
+        /* ============================================================
+           PROGRESO AL ELIMINAR UNA ONT
+
+           La eliminación desconfigura el equipo en la OLT por consola
+           y tarda varios segundos: se sustituye la confirmación por un
+           aviso de progreso y se impide cerrar el modal mientras tanto.
+           ============================================================ */
+        document.getElementById('formEliminarOnt').addEventListener('submit', function () {
+            document.getElementById('eliminarCampos').style.display = 'none';
+            document.getElementById('eliminarBotones').style.display = 'none';
+            document.getElementById('eliminarProgreso').style.display = 'block';
+
+            $('#modalEliminarOnt').data('bs.modal')._config.backdrop = 'static';
+            $('#modalEliminarOnt').data('bs.modal')._config.keyboard = false;
         });
 
         // Refrescar potencia sin recargar página

@@ -25,9 +25,166 @@
         <span id="realtimeErrorMsg"></span>
     </div>
 
+    {{-- ============================================================
+         ZONA 1 — Operación
+
+         Lo que se consulta al atender a un cliente: si está
+         conectado, a qué velocidad, y las acciones sobre su sesión.
+         ============================================================ --}}
     <div class="row">
-        {{-- Columna izquierda: datos de la DB --}}
-        <div class="col-md-6">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-wifi"></i> Estado de Conexión</span>
+                    <button id="btnRefreshSession" class="btn btn-sm btn-light" title="Refrescar">
+                        <i class="fas fa-sync"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    {{-- Loader --}}
+                    <div id="sessionLoader" class="text-center p-4">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <p class="mt-2 text-muted">Consultando el router...</p>
+                    </div>
+
+                    {{-- Tabla de sesión (oculta hasta que lleguen datos) --}}
+                    <table id="sessionTable" class="table table-striped mb-0" style="display:none;">
+                        <tr>
+                            <th style="width:40%">Estado</th>
+                            <td id="st-connected">—</td>
+                        </tr>
+                        <tr>
+                            <th>Dirección IP</th>
+                            <td id="st-address">—</td>
+                        </tr>
+                        <tr>
+                            <th>Caller ID (MAC)</th>
+                            <td id="st-caller">—</td>
+                        </tr>
+                        <tr>
+                            <th>Tiempo conectado</th>
+                            <td id="st-uptime">—</td>
+                        </tr>
+                        <tr>
+                            <th>Servicio</th>
+                            <td id="st-service">—</td>
+                        </tr>
+                        <tr>
+                            <th>Session ID</th>
+                            <td id="st-session-id">—</td>
+                        </tr>
+                        {{-- Velocidad instantánea que reporta el router --}}
+                        <tr>
+                            <th>Velocidad actual</th>
+                            <td id="st-speed">—</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            {{-- Acciones --}}
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-tools"></i> Acciones
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ route('pppoe.restart', $pppoe) }}" class="d-inline"
+                          onsubmit="return confirm('¿Reiniciar la sesión de {{ $pppoe->username }}? El cliente perderá conexión unos segundos.');">
+                        @csrf
+                        <button type="submit" class="btn btn-warning" id="btnRestartSession" disabled>
+                            <i class="fas fa-redo"></i> Reiniciar Sesión
+                        </button>
+                    </form>
+
+                    <form method="POST" action="{{ route('pppoe.toggle', $pppoe) }}" class="d-inline">
+                        @csrf
+                        @if($pppoe->disabled)
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-play"></i> Reactivar Cuenta
+                            </button>
+                        @else
+                            <button type="submit" class="btn btn-danger"
+                                    onclick="return confirm('¿Suspender la cuenta {{ $pppoe->username }}? El cliente quedará sin servicio.');">
+                                <i class="fas fa-pause"></i> Suspender Cuenta
+                            </button>
+                        @endif
+                    </form>
+
+                    <small class="d-block text-muted mt-2">
+                        <i class="fas fa-info-circle"></i>
+                        "Reiniciar Sesión" desconecta al cliente momentáneamente para que renegocie
+                        (útil tras cambios de plan). Solo está disponible si hay sesión activa.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ============================================================
+         ZONA 2 — Consumo
+
+         A ancho completo: la gráfica de ancho de banda se lee mucho
+         mejor extendida que en media pantalla.
+         ============================================================ --}}
+    <div class="row">
+        <div class="col-12">
+            {{-- ============================================================
+                 Gráfica de ancho de banda
+
+                 Se alimenta de las muestras que guarda el comando
+                 pppoe:poll (una petición por router cada 5 minutos).
+                 ============================================================ --}}
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-chart-area"></i> Ancho de banda</span>
+                    <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
+                        <option value="6">Últimas 6 horas</option>
+                        <option value="24" selected>Últimas 24 horas</option>
+                        <option value="72">Últimos 3 días</option>
+                        <option value="168">Última semana</option>
+                    </select>
+                </div>
+                <div class="card-body">
+                    <div id="chartEmpty" class="alert alert-info mb-0" style="display:none;">
+                        <i class="fas fa-info-circle"></i>
+                        Todavía no hay muestras de tráfico para esta cuenta. El historial lo
+                        genera la tarea programada <code>php artisan pppoe:poll</code>;
+                        cuando corra periódicamente, aquí verá el consumo del cliente.
+                    </div>
+
+                    <div id="chartWrapper" style="display:none;">
+                        {{-- Resumen del período --}}
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <small class="text-muted d-block">Pico de bajada</small>
+                                <strong id="peak-out" class="text-primary">—</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Pico de subida</small>
+                                <strong id="peak-in" class="text-warning">—</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Promedio bajada</small>
+                                <strong id="avg-out">—</strong>
+                            </div>
+                        </div>
+
+                        <canvas id="trafficChart" height="130"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ============================================================
+         ZONA 3 — Datos de referencia
+
+         Configuración de la cuenta y datos del titular: se consultan
+         ocasionalmente, no en cada atención.
+         ============================================================ --}}
+    <div class="row">
+        <div class="col-lg-6">
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <i class="fas fa-id-card"></i> Datos de la Cuenta
@@ -81,7 +238,8 @@
                     </table>
                 </div>
             </div>
-
+        </div>
+        <div class="col-lg-6">
             {{-- Cliente / Contrato --}}
             <div class="card">
                 <div class="card-header bg-info text-white">
@@ -117,140 +275,6 @@
                             <td>{{ $pppoe->contract->neighborhood ?? '—' }}</td>
                         </tr>
                     </table>
-                </div>
-            </div>
-        </div>
-
-        {{-- Columna derecha: estado de conexión en tiempo real --}}
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-wifi"></i> Estado de Conexión</span>
-                    <button id="btnRefreshSession" class="btn btn-sm btn-light" title="Refrescar">
-                        <i class="fas fa-sync"></i>
-                    </button>
-                </div>
-                <div class="card-body p-0">
-                    {{-- Loader --}}
-                    <div id="sessionLoader" class="text-center p-4">
-                        <div class="spinner-border text-success" role="status"></div>
-                        <p class="mt-2 text-muted">Consultando el router...</p>
-                    </div>
-
-                    {{-- Tabla de sesión (oculta hasta que lleguen datos) --}}
-                    <table id="sessionTable" class="table table-striped mb-0" style="display:none;">
-                        <tr>
-                            <th style="width:40%">Estado</th>
-                            <td id="st-connected">—</td>
-                        </tr>
-                        <tr>
-                            <th>Dirección IP</th>
-                            <td id="st-address">—</td>
-                        </tr>
-                        <tr>
-                            <th>Caller ID (MAC)</th>
-                            <td id="st-caller">—</td>
-                        </tr>
-                        <tr>
-                            <th>Tiempo conectado</th>
-                            <td id="st-uptime">—</td>
-                        </tr>
-                        <tr>
-                            <th>Servicio</th>
-                            <td id="st-service">—</td>
-                        </tr>
-                        <tr>
-                            <th>Session ID</th>
-                            <td id="st-session-id">—</td>
-                        </tr>
-                        {{-- Velocidad instantánea que reporta el router --}}
-                        <tr>
-                            <th>Velocidad actual</th>
-                            <td id="st-speed">—</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-
-            {{-- ============================================================
-                 Gráfica de ancho de banda
-
-                 Se alimenta de las muestras que guarda el comando
-                 pppoe:poll (una petición por router cada 5 minutos).
-                 ============================================================ --}}
-            <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-chart-area"></i> Ancho de banda</span>
-                    <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
-                        <option value="6">Últimas 6 horas</option>
-                        <option value="24" selected>Últimas 24 horas</option>
-                        <option value="72">Últimos 3 días</option>
-                        <option value="168">Última semana</option>
-                    </select>
-                </div>
-                <div class="card-body">
-                    <div id="chartEmpty" class="alert alert-info mb-0" style="display:none;">
-                        <i class="fas fa-info-circle"></i>
-                        Todavía no hay muestras de tráfico para esta cuenta. El historial lo
-                        genera la tarea programada <code>php artisan pppoe:poll</code>;
-                        cuando corra periódicamente, aquí verá el consumo del cliente.
-                    </div>
-
-                    <div id="chartWrapper" style="display:none;">
-                        {{-- Resumen del período --}}
-                        <div class="row text-center mb-3">
-                            <div class="col-4">
-                                <small class="text-muted d-block">Pico de bajada</small>
-                                <strong id="peak-out" class="text-primary">—</strong>
-                            </div>
-                            <div class="col-4">
-                                <small class="text-muted d-block">Pico de subida</small>
-                                <strong id="peak-in" class="text-warning">—</strong>
-                            </div>
-                            <div class="col-4">
-                                <small class="text-muted d-block">Promedio bajada</small>
-                                <strong id="avg-out">—</strong>
-                            </div>
-                        </div>
-
-                        <canvas id="trafficChart" height="130"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Acciones --}}
-            <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <i class="fas fa-tools"></i> Acciones
-                </div>
-                <div class="card-body">
-                    <form method="POST" action="{{ route('pppoe.restart', $pppoe) }}" class="d-inline"
-                          onsubmit="return confirm('¿Reiniciar la sesión de {{ $pppoe->username }}? El cliente perderá conexión unos segundos.');">
-                        @csrf
-                        <button type="submit" class="btn btn-warning" id="btnRestartSession" disabled>
-                            <i class="fas fa-redo"></i> Reiniciar Sesión
-                        </button>
-                    </form>
-
-                    <form method="POST" action="{{ route('pppoe.toggle', $pppoe) }}" class="d-inline">
-                        @csrf
-                        @if($pppoe->disabled)
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-play"></i> Reactivar Cuenta
-                            </button>
-                        @else
-                            <button type="submit" class="btn btn-danger"
-                                    onclick="return confirm('¿Suspender la cuenta {{ $pppoe->username }}? El cliente quedará sin servicio.');">
-                                <i class="fas fa-pause"></i> Suspender Cuenta
-                            </button>
-                        @endif
-                    </form>
-
-                    <small class="d-block text-muted mt-2">
-                        <i class="fas fa-info-circle"></i>
-                        "Reiniciar Sesión" desconecta al cliente momentáneamente para que renegocie
-                        (útil tras cambios de plan). Solo está disponible si hay sesión activa.
-                    </small>
                 </div>
             </div>
         </div>

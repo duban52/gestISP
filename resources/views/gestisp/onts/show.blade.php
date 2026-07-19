@@ -26,96 +26,13 @@
     </div>
 
     <div class="row">
-        {{-- Columna izquierda: datos de la DB (carga instantánea) --}}
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <i class="fas fa-info-circle"></i> Información General
-                </div>
-                <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
-                        <tr>
-                            <th style="width:40%">Serial</th>
-                            <td>{{ $ont->sn }}</td>
-                        </tr>
-                        <tr>
-                            <th>OLT</th>
-                            <td>{{ $ont->olt->name ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Ubicación (F/S/P)</th>
-                            <td>0/{{ $ont->slot }}/{{ $ont->port }}</td>
-                        </tr>
-                        <tr>
-                            <th>ONT ID</th>
-                            <td>{{ $ont->onu_id }}</td>
-                        </tr>
-                        <tr>
-                            <th>Service Port</th>
-                            <td>{{ $ont->service_port }}</td>
-                        </tr>
-                        <tr>
-                            <th>VLAN</th>
-                            <td>{{ $ont->vlan }}</td>
-                        </tr>
-                        <tr>
-                            <th>Descripción</th>
-                            <td>{{ $ont->description }}</td>
-                        </tr>
-                        <tr>
-                            <th>Estado en sistema</th>
-                            <td>
-                                @if($ont->status)
-                                    <span class="badge badge-success">Activa</span>
-                                @else
-                                    <span class="badge badge-danger">Offline</span>
-                                @endif
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
+        {{-- ============================================================
+             ZONA 1 — Operación
 
-            <div class="card">
-                <div class="card-header bg-info text-white">
-                    <i class="fas fa-user"></i> Cliente y Contrato
-                </div>
-                <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
-                        <tr>
-                            <th style="width:40%">Cliente</th>
-                            <td>
-                                {{ $ont->contract->client->name ?? 'N/A' }}
-                                {{ $ont->contract->client->last_name ?? '' }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Identificación</th>
-                            <td>{{ $ont->contract->client->identity_number ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Teléfono</th>
-                            <td>{{ $ont->contract->client->number_phone ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Contrato #</th>
-                            <td>{{ $ont->contract_id ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Dirección</th>
-                            <td>{{ $ont->contract->address ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Barrio</th>
-                            <td>{{ $ont->contract->neighborhood ?? 'N/A' }}</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        {{-- Columna derecha: datos en tiempo real (AJAX) --}}
-        <div class="col-md-6">
+             Lo primero que necesita un técnico: el estado en vivo del
+             enlace, los controles de servicio y el historial de caídas.
+             ============================================================ --}}
+        <div class="col-xl-4 col-lg-6">
             <div class="card">
                 <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                     <span>
@@ -171,51 +88,9 @@
                     </table>
                 </div>
             </div>
+        </div>
 
-            {{-- ============================================================
-                 Gráficas históricas
-
-                 Se alimentan de las muestras que guarda el comando
-                 onts:poll. Si aún no hay muestras, se explica cómo
-                 activarlas en lugar de mostrar una gráfica vacía.
-                 ============================================================ --}}
-            <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-chart-area"></i> Historial</span>
-                    <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
-                        <option value="6">Últimas 6 horas</option>
-                        <option value="24" selected>Últimas 24 horas</option>
-                        <option value="72">Últimos 3 días</option>
-                        <option value="168">Última semana</option>
-                    </select>
-                </div>
-                <div class="card-body">
-                    <div id="chartsEmpty" class="alert alert-info mb-0" style="display:none;">
-                        <i class="fas fa-info-circle"></i>
-                        Todavía no hay muestras registradas para esta ONT. El historial lo
-                        genera la tarea programada <code>php artisan onts:poll</code>;
-                        una vez que corra periódicamente, aquí verá la evolución.
-                    </div>
-
-                    <div id="chartsWrapper" style="display:none;">
-                        {{-- Potencia óptica --}}
-                        <h6 class="text-muted mb-2">Potencia óptica (dBm)</h6>
-                        <canvas id="opticalChart" height="120"></canvas>
-
-                        {{-- Ancho de banda --}}
-                        <h6 class="text-muted mb-2 mt-4">Ancho de banda</h6>
-                        <canvas id="trafficChart" height="120"></canvas>
-                        <div id="trafficUnavailable" class="alert alert-secondary mt-2 mb-0" style="display:none;">
-                            <i class="fas fa-info-circle"></i>
-                            No hay datos de tráfico para esta ONT. Requiere que la OLT exponga
-                            contadores por ONT: ejecute
-                            <code>php artisan onts:poll --resolve-traffic</code> y verifique
-                            con <code>php artisan olt:snmp-probe {{ $ont->olt_id }} --interfaces --filter=ONT</code>.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+        <div class="col-xl-4 col-lg-6">
             {{-- ============================================================
                  Control de la ONT
 
@@ -310,7 +185,9 @@
                     </table>
                 </div>
             </div>
+        </div>
 
+        <div class="col-xl-4 col-lg-12">
             {{-- Historial (oculta hasta que lleguen los datos) --}}
             <div class="card" id="historyCard" style="display:none;">
                 <div class="card-header bg-secondary text-white">
@@ -333,6 +210,156 @@
                         <tr>
                             <th>Tiempo en línea</th>
                             <td id="rt-online-duration">—</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ============================================================
+         ZONA 2 — Gráficas
+
+         A ancho completo: las series temporales se leen mucho mejor
+         anchas que en media pantalla.
+         ============================================================ --}}
+    <div class="row">
+        <div class="col-12">
+            {{-- ============================================================
+                 Gráficas históricas
+
+                 Se alimentan de las muestras que guarda el comando
+                 onts:poll. Si aún no hay muestras, se explica cómo
+                 activarlas en lugar de mostrar una gráfica vacía.
+                 ============================================================ --}}
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-chart-area"></i> Historial</span>
+                    <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
+                        <option value="6">Últimas 6 horas</option>
+                        <option value="24" selected>Últimas 24 horas</option>
+                        <option value="72">Últimos 3 días</option>
+                        <option value="168">Última semana</option>
+                    </select>
+                </div>
+                <div class="card-body">
+                    <div id="chartsEmpty" class="alert alert-info mb-0" style="display:none;">
+                        <i class="fas fa-info-circle"></i>
+                        Todavía no hay muestras registradas para esta ONT. El historial lo
+                        genera la tarea programada <code>php artisan onts:poll</code>;
+                        una vez que corra periódicamente, aquí verá la evolución.
+                    </div>
+
+                    <div id="chartsWrapper" style="display:none;">
+                        {{-- Potencia óptica --}}
+                        <h6 class="text-muted mb-2">Potencia óptica (dBm)</h6>
+                        <canvas id="opticalChart" height="120"></canvas>
+
+                        {{-- Ancho de banda --}}
+                        <h6 class="text-muted mb-2 mt-4">Ancho de banda</h6>
+                        <canvas id="trafficChart" height="120"></canvas>
+                        <div id="trafficUnavailable" class="alert alert-secondary mt-2 mb-0" style="display:none;">
+                            <i class="fas fa-info-circle"></i>
+                            No hay datos de tráfico para esta ONT. Requiere que la OLT exponga
+                            contadores por ONT: ejecute
+                            <code>php artisan onts:poll --resolve-traffic</code> y verifique
+                            con <code>php artisan olt:snmp-probe {{ $ont->olt_id }} --interfaces --filter=ONT</code>.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ============================================================
+         ZONA 3 — Datos de referencia
+
+         Información que se consulta ocasionalmente: ficha técnica de
+         la ONT y datos del cliente.
+         ============================================================ --}}
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-info-circle"></i> Información General
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0">
+                        <tr>
+                            <th style="width:40%">Serial</th>
+                            <td>{{ $ont->sn }}</td>
+                        </tr>
+                        <tr>
+                            <th>OLT</th>
+                            <td>{{ $ont->olt->name ?? 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Ubicación (F/S/P)</th>
+                            <td>0/{{ $ont->slot }}/{{ $ont->port }}</td>
+                        </tr>
+                        <tr>
+                            <th>ONT ID</th>
+                            <td>{{ $ont->onu_id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Service Port</th>
+                            <td>{{ $ont->service_port }}</td>
+                        </tr>
+                        <tr>
+                            <th>VLAN</th>
+                            <td>{{ $ont->vlan }}</td>
+                        </tr>
+                        <tr>
+                            <th>Descripción</th>
+                            <td>{{ $ont->description }}</td>
+                        </tr>
+                        <tr>
+                            <th>Estado en sistema</th>
+                            <td>
+                                @if($ont->status)
+                                    <span class="badge badge-success">Activa</span>
+                                @else
+                                    <span class="badge badge-danger">Offline</span>
+                                @endif
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-user"></i> Cliente y Contrato
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-striped mb-0">
+                        <tr>
+                            <th style="width:40%">Cliente</th>
+                            <td>
+                                {{ $ont->contract->client->name ?? 'N/A' }}
+                                {{ $ont->contract->client->last_name ?? '' }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Identificación</th>
+                            <td>{{ $ont->contract->client->identity_number ?? 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Teléfono</th>
+                            <td>{{ $ont->contract->client->number_phone ?? 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Contrato #</th>
+                            <td>{{ $ont->contract_id ?? 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Dirección</th>
+                            <td>{{ $ont->contract->address ?? 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Barrio</th>
+                            <td>{{ $ont->contract->neighborhood ?? 'N/A' }}</td>
                         </tr>
                     </table>
                 </div>

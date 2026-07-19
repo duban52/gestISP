@@ -65,7 +65,7 @@
                             <span>&times;</span>
                         </button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body" id="activarCampos">
                         <input type="hidden" name="ont_sn" id="modalOntSn">
 
                         <div class="form-group">
@@ -131,8 +131,29 @@
 
                         <input type="hidden" id="selectedOltId" name="olt_id">
                     </div>
-                    <div class="modal-footer">
-                        <button type="submit" class="btn btn-primary">Activar</button>
+
+                    {{-- ============================================================
+                         Progreso de la autorización
+
+                         Autorizar una ONT implica configurarla en la OLT por
+                         consola, lo que toma varios segundos. Sin este aviso
+                         el modal parecía congelado y el usuario volvía a
+                         pulsar Activar, generando configuraciones duplicadas.
+                         ============================================================ --}}
+                    <div class="modal-body text-center py-5" id="activarProgreso" style="display:none;">
+                        <div class="spinner-border text-primary" role="status" style="width:3.5rem;height:3.5rem;"></div>
+                        <h5 class="mt-4 mb-2">Autorizando la ONT en la OLT...</h5>
+                        <p class="text-muted mb-0">
+                            Se está configurando el equipo. Este proceso puede tardar
+                            hasta un minuto.<br>
+                            <strong>No cierre esta ventana ni recargue la página.</strong>
+                        </p>
+                    </div>
+
+                    <div class="modal-footer" id="activarBotones">
+                        <button type="submit" class="btn btn-primary" id="btnActivarOnt">
+                            <i class="fas fa-check-circle"></i> Activar
+                        </button>
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                     </div>
                 </div>
@@ -449,6 +470,32 @@
             if (!e.target.closest('#buscarContrato') && !e.target.closest('#resultadosContrato')) {
                 document.getElementById('resultadosContrato').style.display = 'none';
             }
+        });
+
+        /* ============================================================
+           PROGRESO AL AUTORIZAR UNA ONT
+
+           La autorización configura el equipo por consola y tarda
+           varios segundos. Se sustituye el formulario por un aviso de
+           progreso y se bloquea el cierre del modal, para que quede
+           claro que el sistema está trabajando y no se envíe dos veces.
+           ============================================================ */
+        document.getElementById('formActivarOnt').addEventListener('submit', function () {
+            document.getElementById('activarCampos').style.display = 'none';
+            document.getElementById('activarBotones').style.display = 'none';
+            document.getElementById('activarProgreso').style.display = 'block';
+
+            // Evitar que se cierre con Esc o clic fuera mientras trabaja
+            $('#activarOntModal').data('bs.modal')._config.backdrop = 'static';
+            $('#activarOntModal').data('bs.modal')._config.keyboard = false;
+        });
+
+        // Al reabrir el modal, restaurar el formulario (si la
+        // autorización falló, el usuario debe poder reintentar)
+        $('#activarOntModal').on('show.bs.modal', function () {
+            document.getElementById('activarCampos').style.display = 'block';
+            document.getElementById('activarBotones').style.display = 'flex';
+            document.getElementById('activarProgreso').style.display = 'none';
         });
     </script>
 @endsection
