@@ -12,8 +12,20 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
-        $schedule->command('onts:sync-power')->everyFiveMinutes();
+        // Muestreo SNMP de las ONTs: actualiza potencias y estado, y
+        // alimenta el historial que grafica la vista de detalle.
+        // Cada 5 minutos da una resolución suficiente para las
+        // gráficas sin cargar la OLT (un recorrido masivo por OLT).
+        $schedule->command('onts:poll')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        // Una vez al día: resuelve los ifIndex de tráfico de las
+        // ONTs nuevas y poda el historial con más de 30 días.
+        $schedule->command('onts:poll --resolve-traffic --prune=30')
+            ->dailyAt('03:30')
+            ->withoutOverlapping();
     }
 
     /**

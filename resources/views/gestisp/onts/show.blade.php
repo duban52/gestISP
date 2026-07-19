@@ -118,7 +118,11 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-broadcast-tower"></i> Estado en Tiempo Real</span>
+                    <span>
+                        <i class="fas fa-broadcast-tower"></i> Estado en Tiempo Real
+                        {{-- Indicador de la latencia real de la consulta SNMP --}}
+                        <small id="rt-latency" class="badge badge-light ml-2" style="display:none;"></small>
+                    </span>
                     <button id="btnRefreshRealtime" class="btn btn-sm btn-light" title="Refrescar">
                         <i class="fas fa-sync"></i>
                     </button>
@@ -127,7 +131,7 @@
                     {{-- Loader --}}
                     <div id="realtimeLoader" class="text-center p-4">
                         <div class="spinner-border text-success" role="status"></div>
-                        <p class="mt-2 text-muted">Consultando la OLT...</p>
+                        <p class="mt-2 text-muted">Consultando la OLT por SNMP...</p>
                     </div>
 
                     {{-- Tabla (oculta hasta que lleguen los datos) --}}
@@ -165,6 +169,50 @@
                             <td id="rt-distance">—</td>
                         </tr>
                     </table>
+                </div>
+            </div>
+
+            {{-- ============================================================
+                 Gráficas históricas
+
+                 Se alimentan de las muestras que guarda el comando
+                 onts:poll. Si aún no hay muestras, se explica cómo
+                 activarlas en lugar de mostrar una gráfica vacía.
+                 ============================================================ --}}
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-chart-area"></i> Historial</span>
+                    <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
+                        <option value="6">Últimas 6 horas</option>
+                        <option value="24" selected>Últimas 24 horas</option>
+                        <option value="72">Últimos 3 días</option>
+                        <option value="168">Última semana</option>
+                    </select>
+                </div>
+                <div class="card-body">
+                    <div id="chartsEmpty" class="alert alert-info mb-0" style="display:none;">
+                        <i class="fas fa-info-circle"></i>
+                        Todavía no hay muestras registradas para esta ONT. El historial lo
+                        genera la tarea programada <code>php artisan onts:poll</code>;
+                        una vez que corra periódicamente, aquí verá la evolución.
+                    </div>
+
+                    <div id="chartsWrapper" style="display:none;">
+                        {{-- Potencia óptica --}}
+                        <h6 class="text-muted mb-2">Potencia óptica (dBm)</h6>
+                        <canvas id="opticalChart" height="120"></canvas>
+
+                        {{-- Ancho de banda --}}
+                        <h6 class="text-muted mb-2 mt-4">Ancho de banda</h6>
+                        <canvas id="trafficChart" height="120"></canvas>
+                        <div id="trafficUnavailable" class="alert alert-secondary mt-2 mb-0" style="display:none;">
+                            <i class="fas fa-info-circle"></i>
+                            No hay datos de tráfico para esta ONT. Requiere que la OLT exponga
+                            contadores por ONT: ejecute
+                            <code>php artisan onts:poll --resolve-traffic</code> y verifique
+                            con <code>php artisan olt:snmp-probe {{ $ont->olt_id }} --interfaces --filter=ONT</code>.
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -222,9 +270,11 @@
 @endsection
 
 @section('js')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
         const ontId          = {{ $ont->id }};
         const realtimeUrl    = `/onts/${ontId}/realtime`;
+        const historyUrl     = `{{ route('onts.metrics_history', $ont) }}`;
         const catvEnableUrl  = `/onts/${ontId}/catv/enable`;
         const catvDisableUrl = `/onts/${ontId}/catv/disable`;
         const csrfToken      = document.querySelector('meta[name="csrf-token"]').content;
@@ -259,11 +309,19 @@
                     const d = res.data;
                     table.style.display = 'table';
 
+                    // Latencia real de la consulta SNMP (con SSH esto
+                    // eran segundos; ahora son milisegundos)
+                    const lat = document.getElementById('rt-latency');
+                    lat.textContent = res.cached
+                        ? 'en caché'
+                        : `SNMP · ${res.query_ms} ms`;
+                    lat.style.display = 'inline-block';
+
                     // Estado operativo
-                    if ((d.run_state || '').toLowerCase() === 'online') {
+                    if ((d.run_status || '').toLowerCase() === 'online') {
                         setText('rt-run-state', '<span class="badge badge-success">Online</span>');
                     } else {
-                        setText('rt-run-state', `<span class="badge badge-danger">${d.run_state ?? 'Desconocido'}</span>`);
+                        setText('rt-run-state', `<span class="badge badge-danger">${d.run_status ?? 'Desconocido'}</span>`);
                     }
 
                     // Potencia Rx con color según umbral
@@ -286,9 +344,9 @@
                         setText('rt-temperature', null);
                     }
 
-                    setText('rt-voltage',  d.voltage,  ' V');
-                    setText('rt-current',  d.current,  ' mA');
-                    setText('rt-distance', d.distance, ' m');
+                    setText('rt-voltage',  d.voltage,      ' V');
+                    setText('rt-current',  d.bias_current, ' mA');
+                    setText('rt-distance', d.distance,     ' m');
 
                     // Historial
                     document.getElementById('historyCard').style.display = 'block';
@@ -354,10 +412,171 @@
                 </form>`;
         }
 
-        // Cargar al abrir la página
-        document.addEventListener('DOMContentLoaded', loadRealtime);
+        /* ============================================================
+           GRÁFICAS HISTÓRICAS
 
-        // Botón de refresco manual
+           Los datos vienen de las muestras que guarda onts:poll.
+           Se dibujan dos gráficas: potencia óptica (siempre que haya
+           muestras) y ancho de banda (solo si la OLT expone
+           contadores por ONT).
+           ============================================================ */
+        let opticalChart = null;
+        let trafficChart = null;
+
+        /** Formatea bits por segundo a la unidad más legible */
+        function formatBps(bps) {
+            if (bps === null || bps === undefined) return '—';
+            if (bps >= 1e9) return (bps / 1e9).toFixed(2) + ' Gbps';
+            if (bps >= 1e6) return (bps / 1e6).toFixed(2) + ' Mbps';
+            if (bps >= 1e3) return (bps / 1e3).toFixed(1) + ' kbps';
+            return bps + ' bps';
+        }
+
+        function loadCharts() {
+            const hours = document.getElementById('chartRange').value;
+
+            fetch(`${historyUrl}?hours=${hours}`)
+                .then(r => r.json())
+                .then(res => {
+                    const empty   = document.getElementById('chartsEmpty');
+                    const wrapper = document.getElementById('chartsWrapper');
+
+                    if (!res.ok || res.count === 0) {
+                        empty.style.display   = 'block';
+                        wrapper.style.display = 'none';
+                        return;
+                    }
+
+                    empty.style.display   = 'none';
+                    wrapper.style.display = 'block';
+
+                    const labels = res.samples.map(s => s.t.substring(5)); // sin el año
+
+                    // ---- Potencia óptica ----
+                    const opticalData = {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Rx ONT (dBm)',
+                                data: res.samples.map(s => s.rx),
+                                borderColor: '#28a745',
+                                backgroundColor: 'rgba(40,167,69,.12)',
+                                tension: .3,
+                                spanGaps: true,
+                            },
+                            {
+                                label: 'Rx en OLT (dBm)',
+                                data: res.samples.map(s => s.olt_rx),
+                                borderColor: '#17a2b8',
+                                backgroundColor: 'rgba(23,162,184,.10)',
+                                tension: .3,
+                                spanGaps: true,
+                            },
+                        ],
+                    };
+
+                    if (opticalChart) opticalChart.destroy();
+                    opticalChart = new Chart(document.getElementById('opticalChart'), {
+                        type: 'line',
+                        data: opticalData,
+                        options: {
+                            responsive: true,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                legend: { position: 'bottom' },
+                                tooltip: {
+                                    callbacks: {
+                                        label: c => `${c.dataset.label}: ${c.parsed.y} dBm`,
+                                    },
+                                },
+                            },
+                            scales: {
+                                y: {
+                                    title: { display: true, text: 'dBm' },
+                                    // Umbral de alarma habitual en GPON
+                                    suggestedMin: -30,
+                                    suggestedMax: -10,
+                                },
+                            },
+                        },
+                    });
+
+                    // ---- Ancho de banda ----
+                    const trafficBox = document.getElementById('trafficUnavailable');
+                    const trafficCanvas = document.getElementById('trafficChart');
+
+                    if (!res.has_traffic) {
+                        trafficBox.style.display = 'block';
+                        trafficCanvas.style.display = 'none';
+                        if (trafficChart) { trafficChart.destroy(); trafficChart = null; }
+                        return;
+                    }
+
+                    trafficBox.style.display = 'none';
+                    trafficCanvas.style.display = 'block';
+
+                    if (trafficChart) trafficChart.destroy();
+                    trafficChart = new Chart(trafficCanvas, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    label: 'Bajada (descarga)',
+                                    data: res.samples.map(s => s.out_bps),
+                                    borderColor: '#007bff',
+                                    backgroundColor: 'rgba(0,123,255,.15)',
+                                    fill: true,
+                                    tension: .3,
+                                    spanGaps: true,
+                                },
+                                {
+                                    label: 'Subida (carga)',
+                                    data: res.samples.map(s => s.in_bps),
+                                    borderColor: '#fd7e14',
+                                    backgroundColor: 'rgba(253,126,20,.12)',
+                                    fill: true,
+                                    tension: .3,
+                                    spanGaps: true,
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                legend: { position: 'bottom' },
+                                tooltip: {
+                                    callbacks: {
+                                        label: c => `${c.dataset.label}: ${formatBps(c.parsed.y)}`,
+                                    },
+                                },
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { callback: v => formatBps(v) },
+                                },
+                            },
+                        },
+                    });
+                })
+                .catch(() => {
+                    document.getElementById('chartsEmpty').style.display = 'block';
+                    document.getElementById('chartsWrapper').style.display = 'none';
+                });
+        }
+
+        // Cargar al abrir la página
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRealtime();
+            loadCharts();
+        });
+
+        // Botón de refresco manual (fuerza lectura sin caché)
         document.getElementById('btnRefreshRealtime').addEventListener('click', loadRealtime);
+
+        // Cambio de rango de las gráficas
+        document.getElementById('chartRange').addEventListener('change', loadCharts);
     </script>
 @endsection

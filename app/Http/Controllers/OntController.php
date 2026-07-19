@@ -36,7 +36,7 @@ class OntController extends Controller
 
         $this->middleware('auth');
         $this->middleware('check.permission:onts.index')->only('authorized_ont_index', 'no_authorized_ont_index');
-        $this->middleware('check.permission:onts.show')->only('show', 'realtimeInfo', 'syncPower');
+        $this->middleware('check.permission:onts.show')->only('show', 'realtimeInfo', 'syncPower', 'metricsHistory');
         $this->middleware('check.permission:onts.activate')->only('activate');
         $this->middleware('check.permission:onts.destroy')->only('destroy');
         $this->middleware('check.permission:onts.relocate')->only('relocate');
@@ -160,6 +160,17 @@ class OntController extends Controller
      * Busca el ifIndex SNMP de una interfaz GPON dado su slot y port
      */
     private function resolveIfIndex(Olt $olt, string $slot, string $port): ?int
+    {
+        // Delegado al servicio SNMP: usa SNMPv2c con GETBULK (el
+        // código anterior hacía un walk SNMPv1, mucho más lento) y
+        // el patrón de interfaz vive en config/olt_snmp.php
+        return $this->snmpService->resolvePonPortIfIndex($olt, $slot, $port);
+    }
+
+    /**
+     * @deprecated Sustituido por OltSnmpService::resolvePonPortIfIndex
+     */
+    private function resolveIfIndexLegacy(Olt $olt, string $slot, string $port): ?int
     {
         $host      = $olt->ip_address . ':' . ($olt->snmp_port ?? 161);
         $community = $olt->read_snmp_comunity;
@@ -289,25 +300,82 @@ class OntController extends Controller
     }
 
     /**
-     * Endpoint AJAX: información en tiempo real de la ONT via SSH
+     * Endpoint AJAX: información en tiempo real de la ONT.
+     *
+     * Usa SNMP (milisegundos) en lugar de SSH (segundos): la ficha
+     * completa se obtiene con UNA sola petición al equipo.
+     *
+     * El estado del puerto CATV es lo único que sigue requiriendo
+     * CLI, así que se consulta por SSH solo si se pide de forma
+     * explícita (?catv=1), para no penalizar la carga normal.
      */
-    public function realtimeInfo(Ont $ont): \Illuminate\Http\JsonResponse
+    public function realtimeInfo(Request $request, Ont $ont): \Illuminate\Http\JsonResponse
     {
         $olt = Olt::findOrFail($ont->olt_id);
 
-        try {
-            $realtime = $this->oltSshService->getOntOpticalInfo($olt, $ont);
+        $result = $this->snmpService->getOntMetrics($olt, $ont, useCache: !$request->boolean('fresh'));
 
+        if (!$result['ok']) {
             return response()->json([
-                'ok'   => true,
-                'data' => $realtime,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'ok'      => false,
-                'message' => 'No se pudo obtener información en tiempo real: ' . $e->getMessage(),
+                'ok' => false,
+                'message' => $result['error'] ?? 'La OLT no respondió a la consulta SNMP.',
             ]);
         }
+
+        // Aplanar a [clave => valor] para la vista
+        $data = [];
+        foreach ($result['metrics'] as $key => $metric) {
+            $data[$key] = $metric['value'];
+            $data[$key . '_unit'] = $metric['unit'];
+        }
+
+        // Guardar la última lectura como estado actual de la ONT
+        if (isset($result['metrics']['rx_power']['value'])) {
+            $ont->update([
+                'rx_power' => $result['metrics']['rx_power']['value'],
+                'status' => 1,
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => $data,
+            'query_ms' => $result['query_ms'],
+            'cached' => $result['cached'] ?? false,
+            'source' => 'snmp',
+        ]);
+    }
+
+    /**
+     * Endpoint AJAX: historial de métricas para las gráficas
+     * (potencia óptica y ancho de banda).
+     *
+     * Las muestras las genera el comando onts:poll.
+     */
+    public function metricsHistory(Request $request, Ont $ont): \Illuminate\Http\JsonResponse
+    {
+        $hours = (int) $request->get('hours', 24);
+        $hours = max(1, min($hours, 720)); // entre 1 hora y 30 días
+
+        $samples = $ont->metrics()
+            ->where('measured_at', '>=', now()->subHours($hours))
+            ->orderBy('measured_at')
+            ->get(['measured_at', 'rx_power', 'tx_power', 'olt_rx_power', 'in_bps', 'out_bps']);
+
+        return response()->json([
+            'ok' => true,
+            'hours' => $hours,
+            'count' => $samples->count(),
+            'has_traffic' => $samples->contains(fn ($s) => $s->in_bps !== null),
+            'samples' => $samples->map(fn ($s) => [
+                't' => $s->measured_at->format('Y-m-d H:i'),
+                'rx' => $s->rx_power !== null ? (float) $s->rx_power : null,
+                'tx' => $s->tx_power !== null ? (float) $s->tx_power : null,
+                'olt_rx' => $s->olt_rx_power !== null ? (float) $s->olt_rx_power : null,
+                'in_bps' => $s->in_bps,
+                'out_bps' => $s->out_bps,
+            ]),
+        ]);
     }
     public function enableCatv(Ont $ont): \Illuminate\Http\RedirectResponse
     {
