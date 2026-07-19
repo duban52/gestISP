@@ -816,4 +816,63 @@ class OltSshService
             $ssh->disconnect();
         }
     }
+
+    /**
+     * Habilita o deshabilita la ONT completa en la OLT.
+     *
+     * Deshabilitarla corta el servicio del cliente sin borrar su
+     * configuración: la ONT queda registrada y se puede volver a
+     * habilitar en cualquier momento (a diferencia de eliminarla,
+     * que obliga a reautorizarla desde cero).
+     *
+     * Es una operación de escritura, por eso va por CLI: SNMP en
+     * modo lectura no puede cambiar el estado del equipo.
+     */
+    public function setOntAdminState(Olt $olt, Ont $ont, bool $enable): void
+    {
+        $interface = "0/{$ont->slot}";
+        $command = $enable ? 'activate' : 'deactivate';
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("config\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("interface gpon {$interface}\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("ont {$command} {$ont->port} {$ont->onu_id}\n");
+            $output = $ssh->read('/[>#]/');
+
+            // Algunas versiones piden confirmación al desactivar
+            if (str_contains($output, '(y/n)')) {
+                $ssh->write("y\n");
+                $output .= $ssh->read('/[>#]/');
+            }
+
+            Log::debug('ONT ADMIN STATE', [
+                'sn' => $ont->sn,
+                'command' => $command,
+                'output' => $output,
+            ]);
+
+            if (str_contains($output, 'Failure') || stripos($output, 'error') !== false) {
+                throw new \Exception("La OLT rechazó el cambio de estado de la ONT: {$output}");
+            }
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
 }

@@ -163,6 +163,26 @@ return [
                     'invalid' => [],
                     'map' => [1 => 'online', 2 => 'offline'],
                 ],
+
+                /*
+                | Potencia óptica que recibe el módulo CATV de la
+                | ONT. Verificado contra el equipo real: la ONT con
+                | televisión activa reporta 80 (0,80 dBm) y la que
+                | no tiene señal reporta -4000, que es el valor de
+                | fondo (-40 dBm) cuando no hay portadora.
+                |
+                | Que este OID responda indica además que la ONT
+                | TIENE módulo CATV.
+                */
+                'catv_rx_power' => [
+                    'oid' => '.1.3.6.1.4.1.2011.6.128.1.1.2.51.1.7',
+                    'scale' => 0.01,
+                    'unit' => 'dBm',
+                    'label' => 'Potencia CATV',
+                    'invalid' => [2147483647],
+                    'min' => -45,
+                    'max' => 20,
+                ],
             ],
 
             /*

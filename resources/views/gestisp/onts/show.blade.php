@@ -216,24 +216,96 @@
                 </div>
             </div>
 
-            {{-- CATV (oculta hasta confirmar que la ONT tiene módulo) --}}
-            <div class="card" id="catvCard" style="display:none;">
-                <div class="card-header bg-dark text-white">
-                    <i class="fas fa-tv"></i> CATV (Televisión)
+            {{-- ============================================================
+                 Control de la ONT
+
+                 Deshabilitar corta el servicio del cliente SIN borrar
+                 su configuración: la ONT sigue registrada y se puede
+                 rehabilitar cuando se quiera (a diferencia de
+                 eliminarla, que obliga a reautorizarla desde cero).
+                 ============================================================ --}}
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <i class="fas fa-power-off"></i> Control de la ONT
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Estado administrativo:</strong>
+                            @if($ont->admin_enabled === false)
+                                <span class="badge badge-danger">Deshabilitada</span>
+                                <small class="d-block text-muted mt-1">
+                                    El cliente no tiene servicio hasta que se habilite.
+                                </small>
+                            @else
+                                <span class="badge badge-success">Habilitada</span>
+                                <small class="d-block text-muted mt-1">
+                                    La ONT está activa en la OLT.
+                                </small>
+                            @endif
+                        </div>
+                        <div>
+                            @if($ont->admin_enabled === false)
+                                <form method="POST" action="{{ route('onts.enable', $ont) }}"
+                                      onsubmit="return confirm('¿Habilitar la ONT y restablecer el servicio del cliente?');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-play-circle"></i> Habilitar ONT
+                                    </button>
+                                </form>
+                            @else
+                                <form method="POST" action="{{ route('onts.disable', $ont) }}"
+                                      onsubmit="return confirm('¿Deshabilitar la ONT? Se cortará el servicio del cliente hasta que vuelva a habilitarla.');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="fas fa-stop-circle"></i> Deshabilitar ONT
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- ============================================================
+                 CATV (televisión)
+
+                 Se muestra solo si la ONT tiene módulo CATV, lo que se
+                 detecta porque la OLT reporta su potencia óptica.
+
+                 El estado on/off NO se puede leer por SNMP: solo por
+                 consola, y esa consulta tarda ~40 segundos. Por eso se
+                 muestra el último estado conocido (el que dejó GestISP
+                 al cambiarlo, o el de la última verificación) y se
+                 ofrece un botón para verificarlo contra la OLT.
+                 ============================================================ --}}
+            <div class="card" id="catvCard" style="display:none;">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-tv"></i> CATV (Televisión)</span>
+                    <button id="btnCheckCatv" class="btn btn-sm btn-light" title="Consultar el estado real en la OLT (tarda ~40 s)">
+                        <i class="fas fa-sync"></i> Verificar
+                    </button>
+                </div>
+                <div class="card-body">
+                    {{-- Interruptor de televisión --}}
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <strong>Servicio de televisión</strong>
+                            <small id="catv-checked" class="d-block text-muted">—</small>
+                        </div>
+                        <div id="catv-switch">
+                            {{-- Lo arma el JavaScript según el estado --}}
+                        </div>
+                    </div>
+
                     <table class="table table-striped mb-0">
                         <tr>
-                            <th style="width:40%">Estado del puerto</th>
+                            <th style="width:45%">Estado del puerto</th>
                             <td id="rt-catv-state">—</td>
                         </tr>
                         <tr>
                             <th>Potencia Rx CATV</th>
                             <td id="rt-catv-power">—</td>
-                        </tr>
-                        <tr>
-                            <th>Acciones</th>
-                            <td id="rt-catv-actions">—</td>
                         </tr>
                     </table>
                 </div>
@@ -275,8 +347,9 @@
         const ontId          = {{ $ont->id }};
         const realtimeUrl    = `/onts/${ontId}/realtime`;
         const historyUrl     = `{{ route('onts.metrics_history', $ont) }}`;
-        const catvEnableUrl  = `/onts/${ontId}/catv/enable`;
-        const catvDisableUrl = `/onts/${ontId}/catv/disable`;
+        const catvEnableUrl  = `{{ route('onts.catv.enable', $ont) }}`;
+        const catvDisableUrl = `{{ route('onts.catv.disable', $ont) }}`;
+        const catvStateUrl   = `{{ route('onts.catv.state', $ont) }}`;
         const csrfToken      = document.querySelector('meta[name="csrf-token"]').content;
 
         function setText(id, value, suffix = '') {
@@ -362,36 +435,23 @@
                         setText('rt-down-cause', d.last_down_cause);
                     }
 
-                    // CATV
+                    // CATV: la ONT tiene módulo de televisión si la
+                    // OLT reporta su potencia óptica
                     if (d.has_catv) {
                         document.getElementById('catvCard').style.display = 'block';
+                        renderCatv(d.catv_enabled, d.catv_checked_at);
 
-                        if (d.catv_state === 'on') {
-                            setText('rt-catv-state', '<span class="badge badge-success">Habilitado</span>');
-                        } else if (d.catv_state === 'off') {
-                            setText('rt-catv-state', '<span class="badge badge-danger">Deshabilitado</span>');
-                        } else {
-                            setText('rt-catv-state', '<span class="badge badge-secondary">Desconocido</span>');
-                        }
-
+                        // Potencia CATV: -40 dBm es el valor de fondo
+                        // que reporta la ONT cuando no hay portadora
                         if (d.catv_rx_power !== null && d.catv_rx_power > -35) {
-                            const cls = d.catv_rx_power < -8 ? 'text-danger' : 'text-success';
-                            setText('rt-catv-power', `<span class="${cls}">${d.catv_rx_power} dBm</span>`);
+                            const cls = d.catv_rx_power < -8 ? 'text-warning' : 'text-success';
+                            setText('rt-catv-power',
+                                `<span class="${cls}"><strong>${d.catv_rx_power} dBm</strong></span>` +
+                                (d.catv_rx_power < -8 ? ' <small class="text-muted">(señal baja)</small>' : ''));
                         } else {
-                            setText('rt-catv-power', `<span class="text-muted">Sin señal (${d.catv_rx_power} dBm)</span>`);
+                            setText('rt-catv-power',
+                                `<span class="text-muted">Sin señal de TV${d.catv_rx_power !== null ? ' (' + d.catv_rx_power + ' dBm)' : ''}</span>`);
                         }
-
-                        // Botones según estado
-                        let actions = '';
-                        if (d.catv_state === 'on') {
-                            actions = catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-off', 'Deshabilitar CATV');
-                        } else if (d.catv_state === 'off') {
-                            actions = catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-on', 'Habilitar CATV');
-                        } else {
-                            actions = catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-on', 'Habilitar') + ' ' +
-                                catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-off', 'Deshabilitar');
-                        }
-                        document.getElementById('rt-catv-actions').innerHTML = actions;
                     }
                 })
                 .catch(() => {
@@ -410,6 +470,69 @@
                         <i class="fas ${icon}"></i> ${label}
                     </button>
                 </form>`;
+        }
+
+        /**
+         * Pinta el estado del CATV y su interruptor.
+         *
+         * enabled: true = encendido, false = apagado,
+         *          null/undefined = nunca verificado.
+         */
+        function renderCatv(enabled, checkedAt) {
+            const stateCell  = document.getElementById('rt-catv-state');
+            const switchBox  = document.getElementById('catv-switch');
+            const checkedTxt = document.getElementById('catv-checked');
+
+            if (enabled === true) {
+                stateCell.innerHTML = '<span class="badge badge-success">Habilitado</span>';
+                switchBox.innerHTML = catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-on', 'Apagar TV');
+            } else if (enabled === false) {
+                stateCell.innerHTML = '<span class="badge badge-danger">Deshabilitado</span>';
+                switchBox.innerHTML = catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-off', 'Encender TV');
+            } else {
+                // Nunca verificado: se ofrecen las dos acciones sin
+                // afirmar un estado que el sistema no conoce
+                stateCell.innerHTML = '<span class="badge badge-secondary">Sin verificar</span>';
+                switchBox.innerHTML =
+                    catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-on', 'Encender') + ' ' +
+                    catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-off', 'Apagar');
+            }
+
+            checkedTxt.textContent = checkedAt
+                ? `Último estado conocido: ${checkedAt}`
+                : 'Estado no verificado contra la OLT';
+        }
+
+        /**
+         * Consulta a la OLT el estado real del puerto CATV.
+         * Va por consola y tarda ~40 s, por eso muestra progreso.
+         */
+        function checkCatvState() {
+            const btn = document.getElementById('btnCheckCatv');
+            const original = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Consultando la OLT...';
+
+            fetch(catvStateUrl)
+                .then(r => r.json())
+                .then(res => {
+                    if (res.ok) {
+                        renderCatv(res.catv_enabled, res.checked_at);
+                    } else {
+                        document.getElementById('realtimeErrorMsg').textContent = res.message;
+                        document.getElementById('realtimeError').style.display = 'block';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('realtimeErrorMsg').textContent =
+                        'No se pudo verificar el estado del CATV.';
+                    document.getElementById('realtimeError').style.display = 'block';
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = original;
+                });
         }
 
         /* ============================================================
@@ -575,6 +698,9 @@
 
         // Botón de refresco manual (fuerza lectura sin caché)
         document.getElementById('btnRefreshRealtime').addEventListener('click', loadRealtime);
+
+        // Verificación del estado CATV contra la OLT (consulta lenta)
+        document.getElementById('btnCheckCatv').addEventListener('click', checkCatvState);
 
         // Cambio de rango de las gráficas
         document.getElementById('chartRange').addEventListener('change', loadCharts);

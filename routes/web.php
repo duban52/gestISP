@@ -209,6 +209,11 @@ Route::get('/onts/{ont}', [OntController::class, 'show'])->name('onts.show');
 //Activar y desactivar CATV en ONTS
 Route::post('/onts/{ont}/catv/enable',  [OntController::class, 'enableCatv'])->name('onts.catv.enable');
 Route::post('/onts/{ont}/catv/disable', [OntController::class, 'disableCatv'])->name('onts.catv.disable');
+//Verificar contra la OLT el estado real del puerto CATV (consulta lenta, bajo demanda)
+Route::get('/onts/{ont}/catv/state', [OntController::class, 'checkCatvState'])->name('onts.catv.state');
+//Habilitar y deshabilitar la ONT completa (corta o restablece el servicio)
+Route::post('/onts/{ont}/enable',  [OntController::class, 'enableOnt'])->name('onts.enable');
+Route::post('/onts/{ont}/disable', [OntController::class, 'disableOnt'])->name('onts.disable');
 //Cargar información de onts (SNMP: respuesta en milisegundos)
 Route::get('/onts/{ont}/realtime', [OntController::class, 'realtimeInfo'])->name('onts.realtime');
 //Historial de métricas para las gráficas de la vista de detalle

@@ -40,7 +40,10 @@ class OntController extends Controller
         $this->middleware('check.permission:onts.activate')->only('activate');
         $this->middleware('check.permission:onts.destroy')->only('destroy');
         $this->middleware('check.permission:onts.relocate')->only('relocate');
-        $this->middleware('check.permission:onts.catv')->only('enableCatv', 'disableCatv');
+        $this->middleware('check.permission:onts.catv')->only('enableCatv', 'disableCatv', 'checkCatvState');
+        // Habilitar/deshabilitar la ONT corta o restablece el
+        // servicio: se protege con el mismo permiso que activarla
+        $this->middleware('check.permission:onts.activate')->only('enableOnt', 'disableOnt');
     }
 
     public function no_authorized_ont_index()
@@ -329,6 +332,16 @@ class OntController extends Controller
             $data[$key . '_unit'] = $metric['unit'];
         }
 
+        // ---- CATV ----
+        // Que el OID de potencia CATV responda significa que la ONT
+        // tiene módulo de televisión. El estado on/off NO se puede
+        // leer por SNMP (solo por CLI, ~40 s), así que se entrega el
+        // último estado conocido y la vista ofrece verificarlo.
+        $data['has_catv'] = $result['metrics']['catv_rx_power']['raw'] !== null;
+        $data['catv_enabled'] = $ont->catv_enabled;
+        $data['catv_checked_at'] = $ont->catv_checked_at?->format('d/m/Y H:i');
+        $data['admin_enabled'] = $ont->admin_enabled;
+
         // Guardar la última lectura como estado actual de la ONT
         if (isset($result['metrics']['rx_power']['value'])) {
             $ont->update([
@@ -379,27 +392,118 @@ class OntController extends Controller
     }
     public function enableCatv(Ont $ont): \Illuminate\Http\RedirectResponse
     {
-        $olt = Olt::findOrFail($ont->olt_id);
-
-        try {
-            $this->oltSshService->setCatvPort($olt, $ont, true);
-        } catch (\Exception $e) {
-            return back()->with('error', 'Error al habilitar CATV: ' . $e->getMessage());
-        }
-
-        return back()->with('success', 'Puerto CATV habilitado correctamente.');
+        return $this->changeCatv($ont, true);
     }
 
     public function disableCatv(Ont $ont): \Illuminate\Http\RedirectResponse
     {
+        return $this->changeCatv($ont, false);
+    }
+
+    /**
+     * Cambia el estado del puerto CATV y guarda el resultado.
+     *
+     * Al aplicarlo desde aquí el sistema sabe con certeza en qué
+     * estado quedó, así que lo registra: la vista puede mostrarlo
+     * al instante sin volver a consultar la OLT (que tarda ~40 s).
+     */
+    private function changeCatv(Ont $ont, bool $enable): \Illuminate\Http\RedirectResponse
+    {
+        $olt = Olt::findOrFail($ont->olt_id);
+        $accion = $enable ? 'habilitar' : 'deshabilitar';
+
+        try {
+            $this->oltSshService->setCatvPort($olt, $ont, $enable);
+        } catch (\Exception $e) {
+            return back()->with('error', "Error al {$accion} CATV: " . $e->getMessage());
+        }
+
+        $ont->update([
+            'catv_enabled' => $enable,
+            'catv_checked_at' => now(),
+        ]);
+
+        return back()->with(
+            $enable ? 'success' : 'success-update',
+            $enable ? 'Televisión (CATV) habilitada correctamente.' : 'Televisión (CATV) deshabilitada.'
+        );
+    }
+
+    /**
+     * Consulta a la OLT el estado real del puerto CATV.
+     *
+     * Va por CLI y tarda unos 40 segundos, por eso es una acción
+     * bajo demanda y no parte de la carga de la pantalla.
+     */
+    public function checkCatvState(Ont $ont): \Illuminate\Http\JsonResponse
+    {
         $olt = Olt::findOrFail($ont->olt_id);
 
         try {
-            $this->oltSshService->setCatvPort($olt, $ont, false);
+            $state = $this->oltSshService->getCatvPortState($olt, $ont);
         } catch (\Exception $e) {
-            return back()->with('error', 'Error al deshabilitar CATV: ' . $e->getMessage());
+            return response()->json([
+                'ok' => false,
+                'message' => 'No se pudo consultar la OLT: ' . $e->getMessage(),
+            ]);
         }
 
-        return back()->with('success-update', 'Puerto CATV deshabilitado.');
+        if ($state === null) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'La OLT no reportó el estado del puerto CATV.',
+            ]);
+        }
+
+        $enabled = $state === 'on';
+
+        $ont->update([
+            'catv_enabled' => $enabled,
+            'catv_checked_at' => now(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'catv_enabled' => $enabled,
+            'checked_at' => now()->format('d/m/Y H:i'),
+        ]);
+    }
+
+    /**
+     * Habilita la ONT (restablece el servicio del cliente).
+     */
+    public function enableOnt(Ont $ont): \Illuminate\Http\RedirectResponse
+    {
+        return $this->changeAdminState($ont, true);
+    }
+
+    /**
+     * Deshabilita la ONT (corta el servicio sin borrar su
+     * configuración: se puede rehabilitar cuando se quiera).
+     */
+    public function disableOnt(Ont $ont): \Illuminate\Http\RedirectResponse
+    {
+        return $this->changeAdminState($ont, false);
+    }
+
+    private function changeAdminState(Ont $ont, bool $enable): \Illuminate\Http\RedirectResponse
+    {
+        $olt = Olt::findOrFail($ont->olt_id);
+        $accion = $enable ? 'habilitar' : 'deshabilitar';
+
+        try {
+            $this->oltSshService->setOntAdminState($olt, $ont, $enable);
+        } catch (\Exception $e) {
+            return back()->with('error', "Error al {$accion} la ONT: " . $e->getMessage());
+        }
+
+        $ont->update(['admin_enabled' => $enable]);
+
+        return back()->with(
+            $enable ? 'success' : 'success-update',
+            $enable
+                ? 'ONT habilitada: el servicio del cliente queda restablecido.'
+                : 'ONT deshabilitada: el servicio del cliente queda suspendido.'
+        );
     }
 }

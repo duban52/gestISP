@@ -39,12 +39,20 @@ class Ont extends Model
         'rx_power',
         'model',
         'vlan',
+        // Últimos estados conocidos (se leen de la OLT por CLI,
+        // que es lento; se guardan para mostrarlos al instante)
+        'catv_enabled',
+        'catv_checked_at',
+        'admin_enabled',
     ];
 
     protected $casts = [
         'if_index' => 'integer',
         'traffic_if_index' => 'integer',
         'rx_power' => 'decimal:2',
+        'catv_enabled' => 'boolean',
+        'catv_checked_at' => 'datetime',
+        'admin_enabled' => 'boolean',
     ];
 
     public function branch()
