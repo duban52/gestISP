@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Olt;
 use App\Services\OntPoller;
+use App\Services\Snmp\SnmpClient;
 use Illuminate\Console\Command;
 
 /**
@@ -34,6 +35,14 @@ class PollOnts extends Command
 
     public function handle(): int
     {
+        if (!SnmpClient::isAvailable()) {
+            $this->error('La extensión SNMP de PHP no está instalada en este servidor.');
+            $this->line('  Instálela con: apt install php' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . '-snmp');
+            $this->line('  Después reinicie PHP-FPM y verifique con: php -m | grep snmp');
+
+            return self::FAILURE;
+        }
+
         $query = Olt::query()->where('active', true);
 
         if ($oltId = $this->option('olt')) {

@@ -41,6 +41,14 @@ class OltSnmpProbe extends Command
 
     public function handle(): int
     {
+        if (!SnmpClient::isAvailable()) {
+            $this->error('La extensión SNMP de PHP no está instalada en este servidor.');
+            $this->line('  Instálela con: apt install php' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . '-snmp');
+            $this->line('  Después reinicie PHP-FPM y verifique con: php -m | grep snmp');
+
+            return self::FAILURE;
+        }
+
         $olt = Olt::find($this->argument('olt'));
 
         if (!$olt) {

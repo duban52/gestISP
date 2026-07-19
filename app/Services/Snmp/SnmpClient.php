@@ -51,11 +51,33 @@ class SnmpClient
     }
 
     /**
+     * ¿Está disponible la extensión SNMP de PHP?
+     *
+     * Sin ella no se puede consultar ningún equipo. Se comprueba
+     * explícitamente para dar un mensaje claro en lugar de un
+     * error fatal "Class SNMP not found" en mitad de una pantalla.
+     */
+    public static function isAvailable(): bool
+    {
+        return class_exists('SNMP');
+    }
+
+    /**
      * Construye el cliente a partir de los datos de la OLT.
-     * Devuelve null si la OLT no tiene community de lectura.
+     * Devuelve null si falta la extensión SNMP o la OLT no tiene
+     * community de lectura.
      */
     public static function forOlt(Olt $olt): ?self
     {
+        if (!self::isAvailable()) {
+            Log::error(
+                'La extensión SNMP de PHP no está instalada: no se pueden consultar las OLTs. ' .
+                'Instálela en el servidor (por ejemplo: apt install php8.3-snmp) y reinicie PHP-FPM.'
+            );
+
+            return null;
+        }
+
         if (empty($olt->read_snmp_comunity)) {
             Log::warning("SNMP: la OLT {$olt->name} no tiene community de lectura configurada.");
 

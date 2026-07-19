@@ -55,9 +55,7 @@ class OltSnmpService
                 'ok' => false,
                 'metrics' => [],
                 'query_ms' => 0.0,
-                'error' => !$client
-                    ? 'La OLT no tiene community SNMP de lectura configurada.'
-                    : 'La ONT no tiene if_index resuelto; vuelva a activarla o ejecute onts:poll.',
+                'error' => $this->unavailableReason($client, $ont),
             ];
         }
 
@@ -288,6 +286,25 @@ class OltSnmpService
         }
 
         return null;
+    }
+
+    /**
+     * Explica por qué no se pudo consultar, para mostrarlo en la
+     * pantalla en lugar de un error genérico.
+     */
+    private function unavailableReason(?SnmpClient $client, Ont $ont): string
+    {
+        if (!SnmpClient::isAvailable()) {
+            return 'La extensión SNMP de PHP no está instalada en el servidor. '
+                . 'Instálela (apt install phpX.Y-snmp) y reinicie PHP-FPM.';
+        }
+
+        if (!$client) {
+            return 'La OLT no tiene community SNMP de lectura configurada.';
+        }
+
+        return 'La ONT no tiene índice SNMP (if_index) resuelto. '
+            . 'Ejecute: php artisan olt:sync-interfaces';
     }
 
     /**
