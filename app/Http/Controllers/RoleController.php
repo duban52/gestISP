@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PermissionLabels;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -25,41 +26,6 @@ use Spatie\Permission\Models\Role;
  */
 class RoleController extends Controller
 {
-    /**
-     * Etiquetas legibles para agrupar los permisos por módulo en
-     * los formularios. La clave es el prefijo del permiso (lo que
-     * va antes del punto). Varios prefijos históricos apuntan al
-     * mismo módulo (ej. warehouse/warehouses).
-     */
-    private const MODULE_LABELS = [
-        'gestisp' => 'Dashboard',
-        'branches' => 'Sucursales',
-        'services' => 'Servicios',
-        'plans' => 'Planes',
-        'clients' => 'Clientes',
-        'contracts' => 'Contratos',
-        'invoices' => 'Facturas',
-        'additionalCharges' => 'Cargos adicionales',
-        'payments' => 'Pagos',
-        'cashRegisters' => 'Cajas',
-        'cash_register' => 'Cajas',
-        'transactions' => 'Movimientos de caja',
-        'warehouses' => 'Almacenes',
-        'warehouse' => 'Almacenes',
-        'materials' => 'Materiales',
-        'categories' => 'Categorías de materiales',
-        'movements' => 'Movimientos de material',
-        'technicals_orders' => 'Órdenes técnicas',
-        'technical_order' => 'Órdenes técnicas',
-        'technical_orders' => 'Órdenes técnicas',
-        'routers' => 'Routers',
-        'olts' => 'OLTs',
-        'onts' => 'ONTs',
-        'pppoe' => 'Cuentas PPPoE',
-        'users' => 'Usuarios',
-        'roles' => 'Roles',
-    ];
-
     /**
      * Constructor: protege las rutas con autenticación y permisos.
      * Antes este controlador no tenía protección y cualquier
@@ -232,10 +198,6 @@ class RoleController extends Controller
     private function permissionsByModule(): Collection
     {
         return Permission::orderBy('id')->get()
-            ->groupBy(function (Permission $permission) {
-                $prefix = explode('.', $permission->name)[0];
-
-                return self::MODULE_LABELS[$prefix] ?? ucfirst($prefix);
-            });
+            ->groupBy(fn (Permission $permission) => PermissionLabels::module($permission->name));
     }
 }
