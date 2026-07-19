@@ -227,6 +227,8 @@ Route::get('/api/routers/{router}/profiles',   [RouterController::class, 'apiPro
 //Ver estados de sesiones pppoe
 Route::get('/pppoe/{pppoe}',                  [PppoeAccountController::class, 'show'])->name('pppoe.show');
 Route::get('/pppoe/{pppoe}/realtime-session', [PppoeAccountController::class, 'realtimeSession'])->name('pppoe.realtime');
+//Historial de tráfico para la gráfica de ancho de banda
+Route::get('/pppoe/{pppoe}/metrics-history', [PppoeAccountController::class, 'metricsHistory'])->name('pppoe.metrics_history');
 Route::post('/pppoe/{pppoe}/restart-session', [PppoeAccountController::class, 'restartSession'])->name('pppoe.restart');
 // PPPoE
 Route::get('/pppoe',                       [PppoeAccountController::class, 'index'])->name('pppoe.index');

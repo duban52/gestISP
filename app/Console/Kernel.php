@@ -26,6 +26,17 @@ class Kernel extends ConsoleKernel
         $schedule->command('onts:poll --resolve-traffic --prune=30')
             ->dailyAt('03:30')
             ->withoutOverlapping();
+
+        // Tráfico de las cuentas PPPoE: alimenta la gráfica de
+        // ancho de banda de cada cliente (una petición por router).
+        $schedule->command('pppoe:poll')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        $schedule->command('pppoe:poll --prune=30')
+            ->dailyAt('03:45')
+            ->withoutOverlapping();
     }
 
     /**

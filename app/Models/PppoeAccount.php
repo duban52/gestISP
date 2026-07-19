@@ -41,4 +41,17 @@ class PppoeAccount extends Model
     {
         return $this->belongsTo(Contract::class);
     }
+
+    /** Historial de tráfico (muestras del poller) */
+    public function metrics()
+    {
+        return $this->hasMany(PppoeSessionMetric::class, 'pppoe_account_id');
+    }
+
+    /** Última muestra registrada */
+    public function latestMetric()
+    {
+        return $this->hasOne(PppoeSessionMetric::class, 'pppoe_account_id')
+            ->latestOfMany('measured_at');
+    }
 }

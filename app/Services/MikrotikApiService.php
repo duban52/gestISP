@@ -305,6 +305,87 @@ class MikrotikApiService
     }
 
     /**
+     * Contadores de tráfico de TODAS las interfaces del router.
+     *
+     * Una sola petición devuelve los octetos acumulados de todas
+     * las sesiones PPPoE activas: RouterOS crea una interfaz
+     * dinámica por sesión, llamada "<pppoe-USUARIO>".
+     *
+     * De aquí sale el ancho de banda, calculando la diferencia
+     * entre dos lecturas consecutivas (los routers no reportan
+     * velocidad, sino bytes acumulados).
+     *
+     * @return array<string, array{in: int, out: int, running: bool}> [usuario => contadores]
+     */
+    public function getPppoeInterfaceCounters(Router $router): array
+    {
+        $base = $this->baseUrl($router);
+
+        $response = $this->http($router)->get("{$base}/interface");
+        $this->checkResponse($response, 'interface');
+
+        $counters = [];
+
+        foreach ($this->safeJson($response) as $interface) {
+            $name = $interface['name'] ?? '';
+
+            // Solo las interfaces dinámicas de sesiones PPPoE
+            if (!preg_match('/^<pppoe-(.+)>$/', $name, $m)) {
+                continue;
+            }
+
+            $counters[$m[1]] = [
+                // rx/tx son desde el punto de vista del ROUTER:
+                // rx = lo que sube el cliente, tx = lo que baja
+                'in' => (int) ($interface['rx-byte'] ?? 0),
+                'out' => (int) ($interface['tx-byte'] ?? 0),
+                'running' => ($interface['running'] ?? 'false') === 'true',
+            ];
+        }
+
+        return $counters;
+    }
+
+    /**
+     * Velocidad instantánea de una sesión PPPoE.
+     *
+     * Usa monitor-traffic del router, que entrega bits por segundo
+     * en el momento sin necesidad de dos lecturas. Es lo que se
+     * muestra en el panel de estado en vivo.
+     *
+     * @return array{in_bps: int, out_bps: int}|null
+     */
+    public function getSessionTraffic(Router $router, string $username): ?array
+    {
+        $base = $this->baseUrl($router);
+
+        $response = $this->http($router)
+            ->timeout(15)
+            ->post("{$base}/interface/monitor-traffic", [
+                'interface' => "<pppoe-{$username}>",
+                'once' => '',
+            ]);
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $data = $this->safeJson($response);
+        $sample = $data[0] ?? null;
+
+        if (!$sample) {
+            return null;
+        }
+
+        return [
+            // Desde la perspectiva del cliente: lo que el router
+            // recibe es la subida del cliente y viceversa
+            'in_bps' => (int) ($sample['rx-bits-per-second'] ?? 0),
+            'out_bps' => (int) ($sample['tx-bits-per-second'] ?? 0),
+        ];
+    }
+
+    /**
      * Tumba la sesión activa de un usuario
      */
     public function dropActiveSession(Router $router, string $username): bool

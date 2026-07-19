@@ -163,7 +163,58 @@
                             <th>Session ID</th>
                             <td id="st-session-id">—</td>
                         </tr>
+                        {{-- Velocidad instantánea que reporta el router --}}
+                        <tr>
+                            <th>Velocidad actual</th>
+                            <td id="st-speed">—</td>
+                        </tr>
                     </table>
+                </div>
+            </div>
+
+            {{-- ============================================================
+                 Gráfica de ancho de banda
+
+                 Se alimenta de las muestras que guarda el comando
+                 pppoe:poll (una petición por router cada 5 minutos).
+                 ============================================================ --}}
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-chart-area"></i> Ancho de banda</span>
+                    <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
+                        <option value="6">Últimas 6 horas</option>
+                        <option value="24" selected>Últimas 24 horas</option>
+                        <option value="72">Últimos 3 días</option>
+                        <option value="168">Última semana</option>
+                    </select>
+                </div>
+                <div class="card-body">
+                    <div id="chartEmpty" class="alert alert-info mb-0" style="display:none;">
+                        <i class="fas fa-info-circle"></i>
+                        Todavía no hay muestras de tráfico para esta cuenta. El historial lo
+                        genera la tarea programada <code>php artisan pppoe:poll</code>;
+                        cuando corra periódicamente, aquí verá el consumo del cliente.
+                    </div>
+
+                    <div id="chartWrapper" style="display:none;">
+                        {{-- Resumen del período --}}
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <small class="text-muted d-block">Pico de bajada</small>
+                                <strong id="peak-out" class="text-primary">—</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Pico de subida</small>
+                                <strong id="peak-in" class="text-warning">—</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">Promedio bajada</small>
+                                <strong id="avg-out">—</strong>
+                            </div>
+                        </div>
+
+                        <canvas id="trafficChart" height="130"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -207,12 +258,23 @@
 @endsection
 
 @section('js')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
         const sessionUrl = "{{ route('pppoe.realtime', $pppoe) }}";
+        const historyUrl = "{{ route('pppoe.metrics_history', $pppoe) }}";
 
         function setText(id, value) {
             document.getElementById(id).innerHTML =
                 (value !== null && value !== undefined && value !== '') ? value : '—';
+        }
+
+        /** Formatea bits por segundo a la unidad más legible */
+        function formatBps(bps) {
+            if (bps === null || bps === undefined) return '—';
+            if (bps >= 1e9) return (bps / 1e9).toFixed(2) + ' Gbps';
+            if (bps >= 1e6) return (bps / 1e6).toFixed(2) + ' Mbps';
+            if (bps >= 1e3) return (bps / 1e3).toFixed(1) + ' kbps';
+            return bps + ' bps';
         }
 
         function loadSession() {
@@ -250,6 +312,16 @@
                         setText('st-service',    s.service);
                         setText('st-session-id', s.session_id);
 
+                        // Velocidad instantánea reportada por el router
+                        if (res.traffic) {
+                            setText('st-speed',
+                                `<i class="fas fa-download text-primary"></i> ${formatBps(res.traffic.out_bps)}
+                                 &nbsp;&nbsp;
+                                 <i class="fas fa-upload text-warning"></i> ${formatBps(res.traffic.in_bps)}`);
+                        } else {
+                            setText('st-speed', null);
+                        }
+
                         // Habilitar reinicio de sesión solo si está conectado
                         btnRestart.disabled = false;
                     } else {
@@ -281,7 +353,108 @@
             this.querySelector('i').className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
         });
 
-        document.addEventListener('DOMContentLoaded', loadSession);
+        /* ============================================================
+           GRÁFICA DE ANCHO DE BANDA
+
+           Los datos vienen de las muestras que guarda pppoe:poll.
+           Se grafica la bajada (lo que descarga el cliente) y la
+           subida, con los picos y el promedio del período.
+           ============================================================ */
+        let trafficChart = null;
+
+        function loadChart() {
+            const hours = document.getElementById('chartRange').value;
+
+            fetch(`${historyUrl}?hours=${hours}`)
+                .then(r => r.json())
+                .then(res => {
+                    const empty   = document.getElementById('chartEmpty');
+                    const wrapper = document.getElementById('chartWrapper');
+
+                    if (!res.ok || !res.has_traffic) {
+                        empty.style.display   = 'block';
+                        wrapper.style.display = 'none';
+                        return;
+                    }
+
+                    empty.style.display   = 'none';
+                    wrapper.style.display = 'block';
+
+                    // Resumen del período
+                    setText('peak-out', formatBps(res.peak_out_bps));
+                    setText('peak-in',  formatBps(res.peak_in_bps));
+                    setText('avg-out',  formatBps(res.avg_out_bps));
+
+                    const labels = res.samples.map(s => s.t.substring(5)); // sin el año
+
+                    if (trafficChart) trafficChart.destroy();
+
+                    trafficChart = new Chart(document.getElementById('trafficChart'), {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    label: 'Bajada (descarga del cliente)',
+                                    data: res.samples.map(s => s.out_bps),
+                                    borderColor: '#007bff',
+                                    backgroundColor: 'rgba(0,123,255,.15)',
+                                    fill: true,
+                                    tension: .3,
+                                    spanGaps: false, // los cortes se ven como huecos
+                                    pointRadius: 0,
+                                    borderWidth: 2,
+                                },
+                                {
+                                    label: 'Subida (carga del cliente)',
+                                    data: res.samples.map(s => s.in_bps),
+                                    borderColor: '#fd7e14',
+                                    backgroundColor: 'rgba(253,126,20,.12)',
+                                    fill: true,
+                                    tension: .3,
+                                    spanGaps: false,
+                                    pointRadius: 0,
+                                    borderWidth: 2,
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                legend: { position: 'bottom' },
+                                tooltip: {
+                                    callbacks: {
+                                        label: c => `${c.dataset.label}: ${formatBps(c.parsed.y)}`,
+                                        // Avisar en el tooltip si la sesión estaba caída
+                                        afterBody: (items) => {
+                                            const s = res.samples[items[0].dataIndex];
+                                            return s && !s.connected ? 'Sesión desconectada' : '';
+                                        },
+                                    },
+                                },
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { callback: v => formatBps(v) },
+                                },
+                            },
+                        },
+                    });
+                })
+                .catch(() => {
+                    document.getElementById('chartEmpty').style.display = 'block';
+                    document.getElementById('chartWrapper').style.display = 'none';
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSession();
+            loadChart();
+        });
+
         document.getElementById('btnRefreshSession').addEventListener('click', loadSession);
+        document.getElementById('chartRange').addEventListener('change', loadChart);
     </script>
 @endsection

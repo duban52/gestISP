@@ -29,7 +29,7 @@ class PppoeAccountController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('check.permission:pppoe.index')->only('index', 'apiActiveSessions');
-        $this->middleware('check.permission:pppoe.show')->only('show', 'realtimeSession');
+        $this->middleware('check.permission:pppoe.show')->only('show', 'realtimeSession', 'metricsHistory');
         $this->middleware('check.permission:pppoe.create')->only('store');
         $this->middleware('check.permission:pppoe.edit')->only('update', 'toggleState');
         $this->middleware('check.permission:pppoe.destroy')->only('destroy');
@@ -254,10 +254,18 @@ class PppoeAccountController extends Controller
         try {
             $session = $this->mikrotik->getActiveSession($router, $pppoe->username);
 
+            // Velocidad instantánea: solo tiene sentido si hay
+            // sesión activa. El router la entrega directamente en
+            // bits por segundo, sin esperar a dos muestras.
+            $traffic = $session
+                ? $this->mikrotik->getSessionTraffic($router, $pppoe->username)
+                : null;
+
             return response()->json([
                 'ok'        => true,
                 'connected' => $session !== null,
                 'session'   => $session,
+                'traffic'   => $traffic,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -265,6 +273,40 @@ class PppoeAccountController extends Controller
                 'message' => 'No se pudo consultar el router: ' . $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Endpoint AJAX: historial de tráfico para la gráfica de ancho
+     * de banda. Las muestras las genera el comando pppoe:poll.
+     */
+    public function metricsHistory(Request $request, PppoeAccount $pppoe): \Illuminate\Http\JsonResponse
+    {
+        $hours = (int) $request->get('hours', 24);
+        $hours = max(1, min($hours, 720)); // entre 1 hora y 30 días
+
+        $samples = $pppoe->metrics()
+            ->where('measured_at', '>=', now()->subHours($hours))
+            ->orderBy('measured_at')
+            ->get(['measured_at', 'in_bps', 'out_bps', 'connected']);
+
+        $withData = $samples->filter(fn ($s) => $s->in_bps !== null);
+
+        return response()->json([
+            'ok' => true,
+            'hours' => $hours,
+            'count' => $samples->count(),
+            'has_traffic' => $withData->isNotEmpty(),
+            // Resumen para mostrar sobre la gráfica
+            'peak_in_bps' => $withData->max('in_bps'),
+            'peak_out_bps' => $withData->max('out_bps'),
+            'avg_out_bps' => $withData->isNotEmpty() ? (int) round($withData->avg('out_bps')) : null,
+            'samples' => $samples->map(fn ($s) => [
+                't' => $s->measured_at->format('Y-m-d H:i'),
+                'in_bps' => $s->in_bps,
+                'out_bps' => $s->out_bps,
+                'connected' => $s->connected,
+            ]),
+        ]);
     }
 
     /**
