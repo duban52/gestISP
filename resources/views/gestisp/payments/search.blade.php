@@ -37,7 +37,7 @@
                 <strong>No tienes una caja abierta.</strong>
                 Ningún cobro será aceptado hasta que abras tu caja.
             </span>
-            <a href="{{ route('cashRegisters.index') }}" class="btn btn-light btn-sm">
+            <a href="{{ route('cashRegisters.index') }}" class="btn btn-info btn-sm">
                 <i class="fas fa-cash-register"></i> Ir a Gestión de caja
             </a>
         </div>
