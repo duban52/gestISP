@@ -68,28 +68,39 @@
                     <tbody>
                     @foreach($invoices as $invoice)
                         <tr>
-                            <td>{{ $invoice->id }}</td>
+                            {{-- Número formal (prefijo-consecutivo); las facturas
+                                 históricas sin numerar muestran su id --}}
+                            <td>{{ $invoice->displayNumber() }}</td>
                             <td>{{ $invoice->contract->client->name }} {{ $invoice->contract->client->last_name }}</td>
                             <td>{{ $invoice->billed_period_short ?? 'N/A' }}</td>
                             <td>{{ \Carbon\Carbon::parse($invoice->issue_date)->format('d/m/Y') }}</td>
                             <td>{{ \Carbon\Carbon::parse($invoice->due_date)->format('d/m/Y') }}</td>
                             <td>${{ number_format($invoice->total, 2) }}</td>
                             <td>
+                                {{-- Estados canónicos: App\Billing\Enums\InvoiceStatus.
+                                     El @case('pagada') anterior (minúscula) nunca
+                                     coincidía con el valor real 'Pagada'. --}}
                                 @switch($invoice->status)
-                                    @case('pendiente')
-                                        <span class="badge badge-warning">{{ ucfirst($invoice->status) }}</span>
+                                    @case(\App\Billing\Enums\InvoiceStatus::Pendiente->value)
+                                        <span class="badge badge-warning">{{ $invoice->status }}</span>
                                         @break
-                                    @case('Pendiente con riesgo de corte')
+                                    @case(\App\Billing\Enums\InvoiceStatus::PendienteParcial->value)
+                                        <span class="badge badge-warning">{{ $invoice->status }}</span>
+                                        @break
+                                    @case(\App\Billing\Enums\InvoiceStatus::PendienteRiesgoCorte->value)
                                         <span class="badge badge-danger">Riesgo de Corte</span>
                                         @break
-                                    @case('vencida')
-                                        <span class="badge badge-danger">{{ ucfirst($invoice->status) }}</span>
+                                    @case(\App\Billing\Enums\InvoiceStatus::Vencida->value)
+                                        <span class="badge badge-danger">{{ $invoice->status }}</span>
                                         @break
-                                    @case('pagada')
-                                        <span class="badge badge-success">{{ ucfirst($invoice->status) }}</span>
+                                    @case(\App\Billing\Enums\InvoiceStatus::Pagada->value)
+                                        <span class="badge badge-success">{{ $invoice->status }}</span>
                                         @break
-                                    @case('Cargada a nueva factura')
+                                    @case(\App\Billing\Enums\InvoiceStatus::CargadaANuevaFactura->value)
                                         <span class="badge badge-info">Cargada</span>
+                                        @break
+                                    @case(\App\Billing\Enums\InvoiceStatus::Anulada->value)
+                                        <span class="badge badge-dark" title="{{ $invoice->void_reason }}">Anulada</span>
                                         @break
                                     @default
                                         <span class="badge badge-secondary">{{ $invoice->status }}</span>
@@ -108,6 +119,19 @@
                                        target="_blank">
                                         <i class="far fa-file-pdf"></i>
                                     </a>
+
+                                    {{-- Anular (abre modal pidiendo motivo). Solo
+                                         facturas abiertas sin pagos; el servidor
+                                         aplica las reglas completas --}}
+                                    @if(in_array($invoice->status, \App\Billing\Enums\InvoiceStatus::payable()))
+                                        <button
+                                            class="btn btn-secondary btn-sm btn-anular-factura"
+                                            data-url="{{ route('invoices.void', $invoice) }}"
+                                            data-numero="{{ $invoice->displayNumber() }}"
+                                            title="Anular factura">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -140,6 +164,51 @@
             </div>
         </div>
     </div>
+
+    {{-- ============================================================
+         Modal de anulación de factura
+
+         La factura nunca se elimina: cambia a estado Anulada
+         registrando usuario, fecha y motivo (obligatorio). El
+         servidor rechaza anular facturas con pagos registrados.
+         ============================================================ --}}
+    <div class="modal fade" id="modalAnularFactura" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">Anular Factura</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <form id="formAnularFactura" method="POST">
+                    @csrf
+                    <div class="modal-body">
+                        <p>¿Está seguro que desea anular la factura
+                            <strong id="anularFacturaNumero"></strong>?</p>
+
+                        <div class="form-group">
+                            <label for="void_reason">Motivo de la anulación <span class="text-danger">*</span></label>
+                            <textarea name="void_reason" id="void_reason" class="form-control"
+                                      maxlength="255" rows="2" required
+                                      placeholder="Ej: error en el valor facturado"></textarea>
+                        </div>
+
+                        <p class="text-muted mb-0">
+                            <i class="fas fa-info-circle"></i>
+                            La factura no se elimina: queda anulada con su
+                            historial completo. Si tiene pagos registrados,
+                            la anulación será rechazada.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-dark">Sí, anular</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 {{-- Agregar JavaScript de DataTables --}}
@@ -158,6 +227,24 @@
     <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 
     <script>
+        /**
+         * Abre el modal de anulación cargando el número de la
+         * factura y la URL del formulario (generada con route()).
+         */
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.btn-anular-factura')) {
+                const btn = e.target.closest('.btn-anular-factura');
+
+                document.getElementById('anularFacturaNumero').textContent =
+                    btn.getAttribute('data-numero');
+                document.getElementById('formAnularFactura').action =
+                    btn.getAttribute('data-url');
+                document.getElementById('void_reason').value = '';
+
+                $('#modalAnularFactura').modal('show');
+            }
+        });
+
         $(document).ready(function() {
             // Inicializar DataTable
             $('#invoicesTable').DataTable({

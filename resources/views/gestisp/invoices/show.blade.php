@@ -74,15 +74,26 @@
                 <h3><i class="fas fa-file-invoice-dollar"></i> DATOS DE LA FACTURA</h3>
             </div>
             <div class="card-body row">
-                <p class="col-6"><strong>SUBTOTAL:</strong> {{ $invoice->total - $invoice->tax }}</p>
-                <p class="col-6"><strong>IVA 19%:</strong> {{ $invoice->tax }}</p>
-                <p class="col-6"><strong>TOTAL:</strong> {{ $invoice->total }}</p>
+                <p class="col-6"><strong>NÚMERO:</strong> {{ $invoice->displayNumber() }}</p>
+                <p class="col-6"><strong>TIPO:</strong> {{ $invoice->type }}</p>
+                <p class="col-6"><strong>SUBTOTAL:</strong> {{ number_format($invoice->subtotal, 2) }}</p>
+                <p class="col-6"><strong>IVA:</strong> {{ number_format($invoice->tax, 2) }}</p>
+                <p class="col-6"><strong>TOTAL:</strong> {{ number_format($invoice->total, 2) }}</p>
+                {{-- Saldo real de ESTA factura (total − pagos);
+                     la deuda acumulada del contrato se lee en su
+                     estado de cuenta, no aquí --}}
+                <p class="col-6"><strong>SALDO PENDIENTE:</strong> {{ number_format($invoice->pending_invoice_amount, 2) }}</p>
                 <p class="col-6"><strong>PERIODO FACTURADO:</strong> Del {{ $invoice->billed_period_short }} del mes de {{ $invoice->billed_month_name }}</p>
-                <p class="col-6"><strong>FECHA DE GENERACIÓN:</strong> {{ $invoice->issue_date}}</p>
-                <p class="col-6"><strong>FECHA DE VENCIMIENTO:</strong> {{ $invoice->due_date }}</p>
+                <p class="col-6"><strong>FECHA DE GENERACIÓN:</strong> {{ $invoice->issue_date->format('d/m/Y') }}</p>
+                <p class="col-6"><strong>FECHA DE VENCIMIENTO:</strong> {{ $invoice->due_date->format('d/m/Y') }}</p>
                 <p class="col-6"><strong>ESTADO DE LA FACTURA:</strong> {{ $invoice->status}}</p>
-                <p class="col-6"><strong>FACTURAS VENCIDAS:</strong> {{ $invoice->contract->overdue_invoices_count }}</p>
-                <p class="col-6"><strong>MONTO DE FACTURAS VENCIDAS:</strong> {{ $invoice->pending_invoice_amount }}</p>
+                <p class="col-6"><strong>FACTURAS VENCIDAS DEL CONTRATO:</strong> {{ $invoice->contract->overdue_invoices_count }}</p>
+                @if($invoice->status === \App\Billing\Enums\InvoiceStatus::Anulada->value)
+                    <p class="col-12 text-danger">
+                        <strong>ANULADA:</strong> {{ $invoice->voided_at?->format('d/m/Y H:i') }}
+                        por {{ $invoice->voidedBy->name ?? '—' }} — {{ $invoice->void_reason }}
+                    </p>
+                @endif
             </div>
         </div>
 

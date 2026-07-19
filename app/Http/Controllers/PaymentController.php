@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Enums\InvoiceStatus;
+use App\Billing\Services\PaymentRegistrar;
 use App\Exports\PaymentsExport;
-use App\Models\CashRegister;
-use App\Models\CashRegisterTransaction;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\TechnicalOrder;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -216,7 +215,7 @@ class PaymentController extends Controller
         }
 
         // Solo facturas que aún admiten pagos
-        $query->whereNotIn('status', ['Pagada', 'Cargada a nueva factura']);
+        $query->whereNotIn('status', InvoiceStatus::notPayable());
 
         $perPage  = $request->get('per_page', 8);
         $invoices = $query->simplePaginate($perPage);
@@ -245,7 +244,7 @@ class PaymentController extends Controller
      * Responde en JSON porque el formulario de pago funciona vía
      * AJAX desde la vista de búsqueda de facturas.
      */
-    public function store(Request $request)
+    public function store(Request $request, PaymentRegistrar $registrar)
     {
         DB::beginTransaction();
 
@@ -258,103 +257,14 @@ class PaymentController extends Controller
                 'notes'            => 'nullable|string',
             ]);
 
-            $invoice       = Invoice::findOrFail($validated['invoice_id']);
-            $pendingAmount = $invoice->getPendingAmount();
+            // Toda la regla de negocio (saldo, caja, estados de
+            // factura y contrato, orden de reconexión, movimiento
+            // de caja) vive en el servicio; el recibo PDF queda
+            // dentro de la misma transacción para conservar el
+            // todo-o-nada del flujo original
+            $payment = $registrar->register($validated, auth()->id(), session('branch_id'));
 
-            // El pago no puede exceder lo adeudado
-            if ($validated['amount'] > $pendingAmount) {
-                throw new \Exception('El monto del pago excede el saldo pendiente.');
-            }
-
-            // Pagos presenciales requieren caja abierta del usuario
-            $activeCashRegister = CashRegister::where('status', 'open')
-                ->where('user_id', auth()->id())
-                ->first();
-
-            if (!$activeCashRegister && in_array($validated['payment_method'], ['cash', 'card'])) {
-                throw new \Exception('No hay una caja abierta para recibir pagos.');
-            }
-
-            // Crear el registro del pago
-            $payment = Payment::create([
-                'invoice_id'       => $validated['invoice_id'],
-                'user_id'          => auth()->id(),
-                'cash_register_id' => $activeCashRegister->id ?? null,
-                'amount'           => $validated['amount'],
-                'payment_method'   => $validated['payment_method'],
-                'payment_date'     => now(),
-                'reference_number' => $validated['reference_number'],
-                'notes'            => $validated['notes'],
-                'status'           => 'completed',
-            ]);
-
-            // Actualizar estado de la factura y del contrato
-            if ($validated['amount'] >= $pendingAmount) {
-                $invoice->update(['status' => 'Pagada']);
-
-                $contract = $invoice->contract;
-
-                if ($contract && $contract->status === 'Pre-suspensión') {
-                    // Aún no cortado: se reactiva directamente
-                    $contract->update([
-                        'status'                  => 'Activo',
-                        'overdue_invoices_count'  => 0,
-                        'suspension_warning_date' => null,
-                        'suspension_date'         => null,
-                    ]);
-                } elseif ($contract && $contract->status === 'Suspendido') {
-                    // Ya cortado: requiere visita técnica de reconexión
-                    TechnicalOrder::create([
-                        'contract_id'     => $contract->id,
-                        'branch_id'       => session('branch_id'),
-                        'type'            => 'Servicio',
-                        'detail'          => 'Reconexión',
-                        'initial_comment' => 'Orden de reconexión automática por pago',
-                    ]);
-
-                    $contract->update([
-                        'status'                  => 'Por Reconexión',
-                        'overdue_invoices_count'  => 0,
-                        'suspension_warning_date' => null,
-                        'suspension_date'         => null,
-                    ]);
-                }
-            } else {
-                $invoice->update(['status' => 'Pendiente Parcial']);
-            }
-
-            // Registrar el movimiento en la caja abierta
-            if ($activeCashRegister) {
-                CashRegisterTransaction::create([
-                    'cash_register_id' => $activeCashRegister->id,
-                    'payment_id'       => $payment->id,
-                    'transaction_type' => 'Ingreso',
-                    'amount'           => $validated['amount'],
-                    'payment_method'   => $validated['payment_method'],
-                    'description'      => "Pago de factura #{$invoice->id}",
-                    'created_by'       => auth()->id(),
-                ]);
-
-                $activeCashRegister->calculateTotals();
-            }
-
-            // Generar el recibo PDF en storage/temp
-            if (!Storage::disk('public')->exists('temp')) {
-                Storage::disk('public')->makeDirectory('temp');
-            }
-
-            $pdf = PDF::loadView('gestisp.payments.payment-receipt', [
-                'payment' => $payment->load(['invoice.contract.client', 'user']),
-                'company' => [
-                    'name'    => config('app.company_name', 'Nombre de la Empresa'),
-                    'address' => config('app.company_address', 'Dirección de la Empresa'),
-                    'phone'   => config('app.company_phone', 'Teléfono de la Empresa'),
-                    'email'   => config('app.company_email', 'Email de la Empresa'),
-                ],
-            ]);
-
-            $pdfPath = 'temp/payment_' . $payment->id . '.pdf';
-            Storage::disk('public')->put($pdfPath, $pdf->output());
+            $pdfPath = $this->storeReceiptPdf($payment);
 
             DB::commit();
 
@@ -369,7 +279,7 @@ class PaymentController extends Controller
                     'amount'         => number_format($payment->amount, 2),
                     'payment_method' => $payment->payment_method,
                 ],
-                'new_balance' => number_format($invoice->getPendingAmount(), 2),
+                'new_balance' => number_format($payment->invoice->getPendingAmount(), 2),
                 'pdf_url'     => asset('storage/' . $pdfPath),
             ]);
 
@@ -384,6 +294,32 @@ class PaymentController extends Controller
                 'error'   => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * Genera el recibo PDF del pago en storage/temp y retorna su
+     * ruta relativa en el disco público.
+     */
+    private function storeReceiptPdf(Payment $payment): string
+    {
+        if (!Storage::disk('public')->exists('temp')) {
+            Storage::disk('public')->makeDirectory('temp');
+        }
+
+        $pdf = PDF::loadView('gestisp.payments.payment-receipt', [
+            'payment' => $payment->load(['invoice.contract.client', 'user']),
+            'company' => [
+                'name'    => config('app.company_name', 'Nombre de la Empresa'),
+                'address' => config('app.company_address', 'Dirección de la Empresa'),
+                'phone'   => config('app.company_phone', 'Teléfono de la Empresa'),
+                'email'   => config('app.company_email', 'Email de la Empresa'),
+            ],
+        ]);
+
+        $pdfPath = 'temp/payment_' . $payment->id . '.pdf';
+        Storage::disk('public')->put($pdfPath, $pdf->output());
+
+        return $pdfPath;
     }
 
     /**

@@ -15,7 +15,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade'); // Relación con la tabla users
             $table->foreignId('branch_id')->constrained()->onDelete('cascade'); // Relación con la tabla branches
-            $table->string('role')->default('employee'); // Rol del usuario en la sucursal (ej. admin, employee)
+            // Rol del usuario en esta sucursal. Sin FK porque la tabla
+            // roles (Spatie) se crea en una migración posterior; el
+            // código garantiza la integridad vía validación exists.
+            $table->unsignedBigInteger('role_id')->nullable()->index();
             $table->timestamps();
         });
     }

@@ -67,7 +67,61 @@
                         <textarea name="observation" class="form-control">{{ $branch->observation }}</textarea>
                     </div>
 
-                    <div class="col-12 text-center">
+                    {{-- ============================================================
+                         Configuración de facturación de la sucursal
+
+                         Reglas que consumen los servicios de facturación
+                         (app/Billing/Services) — modificables sin tocar código.
+                         ============================================================ --}}
+                    <div class="col-12">
+                        <div class="card border-primary mt-2">
+                            <div class="card-header py-2">
+                                <strong><i class="fas fa-file-invoice-dollar"></i> Configuración de facturación</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="form-group col-md-6">
+                                        <label for="proration_mode">Facturación del primer mes</label>
+                                        <select name="proration_mode" id="proration_mode" class="form-control" required>
+                                            @foreach($prorationModes as $mode)
+                                                <option value="{{ $mode->value }}"
+                                                    {{ old('proration_mode', $billingSettings->proration_mode->value) === $mode->value ? 'selected' : '' }}>
+                                                    {{ $mode->label() }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            Prorratear: un contrato activado el día 20 paga solo los días
+                                            restantes del mes. Mes completo: paga el mes entero.
+                                        </small>
+                                    </div>
+                                    <div class="form-group col-md-2">
+                                        <label for="due_days">Días de plazo</label>
+                                        <input type="number" name="due_days" id="due_days" class="form-control"
+                                               min="1" max="90"
+                                               value="{{ old('due_days', $billingSettings->due_days) }}" required>
+                                        <small class="form-text text-muted">Vencimiento desde la emisión</small>
+                                    </div>
+                                    <div class="form-group col-md-2">
+                                        <label for="suspension_threshold">Umbral de corte</label>
+                                        <input type="number" name="suspension_threshold" id="suspension_threshold" class="form-control"
+                                               min="1" max="12"
+                                               value="{{ old('suspension_threshold', $billingSettings->suspension_threshold) }}" required>
+                                        <small class="form-text text-muted">Facturas vencidas para suspender</small>
+                                    </div>
+                                    <div class="form-group col-md-2">
+                                        <label for="suspension_days">Días hasta el corte</label>
+                                        <input type="number" name="suspension_days" id="suspension_days" class="form-control"
+                                               min="1" max="90"
+                                               value="{{ old('suspension_days', $billingSettings->suspension_days) }}" required>
+                                        <small class="form-text text-muted">Con facturas vencidas</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 text-center mt-3">
                         <button  type="submit" class="btn btn-primary col-md-3">Actualizar</button>
                     </div>
 

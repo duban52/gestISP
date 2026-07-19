@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Billing\Enums\InvoiceStatus;
 use App\Models\Invoice;
 use App\Models\PdfReport;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -29,7 +30,10 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
     {
         try {
             // Obtener las facturas pendientes de la sucursal específica
-            $invoices = Invoice::whereIn('status', ['Pendiente', 'Pendiente con riesgo de corte'])
+            $invoices = Invoice::whereIn('status', [
+                    InvoiceStatus::Pendiente->value,
+                    InvoiceStatus::PendienteRiesgoCorte->value,
+                ])
                 ->whereHas('contract.client', function ($query) {
                     $query->where('branch_id', $this->branchId);
                 })

@@ -90,7 +90,7 @@
                             <tbody>
                             <tr>
                                 <td colspan="4" class="border-bottom text-center" style="padding-top: 4px; padding-bottom: 4px;">
-                                    <strong>FACTURA ELECTRONICA DE VENTA No FEG10881</strong>
+                                    <strong>FACTURA DE VENTA No {{ $invoice->displayNumber() }}</strong>
                                 </td>
                             </tr>
                             <tr>
@@ -248,7 +248,7 @@
                         <p style="text-align: right; padding-right: 15px;">Señal empaquetada</p>
                         <table class="table-border-rounded">
                             <td style="padding-right: 5px; padding-bottom: 10px; padding-left: 5px;">
-                                <p><strong>FACTURA ELECTRONICA DE VENTA No FEG10811</strong></p>
+                                <p><strong>FACTURA DE VENTA No {{ $invoice->displayNumber() }}</strong></p>
                             </td>
                         </table>
                     </td>

@@ -137,12 +137,12 @@ class User extends Authenticatable
 
     //Método para asignar sucursal a un usuario:
 
-    public function assignBranch($branchId, $role)
+    public function assignBranch($branchId, $roleId)
     {
         $branch = Branch::find($branchId);
 
         if ($branch) {
-            $this->branches()->attach($branch, ['role' => $role]);
+            $this->branches()->attach($branch, ['role_id' => $roleId]);
         } else {
             throw new \Exception("Branch with ID '{$branchId}' not found.");
         }

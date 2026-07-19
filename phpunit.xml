@@ -19,10 +19,17 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- El APP_URL del .env incluye una ruta (/public/) que se
+             antepondría a cada petición de prueba y rompería el
+             enrutamiento con 404 -->
+        <env name="APP_URL" value="http://localhost"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_DRIVER" value="array"/>
-        <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
-        <!-- <env name="DB_DATABASE" value=":memory:"/> -->
+        <!-- Base de datos MySQL dedicada a pruebas: las migraciones
+             usan ALTER TABLE ... MODIFY específicos de MySQL, así
+             que no se usa sqlite. RefreshDatabase la reconstruye. -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="gestisp_testing"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

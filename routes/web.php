@@ -116,6 +116,9 @@ Route::get('/user/branches', [LoginController::class, 'getBranches'])->name('use
 // Generación de facturas
 Route::post('/invoices/generate', [InvoiceController::class, 'generateInvoices'])->name('invoices.generate');
 
+// Anulación de facturas (nunca se eliminan: cambian a estado Anulada)
+Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'voidInvoice'])->name('invoices.void');
+
 // Descarga de PDF
 Route::get('/invoices/{id}/download-pdf', [InvoiceController::class, 'downloadInvoicePdf'])->name('invoices.download-pdf');
 //generacion de PDF másivo

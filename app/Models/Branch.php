@@ -76,4 +76,14 @@ class Branch extends Model
         return $this->hasMany(Ont::class);
     }
 
+    /**
+     * Configuración de facturación de la sucursal. Usar
+     * BranchBillingSetting::forBranch() cuando se necesite con
+     * defaults garantizados.
+     */
+    public function billingSettings()
+    {
+        return $this->hasOne(BranchBillingSetting::class);
+    }
+
 }

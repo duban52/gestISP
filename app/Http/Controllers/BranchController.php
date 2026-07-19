@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Enums\ProrationMode;
 use App\Models\Branch;
+use App\Models\BranchBillingSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\File;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -89,7 +92,12 @@ class BranchController extends Controller
      */
     public function edit(Branch $branch): View
     {
-        return view('gestisp.branches.edit', compact('branch'));
+        // Configuración de facturación (se crea con los defaults
+        // históricos si la sucursal aún no tiene)
+        $billingSettings = BranchBillingSetting::forBranch($branch->id);
+        $prorationModes = ProrationMode::cases();
+
+        return view('gestisp.branches.edit', compact('branch', 'billingSettings', 'prorationModes'));
     }
 
     /**
@@ -102,6 +110,21 @@ class BranchController extends Controller
     {
         $validated = $this->validateBranch($request, $branch->id);
 
+        // Configuración de facturación de la sucursal (modo de
+        // prorrateo, plazos y umbral de suspensión) — las reglas
+        // que consumen los servicios de app/Billing/Services
+        $billingValidated = $request->validate([
+            'proration_mode' => ['required', Rule::enum(ProrationMode::class)],
+            'due_days' => 'required|integer|min:1|max:90',
+            'suspension_threshold' => 'required|integer|min:1|max:12',
+            'suspension_days' => 'required|integer|min:1|max:90',
+        ], [
+            'proration_mode.required' => 'Debe elegir el modo de facturación del primer mes.',
+            'due_days.*' => 'Los días de plazo deben estar entre 1 y 90.',
+            'suspension_threshold.*' => 'El umbral de suspensión debe estar entre 1 y 12 facturas.',
+            'suspension_days.*' => 'Los días hasta el corte deben estar entre 1 y 90.',
+        ]);
+
         // Reemplazar la imagen si se envió una nueva
         if ($request->hasFile('image')) {
             // Eliminar la imagen anterior del disco
@@ -112,6 +135,8 @@ class BranchController extends Controller
         }
 
         $branch->update($validated);
+
+        BranchBillingSetting::forBranch($branch->id)->update($billingValidated);
 
         return redirect()
             ->route('branches.index')

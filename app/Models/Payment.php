@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Billing\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -29,6 +30,7 @@ class Payment extends Model
 
     protected $casts = [
         'payment_date' => 'date',
+        'amount' => 'decimal:2',
     ];
 
     /**
@@ -103,7 +105,7 @@ class Payment extends Model
     {
         if ($this->invoice) {
             $totalPaid = $this->invoice->payments()
-                ->where('status', 'completed')
+                ->where('status', PaymentStatus::Completed->value)
                 ->sum('amount');
 
             $this->invoice->pending_invoice_amount = $this->invoice->total - $totalPaid;
