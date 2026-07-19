@@ -196,7 +196,7 @@ class MaterialMovementController extends Controller
             });
 
             // ---- PDF de resumen del movimiento ----
-            $pdf     = Pdf::loadView('gestisp.materials.movements.pdf_summary', compact('movements'));
+            $pdf     = \App\Support\PdfBranding::make('gestisp.materials.movements.pdf_summary', compact('movements'));
             $pdfPath = storage_path('app/public/movimiento_' . time() . '.pdf');
             $pdf->save($pdfPath);
 
@@ -386,7 +386,16 @@ class MaterialMovementController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        $pdf = Pdf::loadView('gestisp.materials.movements.pdf', compact('movements'));
+        // El PDF informa el período consultado en su encabezado
+        $from = $request->start_date;
+        $to = $request->end_date;
+
+        // Horizontal: el detalle tiene 9 columnas
+        $pdf = \App\Support\PdfBranding::make(
+            'gestisp.materials.movements.pdf',
+            compact('movements', 'from', 'to'),
+            landscape: true
+        );
 
         return $pdf->download('historial_movimientos.pdf');
     }

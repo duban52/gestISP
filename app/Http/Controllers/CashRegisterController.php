@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CashRegister;
 use App\Models\CashRegisterTransaction;
+use App\Support\PdfBranding;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -204,9 +205,10 @@ class CashRegisterController extends Controller
         // Calcular los totales finales
         $cashRegister->calculateTotals();
 
-        // Generar el PDF
-        $pdf = PDF::loadView('gestisp.cashRegisters.report', [
-            'cashRegister' => $cashRegister->load(['transactions', 'user'])
+        // Generar el comprobante de cierre (arqueo). Se precarga la
+        // sucursal porque el encabezado del PDF la identifica.
+        $pdf = PdfBranding::make('gestisp.cashRegisters.report', [
+            'cashRegister' => $cashRegister->load(['transactions.user', 'user', 'branch'])
         ]);
 
         // Guardar el PDF

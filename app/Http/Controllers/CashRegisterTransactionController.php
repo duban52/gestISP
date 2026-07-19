@@ -130,12 +130,21 @@ class CashRegisterTransactionController extends Controller
 
 
 
-        $transactions = $query->get();
+        // Precargar el usuario: el PDF muestra quién registró cada
+        // movimiento (evita N+1 en el detalle)
+        $transactions = $query->with('user')->orderByDesc('created_at')->get();
 
-        // Cargar una vista y pasar los datos de movimientos a la vista
-        $pdf = PDF::loadView('gestisp.cashRegisters.transactions.report_pdf', compact('transactions'));
+        // El PDF informa el período consultado en su encabezado
+        $from = $request->start_date;
+        $to = $request->end_date;
 
-        // Retornar el PDF generado al navegador
+        // Horizontal: el detalle tiene 8 columnas
+        $pdf = \App\Support\PdfBranding::make(
+            'gestisp.cashRegisters.transactions.report_pdf',
+            compact('transactions', 'from', 'to'),
+            landscape: true
+        );
+
         return $pdf->download('Historial de movimientos de caja.pdf');
     }
 

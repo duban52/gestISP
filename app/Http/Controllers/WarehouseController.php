@@ -219,7 +219,7 @@ class WarehouseController extends Controller
 
         ];
 
-        $pdf = Pdf::loadView('gestisp.warehouses.pdf', $data);
+        $pdf = \App\Support\PdfBranding::make('gestisp.warehouses.pdf', $data);
 
         return $pdf->download('Inventario_'.$warehouse->description.'.pdf');
 

@@ -8,6 +8,7 @@ use App\Exports\PaymentsExport;
 use App\Models\CashRegister;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Support\PdfBranding;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -96,7 +97,16 @@ class PaymentController extends Controller
             ->orderByDesc('payment_date')
             ->get();
 
-        $pdf = PDF::loadView('gestisp.payments.report_pdf', compact('payments'));
+        // El PDF informa el período consultado en su encabezado
+        $from = $request->start_date;
+        $to = $request->end_date;
+
+        // Horizontal: el detalle tiene 8 columnas
+        $pdf = PdfBranding::make(
+            'gestisp.payments.report_pdf',
+            compact('payments', 'from', 'to'),
+            landscape: true
+        );
 
         return $pdf->download('Reporte de pagos.pdf');
     }
@@ -405,14 +415,15 @@ class PaymentController extends Controller
             Storage::disk('public')->makeDirectory('temp');
         }
 
-        $pdf = PDF::loadView('gestisp.payments.payment-receipt', [
-            'payment' => $payment->load(['invoice.contract.client', 'user']),
-            'company' => [
-                'name'    => config('app.company_name', 'Nombre de la Empresa'),
-                'address' => config('app.company_address', 'Dirección de la Empresa'),
-                'phone'   => config('app.company_phone', 'Teléfono de la Empresa'),
-                'email'   => config('app.company_email', 'Email de la Empresa'),
-            ],
+        // Los datos de la empresa salen de la sucursal del contrato
+        // (encabezado del PDF), no de config: cada sucursal tiene
+        // su propio NIT, dirección y logo.
+        $pdf = PdfBranding::make('gestisp.payments.payment-receipt', [
+            'payment' => $payment->load([
+                'invoice.contract.client',
+                'invoice.contract.branch',
+                'user',
+            ]),
         ]);
 
         $pdfPath = 'temp/payment_' . $payment->id . '.pdf';
@@ -421,16 +432,4 @@ class PaymentController extends Controller
         return $pdfPath;
     }
 
-    /**
-     * Genera y guarda el recibo PDF de un pago existente.
-     * Retorna la ruta del archivo generado.
-     */
-    public function generatePaymentReceipt(Payment $payment): string
-    {
-        $pdf     = PDF::loadView('pdf.payment_receipt', compact('payment'));
-        $pdfPath = storage_path('app/public/payment_receipts/' . $payment->id . '.pdf');
-        $pdf->save($pdfPath);
-
-        return $pdfPath;
-    }
 }
