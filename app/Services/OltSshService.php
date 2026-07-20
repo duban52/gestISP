@@ -350,6 +350,63 @@ class OltSshService
     }
 
     /**
+     * Consulta a la OLT el service-port de una ONT ya existente.
+     *
+     * Las ONTs importadas desde la OLT llegan sin este dato: no se
+     * expone por SNMP y solo se obtiene por consola. Se resuelve
+     * bajo demanda, justo antes de las operaciones que lo
+     * necesitan (eliminar y mover), y queda guardado para no
+     * repetir la consulta.
+     */
+    public function resolveServicePort(Olt $olt, Ont $ont): ?int
+    {
+        $interface = "0/{$ont->slot}";
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $ssh->write("enable\n");
+            $ssh->read('/[>#]/');
+
+            $ssh->write("config\n");
+            $ssh->read('/[>#]/');
+
+            $displayCmd = implode(' ', [
+                'display service-port port',
+                "{$interface}/{$ont->port}",
+                'ont', $ont->onu_id,
+            ]);
+
+            $ssh->write($displayCmd . "\n");
+            $output = $ssh->read('/[>#]|\}:/');
+
+            // La salida puede paginar: se envía un salto para
+            // continuar y se acumula el resto
+            if (str_contains($output, '}:')) {
+                $ssh->write("\n");
+                $output .= $ssh->read('/[>#]/');
+            }
+
+            $ssh->write("quit\n");
+            $ssh->read('/[>#]/');
+
+            $servicePort = $this->parseServicePortId($output);
+
+            Log::debug('RESOLVE SERVICE PORT', [
+                'sn' => $ont->sn,
+                'service_port' => $servicePort,
+            ]);
+
+            return $servicePort;
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+
+    /**
      * Elimina una ONT de la OLT via SSH
      */
     public function deleteOnt(Olt $olt, Ont $ont): void

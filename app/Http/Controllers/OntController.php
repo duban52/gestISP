@@ -138,11 +138,43 @@ class OntController extends Controller
         return back()->with('success', 'ONT activada y registrada correctamente.');
     }
 
+    /**
+     * Asegura que la ONT tenga su service-port resuelto.
+     *
+     * Las ONTs importadas desde la OLT llegan sin él (no se expone
+     * por SNMP). Eliminar o mover una ONT ejecuta
+     * "undo service-port {id}" en el equipo, así que sin este dato
+     * se enviaría un comando incompleto: se consulta a la OLT y se
+     * guarda antes de continuar.
+     */
+    private function ensureServicePort(Olt $olt, Ont $ont): void
+    {
+        if (!empty($ont->service_port)) {
+            return;
+        }
+
+        $servicePort = $this->oltSshService->resolveServicePort($olt, $ont);
+
+        if (!$servicePort) {
+            throw new \RuntimeException(
+                'No se pudo obtener el service-port de esta ONT en la OLT. ' .
+                'Verifíquelo en el equipo antes de continuar.'
+            );
+        }
+
+        $ont->update(['service_port' => $servicePort]);
+        $ont->refresh();
+    }
+
     public function destroy(Ont $ont): \Illuminate\Http\RedirectResponse
     {
         $olt = Olt::findOrFail($ont->olt_id);
 
         try {
+            // Las ONTs importadas llegan sin service-port: se
+            // resuelve antes de que la OLT reciba el comando
+            $this->ensureServicePort($olt, $ont);
+
             $this->oltSshService->deleteOnt($olt, $ont);
         } catch (\Exception $e) {
             return back()->with('error', 'Error al eliminar la ONT: ' . $e->getMessage());
@@ -274,6 +306,10 @@ class OntController extends Controller
         $validated['fspon'] = $validated['ont_location'];
 
         try {
+            // Mover también ejecuta "undo service-port": las ONTs
+            // importadas necesitan resolverlo primero
+            $this->ensureServicePort($olt, $ont);
+
             $result = $this->oltSshService->moveOnt($olt, $ont, $validated);
         } catch (\Exception $e) {
             return back()->with('error', 'Error al mover la ONT: ' . $e->getMessage());

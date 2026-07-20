@@ -239,6 +239,18 @@ class OltOntDiscovery
         $config = config("olt_snmp.brands.{$brand}") ?? config('olt_snmp.brands.huawei');
 
         $inventory = $config['inventory'] ?? [];
+
+        // Sin el mapa de OIDs de inventario no se puede leer la OLT.
+        // Pasa cuando el proceso quedó con una configuración vieja
+        // en memoria: el worker de colas es de larga duración y
+        // conserva la config con la que arrancó.
+        if (empty($inventory['serial'])) {
+            throw new \RuntimeException(
+                'Falta el mapa de OIDs de inventario en config/olt_snmp.php para la marca "' . $brand . '". ' .
+                'Si acaba de actualizar el sistema, reinicie el worker de colas: php artisan queue:restart'
+            );
+        }
+
         $inventory['empty_description'] = $config['empty_description'] ?? 'ONT_NO_DESCRIPTION';
 
         return $inventory;

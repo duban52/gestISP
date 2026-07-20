@@ -303,7 +303,18 @@
                         </tr>
                         <tr>
                             <th>Service Port</th>
-                            <td>{{ $ont->service_port }}</td>
+                            <td>
+                                @if($ont->service_port)
+                                    {{ $ont->service_port }}
+                                @else
+                                    {{-- Las ONTs importadas llegan sin este dato:
+                                         no se expone por SNMP. Se consulta a la OLT
+                                         automáticamente cuando hace falta. --}}
+                                    <span class="text-muted">Sin resolver</span>
+                                    <i class="fas fa-info-circle text-info ml-1"
+                                       title="Esta ONT se importó desde la OLT. El service-port se consultará automáticamente la primera vez que se elimine o se mueva."></i>
+                                @endif
+                            </td>
                         </tr>
                         <tr>
                             <th>VLAN</th>
