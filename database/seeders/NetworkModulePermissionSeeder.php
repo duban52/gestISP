@@ -40,7 +40,7 @@ class NetworkModulePermissionSeeder extends Seeder
         'olts.index' => 'Ver OLTs',
         'olts.create' => 'Crear OLTs',
         'olts.edit' => 'Editar OLTs',
-        'olts.vlans' => 'Crear VLANs en la OLT',
+        'olts.vlans' => 'Crear VLANs y perfiles en la OLT',
 
         // ONTs
         'onts.index' => 'Ver ONTs (autorizadas y por autorizar)',

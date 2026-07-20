@@ -199,8 +199,19 @@ Route::middleware('auth')->get('/api/vlansolt/{olt}', [OltController::class, 'vi
 Route::middleware('auth')->get('/api/lineprofiles/{olt}', [OltController::class, 'viewLineProfiles'])->name('api.lineProfile');
 Route::middleware('auth')->get('/api/srvprofiles/{olt}', [OltController::class, 'viewSrvProfiles'])->name('api.srvProfile');
 
-//VlanOlt
+//Configuración de la OLT: VLANs y perfiles que ya existen en el
+//equipo y se registran aquí para ofrecerlos al autorizar una ONT.
 Route::post('/vlans', [OltController::class, 'storeVlan'])->name('olt.vlans.store');
+Route::put('/vlans/{vlan}', [OltController::class, 'updateVlan'])->name('olt.vlans.update');
+Route::delete('/vlans/{vlan}', [OltController::class, 'destroyVlan'])->name('olt.vlans.destroy');
+
+Route::post('/lineprofiles', [OltController::class, 'storeLineProfile'])->name('olt.lineprofiles.store');
+Route::put('/lineprofiles/{lineProfile}', [OltController::class, 'updateLineProfile'])->name('olt.lineprofiles.update');
+Route::delete('/lineprofiles/{lineProfile}', [OltController::class, 'destroyLineProfile'])->name('olt.lineprofiles.destroy');
+
+Route::post('/srvprofiles', [OltController::class, 'storeSrvProfile'])->name('olt.srvprofiles.store');
+Route::put('/srvprofiles/{srvProfile}', [OltController::class, 'updateSrvProfile'])->name('olt.srvprofiles.update');
+Route::delete('/srvprofiles/{srvProfile}', [OltController::class, 'destroySrvProfile'])->name('olt.srvprofiles.destroy');
 
 //Activar ONT
 Route::post('/onts/activate', [OntController::class, 'activate'])->name('onts.activate');

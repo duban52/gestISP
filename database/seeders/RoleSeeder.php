@@ -156,7 +156,7 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'olts.index', 'description' => 'Ver OLTs']);
         Permission::create(['name' => 'olts.create', 'description' => 'Crear OLTs']);
         Permission::create(['name' => 'olts.edit', 'description' => 'Editar OLTs']);
-        Permission::create(['name' => 'olts.vlans', 'description' => 'Crear VLANs en la OLT']);
+        Permission::create(['name' => 'olts.vlans', 'description' => 'Crear VLANs y perfiles en la OLT']);
 
         // ONTs
         Permission::create(['name' => 'onts.index', 'description' => 'Ver ONTs (autorizadas y por autorizar)']);
