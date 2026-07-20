@@ -89,6 +89,18 @@ class Contract extends Model
     }
 
     /**
+     * Cuentas PPPoE del contrato.
+     *
+     * Es hasMany y no hasOne a propósito: el esquema no impide que
+     * un cliente tenga más de un servicio, y el informe de
+     * aprovisionamiento necesita contarlas.
+     */
+    public function pppoeAccounts()
+    {
+        return $this->hasMany(PppoeAccount::class);
+    }
+
+    /**
      * Relación con las facturas del contrato
      */
     public function invoices()

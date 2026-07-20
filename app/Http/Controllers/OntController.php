@@ -7,6 +7,7 @@ use App\Models\Olt;
 use App\Models\Ont;
 use App\Services\OltSnmpService;
 use App\Services\OltSshService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -29,12 +30,18 @@ class OntController extends Controller
      * buscarContrato y checkSn quedan solo con auth porque son
      * consultas compartidas con el flujo de cuentas PPPoE.
      */
-    public function __construct(OltSshService $oltSshService, OltSnmpService $snmpService)
-    {
+    public function __construct(
+        OltSshService $oltSshService,
+        OltSnmpService $snmpService,
+        private readonly \App\Services\ContractLinker $contractLinker,
+    ) {
         $this->oltSshService = $oltSshService;
         $this->snmpService   = $snmpService;
 
         $this->middleware('auth');
+        // Vincular no toca la OLT, pero decide a qué cliente se le
+        // cobra este equipo: se protege igual que activarla
+        $this->middleware('check.permission:onts.activate')->only('linkContract', 'unlinkContract');
         $this->middleware('check.permission:onts.index')->only('authorized_ont_index', 'no_authorized_ont_index');
         $this->middleware('check.permission:onts.show')->only('show', 'realtimeInfo', 'syncPower', 'metricsHistory');
         $this->middleware('check.permission:onts.activate')->only('activate');
@@ -76,6 +83,9 @@ class OntController extends Controller
                     ->where('id', 'like', "%{$query}%");
             })
             ->with('client')
+            // Equipos que ya tiene: al vincular hay que saber si el
+            // contrato está libre antes de elegirlo
+            ->withCount(['ont as onts_count', 'pppoeAccounts as pppoe_count'])
             ->limit(10)
             ->get();
 
@@ -87,7 +97,46 @@ class OntController extends Controller
             'client_name'     => $c->client->name,
             'client_lastname' => $c->client->last_name,
             'identity_number' => $c->client->identity_number,
+            'estado'          => $c->status,
+            'tiene_ont'       => (int) $c->onts_count > 0,
+            'cuentas_pppoe'   => (int) $c->pppoe_count,
         ]));
+    }
+
+    /**
+     * Vincula la ONT a un contrato.
+     *
+     * Pensado para las ONTs importadas desde la OLT, que llegan sin
+     * cliente asignado. Solo escribe en la base de datos: la ONT ya
+     * está configurada en el equipo y no se toca.
+     */
+    public function linkContract(Request $request, Ont $ont): RedirectResponse
+    {
+        $validated = $request->validate([
+            'contract_id' => 'required|integer|exists:contracts,id',
+        ]);
+
+        try {
+            $contrato = $this->contractLinker->linkOnt($ont, (int) $validated['contract_id']);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "ONT vinculada al contrato #{$contrato->id}.");
+    }
+
+    /**
+     * Quita la asociación de la ONT con su contrato.
+     */
+    public function unlinkContract(Ont $ont): RedirectResponse
+    {
+        try {
+            $this->contractLinker->unlinkOnt($ont);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'ONT desvinculada del contrato.');
     }
 
     public function activate(Request $request): \Illuminate\Http\RedirectResponse

@@ -242,40 +242,84 @@
         <div class="col-lg-6">
             {{-- Cliente / Contrato --}}
             <div class="card">
-                <div class="card-header bg-info text-white">
-                    <i class="fas fa-user"></i> Cliente y Contrato
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-user"></i> Cliente y Contrato</span>
+
+                    @if($pppoe->contract_id)
+                        @can('pppoe.edit')
+                            <form method="POST" action="{{ route('pppoe.unlink_contract', $pppoe) }}"
+                                  onsubmit="return confirm('¿Desvincular esta cuenta del contrato #{{ $pppoe->contract_id }}? La cuenta seguirá funcionando en el router: solo se quita la asociación en el sistema.');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-light" title="Desvincular contrato">
+                                    <i class="fas fa-unlink"></i>
+                                </button>
+                            </form>
+                        @endcan
+                    @endif
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
-                        <tr>
-                            <th style="width:40%">Cliente</th>
-                            <td>
-                                {{ $pppoe->contract->client->name ?? '—' }}
-                                {{ $pppoe->contract->client->last_name ?? '' }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Identificación</th>
-                            <td>{{ $pppoe->contract->client->identity_number ?? '—' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Teléfono</th>
-                            <td>{{ $pppoe->contract->client->number_phone ?? '—' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Contrato #</th>
-                            <td>{{ $pppoe->contract_id ?? '—' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Dirección</th>
-                            <td>{{ $pppoe->contract->address ?? '—' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Barrio</th>
-                            <td>{{ $pppoe->contract->neighborhood ?? '—' }}</td>
-                        </tr>
-                    </table>
-                </div>
+
+                @if($pppoe->contract_id)
+                    <div class="card-body p-0">
+                        <table class="table table-striped mb-0">
+                            <tr>
+                                <th style="width:40%">Cliente</th>
+                                <td>
+                                    {{ $pppoe->contract->client->name ?? '—' }}
+                                    {{ $pppoe->contract->client->last_name ?? '' }}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Identificación</th>
+                                <td>{{ $pppoe->contract->client->identity_number ?? '—' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Teléfono</th>
+                                <td>{{ $pppoe->contract->client->number_phone ?? '—' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Contrato #</th>
+                                <td>{{ $pppoe->contract_id }}</td>
+                            </tr>
+                            <tr>
+                                <th>Dirección</th>
+                                <td>{{ $pppoe->contract->address ?? '—' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Barrio</th>
+                                <td>{{ $pppoe->contract->neighborhood ?? '—' }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                @else
+                    {{-- Las cuentas importadas del router llegan sin
+                         cliente: aquí se les asigna el contrato --}}
+                    <div class="card-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Esta cuenta <strong>no está vinculada a ningún contrato</strong>. Funciona
+                            en el router, pero el sistema no sabe a qué cliente pertenece.
+                        </div>
+
+                        @can('pppoe.edit')
+                            @include('gestisp.partials.vincular-contrato', [
+                                'id' => 'vincularPppoe',
+                                'accion' => route('pppoe.link_contract', $pppoe),
+                                'tipo' => 'pppoe',
+                            ])
+
+                            <p class="text-muted small mb-0 mt-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Vincular no toca el router ni reinicia la sesión del cliente:
+                                solo registra a quién pertenece la cuenta.
+                            </p>
+                        @else
+                            <p class="text-muted small mb-0">
+                                No tiene permiso para vincular cuentas con contratos.
+                            </p>
+                        @endcan
+                    </div>
+                @endif
             </div>
         </div>
     </div>

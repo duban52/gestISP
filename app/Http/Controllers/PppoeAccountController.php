@@ -25,9 +25,12 @@ class PppoeAccountController extends Controller
      * Constructor: inyecta el servicio Mikrotik y protege las
      * rutas con autenticación y permisos.
      */
-    public function __construct(protected MikrotikApiService $mikrotik)
-    {
+    public function __construct(
+        protected MikrotikApiService $mikrotik,
+        protected \App\Services\ContractLinker $contractLinker,
+    ) {
         $this->middleware('auth');
+        $this->middleware('check.permission:pppoe.edit')->only('linkContract', 'unlinkContract');
         $this->middleware('check.permission:pppoe.index')->only('index', 'apiActiveSessions');
         $this->middleware('check.permission:pppoe.show')->only('show', 'realtimeSession', 'metricsHistory');
         $this->middleware('check.permission:pppoe.create')->only('store');
@@ -136,6 +139,41 @@ class PppoeAccountController extends Controller
         $pppoe->update($updateData);
 
         return back()->with('success-update', 'Cuenta PPPoE actualizada.');
+    }
+
+    /**
+     * Vincula la cuenta a un contrato.
+     *
+     * Va por su propia ruta y no dentro del formulario de edición
+     * a propósito: editar la cuenta reescribe el secret en el
+     * Mikrotik y tumba la sesión activa para aplicar los cambios.
+     * Vincular es solo un registro en la base de datos y no tiene
+     * por qué dejar al cliente sin servicio.
+     */
+    public function linkContract(Request $request, PppoeAccount $pppoe): RedirectResponse
+    {
+        $validated = $request->validate([
+            'contract_id' => 'required|integer|exists:contracts,id',
+        ]);
+
+        try {
+            $contrato = $this->contractLinker->linkPppoe($pppoe, (int) $validated['contract_id']);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Cuenta vinculada al contrato #{$contrato->id}.");
+    }
+
+    public function unlinkContract(PppoeAccount $pppoe): RedirectResponse
+    {
+        try {
+            $this->contractLinker->unlinkPppoe($pppoe);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Cuenta desvinculada del contrato.');
     }
 
     public function toggleState(PppoeAccount $pppoe): RedirectResponse

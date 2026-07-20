@@ -340,40 +340,85 @@
         </div>
         <div class="col-lg-6">
             <div class="card">
-                <div class="card-header bg-info text-white">
-                    <i class="fas fa-user"></i> Cliente y Contrato
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-user"></i> Cliente y Contrato</span>
+
+                    @if($ont->contract_id)
+                        @can('onts.activate')
+                            <form method="POST" action="{{ route('onts.unlink_contract', $ont) }}"
+                                  onsubmit="return confirm('¿Desvincular esta ONT del contrato #{{ $ont->contract_id }}? El equipo seguirá funcionando igual: solo se quita la asociación en el sistema.');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-light" title="Desvincular contrato">
+                                    <i class="fas fa-unlink"></i>
+                                </button>
+                            </form>
+                        @endcan
+                    @endif
                 </div>
-                <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
-                        <tr>
-                            <th style="width:40%">Cliente</th>
-                            <td>
-                                {{ $ont->contract->client->name ?? 'N/A' }}
-                                {{ $ont->contract->client->last_name ?? '' }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Identificación</th>
-                            <td>{{ $ont->contract->client->identity_number ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Teléfono</th>
-                            <td>{{ $ont->contract->client->number_phone ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Contrato #</th>
-                            <td>{{ $ont->contract_id ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Dirección</th>
-                            <td>{{ $ont->contract->address ?? 'N/A' }}</td>
-                        </tr>
-                        <tr>
-                            <th>Barrio</th>
-                            <td>{{ $ont->contract->neighborhood ?? 'N/A' }}</td>
-                        </tr>
-                    </table>
-                </div>
+
+                @if($ont->contract_id)
+                    <div class="card-body p-0">
+                        <table class="table table-striped mb-0">
+                            <tr>
+                                <th style="width:40%">Cliente</th>
+                                <td>
+                                    {{ $ont->contract->client->name ?? 'N/A' }}
+                                    {{ $ont->contract->client->last_name ?? '' }}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Identificación</th>
+                                <td>{{ $ont->contract->client->identity_number ?? 'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Teléfono</th>
+                                <td>{{ $ont->contract->client->number_phone ?? 'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Contrato #</th>
+                                <td>{{ $ont->contract_id }}</td>
+                            </tr>
+                            <tr>
+                                <th>Dirección</th>
+                                <td>{{ $ont->contract->address ?? 'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Barrio</th>
+                                <td>{{ $ont->contract->neighborhood ?? 'N/A' }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                @else
+                    {{-- Las ONTs importadas desde la OLT llegan sin
+                         cliente: aquí se les asigna el contrato --}}
+                    <div class="card-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Esta ONT <strong>no está vinculada a ningún contrato</strong>. Está dando
+                            servicio en la OLT, pero el sistema no sabe a qué cliente pertenece y no
+                            aparecerá en su ficha ni en la facturación.
+                        </div>
+
+                        @can('onts.activate')
+                            @include('gestisp.partials.vincular-contrato', [
+                                'id' => 'vincularOnt',
+                                'accion' => route('onts.link_contract', $ont),
+                                'tipo' => 'ont',
+                            ])
+
+                            <p class="text-muted small mb-0 mt-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Vincular no modifica la OLT: solo registra a quién pertenece el equipo
+                                y copia su serial al contrato.
+                            </p>
+                        @else
+                            <p class="text-muted small mb-0">
+                                No tiene permiso para vincular equipos con contratos.
+                            </p>
+                        @endcan
+                    </div>
+                @endif
             </div>
         </div>
     </div>

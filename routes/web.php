@@ -216,6 +216,10 @@ Route::delete('/srvprofiles/{srvProfile}', [OltController::class, 'destroySrvPro
 
 //Activar ONT
 Route::post('/onts/activate', [OntController::class, 'activate'])->name('onts.activate');
+//Vincular la ONT con un contrato (para las importadas desde la OLT,
+//que llegan sin cliente asignado). Solo escribe en base de datos.
+Route::post('/onts/{ont}/contrato',   [OntController::class, 'linkContract'])->name('onts.link_contract');
+Route::delete('/onts/{ont}/contrato', [OntController::class, 'unlinkContract'])->name('onts.unlink_contract');
 //eliminar ONT
 Route::delete('/onts/{ont}', [OntController::class, 'destroy'])->name('onts.destroy');
 //Refrescar potencia de la ont
@@ -264,6 +268,10 @@ Route::get('/pppoe',                       [PppoeAccountController::class, 'inde
 Route::post('/pppoe',                      [PppoeAccountController::class, 'store'])->name('pppoe.store');
 Route::put('/pppoe/{pppoe}',               [PppoeAccountController::class, 'update'])->name('pppoe.update');
 Route::post('/pppoe/{pppoe}/toggle',       [PppoeAccountController::class, 'toggleState'])->name('pppoe.toggle');
+//Vincular la cuenta con un contrato. Va aparte de la edición: esta
+//no toca el Mikrotik ni reinicia la sesión del cliente.
+Route::post('/pppoe/{pppoe}/contrato',   [PppoeAccountController::class, 'linkContract'])->name('pppoe.link_contract');
+Route::delete('/pppoe/{pppoe}/contrato', [PppoeAccountController::class, 'unlinkContract'])->name('pppoe.unlink_contract');
 Route::delete('/pppoe/{pppoe}',            [PppoeAccountController::class, 'destroy'])->name('pppoe.destroy');
 Route::post('/pppoe/import/{router}',      [PppoeAccountController::class, 'importFromRouter'])->name('pppoe.import');
 Route::get('/api/routers/{router}/active-sessions', [PppoeAccountController::class, 'apiActiveSessions'])->name('api.routers.sessions');

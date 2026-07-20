@@ -63,8 +63,18 @@
                             <td>{{ $account->profile }}</td>
                             <td>{{ $account->remote_address ?? '—' }}</td>
                             <td>
-                                {{ $account->contract->client->name ?? '—' }}
-                                {{ $account->contract->client->last_name ?? '' }}
+                                @if($account->contract_id)
+                                    {{ $account->contract->client->name ?? '—' }}
+                                    {{ $account->contract->client->last_name ?? '' }}
+                                @else
+                                    {{-- Las cuentas importadas del router llegan
+                                         sin cliente: se vinculan desde su ficha --}}
+                                    <a href="{{ route('pppoe.show', $account) }}"
+                                       class="badge badge-warning"
+                                       title="Vincular esta cuenta con un contrato">
+                                        <i class="fas fa-unlink mr-1"></i> Sin contrato
+                                    </a>
+                                @endif
                             </td>
                             <td>
                                 @if($account->disabled)
