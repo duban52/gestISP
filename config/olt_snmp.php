@@ -207,6 +207,39 @@ return [
             'if_descr' => '.1.3.6.1.2.1.2.2.1.2',
 
             /*
+            |----------------------------------------------------------
+            | Inventario de ONTs (para la importación)
+            |----------------------------------------------------------
+            | Estas tablas SÍ admiten recorrido completo (walk), a
+            | diferencia de las ópticas: verificado contra el equipo
+            | real, cada una devolvió las 2.198 ONTs de la OLT en
+            | unos 6 segundos.
+            |
+            | El serial llega en binario con el formato de Huawei:
+            | 4 caracteres ASCII del fabricante + 4 bytes en hexa
+            | (48575443DD5C64C6 → HWTC-DD5C64C6).
+            |
+            | La descripción es la que el operador puso en la OLT y
+            | suele traer datos del cliente ("BT000353 - 94280438 -
+            | JOSE ARGEMIRO MARIN"), lo que permite emparejar la ONT
+            | con su contrato automáticamente.
+            */
+            'inventory' => [
+                'serial' => '.1.3.6.1.4.1.2011.6.128.1.1.2.43.1.3',
+                'description' => '.1.3.6.1.4.1.2011.6.128.1.1.2.43.1.9',
+                'line_profile' => '.1.3.6.1.4.1.2011.6.128.1.1.2.43.1.7',
+                'srv_profile' => '.1.3.6.1.4.1.2011.6.128.1.1.2.43.1.8',
+                // El modelo tarda ~60 s en recorrerse: se consulta
+                // solo si se pide expresamente
+                'model' => '.1.3.6.1.4.1.2011.6.128.1.1.2.45.1.4',
+            ],
+
+            /*
+            | Texto con el que la OLT marca las ONTs sin descripción.
+            */
+            'empty_description' => 'ONT_NO_DESCRIPTION',
+
+            /*
             | Patrón para reconocer la interfaz del PUERTO PON.
             | %slot% y %port% se sustituyen. Ejemplo real:
             | "GPON_UNI 0/1/2"

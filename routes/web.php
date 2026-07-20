@@ -10,6 +10,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\MaterialMovementController;
 use App\Http\Controllers\OltController;
 use App\Http\Controllers\OntController;
+use App\Http\Controllers\OntImportController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PppoeAccountController;
 use App\Http\Controllers\RouterController;
@@ -94,6 +95,16 @@ Route::namespace('App\Http\Controllers')->prefix('gestisp')->group(function () {
     Route::resource('olts', 'OltController')->names('olts');
 
 });
+//Importación de ONTs existentes en una OLT (equipos ya configurados
+//a mano o provenientes de otro sistema).
+//IMPORTANTE: estas rutas van ANTES que /onts/{ont}; si se declaran
+//después, Laravel interpreta "import" como el identificador de una
+//ONT y la pantalla responde 404.
+Route::get('/onts/import',  [OntImportController::class, 'index'])->name('onts.import.index');
+Route::post('/onts/import/preview', [OntImportController::class, 'preview'])->name('onts.import.preview');
+Route::post('/onts/import', [OntImportController::class, 'store'])->name('onts.import.store');
+Route::get('/onts/import/{run}/status', [OntImportController::class, 'status'])->name('onts.import.status');
+
 Route::get('/onts/authorized', [OntController::class , 'authorized_ont_index'])->name('onts.authorized');
 //Listar onts no autorizada
 Route::get('/onts/no-authorized', [OntController::class , 'no_authorized_ont_index'])->name('onts.no-authorized');
@@ -214,6 +225,7 @@ Route::get('/onts/{ont}/catv/state', [OntController::class, 'checkCatvState'])->
 //Habilitar y deshabilitar la ONT completa (corta o restablece el servicio)
 Route::post('/onts/{ont}/enable',  [OntController::class, 'enableOnt'])->name('onts.enable');
 Route::post('/onts/{ont}/disable', [OntController::class, 'disableOnt'])->name('onts.disable');
+
 //Cargar información de onts (SNMP: respuesta en milisegundos)
 Route::get('/onts/{ont}/realtime', [OntController::class, 'realtimeInfo'])->name('onts.realtime');
 //Historial de métricas para las gráficas de la vista de detalle

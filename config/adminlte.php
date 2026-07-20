@@ -541,6 +541,13 @@ return [
                             'active' => ['gestisp/onts/authorized'],
                             'can' => 'onts.index',
                         ],
+                        [
+                            'text' => 'Importar de OLT',
+                            'route' => 'onts.import.index',
+                            'icon' => 'fas  fa-file-import',
+                            'active' => ['onts/import*'],
+                            'can' => 'onts.activate',
+                        ],
                     ]
                 ],
             ],
