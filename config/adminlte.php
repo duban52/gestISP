@@ -319,6 +319,49 @@ return [
         ],
 
         [
+            'text' => 'Informes gerenciales',
+            'icon' => 'fas fa-chart-line',
+            'can' => 'reports.index',
+            'submenu' => [
+                [
+                    'text' => 'Tablero ejecutivo',
+                    'route' => 'reports.index',
+                    'active' => ['informes'],
+                    'icon' => 'fas fa-tachometer-alt',
+                    'can' => 'reports.index',
+                ],
+                [
+                    'text' => 'Crecimiento',
+                    'route' => 'reports.growth',
+                    'active' => ['informes/crecimiento*'],
+                    'icon' => 'fas fa-user-plus',
+                    'can' => 'reports.growth',
+                ],
+                [
+                    'text' => 'Órdenes técnicas',
+                    'route' => 'reports.technical',
+                    'active' => ['informes/tecnicas*'],
+                    'icon' => 'fas fa-tools',
+                    'can' => 'reports.technical',
+                ],
+                [
+                    'text' => 'Facturación y recaudo',
+                    'route' => 'reports.billing',
+                    'active' => ['informes/facturacion*'],
+                    'icon' => 'fas fa-file-invoice-dollar',
+                    'can' => 'reports.billing',
+                ],
+                [
+                    'text' => 'Aprovisionamiento',
+                    'route' => 'reports.provisioning',
+                    'active' => ['informes/aprovisionamiento*'],
+                    'icon' => 'fas fa-network-wired',
+                    'can' => 'reports.provisioning',
+                ],
+            ],
+        ],
+
+        [
             'text' => 'Gestión empresarial',
             'icon' => 'fas  fa-building',
             'submenu' => [

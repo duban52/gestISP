@@ -181,6 +181,13 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'users.edit', 'description' => 'Editar usuarios']);
         Permission::create(['name' => 'users.destroy', 'description' => 'Eliminar usuarios']);
 
+        // Informes gerenciales
+        Permission::create(['name' => 'reports.index', 'description' => 'Ver el tablero de informes gerenciales']);
+        Permission::create(['name' => 'reports.growth', 'description' => 'Ver el informe de crecimiento de contratos']);
+        Permission::create(['name' => 'reports.technical', 'description' => 'Ver el informe de órdenes técnicas y técnicos']);
+        Permission::create(['name' => 'reports.billing', 'description' => 'Ver el informe de facturación y recaudo']);
+        Permission::create(['name' => 'reports.provisioning', 'description' => 'Ver el informe de aprovisionamiento de red']);
+
         //Roles
         Permission::create(['name' => 'roles.index', 'description' => 'Ver roles']);
         Permission::create(['name' => 'roles.create', 'description' => 'Crear roles']);
@@ -209,7 +216,8 @@ class RoleSeeder extends Seeder
             'routers.index', 'routers.create', 'routers.edit', 'routers.destroy',
             'olts.index', 'olts.create', 'olts.edit', 'olts.vlans',
             'onts.index', 'onts.show', 'onts.activate', 'onts.destroy', 'onts.relocate', 'onts.catv',
-            'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart'
+            'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart',
+            'reports.index', 'reports.growth', 'reports.technical', 'reports.billing', 'reports.provisioning'
         ]);
 
         $aux_admin->givePermissionTo([

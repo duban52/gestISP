@@ -7,6 +7,7 @@ use App\Http\Controllers\CashRegisterTransactionController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ContractController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\ManagementReportController;
 use App\Http\Controllers\MaterialMovementController;
 use App\Http\Controllers\OltController;
 use App\Http\Controllers\OntController;
@@ -266,3 +267,23 @@ Route::post('/pppoe/{pppoe}/toggle',       [PppoeAccountController::class, 'togg
 Route::delete('/pppoe/{pppoe}',            [PppoeAccountController::class, 'destroy'])->name('pppoe.destroy');
 Route::post('/pppoe/import/{router}',      [PppoeAccountController::class, 'importFromRouter'])->name('pppoe.import');
 Route::get('/api/routers/{router}/active-sessions', [PppoeAccountController::class, 'apiActiveSessions'])->name('api.routers.sessions');
+
+/*
+|--------------------------------------------------------------------------
+| Informes gerenciales
+|--------------------------------------------------------------------------
+| Lectura estadística de la operación. Todas las pantallas comparten
+| los filtros (desde, hasta, granularidad, sucursal) y cada una tiene
+| su descarga en PDF con esos mismos parámetros.
+*/
+Route::get('/informes',                    [ManagementReportController::class, 'index'])->name('reports.index');
+Route::get('/informes/crecimiento',        [ManagementReportController::class, 'crecimiento'])->name('reports.growth');
+Route::get('/informes/tecnicas',           [ManagementReportController::class, 'tecnicas'])->name('reports.technical');
+Route::get('/informes/facturacion',        [ManagementReportController::class, 'facturacion'])->name('reports.billing');
+Route::get('/informes/aprovisionamiento',  [ManagementReportController::class, 'aprovisionamiento'])->name('reports.provisioning');
+
+Route::get('/informes/pdf',                [ManagementReportController::class, 'resumenPdf'])->name('reports.summary.pdf');
+Route::get('/informes/crecimiento/pdf',    [ManagementReportController::class, 'crecimientoPdf'])->name('reports.growth.pdf');
+Route::get('/informes/tecnicas/pdf',       [ManagementReportController::class, 'tecnicasPdf'])->name('reports.technical.pdf');
+Route::get('/informes/facturacion/pdf',    [ManagementReportController::class, 'facturacionPdf'])->name('reports.billing.pdf');
+Route::get('/informes/aprovisionamiento/pdf', [ManagementReportController::class, 'aprovisionamientoPdf'])->name('reports.provisioning.pdf');
