@@ -9,6 +9,9 @@ use App\Models\Material;
 use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Notifications\TechnicalOrderAssignedTechnician;
+use App\Notifications\TechnicalOrderCreatedClient;
+use App\Notifications\TechnicalOrderFinishedClient;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -217,6 +220,11 @@ class TechnicalOrderController extends Controller
                 }
             }
 
+            // Avisar al cliente que su servicio quedó resuelto
+            $technicalOrder->loadMissing('contract.client', 'branch');
+            optional($technicalOrder->contract?->client)
+                ->notify(new TechnicalOrderFinishedClient($technicalOrder));
+
             return redirect()->route('technicals_orders.verification')
                 ->with('success', 'La orden ha sido cerrada exitosamente.');
         }
@@ -293,7 +301,7 @@ class TechnicalOrderController extends Controller
                     ->with('error', 'Ya existe una orden técnica en curso para este contrato.');
             }
 
-            TechnicalOrder::create([
+            $order = TechnicalOrder::create([
                 'contract_id'     => $validated['contract_id'],
                 'branch_id'       => session('branch_id'),
                 'created_by'      => Auth::id(),
@@ -302,6 +310,10 @@ class TechnicalOrderController extends Controller
                 'initial_comment' => $validated['initial_comment'] ?? null,
                 'status'          => 'Pendiente',
             ]);
+
+            // Avisar al cliente que recibimos su solicitud de servicio
+            $order->loadMissing('contract.client', 'branch');
+            optional($order->contract?->client)->notify(new TechnicalOrderCreatedClient($order));
 
             return redirect()->route('contracts.show', $validated['contract_id'])
                 ->with('success', 'La orden técnica se ha creado correctamente.');
@@ -322,6 +334,13 @@ class TechnicalOrderController extends Controller
     public function myTechnicalOrders(): View
     {
         $materials = $this->getTechnicianMaterials();
+
+        // Abrir esta bandeja cuenta como "ver" las órdenes: se
+        // marcan leídas las notificaciones de asignación, con lo
+        // que el contador rojo del menú se pone en cero.
+        Auth::user()->unreadNotifications()
+            ->where('type', TechnicalOrderAssignedTechnician::class)
+            ->update(['read_at' => now()]);
 
         $technical_orders = TechnicalOrder::where('branch_id', session('branch_id'))
             ->where('user_assigned', Auth::id())
@@ -528,6 +547,12 @@ class TechnicalOrderController extends Controller
             'user_assigned' => $request->input('assigned_user_id'),
             'status'        => 'Asignada',
         ]);
+
+        // Avisar al técnico: correo, WhatsApp y notificación en el
+        // sistema (que alimenta el contador rojo de "Mis Órdenes").
+        $tecnico = User::find($request->input('assigned_user_id'));
+        $technicalOrder->loadMissing('contract');
+        optional($tecnico)->notify(new TechnicalOrderAssignedTechnician($technicalOrder));
 
         return redirect()->route('technicals_orders.index')
             ->with('success', 'Orden asignada correctamente.');

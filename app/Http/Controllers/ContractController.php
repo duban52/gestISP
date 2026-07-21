@@ -12,6 +12,7 @@ use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\TechnicalOrder;
 use App\Models\User;
+use App\Notifications\ClientWelcome;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -130,6 +131,13 @@ class ContractController extends Controller
             'initial_comment' => 'Instalación del servicio'
         ]);
 
+        // Bienvenida al cliente por correo y WhatsApp. Va en cola:
+        // no demora la creación del contrato. La orden de instalación
+        // automática NO dispara un aviso aparte de "orden creada"
+        // para no enviarle dos mensajes al cliente en el mismo
+        // instante; la bienvenida cubre ese momento.
+        $contract->loadMissing('client', 'plan', 'branch');
+        optional($contract->client)->notify(new ClientWelcome($contract));
 
         // Redirigir con un mensaje de éxito
         return redirect()->route('contracts.index')->with('success', 'Contrato creado exitosamente.');

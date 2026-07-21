@@ -56,6 +56,8 @@ class Invoice extends Model
         'voided_at',
         'voided_by',
         'void_reason',
+        'due_soon_notified_at',
+        'overdue_notified_at',
     ];
 
     protected $casts = [
@@ -72,6 +74,8 @@ class Invoice extends Model
         'total' => 'decimal:2',
         'service_suspension_warning' => 'boolean',
         'service_suspension_date' => 'datetime',
+        'due_soon_notified_at' => 'datetime',
+        'overdue_notified_at' => 'datetime',
     ];
 
     /** Usuario que generó la factura */

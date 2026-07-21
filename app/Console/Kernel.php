@@ -64,6 +64,13 @@ class Kernel extends ConsoleKernel
             ->hourly()
             ->withoutOverlapping();
 
+        // Recordatorios de facturación al cliente (por vencer y
+        // vencida). Idempotente: cada factura se avisa una sola vez.
+        // A las 8:00 para que llegue en horario razonable.
+        $schedule->command('invoices:notify-reminders')
+            ->dailyAt('08:00')
+            ->withoutOverlapping();
+
         // Los logs de muestreo crecen unos pocos cientos de KB al
         // día; se recortan solos para no llenar el disco.
         $schedule->call(function () {

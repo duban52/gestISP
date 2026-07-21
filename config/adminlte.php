@@ -649,6 +649,7 @@ return [
         JeroenNoten\LaravelAdminLte\Menu\Filters\LangFilter::class,
         JeroenNoten\LaravelAdminLte\Menu\Filters\DataFilter::class,
         App\Filters\RoleBasedMenuFilter::class, // Filtro por rol de sesión
+        App\Filters\UnreadOrdersBadgeFilter::class, // Número rojo de órdenes no vistas
     ],
 
     /*
@@ -664,6 +665,19 @@ return [
     */
 
     'plugins' => [
+        // Notificaciones en pantalla de GestISP: mantiene el número
+        // rojo de "Mis Órdenes" y muestra los avisos del navegador.
+        // Se carga en todas las páginas del panel.
+        'GestispNotifications' => [
+            'active' => true,
+            'files' => [
+                [
+                    'type' => 'js',
+                    'asset' => true,
+                    'location' => 'js/gestisp-notifications.js',
+                ],
+            ],
+        ],
         'Datatables' => [
             'active' => false,
             'files' => [

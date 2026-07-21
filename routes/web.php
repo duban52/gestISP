@@ -9,6 +9,7 @@ use App\Http\Controllers\ContractController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ManagementReportController;
 use App\Http\Controllers\MaterialMovementController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OltController;
 use App\Http\Controllers\OntController;
 use App\Http\Controllers\OntImportController;
@@ -203,6 +204,11 @@ Route::get('technicals_orders/verification', [TechnicalOrderController::class, '
 Route::put('technicals_orders/vertification/{technical_order}', [TechnicalOrderController::class, 'verificationOrderProcess'])->name('technical_order.verification_process');
 //Rechazar orden por parte del técnico
 Route::put('technicals_orders/reject/{technical_order}', [TechnicalOrderController::class, 'orderReject'])->name('technical_orders.reject');
+
+// Notificaciones en pantalla: sondeo del contador y de los avisos
+// del navegador, y marcar todo como leído.
+Route::middleware('auth')->get('/notifications/poll', [NotificationController::class, 'poll'])->name('notifications.poll');
+Route::middleware('auth')->post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read_all');
 
 Route::middleware('auth')->get('/api/olts', [OltController::class, 'apiOlts'])->name('api.olts');
 Route::middleware('auth')->get('/api/vlansolt/{olt}', [OltController::class, 'viewVlans'])->name('api.vlansolt');

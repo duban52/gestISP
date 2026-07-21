@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Billing\Events\InvoiceIssued;
+use App\Listeners\NotifyClientInvoiceIssued;
 use App\Listeners\RecordFailedLogin;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Registered;
@@ -23,6 +25,10 @@ class EventServiceProvider extends ServiceProvider
         // Trazabilidad: cada intento de inicio de sesión fallido
         Failed::class => [
             RecordFailedLogin::class,
+        ],
+        // Notificación al cliente cuando se emite su factura
+        InvoiceIssued::class => [
+            NotifyClientInvoiceIssued::class,
         ],
     ];
 

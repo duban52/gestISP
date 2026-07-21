@@ -137,6 +137,14 @@ class User extends Authenticatable
         return $this->hasMany(TechnicalOrderVerification::class, 'verified_by');
     }
 
+    /**
+     * Número al que se le envía WhatsApp (para los avisos a técnicos).
+     */
+    public function routeNotificationForWhatsApp(): ?string
+    {
+        return $this->number_phone;
+    }
+
     // Trazabilidad: sesiones registradas del usuario
     public function sessions()
     {
