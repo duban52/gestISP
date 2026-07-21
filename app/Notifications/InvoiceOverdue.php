@@ -47,7 +47,7 @@ class InvoiceOverdue extends Notification implements ShouldQueue
 
         return WhatsAppMessage::make(
             "Hola {$notifiable->name}, su factura {$this->invoice->displayNumber()} está VENCIDA. Saldo: {$total}. Póngase al día para no interrumpir su servicio. Estamos para ayudarle."
-        )->template('factura_vencida', [
+        )->template('factura_vencida1', [
             $notifiable->name,
             $this->invoice->displayNumber(),
             $total,

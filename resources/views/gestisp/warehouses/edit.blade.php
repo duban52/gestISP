@@ -22,9 +22,11 @@
                 <div>
                     <label for="" class="form-label">Vincular usuario a almacén</label>
                     <select class="form-control form-select" aria-label="Default select example" name="user_id" id="user_id">
-                        <option selected value="">Seleccione un usuario</option>
+                        <option value="">Seleccione un usuario</option>
                         @foreach($users as $user)
-                            <option value="{{ $user->id }}">{{ $user->name }} {{$user->last_name}}</option>
+                            <option value="{{ $user->id }}" @selected($warehouse->user_id == $user->id)>
+                                {{ $user->name }} {{$user->last_name}}
+                            </option>
                         @endforeach
                     </select>
                 </div>

@@ -100,14 +100,22 @@ class WarehouseController extends Controller
      */
     public function create(): View
     {
-        return view('gestisp.warehouses.create');
+        // Usuarios de la sucursal activa para el desplegable
+        // "vincular usuario a almacén" (el dueño del almacén).
+        $users = User::whereHas('branches', function ($q) {
+            $q->where('branches.id', session('branch_id'));
+        })->orderBy('name')->get();
+
+        return view('gestisp.warehouses.create', compact('users'));
     }
 
     /**
      * Guarda un nuevo almacén.
      *
-     * El almacén queda asociado a la sucursal activa en sesión
-     * y al usuario autenticado que lo creó.
+     * El almacén queda asociado a la sucursal activa y al usuario
+     * que se elija en el formulario (su dueño: cada técnico tiene su
+     * propio almacén). Si no se elige ninguno, queda a nombre de
+     * quien lo crea.
      */
     public function store(Request $request): RedirectResponse
     {
@@ -116,7 +124,7 @@ class WarehouseController extends Controller
         Warehouse::create([
             'description' => $validated['description'],
             'branch_id'   => session('branch_id'),
-            'user_id'     => Auth::id(),
+            'user_id'     => $validated['user_id'] ?? Auth::id(),
         ]);
 
         return redirect()
@@ -129,7 +137,11 @@ class WarehouseController extends Controller
      */
     public function edit(Warehouse $warehouse): View
     {
-        return view('gestisp.warehouses.edit', compact('warehouse'));
+        $users = User::whereHas('branches', function ($q) {
+            $q->where('branches.id', session('branch_id'));
+        })->orderBy('name')->get();
+
+        return view('gestisp.warehouses.edit', compact('warehouse', 'users'));
     }
 
     /**
@@ -141,6 +153,9 @@ class WarehouseController extends Controller
 
         $warehouse->update([
             'description' => $validated['description'],
+            // Solo se cambia el dueño si se eligió uno; en blanco se
+            // conserva el actual.
+            'user_id' => $validated['user_id'] ?? $warehouse->user_id,
         ]);
 
         return redirect()
@@ -232,6 +247,8 @@ class WarehouseController extends Controller
     {
         return $request->validate([
             'description' => 'required|string|max:255',
+            // Opcional: el dueño del almacén. Se valida que exista.
+            'user_id' => 'nullable|exists:users,id',
         ]);
     }
 }
