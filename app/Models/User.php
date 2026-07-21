@@ -27,6 +27,7 @@ class User extends Authenticatable
         'address',
         'email',
         'password',
+        'is_active',
         'selected_branch_id'
     ];
 
@@ -48,6 +49,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'is_active' => 'boolean',
     ];
 
 
@@ -133,6 +135,18 @@ class User extends Authenticatable
     public function technicalOrderVerifications()
     {
         return $this->hasMany(TechnicalOrderVerification::class, 'verified_by');
+    }
+
+    // Trazabilidad: sesiones registradas del usuario
+    public function sessions()
+    {
+        return $this->hasMany(UserSession::class);
+    }
+
+    // Trazabilidad: intentos de inicio de sesión fallidos
+    public function failedLogins()
+    {
+        return $this->hasMany(FailedLogin::class);
     }
 
     //Método para asignar sucursal a un usuario:

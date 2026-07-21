@@ -40,6 +40,11 @@ class UserController extends Controller
         $this->middleware('check.permission:users.create')->only('create', 'store');
         $this->middleware('check.permission:users.edit')->only('edit', 'update');
         $this->middleware('check.permission:users.destroy')->only('destroy');
+        // Trazabilidad: ver el detalle y cerrar sesiones de forma remota
+        $this->middleware('check.permission:users.trace')->only('show');
+        $this->middleware('check.permission:users.sessions.close')->only('closeSession', 'closeSessions');
+        // Habilitar/inhabilitar el acceso del usuario
+        $this->middleware('check.permission:users.disable')->only('toggleActive');
     }
 
     /**
@@ -139,9 +144,151 @@ class UserController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(User $user)
+    /**
+     * Trazabilidad del usuario: sesiones activas, historial,
+     * estadísticas de acceso e intentos fallidos.
+     *
+     * Todo se lee de la tabla propia user_sessions (ver
+     * App\Services\SessionTracker), no de la sesión viva de Laravel.
+     */
+    public function show(User $user, \Illuminate\Http\Request $request): View
     {
-        //
+        $activas = $user->sessions()
+            ->active()
+            ->with('branch')
+            ->orderByDesc('last_activity_at')
+            ->get();
+
+        $historial = $user->sessions()
+            ->ended()
+            ->with('branch')
+            ->orderByDesc('login_at')
+            ->paginate(15)
+            ->withQueryString();
+
+        // La sesión desde la que se está viendo la pantalla, para
+        // marcarla ("esta es tu sesión") y no ofrecer cerrarla
+        $sesionActualId = $request->hasSession() ? $request->session()->getId() : null;
+
+        $estadisticas = $this->estadisticasDeAcceso($user);
+
+        $fallidos = $user->failedLogins()
+            ->orderByDesc('attempted_at')
+            ->limit(20)
+            ->get();
+
+        $fallidosTotal = $user->failedLogins()->count();
+
+        return view('gestisp.users.show', compact(
+            'user', 'activas', 'historial', 'sesionActualId',
+            'estadisticas', 'fallidos', 'fallidosTotal'
+        ));
+    }
+
+    /**
+     * Cierra de forma remota una sesión activa del usuario.
+     *
+     * No borra la sesión del disco: la marca como cerrada y el
+     * middleware TrackUserActivity expulsa a esa sesión en su
+     * siguiente petición.
+     */
+    public function closeSession(User $user, \App\Models\UserSession $session): RedirectResponse
+    {
+        // La sesión debe ser de este usuario: evita cerrar la de
+        // otro manipulando el id en la URL
+        if ($session->user_id !== $user->id) {
+            abort(404);
+        }
+
+        app(\App\Services\SessionTracker::class)->forceClose($session);
+
+        return back()->with('success-update', 'La sesión se cerró de forma remota. Se aplicará en el siguiente movimiento del usuario.');
+    }
+
+    /**
+     * Habilita o inhabilita el acceso del usuario.
+     *
+     * Al inhabilitar se cierran además todas sus sesiones activas:
+     * si no, el usuario suspendido seguiría trabajando con la sesión
+     * que ya tenía abierta hasta que caducara. El bloqueo del login
+     * y la expulsión por el middleware lo mantienen fuera.
+     *
+     * No se permite inhabilitarse a uno mismo, para no quedar sin
+     * acceso al sistema por accidente.
+     */
+    public function toggleActive(User $user): RedirectResponse
+    {
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'No puede inhabilitar su propio usuario.');
+        }
+
+        $user->update(['is_active' => !$user->is_active]);
+
+        if (!$user->is_active) {
+            app(\App\Services\SessionTracker::class)->forceCloseAllFor($user);
+
+            return back()->with('success-update', 'Usuario inhabilitado. Se cerraron sus sesiones activas.');
+        }
+
+        return back()->with('success-update', 'Usuario habilitado. Ya puede iniciar sesión.');
+    }
+
+    /**
+     * Cierra de forma remota todas las sesiones activas del usuario.
+     *
+     * Cuando se cierran las sesiones del propio administrador que
+     * ejecuta la acción, se preserva la sesión en curso para que no
+     * se autoexpulse; las demás (otros equipos) sí se cierran.
+     */
+    public function closeSessions(User $user, \Illuminate\Http\Request $request): RedirectResponse
+    {
+        $exceptoActual = $user->id === auth()->id()
+            ? app(\App\Services\SessionTracker::class)->traceIdActual($request)
+            : null;
+
+        $cerradas = app(\App\Services\SessionTracker::class)->forceCloseAllFor($user, $exceptoActual);
+
+        if ($cerradas === 0) {
+            return back()->with('error', 'El usuario no tiene sesiones activas para cerrar.');
+        }
+
+        return back()->with('success-update', "Se cerraron {$cerradas} sesión(es) del usuario.");
+    }
+
+    /**
+     * Resumen de acceso del usuario.
+     *
+     * @return array<string, mixed>
+     */
+    private function estadisticasDeAcceso(User $user): array
+    {
+        $sesiones = $user->sessions();
+
+        // El dispositivo y la IP más frecuentes se resuelven con un
+        // group by, no trayendo todas las filas a memoria
+        $dispositivo = (clone $sesiones)->getQuery()
+            ->selectRaw('device_type, COUNT(*) as total')
+            ->whereNotNull('device_type')
+            ->groupBy('device_type')
+            ->orderByDesc('total')
+            ->first();
+
+        $ipFrecuente = (clone $sesiones)->getQuery()
+            ->selectRaw('ip_address, COUNT(*) as total')
+            ->whereNotNull('ip_address')
+            ->groupBy('ip_address')
+            ->orderByDesc('total')
+            ->first();
+
+        return [
+            'total_sesiones' => (clone $sesiones)->count(),
+            'activas' => (clone $sesiones)->active()->count(),
+            'ips_distintas' => (clone $sesiones)->distinct()->count('ip_address'),
+            'ultimo_acceso' => (clone $sesiones)->max('login_at'),
+            'primer_acceso' => (clone $sesiones)->min('login_at'),
+            'dispositivo_frecuente' => $dispositivo->device_type ?? null,
+            'ip_frecuente' => $ipFrecuente->ip_address ?? null,
+        ];
     }
 
     /**

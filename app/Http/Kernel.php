@@ -37,6 +37,10 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            // Trazabilidad: actualiza la actividad de la sesión y
+            // aplica los cierres remotos. Va al final, después de
+            // iniciar la sesión y resolver la autenticación.
+            \App\Http\Middleware\TrackUserActivity::class,
         ],
 
         'api' => [

@@ -32,6 +32,11 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            // Se fija explícitamente para que el modelo recién creado
+            // ya lleve el valor en memoria: el default de la columna
+            // solo lo aplica la base de datos y no queda cargado hasta
+            // refrescar, lo que dejaría is_active en null (→ false).
+            'is_active' => true,
             'remember_token' => Str::random(10),
         ];
     }

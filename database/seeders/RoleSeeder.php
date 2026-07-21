@@ -180,6 +180,9 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'users.create', 'description' => 'Crear usuarios']);
         Permission::create(['name' => 'users.edit', 'description' => 'Editar usuarios']);
         Permission::create(['name' => 'users.destroy', 'description' => 'Eliminar usuarios']);
+        Permission::create(['name' => 'users.trace', 'description' => 'Ver trazabilidad y sesiones de un usuario']);
+        Permission::create(['name' => 'users.sessions.close', 'description' => 'Cerrar sesiones activas de un usuario de forma remota']);
+        Permission::create(['name' => 'users.disable', 'description' => 'Habilitar o inhabilitar el acceso de un usuario']);
 
         // Informes gerenciales
         Permission::create(['name' => 'reports.index', 'description' => 'Ver el tablero de informes gerenciales']);

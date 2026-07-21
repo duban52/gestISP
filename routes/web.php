@@ -88,6 +88,15 @@ Route::namespace('App\Http\Controllers')->prefix('gestisp')->group(function () {
 
     //Usuarios
     Route::resource('users', 'UserController')->names('users');
+    // Habilitar / inhabilitar el acceso del usuario
+    Route::post('users/{user}/toggle-active', 'UserController@toggleActive')
+        ->name('users.toggle-active');
+    // Trazabilidad: cerrar de forma remota una sesión activa del usuario
+    Route::post('users/{user}/sessions/{session}/close', 'UserController@closeSession')
+        ->name('users.sessions.close');
+    // Cerrar de una vez todas las sesiones activas del usuario
+    Route::post('users/{user}/sessions/close-all', 'UserController@closeSessions')
+        ->name('users.sessions.close-all');
 
     //Roles
     Route::resource('roles', 'RoleController')->names('roles');

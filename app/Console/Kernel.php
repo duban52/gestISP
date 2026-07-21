@@ -58,6 +58,12 @@ class Kernel extends ConsoleKernel
             ->appendOutputTo(storage_path('logs/pppoe-poll.log'))
             ->onFailure(fn () => Log::error('El mantenimiento nocturno de PPPoE falló.'));
 
+        // Trazabilidad: cerrar las sesiones caducadas por
+        // inactividad para que el historial refleje cómo terminaron.
+        $schedule->command('sessions:sweep')
+            ->hourly()
+            ->withoutOverlapping();
+
         // Los logs de muestreo crecen unos pocos cientos de KB al
         // día; se recortan solos para no llenar el disco.
         $schedule->call(function () {

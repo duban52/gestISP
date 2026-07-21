@@ -54,6 +54,7 @@
                         <th>Email</th>
                         <th>Teléfono</th>
                         <th>Sucursales / Roles</th>
+                        <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
                     </thead>
@@ -77,13 +78,50 @@
                                 @endforelse
                             </td>
 
+                            {{-- Estado de acceso --}}
+                            <td data-order="{{ $user->is_active ? 1 : 0 }}">
+                                @if($user->is_active)
+                                    <span class="badge badge-success">Activo</span>
+                                @else
+                                    <span class="badge badge-danger">Inhabilitado</span>
+                                @endif
+                            </td>
+
                             <td>
+                                {{-- Trazabilidad: sesiones e historial del usuario --}}
+                                @can('users.trace')
+                                    <a href="{{ route('users.show', $user) }}"
+                                       class="btn btn-info btn-sm"
+                                       title="Trazabilidad y sesiones">
+                                        <i class="fas fa-fingerprint"></i>
+                                    </a>
+                                @endcan
+
                                 {{-- Editar usuario --}}
                                 <a href="{{ route('users.edit', $user) }}"
                                    class="btn btn-warning btn-sm"
                                    title="Editar">
                                     <i class="fas fa-pencil-alt"></i> Editar
                                 </a>
+
+                                {{-- Habilitar / inhabilitar el acceso.
+                                     No se muestra para el propio usuario: no
+                                     debe poder dejarse a sí mismo sin acceso. --}}
+                                @can('users.disable')
+                                    @if($user->id !== auth()->id())
+                                        <form method="POST" action="{{ route('users.toggle-active', $user) }}" class="d-inline"
+                                              onsubmit="return confirm('{{ $user->is_active
+                                                    ? '¿Inhabilitar a ' . $user->name . '? No podrá iniciar sesión y se cerrarán sus sesiones activas.'
+                                                    : '¿Habilitar a ' . $user->name . '? Podrá volver a iniciar sesión.' }}');">
+                                            @csrf
+                                            <button type="submit"
+                                                    class="btn btn-sm {{ $user->is_active ? 'btn-outline-danger' : 'btn-outline-success' }}"
+                                                    title="{{ $user->is_active ? 'Inhabilitar acceso' : 'Habilitar acceso' }}">
+                                                <i class="fas {{ $user->is_active ? 'fa-user-slash' : 'fa-user-check' }}"></i>
+                                            </button>
+                                        </form>
+                                    @endif
+                                @endcan
 
                                 {{-- Eliminar usuario (abre modal de confirmación).
                                      No se muestra para el propio usuario logueado. --}}
@@ -179,8 +217,9 @@
                 order: [[1, 'asc']],
 
                 columnDefs: [
-                    // Las columnas de sucursales (5) y acciones (6) no son ordenables
-                    { orderable: false, targets: [5, 6] },
+                    // Las columnas de sucursales (5) y acciones (7) no son
+                    // ordenables; la de estado (6) sí, por su data-order
+                    { orderable: false, targets: [5, 7] },
 
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }
