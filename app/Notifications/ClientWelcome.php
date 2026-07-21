@@ -51,6 +51,6 @@ class ClientWelcome extends Notification implements ShouldQueue
 
         return WhatsAppMessage::make(
             "¡Hola {$notifiable->name}! 🎉 Bienvenido a {$sucursal}. Su contrato del plan {$plan} ya quedó activo. ¡Gracias por confiar en nosotros!"
-        )->template('hello_world', [$notifiable->name, $sucursal, $plan]);
+        )->template('bienvenida_cliente', [$notifiable->name, $sucursal, $plan]);
     }
 }
