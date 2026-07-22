@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Exports\ClientsExport;
 use App\Models\Client;
 use App\Models\Contract;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
 
 class ClientController extends Controller
 {
@@ -21,35 +23,58 @@ class ClientController extends Controller
         $this->middleware('check.permission:clients.searchView')->only('searchView');
         $this->middleware('check.permission:clients.export')->only('export');
     }
-    public function searchView(){
-        //Retornar a la vista del buscador
-        return view('gestisp.clients.search');
-    }
-
-    public function search(Request $request)
+    /**
+     * Buscador de clientes.
+     *
+     * Un único cuadro de búsqueda que consulta TODOS los datos del
+     * cliente a la vez (documento, nombres, apellidos, teléfonos,
+     * correo y tipo), siempre dentro de la sucursal activa. Devuelve
+     * todos los que coincidan, paginados, para poder elegir sobre
+     * cuál actuar (ver contratos, editar o asignarle un contrato).
+     *
+     * La búsqueda viaja por la URL (GET) para que la paginación
+     * funcione y el resultado se pueda guardar en favoritos.
+     */
+    public function searchView(Request $request): View
     {
+        $q = trim((string) $request->query('q', ''));
 
-
-        // Validar el número de identidad
-        $request->validate([
-            'identity_number' => 'required|string|max:20',
-        ]);
-
-        // Buscar el cliente por número de identidad
-        $client = Client::where('identity_number', $request->identity_number)
-            ->where('branch_id', session('branch_id'))
-            ->first();
-
-        // Verificar si se encontró un cliente
-        if (!$client) {
-            return redirect()->action([ClientController::class, 'search'])->with('error', 'Cliente no encontrado.');
+        // Sin término: solo se muestra el cuadro de búsqueda.
+        if ($q === '') {
+            return view('gestisp.clients.search', ['q' => '', 'clients' => null]);
         }
 
-        $contracts = $client->contracts;
+        $clients = Client::query()
+            ->where('branch_id', session('branch_id'))
+            ->with('user', 'contracts')
+            ->withCount('contracts')
+            ->where(function ($sub) use ($q) {
+                // Coincidencia en cualquiera de los campos del cliente
+                foreach (['identity_number', 'name', 'last_name', 'number_phone', 'aditional_phone', 'email', 'type_client'] as $campo) {
+                    $sub->orWhere($campo, 'like', "%{$q}%");
+                }
 
+                // Y también contra el nombre completo, para que
+                // "Juan Pérez" encuentre al cliente aunque nombre y
+                // apellido estén en columnas distintas
+                $sub->orWhereRaw("CONCAT(name, ' ', COALESCE(last_name, '')) LIKE ?", ["%{$q}%"]);
+            })
+            ->orderBy('name')
+            ->paginate(10)
+            ->withQueryString();
 
-        //Retornar a la vista del buscador
-        return view('gestisp.clients.search', compact('client', 'contracts'));
+        return view('gestisp.clients.search', compact('q', 'clients'));
+    }
+
+    /**
+     * Compatibilidad: el buscador antiguo enviaba por POST. Se
+     * redirige al buscador nuevo (GET) conservando el término.
+     */
+    public function search(Request $request): RedirectResponse
+    {
+        $q = $request->input('q', $request->input('identity_number', ''));
+
+        return redirect()->route('clients.searchView', ['q' => $q]);
     }
     /**
      * Display a listing of the resource.
