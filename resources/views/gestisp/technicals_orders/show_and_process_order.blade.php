@@ -3,7 +3,7 @@
 @section('title', 'Procesar Orden Técnica')
 
 @section('content_header')
-    <div class="card p-3 d-flex flex-row justify-content-between align-items-center">
+    <div class="card p-3 d-flex flex-row justify-content-between align-items-center mb-0">
         <h2 class="mb-0">VER Y PROCESAR ORDEN {{ $technicalOrder->id }}</h2>
         <a href="{{ route('technicals_orders.my_technical_orders') }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Volver
@@ -13,13 +13,17 @@
 
 @section('content')
     @if(session('error'))
-        <div class="alert alert-danger">{{ session('error') }}</div>
+        <div class="alert alert-danger alert-dismissible">
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+            <i class="fas fa-exclamation-triangle mr-1"></i> {{ session('error') }}
+        </div>
     @endif
 
     @if($errors->any())
-        <div class="alert alert-danger">
+        <div class="alert alert-danger alert-dismissible">
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
             @foreach($errors->all() as $error)
-                {{ $error }}<br>
+                <div><i class="fas fa-exclamation-triangle mr-1"></i> {{ $error }}</div>
             @endforeach
         </div>
     @endif
@@ -46,7 +50,12 @@
             <hr>
             <h3>Datos de la orden</h3>
             <p><strong>Tipo de orden:</strong> {{ $technicalOrder->type }}</p>
-            <p><strong>Detalle de orden:</strong> {{ $technicalOrder->detail }}</p>
+            <p>
+                <strong>Detalle de orden:</strong> {{ $technicalOrder->detail }}
+                @if($requiresMaterial)
+                    <span class="badge badge-warning ml-1">Requiere material</span>
+                @endif
+            </p>
             <p><strong>Comentario inicial:</strong> {{ $technicalOrder->initial_comment ?? '—' }}</p>
             <p>
                 <strong>Creada el:</strong> {{ $technicalOrder->created_at?->format('Y-m-d H:i') ?? 'N/A' }}
@@ -58,16 +67,12 @@
 
         {{-- ============================================================
              Columna derecha: formulario de procesamiento
-
-             El técnico reporta su trabajo (observaciones, solución,
-             evidencia) y el material usado. El JS order_process.js
-             (cargado vía Vite) maneja el modal de materiales y agrega
-             las filas con inputs material_id[]/quantity[]/serial_number[].
              ============================================================ --}}
         <div class="card mt-1 p-3 col-md-6">
             <h3>Procesamiento de orden</h3>
             <form action="{{ route('technicals_orders.process', $technicalOrder->id) }}" method="post"
-                  enctype="multipart/form-data">
+                  enctype="multipart/form-data" id="process-order-form"
+                  data-requires-material="{{ $requiresMaterial ? '1' : '0' }}">
                 @csrf
                 <div class="form-group">
                     <label for="observations_technical">Comentario del técnico</label>
@@ -86,36 +91,52 @@
                 </div>
                 <div class="form-group">
                     <label for="images">Selecciona imágenes (evidencia):</label>
-                    <input class="form-control" type="file" name="images[]" id="images"
+                    <input class="form-control-file" type="file" name="images[]" id="images"
                            multiple accept="image/*">
                 </div>
 
-                <div class="form-group">
-                    <button type="button" class="btn btn-primary col-md-4" id="open-modal-btn">
+                {{-- Materiales -------------------------------------------------- --}}
+                <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+                    <label class="mb-0 font-weight-bold">Materiales utilizados</label>
+                    <button type="button" class="btn btn-primary btn-sm" id="open-modal-btn">
                         <i class="fas fa-plus"></i> Agregar Material
                     </button>
                 </div>
 
+                @if($requiresMaterial)
+                    <div class="alert alert-info py-2 px-3 small mb-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Esta orden de <strong>instalación</strong> requiere registrar el material y
+                        los equipos instalados antes de procesarla.
+                    </div>
+                @endif
+
                 {{-- Materiales reportados (filas dinámicas de order_process.js) --}}
                 <div class="table-responsive">
-                    <table class="table table-bordered" id="materials-table">
-                        <thead>
+                    <table class="table table-bordered table-sm align-middle" id="materials-table">
+                        <thead class="thead-light">
                         <tr>
                             <th>Material</th>
-                            <th>Cantidad</th>
-                            <th>Unidad de Medida</th>
+                            <th class="text-center" style="width: 90px;">Cantidad</th>
+                            <th>Unidad</th>
                             <th>Números de Serie</th>
-                            <th>Acciones</th>
+                            <th class="text-center" style="width: 70px;">Acciones</th>
                         </tr>
                         </thead>
                         <tbody>
-                        {{-- Filas agregadas dinámicamente --}}
+                        {{-- Fila vacía inicial (la gestiona el JS) --}}
+                        <tr id="no-materials-row">
+                            <td colspan="5" class="text-center text-muted py-3">
+                                <i class="fas fa-box-open mr-1"></i> Aún no se ha agregado material
+                            </td>
+                        </tr>
                         </tbody>
                     </table>
-
-                    <input type="submit" value="Procesar orden" class="col-md-4 btn btn-success"
-                           onclick="return confirmProcess();">
                 </div>
+
+                <button type="submit" class="btn btn-success mt-2">
+                    <i class="fas fa-check mr-1"></i> Procesar orden
+                </button>
             </form>
         </div>
     </div>
@@ -123,40 +144,46 @@
     {{-- ============================================================
          Modal para agregar material
 
-         data-warehouse-id: el JS lo usa para consultar disponibilidad
-         y seriales del almacén personal del técnico vía AJAX.
+         Cada opción trae la disponibilidad y los seriales incrustados
+         (data-*), así el modal no depende de ninguna llamada AJAX.
          ============================================================ --}}
     <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel"
-         aria-hidden="true" data-warehouse-id="{{ $warehouse->id ?? '' }}">
-        <div class="modal-dialog">
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="materialModalLabel">Agregar Material</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="materialModalLabel">
+                        <i class="fas fa-box mr-1"></i> Agregar Material
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
                         <label>Material</label>
-                        <select id="modal-material-select" class="form-control material-select select2" required>
+                        <select id="modal-material-select" class="form-control material-select" required>
                             <option value="">Seleccione un material</option>
                             @foreach ($materials as $material)
                                 <option value="{{ $material->id }}"
-                                        data-is-equipment="{{ $material->is_equipment }}"
-                                        data-name="{{ $material->name }}">
+                                        data-is-equipment="{{ $material->is_equipment ? '1' : '0' }}"
+                                        data-name="{{ $material->name }}"
+                                        data-available="{{ $material->total_quantity }}"
+                                        data-serials='@json($material->serial_numbers)'>
                                     {{ $material->name }} (Disp: {{ $material->total_quantity }})
                                 </option>
                             @endforeach
                         </select>
-                        <small id="available-quantity-text" class="text-info mt-1" style="display: none;">
-                            Cantidad disponible: <span id="available-quantity">0</span>
+                        <small id="available-quantity-text" class="form-text text-muted" style="display: none;">
+                            Disponible en tu almacén:
+                            <span class="badge badge-info" id="available-quantity">0</span>
                         </small>
                     </div>
 
-                    <div class="form-group">
+                    {{-- Consumibles: cantidad manual --}}
+                    <div class="form-group" id="modal-quantity-group">
                         <label>Cantidad</label>
-                        <input type="number" id="modal-quantity" class="form-control quantity-input" required min="1">
+                        <input type="number" id="modal-quantity" class="form-control quantity-input" min="1" value="1">
                     </div>
 
                     <div class="form-group">
@@ -170,20 +197,25 @@
                         </select>
                     </div>
 
-                    {{-- Solo visible para equipos: selección del serial --}}
-                    <div id="modal-serial-numbers-container" style="display:none;">
-                        <label for="serial-number-select">Números de Serie Disponibles</label>
+                    {{-- Equipos: selección de seriales (la cantidad la
+                         determina cuántos seriales se marquen) --}}
+                    <div class="form-group" id="modal-serial-numbers-container" style="display:none;">
+                        <label for="serial-number-select">Números de Serie a instalar</label>
                         <select id="serial-number-select" class="form-control" multiple>
-                            {{-- Seriales cargados por AJAX --}}
+                            {{-- Opciones incrustadas desde data-serials --}}
                         </select>
-                        <ul id="serial-number-list" style="list-style-type: none; padding: 0; margin-top: 10px;">
-                            {{-- Seriales seleccionados --}}
-                        </ul>
+                        <small class="form-text text-muted">
+                            La cantidad se calcula según los seriales seleccionados.
+                        </small>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" id="add-material-modal-btn">Agregar Material</button>
+                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">
+                        <i class="fas fa-times mr-1"></i> Cerrar
+                    </button>
+                    <button type="button" class="btn btn-primary" id="add-material-modal-btn">
+                        <i class="fas fa-plus mr-1"></i> Agregar
+                    </button>
                 </div>
             </div>
         </div>
@@ -192,7 +224,25 @@
 
 @section('css')
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <style>
+        /* El desplegable del modal debe quedar por encima del backdrop */
+        .select2-container { z-index: 1060; }
+        #materials-table td, #materials-table th { vertical-align: middle; }
+        .serial-badge {
+            display: inline-block;
+            background: #e9f2ff;
+            color: #0b57d0;
+            border: 1px solid #b6d4fe;
+            border-radius: 12px;
+            padding: 1px 8px;
+            margin: 1px 2px;
+            font-size: .78rem;
+        }
+        /* Diálogos SweetAlert con los botones de Bootstrap del sistema */
+        .swal2-popup .swal2-styled.swal2-confirm { font-weight: 500; }
+    </style>
 @endsection
 
 @section('js')
@@ -204,10 +254,4 @@
          no existe en el navegador (resources/ no es pública) y falla
          en producción. Con Vite el archivo se compila y versiona. --}}
     @vite('resources/js/technical_orders/order_process.js')
-
-    <script>
-        function confirmProcess() {
-            return confirm('¿Está seguro de procesar la orden?');
-        }
-    </script>
 @endsection

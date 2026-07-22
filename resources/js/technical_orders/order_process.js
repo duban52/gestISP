@@ -1,136 +1,174 @@
+/**
+ * Procesamiento de órdenes técnicas: modal de materiales.
+ *
+ * Toda la información (disponibilidad y seriales) viene incrustada en
+ * las <option> del select (data-available / data-serials), así que el
+ * modal NO hace ninguna llamada AJAX: carga al instante y no depende
+ * de rutas ni de permisos. Antes se consultaba /public/inventories/...
+ * —una ruta inexistente— y al fallar la disponibilidad quedaba en 0,
+ * lo que disparaba el falso error "excede el stock disponible".
+ */
 $(document).ready(function () {
-    // Inicializar Select2
-    $('.material-select').select2({
-        placeholder: "Seleccione un material",
-        allowClear: true
+    // Diálogos con la estética de Bootstrap del panel
+    const swalBootstrap = Swal.mixin({
+        buttonsStyling: false,
+        customClass: {
+            confirmButton: 'btn btn-primary mx-1',
+            cancelButton: 'btn btn-outline-secondary mx-1',
+        },
     });
 
-    // Variables para almacenar los materiales seleccionados
+    // Select2 para el material y (más abajo) para los seriales
+    $('#modal-material-select').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Seleccione un material',
+        allowClear: true,
+        dropdownParent: $('#materialModal'),
+    });
+
+    $('#serial-number-select').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Seleccione uno o varios seriales',
+        allowClear: true,
+        dropdownParent: $('#materialModal'),
+    });
+
+    // Materiales agregados a la orden
     let selectedMaterials = [];
 
-    // Abrir el modal para agregar material
+    // ---- Abrir / preparar el modal ----
     $('#open-modal-btn').on('click', function () {
+        resetModal();
         $('#materialModal').modal('show');
     });
 
-    // Manejar la selección de material en el modal
+    // ---- Cambio de material seleccionado ----
     $('#modal-material-select').on('change', function () {
-        let materialId = $(this).val();
-        let materialName = $(this).find('option:selected').data('name');
-        let isEquipment = $(this).find('option:selected').data('is-equipment');
-        let warehouseId = $('#materialModal').data('warehouse-id'); // Obtener el ID del almacén desde el modal
+        const option = $(this).find('option:selected');
+        const isEquipment = option.data('is-equipment') == 1;
+        const available = parseInt(option.data('available'), 10) || 0;
 
-        // Ocultar o mostrar el campo de números de serie según el tipo de material
+        $('#available-quantity').text(available);
+        $('#available-quantity-text').toggle(Boolean($(this).val()));
+
+        const serialSelect = $('#serial-number-select');
+        serialSelect.empty();
+
         if (isEquipment) {
-            $('#modal-serial-numbers-container').show();
-            loadSerialNumbers(warehouseId, materialId); // Pasar warehouseId y materialId
-        } else {
-            $('#modal-serial-numbers-container').hide();
-        }
+            // Equipos: la cantidad la marcan los seriales elegidos
+            const serials = option.data('serials') || [];
+            serials.forEach(function (sn) {
+                serialSelect.append(new Option(sn, sn, false, false));
+            });
+            serialSelect.trigger('change');
 
-        // Cargar la cantidad disponible
-        loadAvailableQuantity(warehouseId, materialId); // Pasar warehouseId y materialId
+            $('#modal-serial-numbers-container').show();
+            $('#modal-quantity-group').hide();
+            $('#modal-unit-of-measurement').val('Unidades');
+        } else {
+            // Consumibles: cantidad manual
+            $('#modal-serial-numbers-container').hide();
+            $('#modal-quantity-group').show();
+            $('#modal-quantity').val(1);
+        }
     });
 
-    // Cargar números de serie disponibles para el material seleccionado
-    function loadSerialNumbers(warehouseId, materialId) {
-        $.ajax({
-            url: `/public/inventories/${warehouseId}/materials/${materialId}/serial-numbers`,
-            method: 'GET',
-            success: function (response) {
-                let serialNumberSelect = $('#serial-number-select');
-                serialNumberSelect.empty();
-
-                // Agregar opciones de números de serie
-                response.forEach(function (serialNumber) {
-                    serialNumberSelect.append(`<option value="${serialNumber}">${serialNumber}</option>`);
-                });
-
-                // Activar Select2 para mejor experiencia de usuario
-                serialNumberSelect.select2({
-                    placeholder: "Seleccione un número de serie",
-                    allowClear: true
-                });
-            },
-            error: function (error) {
-                console.error('Error al cargar los números de serie:', error);
-            }
-        });
-    }
-
-    // Cargar la cantidad disponible del material
-    function loadAvailableQuantity(warehouseId, materialId) {
-        $.ajax({
-            url: `/public/inventories/${warehouseId}/materials/${materialId}/quantity`,
-            method: 'GET',
-            success: function (response) {
-                // La respuesta es un objeto con la clave 'quantity'
-                let availableQuantity = response.quantity;
-                $('#available-quantity').text(availableQuantity);
-                $('#available-quantity-text').show();
-            },
-            error: function (error) {
-                console.error('Error al cargar la cantidad disponible:', error);
-            }
-        });
-    }
-
-    // Agregar material a la tabla
+    // ---- Agregar material a la orden ----
     $('#add-material-modal-btn').on('click', function () {
-        let materialId = $('#modal-material-select').val();
-        let materialName = $('#modal-material-select').find('option:selected').text();
-        let quantity = $('#modal-quantity').val();
-        let unitOfMeasurement = $('#modal-unit-of-measurement').val();
-        let serialNumbers = $('#serial-number-select').val();
+        const option = $('#modal-material-select').find('option:selected');
+        const materialId = $('#modal-material-select').val();
+        const materialName = option.data('name');
+        const isEquipment = option.data('is-equipment') == 1;
+        const available = parseInt(option.data('available'), 10) || 0;
+        const unitOfMeasurement = $('#modal-unit-of-measurement').val();
 
-        if (!materialId || !quantity || !unitOfMeasurement) {
-            Swal.fire('Error', 'Por favor, complete todos los campos.', 'error');
+        if (!materialId) {
+            swalBootstrap.fire('Falta el material', 'Seleccione un material de la lista.', 'warning');
+            return;
+        }
+        if (!unitOfMeasurement) {
+            swalBootstrap.fire('Falta la unidad', 'Seleccione la unidad de medida.', 'warning');
             return;
         }
 
-        // Validar que la cantidad no exceda el stock disponible
-        let availableQuantity = parseInt($('#available-quantity').text());
-        if (quantity > availableQuantity) {
-            Swal.fire('Error', 'La cantidad seleccionada excede el stock disponible.', 'error');
+        let quantity;
+        let serialNumbers = [];
+
+        if (isEquipment) {
+            serialNumbers = $('#serial-number-select').val() || [];
+
+            if (serialNumbers.length === 0) {
+                swalBootstrap.fire('Faltan los seriales', 'Seleccione al menos un número de serie del equipo instalado.', 'warning');
+                return;
+            }
+            quantity = serialNumbers.length;
+        } else {
+            quantity = parseInt($('#modal-quantity').val(), 10);
+
+            if (!quantity || quantity < 1) {
+                swalBootstrap.fire('Cantidad inválida', 'Indique una cantidad mayor que cero.', 'warning');
+                return;
+            }
+        }
+
+        // Validar contra el stock real (ya considerando lo ya agregado
+        // en esta misma orden para el mismo material)
+        const yaAgregado = selectedMaterials
+            .filter((m) => m.materialId === materialId)
+            .reduce((sum, m) => sum + m.quantity, 0);
+
+        if (quantity + yaAgregado > available) {
+            const restante = available - yaAgregado;
+            swalBootstrap.fire(
+                'Stock insuficiente',
+                `Solo hay ${available} disponible(s) de "${materialName}"` +
+                (yaAgregado ? ` y ya agregaste ${yaAgregado} (quedan ${restante}).` : '.'),
+                'error'
+            );
             return;
         }
 
-        // Agregar el material a la lista de materiales seleccionados
         selectedMaterials.push({
             materialId: materialId,
             materialName: materialName,
             quantity: quantity,
             unitOfMeasurement: unitOfMeasurement,
-            serialNumbers: serialNumbers
+            serialNumbers: serialNumbers,
         });
 
-        // Actualizar la tabla
         updateMaterialsTable();
-
-        // Limpiar el modal y cerrarlo
-        $('#modal-material-select').val('').trigger('change');
-        $('#modal-quantity').val('');
-        $('#modal-unit-of-measurement').val('');
-        $('#serial-number-select').val('');
         $('#materialModal').modal('hide');
     });
 
-    // Actualizar la tabla de materiales
+    // ---- Tabla de materiales agregados ----
     function updateMaterialsTable() {
-        let tableBody = $('#materials-table tbody');
+        const tableBody = $('#materials-table tbody');
         tableBody.empty();
 
+        if (selectedMaterials.length === 0) {
+            tableBody.append(`
+                <tr id="no-materials-row">
+                    <td colspan="5" class="text-center text-muted py-3">
+                        <i class="fas fa-box-open mr-1"></i> Aún no se ha agregado material
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
         selectedMaterials.forEach(function (material, index) {
-            let serialNumbersText = material.serialNumbers ? material.serialNumbers.join(', ') : 'N/A';
+            const serialsHtml = (material.serialNumbers && material.serialNumbers.length)
+                ? material.serialNumbers.map((sn) => `<span class="serial-badge">${sn}</span>`).join(' ')
+                : '<span class="text-muted">N/A</span>';
 
             tableBody.append(`
                 <tr>
                     <td>${material.materialName}</td>
-                    <td>${material.quantity}</td>
+                    <td class="text-center">${material.quantity}</td>
                     <td>${material.unitOfMeasurement}</td>
-                    <td>${serialNumbersText}</td>
-                    <td>
-                        <button type="button" class="btn btn-danger btn-sm remove-material-btn" data-index="${index}">
+                    <td>${serialsHtml}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-outline-danger btn-sm remove-material-btn" data-index="${index}" title="Quitar">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -139,41 +177,86 @@ $(document).ready(function () {
         });
     }
 
-    // Eliminar material de la tabla
+    // ---- Quitar un material ----
     $('#materials-table').on('click', '.remove-material-btn', function () {
-        let index = $(this).data('index');
+        const index = $(this).data('index');
         selectedMaterials.splice(index, 1);
         updateMaterialsTable();
     });
 
-    // Enviar el formulario con los materiales seleccionados
-    $('form').on('submit', function (e) {
+    // ---- Envío del formulario ----
+    $('#process-order-form').on('submit', function (e) {
         e.preventDefault();
+        const form = this;
 
-        // Agregar los materiales seleccionados al formulario
-        selectedMaterials.forEach(function (material, index) {
-            $('<input>').attr({
-                type: 'hidden',
-                name: `material_id[${index}]`,
-                value: material.materialId
-            }).appendTo('form');
+        // Las instalaciones exigen material (también se valida en el
+        // servidor, pero avisamos antes para no perder el formulario)
+        const requiresMaterial = $(form).data('requires-material') == 1;
 
-            $('<input>').attr({
-                type: 'hidden',
-                name: `quantity[${index}]`,
-                value: material.quantity
-            }).appendTo('form');
+        if (requiresMaterial && selectedMaterials.length === 0) {
+            swalBootstrap.fire(
+                'Falta el material',
+                'Esta orden de instalación requiere registrar el material y los equipos instalados.',
+                'warning'
+            );
+            return;
+        }
 
-            if (material.serialNumbers) {
-                $('<input>').attr({
-                    type: 'hidden',
-                    name: `serial_number[${index}]`,
-                    value: material.serialNumbers.join(',')
-                }).appendTo('form');
+        swalBootstrap.fire({
+            title: '¿Procesar la orden?',
+            text: 'Se descontará el material de tu almacén y la orden pasará a verificación.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, procesar',
+            cancelButtonText: 'Cancelar',
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                return;
             }
-        });
 
-        // Enviar el formulario
-        this.submit();
+            // Volcar los materiales al formulario como campos ocultos.
+            // El backend espera UN serial por fila con cantidad 1, así
+            // que los equipos con varios seriales se expanden en una
+            // entrada por serial (cada una cantidad 1).
+            $(form).find('.material-hidden-input').remove();
+
+            let row = 0;
+
+            selectedMaterials.forEach(function (material) {
+                if (material.serialNumbers && material.serialNumbers.length) {
+                    material.serialNumbers.forEach(function (sn) {
+                        addHidden(form, `material_id[${row}]`, material.materialId);
+                        addHidden(form, `quantity[${row}]`, 1);
+                        addHidden(form, `serial_number[${row}]`, sn);
+                        row++;
+                    });
+                } else {
+                    addHidden(form, `material_id[${row}]`, material.materialId);
+                    addHidden(form, `quantity[${row}]`, material.quantity);
+                    row++;
+                }
+            });
+
+            form.submit();
+        });
     });
+
+    function addHidden(form, name, value) {
+        $('<input>').attr({
+            type: 'hidden',
+            name: name,
+            value: value,
+            class: 'material-hidden-input',
+        }).appendTo(form);
+    }
+
+    function resetModal() {
+        $('#modal-material-select').val('').trigger('change');
+        $('#modal-quantity').val(1);
+        $('#modal-unit-of-measurement').val('');
+        $('#serial-number-select').empty().trigger('change');
+        $('#modal-serial-numbers-container').hide();
+        $('#modal-quantity-group').show();
+        $('#available-quantity-text').hide();
+    }
 });

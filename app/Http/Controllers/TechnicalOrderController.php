@@ -12,6 +12,7 @@ use App\Models\Warehouse;
 use App\Notifications\TechnicalOrderAssignedTechnician;
 use App\Notifications\TechnicalOrderCreatedClient;
 use App\Notifications\TechnicalOrderFinishedClient;
+use App\Reports\Support\OrderDetailMap;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -401,9 +402,27 @@ class TechnicalOrderController extends Controller
                 'images'                 => 'nullable|array',
             ]);
 
-            DB::beginTransaction();
-
             $technicalOrder = TechnicalOrder::findOrFail($id);
+
+            // Materiales realmente reportados (se descartan las filas
+            // vacías que pueda mandar el formulario).
+            $reportedMaterials = array_filter(
+                $request->input('material_id', []),
+                fn ($materialId) => !empty($materialId)
+            );
+
+            // Regla de negocio: una instalación SIEMPRE consume material
+            // (se instalan equipos, cable, conectores...). Sin material
+            // reportado la orden no puede cerrarse: obliga al técnico a
+            // registrar lo que dejó en sitio y mantiene el inventario al
+            // día. Se valida en el servidor para que no dependa del JS.
+            if ($this->requiresMaterial($technicalOrder) && count($reportedMaterials) === 0) {
+                return redirect()->back()
+                    ->with('error', 'Esta orden de instalación requiere registrar el material y los equipos instalados. Agregue al menos un material antes de procesarla.')
+                    ->withInput();
+            }
+
+            DB::beginTransaction();
 
             // Almacén personal del técnico (de ahí sale el material)
             $warehouse = Warehouse::where('user_id', Auth::id())->first();
@@ -529,9 +548,26 @@ class TechnicalOrderController extends Controller
         $materials = $this->getTechnicianMaterials();
         $warehouse = Warehouse::where('user_id', Auth::id())->first();
 
+        // Si es una instalación, la vista exige registrar material
+        // antes de permitir procesar la orden.
+        $requiresMaterial = $this->requiresMaterial($technicalOrder);
+
         return view('gestisp.technicals_orders.show_and_process_order', compact(
-            'technicalOrder', 'materials', 'warehouse'
+            'technicalOrder', 'materials', 'warehouse', 'requiresMaterial'
         ));
+    }
+
+    /**
+     * ¿La orden obliga a reportar material para poder procesarse?
+     *
+     * Las instalaciones sí: siempre se instala equipo y cable. Se
+     * detecta con OrderDetailMap para unificar las variantes del
+     * detalle ("Instalacion de servicio" y "Instalación de servicio
+     * (creación automática)" son la misma categoría).
+     */
+    private function requiresMaterial(TechnicalOrder $technicalOrder): bool
+    {
+        return OrderDetailMap::clave($technicalOrder->detail) === 'instalacion de servicio';
     }
 
     /**
@@ -596,6 +632,18 @@ class TechnicalOrderController extends Controller
             $material->total_quantity = $material->is_equipment
                 ? $material->inventories->sum('quantity')
                 : ($material->inventories->first()->quantity ?? 0);
+
+            // Seriales disponibles (solo equipos). Se incrustan en la
+            // vista para que el modal no dependa de una llamada AJAX
+            // aparte: así carga al instante y sin problemas de rutas
+            // ni de permisos.
+            $material->serial_numbers = $material->is_equipment
+                ? $material->inventories
+                    ->pluck('serial_number')
+                    ->filter()
+                    ->values()
+                    ->all()
+                : [];
         }
 
         return $materials;
