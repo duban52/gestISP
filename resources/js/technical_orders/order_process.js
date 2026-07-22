@@ -49,14 +49,33 @@ $(document).ready(function () {
         // trazo no se vea borroso ni descentrado en el celular.
         const resizeSignature = function () {
             const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            const rect = signatureCanvas.getBoundingClientRect();
-            signatureCanvas.width = rect.width * ratio;
-            signatureCanvas.height = rect.height * ratio;
+            const width = signatureCanvas.clientWidth;
+            const height = signatureCanvas.clientHeight || 180;
+
+            // En el primer render el layout puede no estar listo y el
+            // ancho llega en 0. Si fijáramos el buffer en 0px el pad
+            // quedaría "muerto" (no responde a ningún trazo, que es el
+            // bug que teníamos). Se reintenta en el siguiente frame
+            // hasta que el navegador reporte un ancho real.
+            if (!width) {
+                window.requestAnimationFrame(resizeSignature);
+                return;
+            }
+
+            // Conservar lo ya dibujado al redimensionar
+            const data = signaturePad.toData();
+            signatureCanvas.width = width * ratio;
+            signatureCanvas.height = height * ratio;
             signatureCanvas.getContext('2d').scale(ratio, ratio);
-            signaturePad.clear(); // redimensionar limpia el buffer
+            signaturePad.clear();
+
+            if (data && data.length) {
+                signaturePad.fromData(data);
+            }
         };
 
         window.addEventListener('resize', resizeSignature);
+        window.addEventListener('load', resizeSignature);
         resizeSignature();
 
         $('#clear-signature-btn').on('click', function () {
