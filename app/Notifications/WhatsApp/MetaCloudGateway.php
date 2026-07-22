@@ -85,7 +85,11 @@ class MetaCloudGateway implements WhatsAppGateway
                 'type' => 'template',
                 'template' => [
                     'name' => $message->templateName,
-                    'language' => ['code' => $config['template_language'] ?? 'es'],
+                    'language' => [
+                        'code' => $message->templateLanguage
+                            ?? $config['template_language']
+                            ?? 'es',
+                    ],
                     'components' => $this->templateComponents($message->templateParams),
                 ],
             ];

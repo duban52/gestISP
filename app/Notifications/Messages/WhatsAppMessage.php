@@ -20,6 +20,13 @@ class WhatsAppMessage
     /** @var array<int, string> */
     public array $templateParams = [];
 
+    /**
+     * Idioma puntual de la plantilla en formato de Meta (por ejemplo,
+     * "es_CO" o "en_US"). Si no se define, se usa la configuración
+     * general del sistema.
+     */
+    public ?string $templateLanguage = null;
+
     public function __construct(
         public string $body = '',
         public ?string $templateName = null,
@@ -50,6 +57,17 @@ class WhatsAppMessage
     {
         $this->templateName = $name;
         $this->templateParams = array_values($params);
+
+        return $this;
+    }
+
+    /**
+     * Define el idioma de esta plantilla sin afectar el de las
+     * notificaciones operativas restantes.
+     */
+    public function templateLanguage(string $language): self
+    {
+        $this->templateLanguage = $language;
 
         return $this;
     }

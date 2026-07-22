@@ -70,6 +70,23 @@ class WhatsAppGatewayTest extends TestCase
         });
     }
 
+    public function test_una_plantilla_puede_definir_su_propio_idioma(): void
+    {
+        $this->configurarMeta();
+
+        Http::fake([
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.x']]], 200),
+        ]);
+
+        $mensaje = WhatsAppMessage::make('Prueba')
+            ->template('jaspers_market_order_confirm', ['Duban'])
+            ->templateLanguage('en_US');
+
+        (new MetaCloudGateway())->send('573155554433', $mensaje);
+
+        Http::assertSent(fn ($request) => $request->data()['template']['language']['code'] === 'en_US');
+    }
+
     public function test_un_fallo_de_meta_no_lanza_excepcion(): void
     {
         $this->configurarMeta();
