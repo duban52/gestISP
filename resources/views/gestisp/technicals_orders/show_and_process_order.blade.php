@@ -134,6 +134,26 @@
                     </table>
                 </div>
 
+                {{-- Firma del cliente -------------------------------------- --}}
+                <div class="form-group mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="mb-0 font-weight-bold">
+                            Firma del cliente <span class="text-danger">*</span>
+                        </label>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="clear-signature-btn">
+                            <i class="fas fa-eraser mr-1"></i> Borrar
+                        </button>
+                    </div>
+                    <small class="form-text text-muted mb-2">
+                        Pida al cliente que firme con el dedo o un lápiz táctil.
+                    </small>
+                    <div id="signature-wrapper">
+                        <canvas id="signature-pad"></canvas>
+                    </div>
+                    {{-- La imagen (Data URL) la rellena order_process.js al enviar --}}
+                    <input type="hidden" name="client_signature" id="client-signature-input">
+                </div>
+
                 <button type="submit" class="btn btn-success mt-2">
                     <i class="fas fa-check mr-1"></i> Procesar orden
                 </button>
@@ -242,12 +262,25 @@
         }
         /* Diálogos SweetAlert con los botones de Bootstrap del sistema */
         .swal2-popup .swal2-styled.swal2-confirm { font-weight: 500; }
+        /* Pad de firma: lienzo táctil */
+        #signature-wrapper {
+            border: 1px dashed #adb5bd;
+            border-radius: 6px;
+            background: #fff;
+            touch-action: none; /* evita el scroll al firmar en móvil */
+        }
+        #signature-pad {
+            display: block;
+            width: 100%;
+            height: 180px;
+        }
     </style>
 @endsection
 
 @section('js')
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 
     {{-- CORRECCIÓN: la versión anterior cargaba
          /resources/js/technical_orders/order_process.js — esa ruta

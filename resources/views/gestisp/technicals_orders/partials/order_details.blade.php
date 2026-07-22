@@ -58,6 +58,14 @@
         </div>
     @endif
 
+    {{-- Firma del cliente al cierre --}}
+    @if($technical_order->client_signature)
+        <p class="mt-3 mb-1"><strong>Firma del cliente</strong></p>
+        <img src="{{ asset($technical_order->client_signature) }}"
+             alt="Firma del cliente"
+             style="max-width: 320px; width: 100%; border: 1px solid #dee2e6; border-radius: 6px; background:#fff;">
+    @endif
+
     {{-- Materiales usados en la ejecución --}}
     @if($technical_order->materials->isNotEmpty())
         <p class="mt-3 mb-1"><strong>Materiales usados</strong></p>

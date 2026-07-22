@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -391,37 +392,43 @@ class TechnicalOrderController extends Controller
      */
     public function processOrder(Request $request, $id): RedirectResponse
     {
+        // La validación va FUERA del try/catch: así los errores de
+        // campo se muestran en el formulario (errors bag) en vez de
+        // acabar convertidos en un mensaje genérico por el catch.
+        $request->validate([
+            'observations_technical' => 'required|string',
+            'client_observation'     => 'required|string',
+            'solution'               => 'required|string',
+            'material_id'            => 'nullable|array',
+            'quantity'               => 'nullable|array',
+            'serial_number'          => 'nullable|array',
+            'images'                 => 'nullable|array',
+            'client_signature'       => 'required|string',
+        ], [
+            'client_signature.required' => 'Falta la firma del cliente. Pídale que firme en pantalla antes de cerrar la orden.',
+        ]);
+
+        $technicalOrder = TechnicalOrder::findOrFail($id);
+
+        // Materiales realmente reportados (se descartan las filas
+        // vacías que pueda mandar el formulario).
+        $reportedMaterials = array_filter(
+            $request->input('material_id', []),
+            fn ($materialId) => !empty($materialId)
+        );
+
+        // Regla de negocio: una instalación SIEMPRE consume material
+        // (se instalan equipos, cable, conectores...). Sin material
+        // reportado la orden no puede cerrarse: obliga al técnico a
+        // registrar lo que dejó en sitio y mantiene el inventario al
+        // día. Se valida en el servidor para que no dependa del JS.
+        if ($this->requiresMaterial($technicalOrder) && count($reportedMaterials) === 0) {
+            return redirect()->back()
+                ->with('error', 'Esta orden de instalación requiere registrar el material y los equipos instalados. Agregue al menos un material antes de procesarla.')
+                ->withInput();
+        }
+
         try {
-            $request->validate([
-                'observations_technical' => 'required|string',
-                'client_observation'     => 'required|string',
-                'solution'               => 'required|string',
-                'material_id'            => 'nullable|array',
-                'quantity'               => 'nullable|array',
-                'serial_number'          => 'nullable|array',
-                'images'                 => 'nullable|array',
-            ]);
-
-            $technicalOrder = TechnicalOrder::findOrFail($id);
-
-            // Materiales realmente reportados (se descartan las filas
-            // vacías que pueda mandar el formulario).
-            $reportedMaterials = array_filter(
-                $request->input('material_id', []),
-                fn ($materialId) => !empty($materialId)
-            );
-
-            // Regla de negocio: una instalación SIEMPRE consume material
-            // (se instalan equipos, cable, conectores...). Sin material
-            // reportado la orden no puede cerrarse: obliga al técnico a
-            // registrar lo que dejó en sitio y mantiene el inventario al
-            // día. Se valida en el servidor para que no dependa del JS.
-            if ($this->requiresMaterial($technicalOrder) && count($reportedMaterials) === 0) {
-                return redirect()->back()
-                    ->with('error', 'Esta orden de instalación requiere registrar el material y los equipos instalados. Agregue al menos un material antes de procesarla.')
-                    ->withInput();
-            }
-
             DB::beginTransaction();
 
             // Almacén personal del técnico (de ahí sale el material)
@@ -448,6 +455,15 @@ class TechnicalOrderController extends Controller
                 }
 
                 $orderData['images'] = json_encode($imagePaths);
+            }
+
+            // ---- Firma del cliente ----
+            // Llega como Data URL PNG (base64) desde el pad táctil. Se
+            // decodifica y se guarda como imagen, igual que la evidencia.
+            $signaturePath = $this->storeSignature($request->input('client_signature'), $technicalOrder->id);
+
+            if ($signaturePath) {
+                $orderData['client_signature'] = $signaturePath;
             }
 
             $technicalOrder->update($orderData);
@@ -568,6 +584,32 @@ class TechnicalOrderController extends Controller
     private function requiresMaterial(TechnicalOrder $technicalOrder): bool
     {
         return OrderDetailMap::clave($technicalOrder->detail) === 'instalacion de servicio';
+    }
+
+    /**
+     * Guarda la firma del cliente (Data URL PNG) como archivo y
+     * devuelve su ruta pública, o null si el dato no es una firma
+     * válida.
+     */
+    private function storeSignature(?string $dataUrl, int $orderId): ?string
+    {
+        if (!$dataUrl || !preg_match('/^data:image\/(png|jpeg);base64,/', $dataUrl, $m)) {
+            return null;
+        }
+
+        $base64 = substr($dataUrl, strpos($dataUrl, ',') + 1);
+        $binary = base64_decode($base64, true);
+
+        if ($binary === false) {
+            return null;
+        }
+
+        $extension = $m[1] === 'jpeg' ? 'jpg' : 'png';
+        $path = 'technical_orders/signatures/' . $orderId . '_' . time() . '.' . $extension;
+
+        Storage::disk('public')->put($path, $binary);
+
+        return 'storage/' . $path;
     }
 
     /**

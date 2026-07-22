@@ -33,6 +33,37 @@ $(document).ready(function () {
         dropdownParent: $('#materialModal'),
     });
 
+    // ---- Pad de firma del cliente ----
+    // La librería SignaturePad se carga por CDN (global window).
+    const signatureCanvas = document.getElementById('signature-pad');
+    let signaturePad = null;
+
+    if (signatureCanvas && window.SignaturePad) {
+        signaturePad = new window.SignaturePad(signatureCanvas, {
+            penColor: '#1a1a1a',
+            backgroundColor: '#ffffff',
+        });
+
+        // El lienzo debe ajustar su resolución interna al tamaño real
+        // en pantalla (y a la densidad del dispositivo) para que el
+        // trazo no se vea borroso ni descentrado en el celular.
+        const resizeSignature = function () {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            const rect = signatureCanvas.getBoundingClientRect();
+            signatureCanvas.width = rect.width * ratio;
+            signatureCanvas.height = rect.height * ratio;
+            signatureCanvas.getContext('2d').scale(ratio, ratio);
+            signaturePad.clear(); // redimensionar limpia el buffer
+        };
+
+        window.addEventListener('resize', resizeSignature);
+        resizeSignature();
+
+        $('#clear-signature-btn').on('click', function () {
+            signaturePad.clear();
+        });
+    }
+
     // Materiales agregados a la orden
     let selectedMaterials = [];
 
@@ -202,6 +233,16 @@ $(document).ready(function () {
             return;
         }
 
+        // La firma del cliente es obligatoria para cerrar la orden
+        if (signaturePad && signaturePad.isEmpty()) {
+            swalBootstrap.fire(
+                'Falta la firma',
+                'Pida al cliente que firme en pantalla antes de procesar la orden.',
+                'warning'
+            );
+            return;
+        }
+
         swalBootstrap.fire({
             title: '¿Procesar la orden?',
             text: 'Se descontará el material de tu almacén y la orden pasará a verificación.',
@@ -212,6 +253,11 @@ $(document).ready(function () {
         }).then((result) => {
             if (!result.isConfirmed) {
                 return;
+            }
+
+            // Volcar la firma (Data URL PNG) al campo oculto
+            if (signaturePad && !signaturePad.isEmpty()) {
+                $('#client-signature-input').val(signaturePad.toDataURL('image/png'));
             }
 
             // Volcar los materiales al formulario como campos ocultos.

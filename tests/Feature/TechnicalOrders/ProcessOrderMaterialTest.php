@@ -14,6 +14,7 @@ use App\Models\Warehouse;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -35,6 +36,7 @@ class ProcessOrderMaterialTest extends TestCase
         parent::setUp();
 
         Notification::fake();
+        Storage::fake('public');
         $this->seed(RoleSeeder::class);
 
         $this->branch = Branch::factory()->create();
@@ -108,12 +110,16 @@ class ProcessOrderMaterialTest extends TestCase
         return $material;
     }
 
+    /** PNG 1x1 válido en Data URL, hace de firma en las pruebas. */
+    private const FIRMA_DEMO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
     private function datosReporte(array $extra = []): array
     {
         return array_merge([
             'observations_technical' => 'Todo en orden',
             'client_observation' => 'Cliente conforme',
             'solution' => 'Servicio instalado',
+            'client_signature' => self::FIRMA_DEMO,
         ], $extra);
     }
 
@@ -155,6 +161,26 @@ class ProcessOrderMaterialTest extends TestCase
 
         // Y el serial quedó vinculado al contrato
         $this->assertSame('SN-ONT-001', $orden->contract->fresh()->cpe_sn);
+
+        // La firma quedó guardada como imagen
+        $this->assertNotNull($orden->client_signature);
+        $rutaRelativa = str_replace('storage/', '', $orden->client_signature);
+        Storage::disk('public')->assertExists($rutaRelativa);
+    }
+
+    public function test_no_se_procesa_sin_la_firma_del_cliente(): void
+    {
+        $orden = $this->orden('Configuraciones');
+
+        // Sin client_signature en el payload
+        $datos = $this->datosReporte();
+        unset($datos['client_signature']);
+
+        $respuesta = $this->post(route('technicals_orders.process', $orden->id), $datos);
+
+        $respuesta->assertRedirect();
+        $respuesta->assertSessionHasErrors('client_signature');
+        $this->assertSame('Asignada', $orden->fresh()->status);
     }
 
     public function test_una_orden_que_no_es_instalacion_no_exige_material(): void

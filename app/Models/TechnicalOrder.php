@@ -47,6 +47,7 @@ class TechnicalOrder extends Model
         'solution',
         'initial_comment',
         'images',
+        'client_signature',
         'created_by',
     ];
 
