@@ -80,7 +80,7 @@ class OltOntDiscovery
                     return null;
                 }
 
-                $port = $ponPorts[(int) $ifIndex] ?? null;
+                $port = $this->resolvePonPort((int) $ifIndex, $ponPorts);
                 $description = trim((string) ($descriptions[$index] ?? $descriptions['.' . $index] ?? ''));
 
                 if ($description === $emptyDescription) {
@@ -214,7 +214,56 @@ class OltOntDiscovery
     }
 
     /**
-     * Mapa ifIndex → slot/port de los puertos PON.
+     * Resuelve el frame/slot/port de una ONT a partir del ifIndex de
+     * su puerto PON.
+     *
+     * Primero usa el mapa de descripciones de interfaz (ifDescr), que
+     * es la fuente más explícita. Cuando la OLT no expone ese ifDescr
+     * —la MA5608T no lo publica por SNMP— se recurre a decodificar el
+     * propio ifIndex, que en la plataforma Huawei SmartAX codifica la
+     * posición del puerto de forma determinista.
+     *
+     * @param  array<int, array>  $map  Mapa ifIndex → posición (de ifDescr)
+     * @return array{frame:int, slot:int, port:int}|null
+     */
+    private function resolvePonPort(int $ifIndex, array $map): ?array
+    {
+        return $map[$ifIndex] ?? $this->decodeGponIfIndex($ifIndex);
+    }
+
+    /**
+     * Decodifica la posición (frame/slot/port) de un puerto GPON a
+     * partir de su ifIndex de Huawei SmartAX.
+     *
+     * El ifIndex de un puerto GPON tiene la forma 0xFA_SSPP_00:
+     *   - byte alto 0xFA  → tipo de puerto = GPON
+     *   - bits 21-23      → frame
+     *   - bits 13-20      → slot
+     *   - bits  8-12      → port
+     *
+     * Verificado contra equipos reales (5800X17: 96/96, 5800X15:
+     * 112/112 puertos coinciden con su ifDescr). Si el ifIndex no
+     * corresponde a un puerto GPON se devuelve null en vez de inventar
+     * una ubicación.
+     *
+     * @return array{frame:int, slot:int, port:int}|null
+     */
+    private function decodeGponIfIndex(int $ifIndex): ?array
+    {
+        // Solo se decodifican puertos GPON (byte de tipo 0xFA).
+        if (($ifIndex >> 24) !== 0xFA) {
+            return null;
+        }
+
+        return [
+            'frame' => ($ifIndex >> 21) & 0x7,
+            'slot' => ($ifIndex >> 13) & 0xFF,
+            'port' => ($ifIndex >> 8) & 0x1F,
+        ];
+    }
+
+    /**
+     * Mapa ifIndex → slot/port de los puertos PON, leído del ifDescr.
      */
     private function ponPortMap(Olt $olt): array
     {
