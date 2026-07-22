@@ -76,6 +76,15 @@ class Contract extends Model
         return $this->hasMany(AditionalCharge::class);
     }
 
+    /**
+     * Comentarios/notas internas sobre el contrato (más recientes
+     * primero).
+     */
+    public function comments()
+    {
+        return $this->hasMany(ContractComment::class)->latest();
+    }
+
     //Relación con la tabla sucursal
     public function branch()
     {

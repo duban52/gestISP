@@ -430,235 +430,276 @@
                         <ul class="nav nav-tabs" id="contractTabs" role="tablist">
                             <li class="nav-item">
                                 <a class="nav-link active" id="account-status-tab" data-toggle="tab" href="#account-status" role="tab" aria-controls="account-status" aria-selected="true">
-                                    Estado de Cuenta
+                                    <i class="fas fa-file-invoice-dollar mr-1"></i> Estado de Cuenta
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" id="additional-charges-tab" data-toggle="tab" href="#additional-charges" role="tab" aria-controls="additional-charges" aria-selected="false">
-                                    Cargos adicionales
+                                    <i class="fas fa-plus-circle mr-1"></i> Cargos adicionales
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" id="operation-history-tab" data-toggle="tab" href="#operation-history" role="tab" aria-controls="operation-history" aria-selected="false">
-                                    Historial de Operaciones
+                                    <i class="fas fa-tools mr-1"></i> Historial de Operaciones
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" id="contract-comments-tab" data-toggle="tab" href="#contract-comments" role="tab" aria-controls="contract-comments" aria-selected="false">
-                                    Comentarios sobre el Contrato
+                                    <i class="fas fa-comments mr-1"></i> Comentarios
+                                    @if($comments->isNotEmpty())
+                                        <span class="badge badge-secondary ml-1">{{ $comments->count() }}</span>
+                                    @endif
                                 </a>
                             </li>
                         </ul>
 
-                        <div class="tab-content" id="contractTabsContent">
+                        @php
+                            // Color de badge según el estado (facturas/cargos)
+                            $badgeFor = function ($status) {
+                                $s = strtolower($status ?? '');
+                                return match (true) {
+                                    str_contains($s, 'pagad')   => 'success',
+                                    str_contains($s, 'vencid')  => 'danger',
+                                    str_contains($s, 'parcial') => 'warning',
+                                    str_contains($s, 'riesgo')  => 'warning',
+                                    str_contains($s, 'anul')    => 'secondary',
+                                    str_contains($s, 'factur')  => 'primary',
+                                    str_contains($s, 'pendiente') => 'info',
+                                    default => 'light',
+                                };
+                            };
+
+                            // Color de badge para estados de órdenes técnicas
+                            $orderBadge = function ($status) {
+                                return match ($status) {
+                                    'Cerrada'       => 'success',
+                                    'Prefinalizada' => 'primary',
+                                    'Asignada'      => 'info',
+                                    'Rechazada'     => 'danger',
+                                    'Pendiente'     => 'warning',
+                                    default         => 'secondary',
+                                };
+                            };
+                        @endphp
+
+                        <div class="tab-content pt-3" id="contractTabsContent">
                             <!-- Estado de Cuenta -->
                             <div class="tab-pane fade show active" id="account-status" role="tabpanel" aria-labelledby="account-status-tab">
-                                <div class="mt-3">
-                                    <h4>Estado de Cuenta</h4>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover">
-                                            <tbody>
-                                                <tr>
-                                                    <th>Factura</th>
-                                                    <th>Mes</th>
-                                                    <th>Saldo</th>
-                                                    <th>Estado</th>
-                                                </tr>
-
-                                                    @foreach($invoices as $invoice)
-                                                        <tr>
-                                                        <td>{{ $invoice->id }}</td>
-                                                        <td>{{ $invoice->billed_month_name }}</td>
-                                                        <td>{{ $invoice->total }}</td>
-                                                        <td>{{ $invoice->status }}</td>
-                                                        </tr>
-                                                    @endforeach
-
-                                            </tbody>
-                                        </table>
-                                        <div>
-                                            {{ $invoices->links() }}
+                                {{-- Resumen: saldo pendiente del contrato --}}
+                                <div class="row mb-3">
+                                    <div class="col-sm-4">
+                                        <div class="info-box mb-0">
+                                            <span class="info-box-icon bg-info"><i class="fas fa-file-invoice"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Facturas</span>
+                                                <span class="info-box-number">{{ $invoices->count() }}</span>
+                                            </div>
                                         </div>
                                     </div>
+                                    <div class="col-sm-4">
+                                        <div class="info-box mb-0">
+                                            <span class="info-box-icon bg-danger"><i class="fas fa-hand-holding-usd"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Saldo pendiente</span>
+                                                <span class="info-box-number">${{ number_format($contract->outstandingBalance(), 2) }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-sm-4">
+                                        <div class="info-box mb-0">
+                                            <span class="info-box-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></span>
+                                            <div class="info-box-content">
+                                                <span class="info-box-text">Facturas vencidas</span>
+                                                <span class="info-box-number">{{ $invoices->filter(fn($i) => str_contains(strtolower($i->status ?? ''), 'vencid'))->count() }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-sm w-100" id="invoicesTable">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>Factura</th>
+                                                <th>Mes</th>
+                                                <th class="text-right">Total</th>
+                                                <th class="text-right">Saldo</th>
+                                                <th>Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($invoices as $invoice)
+                                                <tr>
+                                                    <td>{{ $invoice->displayNumber() }}</td>
+                                                    <td>{{ $invoice->billed_month_name }}</td>
+                                                    <td class="text-right">${{ number_format($invoice->total, 2) }}</td>
+                                                    <td class="text-right">${{ number_format($invoice->pending_invoice_amount, 2) }}</td>
+                                                    <td><span class="badge badge-{{ $badgeFor($invoice->status) }}">{{ $invoice->status }}</span></td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 
                             <!-- Cargos adicionales -->
                             <div class="tab-pane fade" id="additional-charges" role="tabpanel" aria-labelledby="additional-charges-tab">
-                                <div class="mt-3">
-                                    <h4>Cargos adicionales</h4>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover">
-                                            <tbody>
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-sm w-100" id="chargesTable">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>Concepto</th>
+                                                <th class="text-right">Valor</th>
+                                                <th>Cuotas</th>
+                                                <th>Estado</th>
+                                                <th>Fecha de creación</th>
+                                                <th>Creado por</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($additionalCharges as $addionalChrage)
                                                 <tr>
-                                                    <th>Concepto</th>
-                                                    <th>Valor</th>
-                                                    <th>Cuotas</th>
-                                                    <th>Estado</th>
-                                                    <th>Fecha de creación</th>
-                                                    <th>Creado por</th>
+                                                    <td>{{ $addionalChrage->description }}</td>
+                                                    <td class="text-right">${{ number_format($addionalChrage->amount, 2) }}</td>
+
+                                                    {{-- Progreso de cuotas de cargos diferidos --}}
+                                                    <td data-order="{{ $addionalChrage->installments_total ?? 0 }}">
+                                                        @if($addionalChrage->isDeferred())
+                                                            <span class="badge badge-info">
+                                                                {{ $addionalChrage->installments_billed }}/{{ $addionalChrage->installments_total }}
+                                                                (${{ number_format($addionalChrage->installmentAmount(), 2) }} c/u)
+                                                            </span>
+                                                        @else
+                                                            <span class="badge badge-light border">Contado</span>
+                                                        @endif
+                                                    </td>
+
+                                                    <td><span class="badge badge-{{ $badgeFor($addionalChrage->status) }}">{{ $addionalChrage->status }}</span></td>
+                                                    <td data-order="{{ $addionalChrage->created_at?->timestamp }}">{{ $addionalChrage->created_at?->format('Y-m-d H:i') }}</td>
+                                                    <td>{{ $addionalChrage->user->name ?? '—' }} {{ $addionalChrage->user->last_name ?? '' }}</td>
                                                 </tr>
-                                                @foreach($additionalCharges as $addionalChrage)
-                                                    <tr>
-                                                        <td>{{ $addionalChrage->description }}</td>
-                                                        <td>${{ number_format($addionalChrage->amount, 2) }}</td>
-
-                                                        {{-- Progreso de cuotas de cargos diferidos --}}
-                                                        <td>
-                                                            @if($addionalChrage->isDeferred())
-                                                                <span class="badge badge-info">
-                                                                    {{ $addionalChrage->installments_billed }}/{{ $addionalChrage->installments_total }}
-                                                                    (${{ number_format($addionalChrage->installmentAmount(), 2) }} c/u)
-                                                                </span>
-                                                            @else
-                                                                Contado
-                                                            @endif
-                                                        </td>
-
-                                                        <td>{{ $addionalChrage->status }}</td>
-                                                        <td>{{ $addionalChrage->created_at }}</td>
-                                                        <td>{{ $addionalChrage->user->name }} {{ $addionalChrage->user->last_name }}</td>
-                                                    </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 
                             <!-- Historial de Operaciones -->
                             <div class="tab-pane fade" id="operation-history" role="tabpanel" aria-labelledby="operation-history-tab">
-                                <div class="mt-3">
-                                    <h4>Historial de Operaciones</h4>
-                                    <div class="table-responsive">
-                                        <table class="table table-hover">
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-sm w-100" id="ordersTable">
+                                        <thead class="thead-light">
                                             <tr>
-                                                <th>Número de orden</th>
-                                                <th>Tipo de orden</th>
-                                                <th>Detalle de orden</th>
+                                                <th>N.º</th>
+                                                <th>Tipo</th>
+                                                <th>Detalle</th>
                                                 <th>Comentario inicial</th>
                                                 <th>Técnico asignado</th>
                                                 <th>Fecha de creación</th>
                                                 <th>Creada por</th>
                                                 <th>Estado</th>
-                                                <th></th>
+                                                <th class="text-center">Detalles</th>
                                             </tr>
+                                        </thead>
+                                        <tbody>
                                             @foreach($technicalOrders as $technicalOrder)
                                                 <tr>
                                                     <td>{{ $technicalOrder->id }}</td>
                                                     <td>{{ $technicalOrder->type }}</td>
                                                     <td>{{ $technicalOrder->detail }}</td>
-                                                    <td>{{ $technicalOrder->initial_comment }}</td>
-                                                    <td>{{ $technicalOrder->assignedUser->name ?? 'N/A'}} {{ $technicalOrder->assignedUser->last_name ?? 'N/A'}}</td>
-                                                    <td>{{ $technicalOrder->created_at }}</td>
-                                                    <td>{{ $technicalOrder->createdBy->name ?? 'Sistema'}} {{ $technicalOrder->createdBy->last_name ?? 'Sistema' }}</td>
-                                                    <td>{{ $technicalOrder->status }}</td>
-                                                    <td>
-                                                        <!-- Button trigger modal -->
-                                                        <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#detailModal{{ $technicalOrder->id }}">
-                                                            Ver detalles
+                                                    <td>{{ \Illuminate\Support\Str::limit($technicalOrder->initial_comment, 40) ?: '—' }}</td>
+                                                    <td>{{ $technicalOrder->assignedUser->name ?? '—' }} {{ $technicalOrder->assignedUser->last_name ?? '' }}</td>
+                                                    <td data-order="{{ $technicalOrder->created_at?->timestamp }}">{{ $technicalOrder->created_at?->format('Y-m-d H:i') }}</td>
+                                                    <td>{{ $technicalOrder->createdBy->name ?? 'Sistema' }} {{ $technicalOrder->createdBy->last_name ?? '' }}</td>
+                                                    <td><span class="badge badge-{{ $orderBadge($technicalOrder->status) }}">{{ $technicalOrder->status }}</span></td>
+                                                    <td class="text-center">
+                                                        <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#detailModal{{ $technicalOrder->id }}" title="Ver detalles">
+                                                            <i class="fas fa-eye"></i>
                                                         </button>
-
-                                                        <div class="modal fade" id="detailModal{{ $technicalOrder->id }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-                                                            <div class="modal-dialog" role="document">
-                                                                <div class="modal-content">
-                                                                    <div class="modal-header">
-                                                                        <h5 class="modal-title" id="exampleModalLabel">Detalles de orden {{ $technicalOrder->id }}</h5>
-                                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                                            <span aria-hidden="true">&times;</span>
-                                                                        </button>
-                                                                    </div>
-                                                                    <div class="modal-body">
-                                                                        <div class="">
-                                                                            <div class="mt-2">
-                                                                                <p><strong>Datos del cliente</strong></p>
-                                                                            </div>
-                                                                            <div>Cliente: {{ $technicalOrder->contract->client->name }} {{ $technicalOrder->contract->client->last_name }}</div>
-                                                                            <div>Barrio y dirección: {{ $technicalOrder->contract->neighborhood }} {{ $technicalOrder->contract->address }}</div>
-                                                                            <div>Detalles de plan: {{ $technicalOrder->contract->plan->name }}</div>
-                                                                            <div class="mt-2">
-                                                                                <p><strong>Datos de orden</strong></p>
-                                                                            </div>
-                                                                            <div>Tipo de orden: {{ $technicalOrder->type }}</div>
-                                                                            <div>Detalle: {{ $technicalOrder->detail }}</div>
-                                                                            <div>Detalle: {{ $technicalOrder->detail }}</div>
-                                                                            <div>Comentario inicial: {{ $technicalOrder->initial_comment }}</div>
-                                                                            <div class="mt-2">
-                                                                                <p><strong>Datos de solución</strong></p>
-                                                                            </div>
-                                                                            <div>Observaciones técnicas: {{ $technicalOrder->observations_technical }}</div>
-                                                                            <div>Observaciones del cliente: {{ $technicalOrder->client_observation }}</div>
-                                                                            <div>Solución: {{ $technicalOrder->solution }}</div>
-                                                                            <div>Fecha de creación: {{ $technicalOrder->created_at }}</div>
-                                                                            <div>Motivo de rechazo por el técnico: {{ $technicalOrder->rejection_reason ?? 'N/A' }}</div>
-                                                                            <div>Última acción: {{ $technicalOrder->updated_at }}</div>
-                                                                            <div class="mt-2">
-                                                                                <p><strong>Fotos</strong></p>
-                                                                                <div class="card">
-                                                                                    <div id="carouselExample" class="carousel slide">
-                                                                                        <div class="carousel-inner">
-                                                                                            @php
-                                                                                                $images = is_string($technicalOrder->images) ? json_decode($technicalOrder->images) : [];
-                                                                                            @endphp
-
-                                                                                            @forelse($images as $index => $image)
-                                                                                                <div class="carousel-item {{ $index == 0 ? 'active' : '' }}">
-                                                                                                    <img src="{{ asset($image) }}" class="d-block w-100" alt="Imagen técnica {{ $index + 1 }}">
-                                                                                                </div>
-                                                                                            @empty
-                                                                                                <div class="carousel-item active">
-                                                                                                    <img src="{{ asset('path/to/default-image.jpg') }}" class="d-block w-100" alt="No hay imágenes disponibles">
-                                                                                                </div>
-                                                                                            @endforelse
-                                                                                        </div>
-                                                                                        <button class="carousel-control-prev" type="button" data-bs-target="#carouselExample" data-bs-slide="prev">
-                                                                                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                                                                                            <span class="visually-hidden">Anterior</span>
-                                                                                        </button>
-                                                                                        <button class="carousel-control-next" type="button" data-bs-target="#carouselExample" data-bs-slide="next">
-                                                                                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                                                                                            <span class="visually-hidden">Siguiente</span>
-                                                                                        </button>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div class="table-responsive">
-                                                                            <table class="table table-hover">
-                                                                                <tr>
-                                                                                    <th>Material</th>
-                                                                                    <th>Cantidad</th>
-                                                                                    <th>SN</th>
-                                                                                </tr>
-                                                                                @foreach($technicalOrder->materials as $material_to_order)
-                                                                                    <tr>
-                                                                                        <td>{{ $material_to_order->material->name }}</td>
-                                                                                        <td>{{ $material_to_order->quantity }}</td>
-                                                                                        <td>{{ $material_to_order->serial_number }}</td>
-                                                                                    </tr>
-                                                                                @endforeach
-                                                                            </table>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div class="modal-footer">
-                                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
                                                     </td>
                                                 </tr>
                                             @endforeach
-                                        </table>
-                                    </div>
+                                        </tbody>
+                                    </table>
                                 </div>
+
+                                {{-- Modales de detalle FUERA de la tabla: DataTables
+                                     reordena/pagina las filas y arrastraría los modales
+                                     con ellas. Reutilizan el parcial de la orden. --}}
+                                @foreach($technicalOrders as $technicalOrder)
+                                    <div class="modal fade" id="detailModal{{ $technicalOrder->id }}" tabindex="-1" role="dialog" aria-hidden="true">
+                                        <div class="modal-dialog modal-lg" role="document">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Detalles de la orden {{ $technicalOrder->id }}</h5>
+                                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                        <span aria-hidden="true">&times;</span>
+                                                    </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    @include('gestisp.technicals_orders.partials.order_details', ['technical_order' => $technicalOrder])
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
                             </div>
 
                             <!-- Comentarios sobre el Contrato -->
                             <div class="tab-pane fade" id="contract-comments" role="tabpanel" aria-labelledby="contract-comments-tab">
-                                <div class="mt-3">
-                                    <h4>Comentarios sobre el Contrato</h4>
-                                    <p>Aquí se pueden agregar o visualizar comentarios sobre el contrato.</p>
+                                {{-- Formulario para agregar un comentario --}}
+                                <form action="{{ route('contractComments.store', $contract) }}" method="POST" class="mb-4">
+                                    @csrf
+                                    <div class="form-group">
+                                        <label for="comment-body" class="font-weight-bold">
+                                            <i class="fas fa-comment-medical mr-1"></i> Nuevo comentario
+                                        </label>
+                                        <textarea name="body" id="comment-body" rows="3"
+                                                  class="form-control @error('body') is-invalid @enderror"
+                                                  maxlength="2000"
+                                                  placeholder="Escribe una nota interna sobre el contrato (acuerdos, incidencias, recordatorios...)">{{ old('body') }}</textarea>
+                                        @error('body')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-paper-plane mr-1"></i> Agregar comentario
+                                    </button>
+                                </form>
+
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-sm w-100" id="commentsTable">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th style="width: 160px;">Fecha</th>
+                                                <th style="width: 180px;">Autor</th>
+                                                <th>Comentario</th>
+                                                <th class="text-center" style="width: 80px;">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($comments as $comment)
+                                                <tr>
+                                                    <td data-order="{{ $comment->created_at?->timestamp }}">{{ $comment->created_at?->format('Y-m-d H:i') }}</td>
+                                                    <td>{{ $comment->user->name ?? 'Sistema' }} {{ $comment->user->last_name ?? '' }}</td>
+                                                    <td style="white-space: pre-line;">{{ $comment->body }}</td>
+                                                    <td class="text-center">
+                                                        <form action="{{ route('contractComments.destroy', $comment) }}" method="POST"
+                                                              onsubmit="return confirm('¿Eliminar este comentario?');">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Eliminar">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -670,8 +711,15 @@
         </div>
 
 @endsection
+
+@section('css')
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+@endsection
+
 @section('js')
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
     <script>
         // Mostrar automáticamente el modal si existe un mensaje de éxito o error
         @if(session('success'))
@@ -683,5 +731,35 @@
         var errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
         errorModal.show();
         @endif
+
+        // DataTables de las pestañas del contrato
+        $(function () {
+            const opciones = function (extra) {
+                return Object.assign({
+                    language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
+                    pageLength: 10,
+                    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'Todos']],
+                    columnDefs: [{ defaultContent: '—', targets: '_all' }],
+                }, extra || {});
+            };
+
+            $('#invoicesTable').DataTable(opciones({ order: [[0, 'desc']] }));
+            $('#chargesTable').DataTable(opciones({ order: [[4, 'desc']] }));
+            $('#ordersTable').DataTable(opciones({
+                order: [[5, 'desc']],
+                columnDefs: [{ orderable: false, targets: 8 }, { defaultContent: '—', targets: '_all' }],
+            }));
+            $('#commentsTable').DataTable(opciones({
+                order: [[0, 'desc']],
+                columnDefs: [{ orderable: false, targets: 3 }, { defaultContent: '—', targets: '_all' }],
+            }));
+
+            // Las tablas ocultas (pestañas inactivas) calculan mal el
+            // ancho de columna hasta que se muestran: se reajustan al
+            // abrir cada pestaña.
+            $('a[data-toggle="tab"]').on('shown.bs.tab', function () {
+                $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
+            });
+        });
     </script>
 @endsection

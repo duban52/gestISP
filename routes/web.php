@@ -62,6 +62,12 @@ Route::namespace('App\Http\Controllers')->prefix('gestisp')->group(function () {
     // Contratos
     Route::resource('contracts', 'ContractController')->names('contracts');
 
+    // Comentarios/notas internas del contrato
+    Route::post('contracts/{contract}/comments', [App\Http\Controllers\ContractCommentController::class, 'store'])
+        ->name('contractComments.store');
+    Route::delete('contract-comments/{comment}', [App\Http\Controllers\ContractCommentController::class, 'destroy'])
+        ->name('contractComments.destroy');
+
     // Facturas
     Route::resource('invoices', 'InvoiceController')->names('invoices');
 

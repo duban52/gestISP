@@ -159,15 +159,24 @@ class ContractController extends Controller
         $clients = Client::all(); // Todos los clientes
         $plans = Plan::all(); // Todos los planes disponibles
         $users = User::all(); // Todos los usuarios para asignar a un contrato
+        // Las tablas de las pestañas usan DataTables del lado del
+        // cliente: se entregan las colecciones completas (sin paginar)
+        // con las relaciones precargadas para evitar consultas N+1.
         $invoices = Invoice::where('contract_id', $contract->id)
                 ->orderBy('updated_at', 'desc')
-                ->simplePaginate(6);
+                ->get();
         $additionalCharges = AditionalCharge::where('contract_id', $contract->id)
-            ->simplePaginate(6);
-        $technicalOrders = TechnicalOrder::where('contract_id', $contract->id)->orderBy('created_at', 'desc')->simplePaginate(6);
+            ->with('user')
+            ->orderByDesc('created_at')
+            ->get();
+        $technicalOrders = TechnicalOrder::where('contract_id', $contract->id)
+            ->with(['assignedUser', 'createdBy', 'materials.material', 'contract.client', 'contract.plan'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+        $comments = $contract->comments()->with('user')->get();
 
         // Devolver la vista con los datos necesarios
-        return view('gestisp.contracts.show', compact('branches', 'clients', 'plans', 'users', 'contract', 'invoices', 'additionalCharges', 'technicalOrders'));
+        return view('gestisp.contracts.show', compact('branches', 'clients', 'plans', 'users', 'contract', 'invoices', 'additionalCharges', 'technicalOrders', 'comments'));
     }
 
     /**
