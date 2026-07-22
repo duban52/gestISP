@@ -9,8 +9,134 @@ use phpseclib3\Net\SSH2;
 
 class OltSshService
 {
-    private const SSH_TIMEOUT = 2;
-    private const SSH_LONG_TIMEOUT = 3;
+    private const SSH_TIMEOUT = 6;
+    private const SSH_LONG_TIMEOUT = 10;
+
+    /**
+     * Diálogo adaptativo con la consola de la OLT.
+     *
+     * En vez de suponer cómo va a responder cada modelo (algunos
+     * piden un Enter extra tras ciertos comandos, otros no), este
+     * lector REACCIONA a lo que la OLT realmente envía y acumula
+     * toda la salida hasta llegar al prompt. Reconoce cuatro señales:
+     *
+     *   - Prompt final  (…#  o  …>)  → el comando terminó.
+     *   - "{ <cr>||<K> }:"           → la OLT espera un Enter para
+     *                                   continuar (típico de los MA5800);
+     *                                   se responde con "\n".
+     *   - "(y/n)"                    → confirmación destructiva; se
+     *                                   responde "y" o "n" según se pida.
+     *   - "---- More"                → paginación; se responde con
+     *                                   un espacio para avanzar.
+     *
+     * Así funciona igual en la MA5608T, la MA5800 (5800X15/X17) y
+     * cualquier otra, sin condicionar el comportamiento al modelo.
+     *
+     * @param  bool  $confirmYes  Responder "y" ante un prompt (y/n)
+     *                            (para operaciones que borran).
+     */
+    private function converse(SSH2 $ssh, string $command, bool $confirmYes = false, ?int $timeout = null): string
+    {
+        $timeout ??= self::SSH_TIMEOUT;
+
+        // Se descarta cualquier resto de la respuesta anterior antes
+        // de enviar: algunos modelos (MA5800) hacen eco con retardo,
+        // y sin limpiar el búfer la lectura siguiente devolvería la
+        // salida del comando previo, corriendo todo una posición.
+        $this->drain($ssh);
+
+        $ssh->setTimeout($timeout);
+        $ssh->write($command . "\n");
+
+        return $this->readUntilPrompt($ssh, $confirmYes, $timeout);
+    }
+
+    /**
+     * Vacía lo que quede pendiente de leer, para sincronizar.
+     *
+     * Se lee con un patrón imposible y un tiempo corto: read() vuelve
+     * al agotarse ese tiempo devolviendo lo acumulado; cuando ya no
+     * llega nada, el búfer está limpio.
+     */
+    private function drain(SSH2 $ssh, float $timeout = 0.3): void
+    {
+        $ssh->setTimeout($timeout);
+
+        // Tope por seguridad: nunca más de ~2 s drenando.
+        for ($i = 0; $i < 6; $i++) {
+            if ((string) $ssh->read('/\bIMPOSSIBLE_MATCH_TOKEN\b/', SSH2::READ_REGEX) === '') {
+                break;
+            }
+        }
+    }
+
+    /**
+     * Lee la salida de la OLT resolviendo prompts intermedios hasta
+     * llegar al prompt final. Ver converse() para el detalle de las
+     * señales que maneja.
+     */
+    private function readUntilPrompt(SSH2 $ssh, bool $confirmYes = false, ?int $timeout = null): string
+    {
+        $timeout ??= self::SSH_TIMEOUT;
+
+        // Terminadores posibles, en un solo patrón: paginación,
+        // prompt de continuación "}:", confirmación "(y/n)" o el
+        // prompt final del equipo (…# / …>).
+        // El prompt final se ancla a un salto de línea previo para no
+        // confundirlo con un ">" o "#" que aparezca dentro del texto
+        // (por ejemplo, en el banner de bienvenida).
+        $terminadores = '/(?:-{2,}\s*More)'
+            . '|(?:\}\s*:\s*)'
+            . '|(?:\(y\/n\)[^\r\n]*)'
+            . '|(?:[\r\n][\w.\-]+(?:\([^)]*\))?[>#]\s*)$/i';
+
+        $salida = '';
+
+        // Tope de vueltas: evita un bucle infinito si la OLT quedara
+        // en un estado inesperado. 200 cubre de sobra la paginación
+        // más larga (autofind con cientos de ONTs).
+        for ($i = 0; $i < 200; $i++) {
+            $ssh->setTimeout($timeout);
+            $chunk = (string) $ssh->read($terminadores, SSH2::READ_REGEX);
+            $salida .= $chunk;
+
+            // Se decide según el terminador que está JUSTO al final
+            // de lo acumulado (anclado con $). Comprobar "en cualquier
+            // parte" enviaría respuestas de más cuando una señal vieja
+            // (por ejemplo un "}:" ya atendido) sigue presente en una
+            // salida corta.
+            $tail = substr($salida, -160);
+
+            if (preg_match('/-{2,}\s*More[^\r\n]*$/i', $tail)) {
+                $ssh->write(' ');
+                continue;
+            }
+
+            if (preg_match('/\(y\/n\)[^\r\n]*$/i', $tail)) {
+                $ssh->write(($confirmYes ? 'y' : 'n') . "\n");
+                continue;
+            }
+
+            // "}:" al final pide un Enter para continuar/ver la salida.
+            if (preg_match('/\}\s*:\s*$/', $tail)) {
+                $ssh->write("\n");
+                continue;
+            }
+
+            // Prompt final → el comando terminó.
+            if (preg_match('/[>#]\s*$/', $tail)) {
+                break;
+            }
+
+            // read() volvió por timeout sin terminador reconocible:
+            // no hay más que leer, se corta con lo acumulado.
+            if ($chunk === '') {
+                break;
+            }
+        }
+
+        return $salida;
+    }
 
     /**
      * Obtiene el estado de la OLT (temperatura, uptime, etc.)
@@ -53,35 +179,13 @@ class OltSshService
         try {
             $this->enablePrivilegedMode($ssh);
 
-            $ssh->setTimeout(self::SSH_TIMEOUT);
+            // Se intenta quitar la paginación; si el modelo la ignora,
+            // el propio lector la maneja con "---- More".
+            $this->converse($ssh, 'undo terminal more');
 
-            // Deshabilitar paginación en Huawei MA5800
-            $ssh->write("undo terminal more\n");
-            $ssh->read('#');
-
-            // Ejecutar autofind con timeout largo (método que funciona)
-            $output = $this->executeCommand($ssh, "display ont autofind all", $olt, 10);
-
-            // Si la salida quedó paginada, seguir presionando espacio hasta el final
-            $maxPages = 50;
-            for ($i = 0; $i < $maxPages; $i++) {
-
-                // ¿La salida termina con el resumen final o el prompt? → ya está completa
-                if (str_contains($output, 'The number of GPON')) {
-                    break;
-                }
-
-                // ¿Hay paginación pendiente? → enviar espacio y leer el siguiente bloque
-                if (str_contains($output, '---- More')) {
-                    $ssh->write(' ');
-                    $ssh->setTimeout(10);
-                    $output .= $ssh->read('#');
-                    continue;
-                }
-
-                // No hay More ni resumen → no hay más que leer
-                break;
-            }
+            // Autofind con tiempo amplio: el lector recorre toda la
+            // paginación y devuelve la salida completa.
+            $output = $this->converse($ssh, 'display ont autofind all', false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('AUTOFIND RAW', [
                 'length' => strlen($output),
@@ -106,6 +210,11 @@ class OltSshService
             throw new \Exception("No se pudo autenticar con la OLT {$olt->name}");
         }
 
+        // Se consume el banner de bienvenida completo (puede ser
+        // largo y traer avisos), para arrancar el diálogo desde un
+        // búfer limpio.
+        $this->drain($ssh, 1.5);
+
         return $ssh;
     }
 
@@ -114,34 +223,19 @@ class OltSshService
      */
     private function enablePrivilegedMode(SSH2 $ssh): void
     {
-        $ssh->setTimeout(self::SSH_TIMEOUT);
-        $ssh->write("enable\n");
-        $ssh->read('#');
+        $this->converse($ssh, 'enable');
     }
 
     /**
-     * Ejecuta un comando en la OLT
+     * Ejecuta un comando en la OLT y devuelve su salida completa.
+     *
+     * Delega en el diálogo adaptativo, que funciona con cualquier
+     * modelo (ya no depende de suposiciones por modelo ni de un
+     * "doble enter" cableado).
      */
     private function executeCommand(SSH2 $ssh, string $command, Olt $olt, int $timeout = self::SSH_TIMEOUT): string
     {
-        $ssh->setTimeout($timeout);
-
-        // Verificar si el modelo requiere doble enter
-        if ($this->requiresDoubleEnter($olt)) {
-            $ssh->write($command . "\n\n");
-        } else {
-            $ssh->write($command . "\n");
-        }
-
-        return $ssh->read('#');
-    }
-
-    /**
-     * Verifica si el modelo de OLT requiere doble enter después de los comandos
-     */
-    private function requiresDoubleEnter(Olt $olt): bool
-    {
-        return strtoupper($olt->model) === '5800X17';
+        return $this->converse($ssh, $command, false, $timeout);
     }
 
     /**
@@ -238,27 +332,19 @@ class OltSshService
         $ssh = $this->connectToOlt($olt);
 
         try {
-            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'enable', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'config', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, "interface gpon {$interface}", false, self::SSH_LONG_TIMEOUT);
 
-            $ssh->write("enable\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("config\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("interface gpon {$interface}\n");
-            $ssh->read('/[>#]/');
-
-            // 1. Agregar ONT
-            $ssh->write(
-                "ont add {$port} sn-auth {$data['ont_sn']} omci " .
-                "ont-lineprofile-id {$data['ont_lineprofile']} " .
-                "ont-srvprofile-id {$data['ont_srvprofile']} " .
-                "desc \"{$data['client_name']}\"\n"
-            );
-            $ssh->read('/\}:/');
-            $ssh->write("\n");
-            $ontAddOutput = $ssh->read('/[>#]/');
+            // 1. Agregar la ONT. El lector maneja solo el prompt
+            // "{ <cr> }:" que algunos modelos muestran (y que otros
+            // no), así que el mismo código sirve para todos.
+            $ontAddOutput = $this->converse($ssh, implode(' ', [
+                "ont add {$port} sn-auth {$data['ont_sn']} omci",
+                "ont-lineprofile-id {$data['ont_lineprofile']}",
+                "ont-srvprofile-id {$data['ont_srvprofile']}",
+                "desc \"{$data['client_name']}\"",
+            ]), false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('ONT ADD OUTPUT', ['olt' => $olt->name, 'output' => $ontAddOutput]);
 
@@ -268,10 +354,9 @@ class OltSshService
             }
 
             // 2. Salir de la interfaz GPON
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
 
-            // 3. Crear service-port — definir el comando en variable
+            // 3. Crear el service-port
             $servicePortCmd = implode(' ', [
                 'service-port',
                 'vlan', $data['vlan'],
@@ -283,28 +368,21 @@ class OltSshService
                 'tag-transform', 'translate',
             ]);
 
-            $ssh->write($servicePortCmd . "\n\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, $servicePortCmd, false, self::SSH_LONG_TIMEOUT);
 
             // 4. Consultar el INDEX del service-port recién creado
-            $displayCmd = implode(' ', [
+            $servicePortOutput = $this->converse($ssh, implode(' ', [
                 'display service-port port',
                 "{$interface}/{$port}",
                 'ont', $ontId,
-            ]);
-
-            $ssh->write($displayCmd . "\n");
-            $ssh->read('/\}:/');
-            $ssh->write("\n");
-            $servicePortOutput = $ssh->read('/[>#]/');
+            ]), false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('SERVICE PORT DISPLAY OUTPUT', ['olt' => $olt->name, 'output' => $servicePortOutput]);
 
             $servicePortId = $this->parseServicePortId($servicePortOutput);
 
             // 5. Salir
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
 
             return [
                 'ont_id'       => $ontId,
@@ -365,32 +443,16 @@ class OltSshService
         $ssh = $this->connectToOlt($olt);
 
         try {
-            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'enable', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'config', false, self::SSH_LONG_TIMEOUT);
 
-            $ssh->write("enable\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("config\n");
-            $ssh->read('/[>#]/');
-
-            $displayCmd = implode(' ', [
+            $output = $this->converse($ssh, implode(' ', [
                 'display service-port port',
                 "{$interface}/{$ont->port}",
                 'ont', $ont->onu_id,
-            ]);
+            ]), false, self::SSH_LONG_TIMEOUT);
 
-            $ssh->write($displayCmd . "\n");
-            $output = $ssh->read('/[>#]|\}:/');
-
-            // La salida puede paginar: se envía un salto para
-            // continuar y se acumula el resto
-            if (str_contains($output, '}:')) {
-                $ssh->write("\n");
-                $output .= $ssh->read('/[>#]/');
-            }
-
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
 
             $servicePort = $this->parseServicePortId($output);
 
@@ -425,47 +487,25 @@ class OltSshService
         $ssh = $this->connectToOlt($olt);
 
         try {
-            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'enable', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'config', false, self::SSH_LONG_TIMEOUT);
 
-            $ssh->write("enable\n");
-            $output = $ssh->read('/[>#]/');
-            Log::debug('DELETE ONT - enable', ['output' => $output]);
-
-            $ssh->write("config\n");
-            $output = $ssh->read('/[>#]/');
-            Log::debug('DELETE ONT - config', ['output' => $output]);
-
-            // 1. Eliminar el service-port
-            $ssh->write("undo service-port {$ont->service_port}\n");
-            $output = $ssh->read('/\}:/');
-            Log::debug('DELETE ONT - undo service-port (prompt)', ['output' => $output]);
-
-            $ssh->write("y\n");
-            $output = $ssh->read('/[>#]/');
-            Log::debug('DELETE ONT - undo service-port (confirmación)', ['output' => $output]);
+            // 1. Eliminar el service-port (pide confirmación → "y").
+            // El lector detecta el "(y/n)" en cualquier modelo y
+            // responde solo.
+            $out = $this->converse($ssh, "undo service-port {$ont->service_port}", true, self::SSH_LONG_TIMEOUT);
+            Log::debug('DELETE ONT - undo service-port', ['output' => $out]);
 
             // 2. Entrar a la interfaz GPON
-            $ssh->write("interface gpon {$interface}\n");
-            $output = $ssh->read('/[>#]/');
-            Log::debug('DELETE ONT - interface gpon', ['output' => $output]);
+            $this->converse($ssh, "interface gpon {$interface}", false, self::SSH_LONG_TIMEOUT);
 
-            // 3. Eliminar la ONT
-            $ssh->write("ont delete {$port} {$ont->onu_id}\n");
-            $output = $ssh->read('/\}:/');
-            Log::debug('DELETE ONT - ont delete (prompt)', ['output' => $output]);
-
-            $ssh->write("y\n");
-            $output = $ssh->read('/[>#]/');
-            Log::debug('DELETE ONT - ont delete (confirmación)', ['output' => $output]);
+            // 3. Eliminar la ONT (también confirma con "y")
+            $out = $this->converse($ssh, "ont delete {$port} {$ont->onu_id}", true, self::SSH_LONG_TIMEOUT);
+            Log::debug('DELETE ONT - ont delete', ['output' => $out]);
 
             // 4. Salir
-            $ssh->write("quit\n");
-            $output = $ssh->read('/[>#]/');
-            Log::debug('DELETE ONT - quit interfaz', ['output' => $output]);
-
-            $ssh->write("quit\n");
-            $output = $ssh->read('/[>#]/');
-            Log::debug('DELETE ONT - quit config', ['output' => $output]);
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('DELETE ONT - Finalizado correctamente', [
                 'olt'    => $olt->name,
@@ -494,32 +534,19 @@ class OltSshService
         $ssh = $this->connectToOlt($olt);
 
         try {
-            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'enable', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'config', false, self::SSH_LONG_TIMEOUT);
 
-            $ssh->write("enable\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("config\n");
-            $ssh->read('/[>#]/');
-
-            // 1. Eliminar service-port viejo
-            $ssh->write("undo service-port {$ont->service_port}\n");
-            $ssh->read('/\}:/');
-            $ssh->write("y\n");
-            $ssh->read('/[>#]/');
+            // 1. Eliminar service-port viejo (confirma con "y")
+            $this->converse($ssh, "undo service-port {$ont->service_port}", true, self::SSH_LONG_TIMEOUT);
 
             Log::debug('MOVE ONT - service-port eliminado', [
                 'service_port' => $ont->service_port,
             ]);
 
             // 2. Entrar al puerto viejo y eliminar la ONT
-            $ssh->write("interface gpon {$oldInterface}\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("ont delete {$oldPort} {$ont->onu_id}\n");
-            $ssh->read('/\}:/');
-            $ssh->write("y\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, "interface gpon {$oldInterface}", false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, "ont delete {$oldPort} {$ont->onu_id}", true, self::SSH_LONG_TIMEOUT);
 
             Log::debug('MOVE ONT - ONT eliminada del puerto viejo', [
                 'old_interface' => $oldInterface,
@@ -527,22 +554,17 @@ class OltSshService
                 'onu_id'        => $ont->onu_id,
             ]);
 
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
 
             // 3. Entrar al puerto nuevo y activar la ONT
-            $ssh->write("interface gpon {$newInterface}\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, "interface gpon {$newInterface}", false, self::SSH_LONG_TIMEOUT);
 
-            $ssh->write(
-                "ont add {$newPort} sn-auth {$ont->sn} omci " .
-                "ont-lineprofile-id {$newData['ont_lineprofile']} " .
-                "ont-srvprofile-id {$newData['ont_srvprofile']} " .
-                "desc \"{$ont->description}\"\n"
-            );
-            $ssh->read('/\}:/');
-            $ssh->write("\n");
-            $ontAddOutput = $ssh->read('/[>#]/');
+            $ontAddOutput = $this->converse($ssh, implode(' ', [
+                "ont add {$newPort} sn-auth {$ont->sn} omci",
+                "ont-lineprofile-id {$newData['ont_lineprofile']}",
+                "ont-srvprofile-id {$newData['ont_srvprofile']}",
+                "desc \"{$ont->description}\"",
+            ]), false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('MOVE ONT - ont add output', ['output' => $ontAddOutput]);
 
@@ -552,8 +574,7 @@ class OltSshService
                 throw new \Exception("No se pudo obtener el nuevo ONT-ID. Respuesta: {$ontAddOutput}");
             }
 
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
 
             // 4. Crear nuevo service-port
             $servicePortCmd = implode(' ', [
@@ -567,27 +588,20 @@ class OltSshService
                 'tag-transform', 'translate',
             ]);
 
-            $ssh->write($servicePortCmd . "\n\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, $servicePortCmd, false, self::SSH_LONG_TIMEOUT);
 
             // 5. Consultar el nuevo INDEX del service-port
-            $displayCmd = implode(' ', [
+            $servicePortOutput = $this->converse($ssh, implode(' ', [
                 'display service-port port',
                 "{$newInterface}/{$newPort}",
                 'ont', $newOntId,
-            ]);
-
-            $ssh->write($displayCmd . "\n");
-            $ssh->read('/\}:/');
-            $ssh->write("\n");
-            $servicePortOutput = $ssh->read('/[>#]/');
+            ]), false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('MOVE ONT - service-port output', ['output' => $servicePortOutput]);
 
             $newServicePort = $this->parseServicePortId($servicePortOutput);
 
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
 
             return [
                 'ont_id'       => $newOntId,
@@ -611,14 +625,9 @@ class OltSshService
         try {
             $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
 
-            $ssh->write("enable\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("config\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("interface gpon {$interface}\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'enable');
+            $this->converse($ssh, 'config');
+            $this->converse($ssh, "interface gpon {$interface}");
 
             $output = $this->executeDisplayCommand(
                 $ssh,
@@ -627,10 +636,8 @@ class OltSshService
 
             Log::debug('CATV PORT STATE OUTPUT', ['output' => $output]);
 
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit');
+            $this->converse($ssh, 'quit');
 
             return $this->parseCatvState($output);
 
@@ -662,40 +669,16 @@ class OltSshService
         return null;
     }
     /**
-     * Ejecuta un comando display y lee toda la salida manejando la paginación "---- More ----"
+     * Ejecuta un comando "display" y devuelve toda su salida.
+     *
+     * Delega en el diálogo adaptativo, que ya resuelve el prompt de
+     * continuación "{ <cr> }:" y la paginación "---- More" de forma
+     * transparente para cualquier modelo. Se conserva la firma por
+     * compatibilidad con los llamadores.
      */
     private function executeDisplayCommand(SSH2 $ssh, string $command, bool $confirmPrompt = true): string
     {
-        $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
-        $ssh->write($command . "\n");
-
-        if ($confirmPrompt) {
-            // Comandos display de Huawei muestran el prompt { <cr>||<K> }:
-            $ssh->read('/\}:/');
-            $ssh->write("\n");
-        }
-
-        $output   = '';
-        $maxPages = 100;
-
-        for ($i = 0; $i < $maxPages; $i++) {
-            $ssh->setTimeout(10);
-            $chunk  = $ssh->read('/[>#]|---- More/');
-            $output .= $chunk;
-
-            // Verificar solo el final de lo acumulado
-            $tail = substr($output, -100);
-
-            if (str_contains($tail, '---- More')) {
-                $ssh->write(' ');
-                continue;
-            }
-
-            // Llegó el prompt → salida completa
-            break;
-        }
-
-        return $output;
+        return $this->converse($ssh, $command, false, self::SSH_LONG_TIMEOUT);
     }
     public function getOntOpticalInfo(Olt $olt, Ont $ont): array
     {
@@ -706,14 +689,9 @@ class OltSshService
         try {
             $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
 
-            $ssh->write("enable\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("config\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("interface gpon {$interface}\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'enable');
+            $this->converse($ssh, 'config');
+            $this->converse($ssh, "interface gpon {$interface}");
 
             // Info óptica — salida corta, sin paginación normalmente
             $opticalOutput = $this->executeDisplayCommand($ssh, "display ont optical-info {$ont->port} {$ont->onu_id}");
@@ -741,10 +719,8 @@ class OltSshService
                 $catvState = $this->parseCatvState($catvOutput);
             }
 
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit');
+            $this->converse($ssh, 'quit');
 
             return array_merge($optical, $info, ['catv_state' => $catvState]);
 
@@ -841,18 +817,16 @@ class OltSshService
         try {
             $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
 
-            $ssh->write("enable\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("config\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("interface gpon {$interface}\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'enable');
+            $this->converse($ssh, 'config');
+            $this->converse($ssh, "interface gpon {$interface}");
 
             // Cambiar estado del puerto CATV 1
-            $ssh->write("ont port attribute {$ont->port} {$ont->onu_id} catv 1 operational-state {$state}\n");
-            $output = $ssh->read('/[>#]/');
+            $output = $this->converse(
+                $ssh,
+                "ont port attribute {$ont->port} {$ont->onu_id} catv 1 operational-state {$state}",
+                true
+            );
 
             Log::debug('CATV PORT STATE', [
                 'sn'     => $ont->sn,
@@ -864,10 +838,8 @@ class OltSshService
                 throw new \Exception("La OLT rechazó el cambio de estado CATV: {$output}");
             }
 
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit');
+            $this->converse($ssh, 'quit');
 
         } finally {
             $ssh->disconnect();
@@ -893,25 +865,13 @@ class OltSshService
         $ssh = $this->connectToOlt($olt);
 
         try {
-            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'enable');
+            $this->converse($ssh, 'config');
+            $this->converse($ssh, "interface gpon {$interface}");
 
-            $ssh->write("enable\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("config\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("interface gpon {$interface}\n");
-            $ssh->read('/[>#]/');
-
-            $ssh->write("ont {$command} {$ont->port} {$ont->onu_id}\n");
-            $output = $ssh->read('/[>#]/');
-
-            // Algunas versiones piden confirmación al desactivar
-            if (str_contains($output, '(y/n)')) {
-                $ssh->write("y\n");
-                $output .= $ssh->read('/[>#]/');
-            }
+            // El lector maneja solo la confirmación "(y/n)" que
+            // algunas versiones piden al desactivar.
+            $output = $this->converse($ssh, "ont {$command} {$ont->port} {$ont->onu_id}", true);
 
             Log::debug('ONT ADMIN STATE', [
                 'sn' => $ont->sn,
@@ -923,10 +883,8 @@ class OltSshService
                 throw new \Exception("La OLT rechazó el cambio de estado de la ONT: {$output}");
             }
 
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
-            $ssh->write("quit\n");
-            $ssh->read('/[>#]/');
+            $this->converse($ssh, 'quit');
+            $this->converse($ssh, 'quit');
 
         } finally {
             $ssh->disconnect();
