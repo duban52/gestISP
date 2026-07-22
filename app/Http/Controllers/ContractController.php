@@ -13,6 +13,7 @@ use App\Models\Plan;
 use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Notifications\ClientWelcome;
+use App\Support\ColombiaLocations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -100,7 +101,11 @@ class ContractController extends Controller
         $users = User::all(); // Todos los usuarios para asignar a un contrato
 
         // Devolver la vista con los datos necesarios
-        return view('gestisp.contracts.create', compact( 'clients', 'plans', 'users', 'client'));
+        $colombiaLocations = ColombiaLocations::departmentsWithMunicipalities();
+
+        return view('gestisp.contracts.create', compact(
+            'clients', 'plans', 'users', 'client', 'colombiaLocations'
+        ));
     }
 
     /**

@@ -1,6 +1,7 @@
 @extends('adminlte::page')
 
 @section('title', 'Crear contrato')
+@section('plugins.Select2', true)
 @section('content_header')
     <h2>Asignación de contrato para el cliente: {{ $client->name }} {{ $client->last_name }}</h2>
 @endsection
@@ -33,10 +34,15 @@
                             </div>
 
                             <div class="form-group col-md-6">
-                                <label for="department">Departamento</label>
-                                <input type="text" class="form-control" id="department" name="department"
-                                       placeholder="Ingrese el nombre del departamento" minlength="5" maxlength="255"
-                                       value="{{ old('department') }}">
+                                <label for="department">Departamento <span class="text-danger">*</span></label>
+                                <select class="form-control" id="department" name="department" required>
+                                    <option value="">Seleccione un departamento</option>
+                                    @foreach($colombiaLocations as $department => $municipalities)
+                                        <option value="{{ $department }}" {{ old('department') === $department ? 'selected' : '' }}>
+                                            {{ $department }}
+                                        </option>
+                                    @endforeach
+                                </select>
                                 @error('department')
                                 <span class="text-danger">
                                     <span>* {{ $message }}</span>
@@ -45,10 +51,10 @@
                             </div>
 
                             <div class="form-group col-md-6">
-                                <label for="department">Municipio</label>
-                                <input type="text" class="form-control" id="municipality" name="municipality"
-                                       placeholder="Ingrese el nombre del Municipio" minlength="5" maxlength="255"
-                                       value="{{ old('municipality') }}">
+                                <label for="municipality">Ciudad / Municipio <span class="text-danger">*</span></label>
+                                <select class="form-control" id="municipality" name="municipality" required disabled>
+                                    <option value="">Primero seleccione un departamento</option>
+                                </select>
                                 @error('municipality')
                                 <span class="text-danger">
                                     <span>* {{ $message }}</span>
@@ -248,4 +254,63 @@
 
 @endsection
 
+@section('js')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const municipalitiesByDepartment = @json($colombiaLocations, JSON_UNESCAPED_UNICODE);
+            const $departmentSelect = $('#department');
+            const $municipalitySelect = $('#municipality');
+            const previousMunicipality = @json(old('municipality'));
 
+            // Select2 mantiene el formulario compacto y agrega búsqueda
+            // por texto, útil especialmente para los 1.104 municipios.
+            $departmentSelect.select2({
+                width: '100%',
+                placeholder: 'Busque o seleccione un departamento',
+                allowClear: true
+            });
+
+            $municipalitySelect.select2({
+                width: '100%',
+                placeholder: 'Primero seleccione un departamento',
+                allowClear: true
+            });
+
+            function loadMunicipalities(selectedMunicipality = '') {
+                const department = $departmentSelect.val();
+                const municipalities = municipalitiesByDepartment[department] || [];
+
+                $municipalitySelect.empty();
+
+                if (!department) {
+                    $municipalitySelect
+                        .prop('disabled', true)
+                        .append(new Option('Primero seleccione un departamento', ''))
+                        .trigger('change');
+                    return;
+                }
+
+                $municipalitySelect
+                    .prop('disabled', false)
+                    .append(new Option('Busque o seleccione una ciudad o municipio', ''));
+
+                municipalities.forEach(function (municipality) {
+                    $municipalitySelect.append(new Option(
+                        municipality,
+                        municipality,
+                        false,
+                        municipality === selectedMunicipality
+                    ));
+                });
+
+                $municipalitySelect.trigger('change');
+            }
+
+            $departmentSelect.on('change', function () {
+                loadMunicipalities();
+            });
+
+            loadMunicipalities(previousMunicipality);
+        });
+    </script>
+@endsection
