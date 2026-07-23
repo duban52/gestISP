@@ -617,10 +617,11 @@
                                                             <i class="fas fa-eye"></i>
                                                         </button>
                                                         @if($technicalOrder->status === 'Cerrada')
-                                                            <a href="{{ route('technicals_orders.pdf', $technicalOrder->id) }}"
-                                                               class="btn btn-outline-danger btn-sm" target="_blank" title="Descargar/ver PDF">
+                                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                                    data-pdf-url="{{ route('technicals_orders.pdf', $technicalOrder->id) }}"
+                                                                    title="Ver PDF">
                                                                 <i class="fas fa-file-pdf"></i>
-                                                            </a>
+                                                            </button>
                                                         @endif
                                                     </td>
                                                 </tr>
@@ -716,6 +717,9 @@
 
         </div>
 
+        {{-- Visor de PDF de la orden en la misma página --}}
+        @include('gestisp.technicals_orders.partials.pdf_viewer_modal')
+
 @endsection
 
 @section('css')
@@ -765,6 +769,18 @@
             // abrir cada pestaña.
             $('a[data-toggle="tab"]').on('shown.bs.tab', function () {
                 $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
+            });
+
+            // Visor de PDF: abre el comprobante de la orden en el modal
+            $(document).on('click', '[data-pdf-url]', function () {
+                var url = $(this).data('pdf-url');
+                $('#pdfViewerFrame').attr('src', url);
+                $('#pdfViewerDownload').attr('href', url);
+                $('#pdfViewerModal').modal('show');
+            });
+
+            $('#pdfViewerModal').on('hidden.bs.modal', function () {
+                $('#pdfViewerFrame').attr('src', '');
             });
         });
     </script>

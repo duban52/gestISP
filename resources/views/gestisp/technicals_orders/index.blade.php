@@ -137,12 +137,14 @@
                                 </button>
 
                                 {{-- Comprobante PDF: soporte ante el cliente de la
-                                     orden ya cerrada --}}
+                                     orden ya cerrada. Se abre en un visor dentro
+                                     de la misma página. --}}
                                 @if($technical_order->status === 'Cerrada')
-                                    <a href="{{ route('technicals_orders.pdf', $technical_order->id) }}"
-                                       class="btn btn-sm btn-danger" target="_blank" title="Descargar/ver PDF">
+                                    <button type="button" class="btn btn-sm btn-danger"
+                                            data-pdf-url="{{ route('technicals_orders.pdf', $technical_order->id) }}"
+                                            title="Ver PDF">
                                         <i class="fas fa-file-pdf"></i> PDF
-                                    </a>
+                                    </button>
                                 @endif
                             </td>
                         </tr>
@@ -216,6 +218,9 @@
             </div>
         </div>
     @endforeach
+
+    {{-- Visor de PDF en la misma página --}}
+    @include('gestisp.technicals_orders.partials.pdf_viewer_modal')
 @endsection
 
 @section('css')
@@ -240,6 +245,19 @@
                     { orderable: false, targets: [8] },
                     { defaultContent: '—', targets: '_all' }
                 ]
+            });
+
+            // Visor de PDF: abre el comprobante en el modal (misma página)
+            $(document).on('click', '[data-pdf-url]', function () {
+                var url = $(this).data('pdf-url');
+                $('#pdfViewerFrame').attr('src', url);
+                $('#pdfViewerDownload').attr('href', url);
+                $('#pdfViewerModal').modal('show');
+            });
+
+            // Al cerrar, se limpia el iframe (detiene la carga)
+            $('#pdfViewerModal').on('hidden.bs.modal', function () {
+                $('#pdfViewerFrame').attr('src', '');
             });
         });
 
