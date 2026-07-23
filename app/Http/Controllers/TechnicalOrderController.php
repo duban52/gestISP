@@ -13,6 +13,7 @@ use App\Notifications\TechnicalOrderAssignedTechnician;
 use App\Notifications\TechnicalOrderCreatedClient;
 use App\Notifications\TechnicalOrderFinishedClient;
 use App\Reports\Support\OrderDetailMap;
+use App\Support\PdfBranding;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -610,6 +611,42 @@ class TechnicalOrderController extends Controller
         Storage::disk('public')->put($path, $binary);
 
         return 'storage/' . $path;
+    }
+
+    /**
+     * Comprobante en PDF de una orden técnica.
+     *
+     * Sirve como soporte/reporte ante el cliente: incluye los datos
+     * del cliente y la orden, el material usado, la solución, los
+     * comentarios del técnico y del cliente, las fotos de evidencia y
+     * la firma del cliente.
+     *
+     * Va solo con `auth` (sin check.permission) porque es alcanzable
+     * desde dos módulos —el listado de órdenes y el historial del
+     * contrato— y el middleware no admite permisos alternativos; el
+     * documento solo refleja información que el usuario ya puede ver.
+     */
+    public function downloadPdf(TechnicalOrder $technicalOrder)
+    {
+        $technicalOrder->loadMissing([
+            'contract.client',
+            'contract.plan',
+            'assignedUser',
+            'createdBy',
+            'materials.material',
+            'branch',
+        ]);
+
+        $pdf = PdfBranding::make('gestisp.technicals_orders.pdf', [
+            'order' => $technicalOrder,
+            'branch' => $technicalOrder->branch,
+            'pdfTitle' => 'Orden de servicio N.º ' . $technicalOrder->id,
+            'pdfSubtitle' => 'Estado: ' . $technicalOrder->status,
+        ]);
+
+        // stream() lo muestra en el navegador (visualizar); desde el
+        // visor el usuario puede descargarlo.
+        return $pdf->stream("orden-{$technicalOrder->id}.pdf");
     }
 
     /**

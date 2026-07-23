@@ -135,6 +135,15 @@
                                         data-target="#detailModal{{ $technical_order->id }}">
                                     Ver detalles
                                 </button>
+
+                                {{-- Comprobante PDF: soporte ante el cliente de la
+                                     orden ya cerrada --}}
+                                @if($technical_order->status === 'Cerrada')
+                                    <a href="{{ route('technicals_orders.pdf', $technical_order->id) }}"
+                                       class="btn btn-sm btn-danger" target="_blank" title="Descargar/ver PDF">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </a>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

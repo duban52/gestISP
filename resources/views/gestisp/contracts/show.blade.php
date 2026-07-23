@@ -612,10 +612,16 @@
                                                     <td data-order="{{ $technicalOrder->created_at?->timestamp }}">{{ $technicalOrder->created_at?->format('Y-m-d H:i') }}</td>
                                                     <td>{{ $technicalOrder->createdBy->name ?? 'Sistema' }} {{ $technicalOrder->createdBy->last_name ?? '' }}</td>
                                                     <td><span class="badge badge-{{ $orderBadge($technicalOrder->status) }}">{{ $technicalOrder->status }}</span></td>
-                                                    <td class="text-center">
+                                                    <td class="text-center nowrap">
                                                         <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#detailModal{{ $technicalOrder->id }}" title="Ver detalles">
                                                             <i class="fas fa-eye"></i>
                                                         </button>
+                                                        @if($technicalOrder->status === 'Cerrada')
+                                                            <a href="{{ route('technicals_orders.pdf', $technicalOrder->id) }}"
+                                                               class="btn btn-outline-danger btn-sm" target="_blank" title="Descargar/ver PDF">
+                                                                <i class="fas fa-file-pdf"></i>
+                                                            </a>
+                                                        @endif
                                                     </td>
                                                 </tr>
                                             @endforeach

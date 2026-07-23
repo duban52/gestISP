@@ -201,6 +201,8 @@ Route::put('technicals_orders/{technicalOrder}', [TechnicalOrderController::clas
 Route::get('technicals_orders/my_technical_orders', [TechnicalOrderController::class, 'myTechnicalOrders'])->name('technicals_orders.my_technical_orders');
 //Ver orden
 Route::get('technicals_orders/show/{technical_order}', [TechnicalOrderController::class, 'show'])->name('technicals_orders.show');
+//Comprobante PDF de la orden (soporte ante el cliente)
+Route::get('technicals_orders/{technicalOrder}/pdf', [TechnicalOrderController::class, 'downloadPdf'])->name('technicals_orders.pdf');
 //PRocesar orden
 Route::post('/technicals_orders/process/{id}', [TechnicalOrderController::class, 'processOrder'])->name('technicals_orders.process');
 Route::get('technicals_orders/get-serial-numbers/{materialId}', [TechnicalOrderController::class, 'getSerialNumbers']);
