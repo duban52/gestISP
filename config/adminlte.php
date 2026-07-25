@@ -133,12 +133,15 @@ return [
     |
     */
 
+    // Menú del usuario (arriba a la derecha): muestra su foto, y en la
+    // cabecera desplegable el nombre con el rol y la sucursal activos.
+    // Los datos los resuelven los métodos adminlte_* del modelo User.
     'usermenu_enabled' => true,
-    'usermenu_header' => false,
+    'usermenu_header' => true,
     'usermenu_header_class' => 'bg-primary',
-    'usermenu_image' => false,
-    'usermenu_desc' => false,
-    'usermenu_profile_url' => false,
+    'usermenu_image' => true,
+    'usermenu_desc' => true,
+    'usermenu_profile_url' => true,
 
     /*
     |--------------------------------------------------------------------------

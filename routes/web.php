@@ -15,6 +15,7 @@ use App\Http\Controllers\OntController;
 use App\Http\Controllers\OntImportController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PppoeAccountController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RouterController;
 use App\Http\Controllers\TechnicalOrderController;
 use App\Http\Controllers\WarehouseController;
@@ -140,6 +141,14 @@ Route::get('contracts/create/{client}', [ContractController::class, 'create'])->
 
 // Ruta para obtener las sucursales en el login
 Route::get('/user/branches', [LoginController::class, 'getBranches'])->name('user.branches');
+
+// Perfil del usuario autenticado (cada quien edita el suyo: no lleva
+// permisos, siempre opera sobre el usuario de la sesión)
+Route::get('/perfil', [ProfileController::class, 'edit'])->name('profile.edit');
+Route::put('/perfil', [ProfileController::class, 'update'])->name('profile.update');
+Route::put('/perfil/contrasena', [ProfileController::class, 'updatePassword'])->name('profile.password');
+Route::post('/perfil/foto', [ProfileController::class, 'updatePhoto'])->name('profile.photo');
+Route::delete('/perfil/foto', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
 
 // Generación de facturas
 Route::post('/invoices/generate', [InvoiceController::class, 'generateInvoices'])->name('invoices.generate');

@@ -25,6 +25,7 @@ class User extends Authenticatable
         'last_name',
         'number_phone',
         'address',
+        'avatar',
         'email',
         'password',
         'is_active',
@@ -57,6 +58,95 @@ class User extends Authenticatable
     public function branches()
     {
         return $this->belongsToMany(Branch::class, 'user_branch')->withPivot('role_id');
+    }
+
+    /* ================================================================
+       Perfil del usuario
+
+       Los tres métodos adminlte_* los llama la plantilla del menú de
+       usuario (arriba a la derecha) cuando se activan las opciones
+       usermenu_image / usermenu_desc / usermenu_profile_url en
+       config/adminlte.php.
+       ================================================================ */
+
+    /** Nombre y apellido, para no repetir la concatenación. */
+    public function getFullNameAttribute(): string
+    {
+        return trim($this->name . ' ' . $this->last_name);
+    }
+
+    /**
+     * Iniciales del usuario, para el avatar de respaldo.
+     */
+    public function getInitialsAttribute(): string
+    {
+        $iniciales = mb_substr($this->name ?? '', 0, 1) . mb_substr($this->last_name ?? '', 0, 1);
+
+        return mb_strtoupper($iniciales ?: '?');
+    }
+
+    /**
+     * Foto de perfil para el menú superior.
+     *
+     * Si el usuario no subió ninguna (o el archivo ya no está en
+     * disco) se dibuja un avatar con sus iniciales, así el menú nunca
+     * queda con una imagen rota.
+     *
+     * El avatar de respaldo se genera aquí mismo como SVG incrustado:
+     * no depende de ningún servicio externo (un servidor sin salida a
+     * internet lo mostraría igual) ni envía datos del usuario fuera.
+     */
+    public function adminlte_image(): string
+    {
+        if ($this->avatar && is_file(public_path('storage/' . $this->avatar))) {
+            return asset('storage/' . $this->avatar);
+        }
+
+        return $this->avatarDeIniciales();
+    }
+
+    /**
+     * Avatar SVG con las iniciales sobre un fondo de color.
+     *
+     * El color se deriva del identificador para que cada persona
+     * conserve siempre el mismo y se distingan de un vistazo.
+     */
+    private function avatarDeIniciales(): string
+    {
+        $paleta = ['1F4E79', '2E7D32', '6A1B9A', 'AD1457', 'EF6C00', '00838F', '4527A0', 'B71C1C'];
+        $fondo = $paleta[($this->id ?? 0) % count($paleta)];
+
+        $svg = <<<SVG
+        <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+            <rect width="128" height="128" fill="#{$fondo}"/>
+            <text x="50%" y="50%" dy=".35em" text-anchor="middle"
+                  font-family="Helvetica, Arial, sans-serif" font-size="54"
+                  font-weight="bold" fill="#FFFFFF">{$this->initials}</text>
+        </svg>
+        SVG;
+
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
+    }
+
+    /**
+     * Texto bajo el nombre en el menú de usuario: el rol activo y la
+     * sucursal en la que está trabajando ahora mismo.
+     */
+    public function adminlte_desc(): string
+    {
+        $rol = Role::find(session('current_role_id'));
+        $sucursal = Branch::find(session('branch_id'));
+
+        return collect([
+            $rol?->name ? ucfirst($rol->name) : null,
+            $sucursal?->name,
+        ])->filter()->implode(' · ') ?: $this->email;
+    }
+
+    /** Destino del botón "Perfil" del menú de usuario. */
+    public function adminlte_profile_url(): string
+    {
+        return route('profile.edit', [], false);
     }
 
 
