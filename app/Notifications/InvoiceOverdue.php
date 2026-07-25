@@ -40,7 +40,7 @@ class InvoiceOverdue extends Notification implements ShouldQueue
             ->line('Le pedimos ponerse al día para restablecer o mantener su servicio.')
             ->salutation('Gracias, ' . $sucursal);
     }
-
+//Definicion de plantilla
     public function toWhatsApp(object $notifiable): WhatsAppMessage
     {
         $total = '$' . number_format((float) $this->invoice->pending_invoice_amount, 0, ',', '.');
