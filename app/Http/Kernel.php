@@ -41,6 +41,9 @@ class Kernel extends HttpKernel
             // perdió (restablecimiento de contraseña, "recordarme").
             // Va ANTES de TrackUserActivity y de check.permission.
             \App\Http\Middleware\EnsureBranchSession::class,
+            // Repone el tema (claro/oscuro) que el usuario dejó
+            // guardado, ya que AdminLTE solo lo recuerda en la sesión.
+            \App\Http\Middleware\ApplyUserTheme::class,
             // Trazabilidad: actualiza la actividad de la sesión,
             // aplica los cierres remotos y el cierre por inactividad.
             // Va al final, después de iniciar la sesión y resolver la

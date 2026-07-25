@@ -310,6 +310,16 @@ return [
             'text' => 'Búsqueda',
             'topnav_right' => false,
         ],
+        // Interruptor de modo oscuro, a la izquierda del menú de
+        // usuario. La preferencia se guarda en el usuario (ver
+        // PersistDarkModePreference y ApplyUserTheme).
+        [
+            'type' => 'darkmode-widget',
+            'icon_disabled' => 'far fa-moon',
+            'icon_enabled' => 'fas fa-sun',
+            'color_enabled' => 'warning',
+            'topnav_right' => true,
+        ],
         [
             'type' => 'fullscreen-widget',
             'topnav_right' => true,
@@ -678,6 +688,19 @@ return [
                     'type' => 'js',
                     'asset' => true,
                     'location' => 'js/gestisp-notifications.js',
+                ],
+            ],
+        ],
+        // Ajustes del modo oscuro para los componentes propios
+        // (cabeceras de tabla, DataTables, Select2...), que AdminLTE
+        // no cubre. Se carga siempre: dentro solo actúa bajo .dark-mode.
+        'GestispDarkMode' => [
+            'active' => true,
+            'files' => [
+                [
+                    'type' => 'css',
+                    'asset' => true,
+                    'location' => 'css/gestisp/dark-mode.css',
                 ],
             ],
         ],

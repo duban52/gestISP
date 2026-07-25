@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Billing\Events\InvoiceIssued;
 use App\Listeners\NotifyClientInvoiceIssued;
+use App\Listeners\PersistDarkModePreference;
 use App\Listeners\RecordFailedLogin;
+use JeroenNoten\LaravelAdminLte\Events\DarkModeWasToggled;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
@@ -29,6 +31,11 @@ class EventServiceProvider extends ServiceProvider
         // Notificación al cliente cuando se emite su factura
         InvoiceIssued::class => [
             NotifyClientInvoiceIssued::class,
+        ],
+        // Tema claro/oscuro: se guarda en el usuario para que no se
+        // pierda al cerrar la sesión
+        DarkModeWasToggled::class => [
+            PersistDarkModePreference::class,
         ],
     ];
 

@@ -26,6 +26,7 @@ class User extends Authenticatable
         'number_phone',
         'address',
         'avatar',
+        'dark_mode',
         'email',
         'password',
         'is_active',
@@ -51,6 +52,7 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'is_active' => 'boolean',
+        'dark_mode' => 'boolean',
     ];
 
 
