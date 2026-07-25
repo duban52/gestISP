@@ -451,6 +451,17 @@ class OntController extends Controller
         // tiene módulo de televisión. El estado on/off NO se puede
         // leer por SNMP (solo por CLI, ~40 s), así que se entrega el
         // último estado conocido y la vista ofrece verificarlo.
+        // ---- Tiempo en línea ----
+        // La OLT no lo expone por SNMP (su consola sí lo calcula), así
+        // que se deduce de la última conexión mientras la ONT siga en
+        // línea. Comprobado contra la consola: para una ONT levantada
+        // el 23/07 a las 19:40 informaba "1 day(s), 22 hour(s)...",
+        // que es exactamente el tiempo transcurrido desde esa fecha.
+        $data['online_duration'] = $this->calcularTiempoEnLinea(
+            $data['last_up_time'] ?? null,
+            $data['run_status'] ?? null,
+        );
+
         $data['has_catv'] = $result['metrics']['catv_rx_power']['raw'] !== null;
         $data['catv_enabled'] = $ont->catv_enabled;
         $data['catv_checked_at'] = $ont->catv_checked_at?->format('d/m/Y H:i');
@@ -471,6 +482,55 @@ class OntController extends Controller
             'cached' => $result['cached'] ?? false,
             'source' => 'snmp',
         ]);
+    }
+
+    /**
+     * Tiempo que la ONT lleva conectada sin interrupción.
+     *
+     * Solo tiene sentido si la ONT está en línea: si está caída, lo
+     * que importa es cuándo se cayó, no cuánto duró conectada.
+     *
+     * @param  string|null  $ultimaConexion  Fecha "d/m/Y H:i"
+     * @param  string|null  $estado          'online' / 'offline'
+     */
+    private function calcularTiempoEnLinea(?string $ultimaConexion, ?string $estado): ?string
+    {
+        if (!$ultimaConexion || $estado !== 'online') {
+            return null;
+        }
+
+        try {
+            $desde = \Carbon\Carbon::createFromFormat('d/m/Y H:i', $ultimaConexion);
+        } catch (\Exception $e) {
+            return null;
+        }
+
+        if (!$desde || $desde->isFuture()) {
+            return null;
+        }
+
+        $minutos = $desde->diffInMinutes(now());
+
+        $dias = intdiv($minutos, 1440);
+        $horas = intdiv($minutos % 1440, 60);
+        $resto = $minutos % 60;
+
+        $partes = [];
+
+        if ($dias > 0) {
+            $partes[] = $dias . ' ' . ($dias === 1 ? 'día' : 'días');
+        }
+
+        if ($horas > 0) {
+            $partes[] = $horas . ' h';
+        }
+
+        // Los minutos solo se detallan cuando la conexión es reciente
+        if ($dias === 0 && ($resto > 0 || empty($partes))) {
+            $partes[] = $resto . ' min';
+        }
+
+        return implode(' ', $partes);
     }
 
     /**

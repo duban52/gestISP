@@ -165,6 +165,66 @@ return [
                 ],
 
                 /*
+                | Historial de conexión de la ONT.
+                |
+                | Columnas verificadas contra la OLT real comparando
+                | el valor SNMP con lo que muestra la consola para la
+                | MISMA ONT ("display ont info"):
+                |
+                |   .22  Last up time    → 2026-07-23 19:40:06-05:00
+                |   .23  Last down time  → 2026-07-23 19:39:11-05:00
+                |   .24  Last down cause → dying-gasp (código 13)
+                |
+                | Van con 'bulk' => false: son datos de consulta
+                | puntual en la ficha de la ONT, no series que se
+                | grafiquen. Incluirlas en el muestreo masivo
+                | (miles de ONTs cada 5 minutos) encarecería el
+                | sondeo sin aportar nada al historial.
+                */
+                'last_up_time' => [
+                    'oid' => '.1.3.6.1.4.1.2011.6.128.1.1.2.46.1.22',
+                    'type' => 'datetime',
+                    'unit' => '',
+                    'label' => 'Última conexión',
+                    'bulk' => false,
+                ],
+                'last_down_time' => [
+                    'oid' => '.1.3.6.1.4.1.2011.6.128.1.1.2.46.1.23',
+                    'type' => 'datetime',
+                    'unit' => '',
+                    'label' => 'Última desconexión',
+                    'bulk' => false,
+                ],
+
+                /*
+                | Causa de la última caída. Los cuatro códigos que
+                | reporta el equipo se comprobaron uno a uno contra
+                | el texto de la consola:
+                |
+                |    2 → LOSi/LOBi              (pérdida de señal)
+                |    3 → LOFi                   (pérdida de trama)
+                |   13 → dying-gasp             (corte de energía)
+                |   35 → Operator check failure
+                |
+                | -1 significa "sin registro". Un código no listado
+                | se muestra tal cual, sin inventarle un significado.
+                */
+                'last_down_cause' => [
+                    'oid' => '.1.3.6.1.4.1.2011.6.128.1.1.2.46.1.24',
+                    'scale' => 1,
+                    'unit' => '',
+                    'label' => 'Causa de la última caída',
+                    'invalid' => [-1],
+                    'bulk' => false,
+                    'map' => [
+                        2 => 'LOSi/LOBi',
+                        3 => 'LOFi',
+                        13 => 'dying-gasp',
+                        35 => 'Operator check failure',
+                    ],
+                ],
+
+                /*
                 | Potencia óptica que recibe el módulo CATV de la
                 | ONT. Verificado contra el equipo real: la ONT con
                 | televisión activa reporta 80 (0,80 dBm) y la que

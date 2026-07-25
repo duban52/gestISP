@@ -142,6 +142,15 @@ class OltSnmpService
             $suffix = ".{$ont->if_index}.{$ont->onu_id}";
 
             foreach ($definitions as $metric => $def) {
+                // Las métricas marcadas con 'bulk' => false quedan
+                // fuera del muestreo masivo: son datos de consulta
+                // puntual (fechas de conexión) que no se grafican y
+                // que multiplicarían el costo del sondeo de miles de
+                // ONTs sin aportar nada al historial.
+                if (($def['bulk'] ?? true) === false) {
+                    continue;
+                }
+
                 $oids["{$ont->if_index}.{$ont->onu_id}|{$metric}"] = $def['oid'] . $suffix;
             }
         }
@@ -346,6 +355,14 @@ class OltSnmpService
             return $result;
         }
 
+        // Fechas del equipo (DateAndTime): son cadenas de bytes, no
+        // números, así que se decodifican antes de tocar nada más.
+        if (($def['type'] ?? null) === 'datetime') {
+            $result['value'] = $this->decodeDateAndTime($rawValue);
+
+            return $result;
+        }
+
         // Los valores llegan como "INTEGER: -2150" o similares
         $numeric = preg_replace('/[^\-\d.]/', '', $rawValue);
 
@@ -384,6 +401,60 @@ class OltSnmpService
         $result['value'] = $value;
 
         return $result;
+    }
+
+    /**
+     * Decodifica una fecha DateAndTime del equipo.
+     *
+     * Huawei la entrega en el formato estándar de SNMP: 8 u 11 bytes
+     * con año (2 bytes), mes, día, hora, minuto, segundo, décimas y,
+     * opcionalmente, el desfase horario. Una cadena de ceros significa
+     * "sin registro" (por ejemplo, una ONT que nunca se ha conectado).
+     *
+     * Verificado contra la OLT real: la consola muestra
+     * "Last up time: 2026-07-23 19:40:06-05:00" y este OID devuelve
+     * los bytes 07EA 07 17 13 28 06 ... que dan la misma fecha.
+     *
+     * @return string|null Fecha "d/m/Y H:i" lista para mostrar
+     */
+    private function decodeDateAndTime(string $raw): ?string
+    {
+        // La fecha ocupa 8 bytes (sin zona horaria) u 11 (con ella).
+        // Si no llega en ese tamaño, el agente la entregó como
+        // hexadecimal legible ("07 EA 07 17 ...") y hay que convertirla.
+        if (!in_array(strlen($raw), [8, 11], true)) {
+            $limpio = preg_replace('/[^0-9A-Fa-f]/', '', $raw);
+
+            if (!in_array(strlen($limpio), [16, 22], true)) {
+                return null;
+            }
+
+            $raw = (string) hex2bin($limpio);
+        }
+
+        if (strlen($raw) < 8) {
+            return null;
+        }
+
+        $b = unpack('nyear/Cmonth/Cday/Chour/Cminute/Csecond', substr($raw, 0, 8));
+
+        if (!$b || $b['year'] === 0 || $b['month'] === 0 || $b['day'] === 0) {
+            return null; // sin registro
+        }
+
+        // Fecha imposible: el equipo devolvió basura
+        if ($b['month'] > 12 || $b['day'] > 31 || $b['hour'] > 23 || $b['minute'] > 59) {
+            return null;
+        }
+
+        return sprintf(
+            '%02d/%02d/%04d %02d:%02d',
+            $b['day'],
+            $b['month'],
+            $b['year'],
+            $b['hour'],
+            $b['minute'],
+        );
     }
 
     /**

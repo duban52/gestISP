@@ -521,12 +521,21 @@
                     setText('rt-last-down', d.last_down_time);
                     setText('rt-online-duration', d.online_duration);
 
+                    // Causas verificadas contra la consola de la OLT.
+                    // Un código que no esté en la lista se muestra tal
+                    // cual, sin inventarle un significado.
                     if (d.last_down_cause === 'dying-gasp') {
                         setText('rt-down-cause', '<span class="badge badge-warning">Corte de energía (dying-gasp)</span>');
                     } else if (d.last_down_cause === 'LOSi/LOBi') {
-                        setText('rt-down-cause', '<span class="badge badge-danger">Pérdida de señal óptica (LOSi)</span>');
+                        setText('rt-down-cause', '<span class="badge badge-danger">Pérdida de señal óptica (LOSi/LOBi)</span>');
+                    } else if (d.last_down_cause === 'LOFi') {
+                        setText('rt-down-cause', '<span class="badge badge-danger">Pérdida de trama (LOFi)</span>');
+                    } else if (d.last_down_cause === 'Operator check failure') {
+                        setText('rt-down-cause', '<span class="badge badge-secondary">Fallo de comprobación del operador</span>');
+                    } else if (d.last_down_cause) {
+                        setText('rt-down-cause', `<span class="badge badge-light border">Código ${d.last_down_cause}</span>`);
                     } else {
-                        setText('rt-down-cause', d.last_down_cause);
+                        setText('rt-down-cause', null);
                     }
 
                     // CATV: la ONT tiene módulo de televisión si la
