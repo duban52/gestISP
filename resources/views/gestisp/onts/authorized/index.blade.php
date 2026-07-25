@@ -3,7 +3,12 @@
 
 @section('content_header')
     <div class="card p-3">
-        <h2>ONT´S AUTORIZADAS</h2>
+        <h2 class="mb-0">
+            ONT´S AUTORIZADAS
+            @if($oltFiltrada ?? null)
+                <small class="text-muted">— {{ $oltFiltrada->name }}</small>
+            @endif
+        </h2>
     </div>
 @endsection
 
@@ -14,6 +19,22 @@
         <div class="alert alert-warning">{{ session('success-update') }}</div>
     @elseif(session('success-delete'))
         <div class="alert alert-danger">{{ session('success-delete') }}</div>
+    @endif
+
+    {{-- Aviso del filtro por OLT (llega desde el enlace "ONUs" del
+         listado de OLTs) con la opción de quitarlo --}}
+    @if($oltFiltrada ?? null)
+        <div class="alert alert-info d-flex justify-content-between align-items-center">
+            <span>
+                <i class="fas fa-filter mr-1"></i>
+                Mostrando únicamente las ONTs de la OLT
+                <strong>{{ $oltFiltrada->name }}</strong>
+                ({{ $onts->count() }} en total).
+            </span>
+            <a href="{{ route('onts.authorized') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-times mr-1"></i> Ver todas
+            </a>
+        </div>
     @endif
 
     <div class="card">

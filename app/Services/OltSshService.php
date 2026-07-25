@@ -890,4 +890,48 @@ class OltSshService
             $ssh->disconnect();
         }
     }
+
+    /**
+     * Reinicia la ONT del cliente.
+     *
+     * Equivale a desconectar y volver a conectar el equipo: la
+     * configuración NO se toca, solo se reinicia. El cliente pierde el
+     * servicio alrededor de un minuto mientras la ONT vuelve a
+     * levantar y a sincronizar con la OLT.
+     *
+     * Es una operación de escritura, por eso va por CLI: SNMP en modo
+     * lectura no puede ordenar un reinicio.
+     */
+    public function rebootOnt(Olt $olt, Ont $ont): void
+    {
+        $interface = "0/{$ont->slot}";
+
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $this->converse($ssh, 'enable');
+            $this->converse($ssh, 'config');
+            $this->converse($ssh, "interface gpon {$interface}");
+
+            // La OLT pide confirmación ("Are you sure to reset the
+            // ONT? (y/n)"): el lector adaptativo la responde.
+            $output = $this->converse($ssh, "ont reset {$ont->port} {$ont->onu_id}", true);
+
+            Log::debug('ONT REBOOT', [
+                'sn' => $ont->sn,
+                'interface' => $interface,
+                'output' => $output,
+            ]);
+
+            if (str_contains($output, 'Failure') || stripos($output, 'error') !== false) {
+                throw new \Exception("La OLT rechazó el reinicio de la ONT: {$output}");
+            }
+
+            $this->converse($ssh, 'quit');
+            $this->converse($ssh, 'quit');
+
+        } finally {
+            $ssh->disconnect();
+        }
+    }
 }

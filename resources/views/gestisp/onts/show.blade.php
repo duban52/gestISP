@@ -119,7 +119,18 @@
                                 </small>
                             @endif
                         </div>
-                        <div>
+                        <div class="d-flex flex-wrap justify-content-end" style="gap: .5rem;">
+                            {{-- Reinicio: primer paso de soporte cuando el
+                                 cliente reporta lentitud o se quedó sin
+                                 navegación. No cambia la configuración. --}}
+                            <form method="POST" action="{{ route('onts.reboot', $ont) }}"
+                                  onsubmit="return confirm('¿Reiniciar la ONT del cliente?\n\nQuedará sin servicio alrededor de un minuto mientras el equipo vuelve a conectarse. Su configuración no se modifica.');">
+                                @csrf
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="fas fa-redo-alt"></i> Reiniciar ONT
+                                </button>
+                            </form>
+
                             @if($ont->admin_enabled === false)
                                 <form method="POST" action="{{ route('onts.enable', $ont) }}"
                                       onsubmit="return confirm('¿Habilitar la ONT y restablecer el servicio del cliente?');">

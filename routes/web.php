@@ -273,6 +273,8 @@ Route::get('/onts/{ont}/catv/state', [OntController::class, 'checkCatvState'])->
 //Habilitar y deshabilitar la ONT completa (corta o restablece el servicio)
 Route::post('/onts/{ont}/enable',  [OntController::class, 'enableOnt'])->name('onts.enable');
 Route::post('/onts/{ont}/disable', [OntController::class, 'disableOnt'])->name('onts.disable');
+//Reiniciar la ONT (soporte: no cambia su configuración)
+Route::post('/onts/{ont}/reboot',  [OntController::class, 'reboot'])->name('onts.reboot');
 
 //Cargar información de onts (SNMP: respuesta en milisegundos)
 Route::get('/onts/{ont}/realtime', [OntController::class, 'realtimeInfo'])->name('onts.realtime');

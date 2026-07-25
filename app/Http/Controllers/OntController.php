@@ -51,6 +51,11 @@ class OntController extends Controller
         // Habilitar/deshabilitar la ONT corta o restablece el
         // servicio: se protege con el mismo permiso que activarla
         $this->middleware('check.permission:onts.activate')->only('enableOnt', 'disableOnt');
+        // Reiniciar es menos invasivo que deshabilitar (no cambia la
+        // configuración), pero deja al cliente sin servicio un minuto:
+        // se exige el mismo permiso, que además ya existe en la base
+        // de datos y no obliga a sincronizar permisos al desplegar.
+        $this->middleware('check.permission:onts.activate')->only('reboot');
     }
 
     public function no_authorized_ont_index()
@@ -60,13 +65,37 @@ class OntController extends Controller
         return view('gestisp.onts.no-authorized.index', compact('olts', 'contracts'));
     }
 
-    public function authorized_ont_index()
+    /**
+     * Listado de ONTs autorizadas de la sucursal.
+     *
+     * Admite filtrar por OLT (?olt=ID): es lo que usa el enlace "ONUs"
+     * del listado de OLTs para ver de una las ONTs conectadas a ese
+     * equipo. Sin el parámetro se listan todas, como siempre.
+     */
+    public function authorized_ont_index(Request $request)
     {
-        $onts = Ont::where('branch_id', session('branch_id'))
-            ->with(['olt', 'contract'])
-            ->get();
+        $oltFiltrada = null;
 
-        return view('gestisp.onts.authorized.index', compact('onts'));
+        $query = Ont::where('branch_id', session('branch_id'))
+            ->with(['olt', 'contract']);
+
+        if ($request->filled('olt')) {
+            // Se busca dentro de la sucursal activa: así el filtro no
+            // sirve para asomarse a las OLTs de otra sucursal.
+            $oltFiltrada = Olt::where('branch_id', session('branch_id'))
+                ->find($request->query('olt'));
+
+            if ($oltFiltrada) {
+                $query->where('olt_id', $oltFiltrada->id);
+            } else {
+                // Id inexistente o de otra sucursal: no se muestra nada
+                $query->whereRaw('1 = 0');
+            }
+        }
+
+        $onts = $query->get();
+
+        return view('gestisp.onts.authorized.index', compact('onts', 'oltFiltrada'));
     }
     public function buscarContrato(Request $request): \Illuminate\Http\JsonResponse
     {
@@ -569,6 +598,29 @@ class OntController extends Controller
     public function disableOnt(Ont $ont): \Illuminate\Http\RedirectResponse
     {
         return $this->changeAdminState($ont, false);
+    }
+
+    /**
+     * Reinicia la ONT del cliente.
+     *
+     * Útil como primer paso de soporte cuando el cliente reporta
+     * lentitud o se quedó sin navegación: reinicia el equipo sin
+     * tocar su configuración ni obligar a reautorizarlo.
+     */
+    public function reboot(Ont $ont): \Illuminate\Http\RedirectResponse
+    {
+        $olt = Olt::findOrFail($ont->olt_id);
+
+        try {
+            $this->oltSshService->rebootOnt($olt, $ont);
+        } catch (\Exception $e) {
+            return back()->with('error', 'No se pudo reiniciar la ONT: ' . $e->getMessage());
+        }
+
+        return back()->with(
+            'success',
+            'Se envió el reinicio a la ONT. El equipo tarda cerca de un minuto en volver a conectarse.'
+        );
     }
 
     private function changeAdminState(Ont $ont, bool $enable): \Illuminate\Http\RedirectResponse

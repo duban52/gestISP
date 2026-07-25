@@ -57,6 +57,11 @@
                 ]
             });
 
+            // Listado de ONTs filtrado por OLT. La URL se toma de
+            // route() y no se arma a mano: las rutas del panel llevan
+            // prefijo y escribirla aquí daría un 404.
+            const ontsPorOltUrl = "{{ route('onts.authorized') }}";
+
             fetch("{{ route('api.olts') }}")
                 .then(r => r.json())
                 .then(data => {
@@ -75,7 +80,10 @@
                             statusBadge,
                             temperature,
                             olt.uptime ?? 'N/A',
-                            `<a href="#">ONUs</a>`,
+                            `<a href="${ontsPorOltUrl}?olt=${olt.id}" class="btn btn-sm btn-outline-info"
+                                title="Ver las ONTs conectadas a esta OLT">
+                                <i class="fas fa-network-wired"></i> Ver ONUs
+                            </a>`,
                             `<a href="olts/${olt.id}/edit" class="btn btn-sm btn-primary">
                                 <i class="fas fa-edit"></i> Editar
                             </a>`,
