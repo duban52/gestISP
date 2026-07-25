@@ -90,7 +90,7 @@ class LoginController extends Controller
 
         if ($user && !$user->is_active && \Illuminate\Support\Facades\Hash::check($request->input('password'), $user->password)) {
             throw ValidationException::withMessages([
-                $this->username() => 'Su usuario está inhabilitado. Comuníquese con un administrador.',
+                $this->username() => trans('auth.inactive'),
             ]);
         }
 
@@ -104,14 +104,14 @@ class LoginController extends Controller
         $branchId = $request->input('branch_id');
 
         if (!$branchId) {
-            return redirect()->back()->withErrors(['branch_id' => 'Debe seleccionar una sucursal']);
+            return redirect()->back()->withErrors(['branch_id' => trans('auth.branch_required')]);
         }
 
         // Verificar si el usuario tiene acceso a esta sucursal
         $branchRole = $user->branches()->where('branch_id', $branchId)->first();
 
         if (!$branchRole) {
-            return redirect()->back()->withErrors(['branch_id' => 'No tiene acceso a esta sucursal']);
+            return redirect()->back()->withErrors(['branch_id' => trans('auth.branch_forbidden')]);
         }
 
         // Guardar la sucursal y el rol en la sesión

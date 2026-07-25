@@ -105,7 +105,10 @@ class UserAccessControlTest extends TestCase
             'email' => $usuario->email,
             'password' => 'clave-usuario',
             'branch_id' => $this->branch->id,
-        ])->assertSessionHasErrors(['email' => 'Su usuario está inhabilitado. Comuníquese con un administrador.']);
+            // El texto vive en resources/lang/es/auth.php: se compara
+            // contra la traducción y no contra una copia literal, para
+            // que reescribirlo no rompa la prueba.
+        ])->assertSessionHasErrors(['email' => trans('auth.inactive')]);
     }
 
     public function test_un_usuario_habilitado_si_puede_iniciar_sesion(): void

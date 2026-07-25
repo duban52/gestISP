@@ -56,7 +56,7 @@ class TrackUserActivity
             // se le expulsa en el acto. El usuario ya está cargado,
             // así que comprobarlo no cuesta una consulta extra.
             if (!Auth::user()->is_active) {
-                return $this->expulsar($request, 'Su usuario fue inhabilitado.');
+                return $this->expulsar($request, trans('auth.session_user_disabled'));
             }
 
             $sesion = $this->tracker->sesionActual($request);
@@ -64,13 +64,15 @@ class TrackUserActivity
             // Cierre remoto: la fila existe y ya tiene salida
             // marcada por un administrador
             if ($sesion && $sesion->logout_at && $sesion->logout_reason === UserSession::REASON_FORCED) {
-                return $this->expulsar($request, 'Su sesión fue cerrada por un administrador.');
+                return $this->expulsar($request, trans('auth.session_closed_by_admin'));
             }
 
             if ($this->llevaDemasiadoTiempoInactiva($request)) {
                 return $this->expulsar(
                     $request,
-                    'Su sesión se cerró automáticamente por inactividad. Vuelva a iniciar sesión.',
+                    trans('auth.session_expired', [
+                        'minutes' => (int) config('session.inactivity_timeout', 15),
+                    ]),
                     UserSession::REASON_EXPIRED,
                 );
             }

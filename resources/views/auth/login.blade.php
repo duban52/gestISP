@@ -11,6 +11,11 @@
                     <div class="card-header">{{ __('Iniciar Sesión') }}</div>
 
                     <div class="card-body">
+                        {{-- Avisos: confirmaciones (p. ej. contraseña
+                             restablecida, sesión cerrada por inactividad)
+                             y errores de acceso. --}}
+                        @include('auth.partials.alerts')
+
                         <form method="POST" action="{{ route('login') }}">
                             @csrf
 
@@ -18,13 +23,9 @@
                                 <label for="email" class="col-md-4 col-form-label text-md-end">{{ __('Correo Electrónico') }}</label>
 
                                 <div class="col-md-6">
+                                    {{-- El texto del error se muestra una sola vez, en el
+                                         aviso de arriba; aquí solo se resalta el campo. --}}
                                     <input id="email" type="email" class="form-control @error('email') is-invalid @enderror" name="email" value="{{ old('email') }}" required autocomplete="email" autofocus>
-
-                                    @error('email')
-                                    <span class="invalid-feedback" role="alert">
-                                        <strong>{{ $message }}</strong>
-                                    </span>
-                                    @enderror
                                 </div>
                             </div>
 
@@ -33,12 +34,6 @@
 
                                 <div class="col-md-6">
                                     <input id="password" type="password" class="form-control @error('password') is-invalid @enderror" name="password" required autocomplete="current-password">
-
-                                    @error('password')
-                                    <span class="invalid-feedback" role="alert">
-                                        <strong>{{ $message }}</strong>
-                                    </span>
-                                    @enderror
                                 </div>
                             </div>
 
@@ -47,7 +42,7 @@
 
                                 <div class="col-md-6">
 
-                                    <select name="branch_id" id="branch" required class="form-control">
+                                    <select name="branch_id" id="branch" required class="form-control @error('branch_id') is-invalid @enderror">
                                         <option value="" selected disabled>Seleccione una sucursal</option>
                                         <!-- Opciones dinámicas se llenan con AJAX -->
                                     </select>

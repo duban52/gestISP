@@ -67,7 +67,7 @@ class CheckPermission
     private function pedirNuevoInicioDeSesion(Request $request)
     {
         if ($request->expectsJson()) {
-            return response()->json(['message' => 'La sesión no está activa.'], 401);
+            return response()->json(['message' => trans('auth.session_inactive_json')], 401);
         }
 
         if (Auth::check()) {
@@ -77,7 +77,7 @@ class CheckPermission
         }
 
         return redirect()->route('login')->withErrors([
-            'email' => 'Su sesión no tiene una sucursal activa. Inicie sesión de nuevo.',
+            'email' => trans('auth.branch_missing'),
         ]);
     }
 
