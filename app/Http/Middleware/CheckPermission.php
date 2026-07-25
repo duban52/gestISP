@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
 
@@ -19,6 +20,15 @@ class CheckPermission
     public function handle(Request $request, Closure $next, $permission)
     {
         $currentRoleId = session('current_role_id');
+
+        // Sesión sin rol activo: no es una falta de permisos, es una
+        // sesión incompleta (EnsureBranchSession no pudo recomponerla
+        // porque el usuario no pertenece a ninguna sucursal, o la
+        // sesión caducó). Antes esto devolvía un 403 sin salida en el
+        // propio dashboard; ahora se pide iniciar sesión de nuevo.
+        if (!$currentRoleId) {
+            return $this->pedirNuevoInicioDeSesion($request);
+        }
 
         if ($currentRoleId) {
             $role = Role::find($currentRoleId);
@@ -46,6 +56,29 @@ class CheckPermission
         }
 
         abort(403, 'No tienes permiso para realizar esta acción.');
+    }
+
+    /**
+     * Cierra la sesión incompleta y manda al login con un aviso.
+     *
+     * A las peticiones de fondo (sondeos por AJAX) se les responde
+     * 401 en JSON: seguir una redirección a HTML no les sirve de nada.
+     */
+    private function pedirNuevoInicioDeSesion(Request $request)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'La sesión no está activa.'], 401);
+        }
+
+        if (Auth::check()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return redirect()->route('login')->withErrors([
+            'email' => 'Su sesión no tiene una sucursal activa. Inicie sesión de nuevo.',
+        ]);
     }
 
     /**

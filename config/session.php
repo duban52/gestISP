@@ -37,6 +37,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Cierre por inactividad
+    |--------------------------------------------------------------------------
+    |
+    | Minutos que la sesión puede permanecer SIN actividad del usuario
+    | antes de cerrarse sola. Lo aplica el middleware TrackUserActivity,
+    | que además deja la salida registrada en la trazabilidad como
+    | "Expiró por inactividad".
+    |
+    | Se controla aparte de 'lifetime' para poder exigir un cierre
+    | rápido (15 min) sin acortar la vida de la cookie de sesión. Con 0
+    | se desactiva la comprobación.
+    |
+    | Los sondeos automáticos del navegador (badge de notificaciones,
+    | progreso de importación) NO cuentan como actividad: si contaran,
+    | una pestaña abierta mantendría la sesión viva para siempre.
+    |
+    */
+
+    'inactivity_timeout' => env('SESSION_INACTIVITY_TIMEOUT', 15),
+
+    /*
+    |--------------------------------------------------------------------------
     | Session Encryption
     |--------------------------------------------------------------------------
     |
