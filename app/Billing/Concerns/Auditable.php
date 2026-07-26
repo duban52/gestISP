@@ -44,18 +44,15 @@ trait Auditable
 
     /**
      * Escribe el registro de auditoría del cambio.
+     *
+     * Delega en AuditLogger para que estas filas lleven el mismo
+     * contexto (sucursal, rol, ruta, sesión) y la misma limpieza de
+     * datos sensibles que el resto del sistema. Antes escribía
+     * directamente en la tabla y quedaban más pobres que las demás.
      */
     public function writeAudit(string $action, array $old, array $new): void
     {
-        Audit::create([
-            'auditable_type' => static::class,
-            'auditable_id' => $this->getKey(),
-            'user_id' => auth()->id(),
-            'ip' => request()?->ip(),
-            'action' => $action,
-            'old_values' => $old ?: null,
-            'new_values' => $new ?: null,
-        ]);
+        app(\App\Services\Audit\AuditLogger::class)->model($this, $action, $old, $new);
     }
 
     /** Historial de auditoría del modelo */

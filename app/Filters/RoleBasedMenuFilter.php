@@ -36,6 +36,18 @@ class RoleBasedMenuFilter implements FilterInterface
      */
     public function transform($item)
     {
+        // Ítems reservados al superadministrador (trazabilidad): no
+        // dependen de un permiso, sino del rol activo. Así nadie
+        // puede habilitarlos marcando una casilla en el módulo de
+        // roles.
+        if (! empty($item['solo_superadmin'])) {
+            if ($this->currentRole()?->name !== \App\Http\Middleware\EnsureSuperadmin::ROL) {
+                $item['restricted'] = true;
+            }
+
+            return $item;
+        }
+
         if (empty($item['can'])) {
             return $item;
         }

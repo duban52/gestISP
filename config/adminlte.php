@@ -629,6 +629,15 @@ return [
                     'active' => ['gestisp/roles*'],
                     'can' => 'roles.index',
                 ],
+                // Trazabilidad: la entrada la filtra el propio menú
+                // por rol; además la ruta exige superadministrador.
+                [
+                    'text' => 'Trazabilidad',
+                    'route' => 'audits.index',
+                    'icon' => 'fas  fa-user-secret',
+                    'active' => ['auditoria*'],
+                    'solo_superadmin' => true,
+                ],
 
             ],
 

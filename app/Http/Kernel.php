@@ -49,6 +49,11 @@ class Kernel extends HttpKernel
             // Va al final, después de iniciar la sesión y resolver la
             // autenticación.
             \App\Http\Middleware\TrackUserActivity::class,
+            // Trazabilidad: deja constancia de cada acción del usuario
+            // (incluidas las que no cambian datos, como exportar o
+            // reiniciar una ONT). Va al final para conocer ya el
+            // resultado de la petición.
+            \App\Http\Middleware\AuditRequests::class,
         ],
 
         'api' => [
@@ -78,5 +83,6 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'check.permission' => \App\Http\Middleware\CheckPermission::class,
+        'superadmin' => \App\Http\Middleware\EnsureSuperadmin::class,
     ];
 }

@@ -142,6 +142,11 @@ Route::get('contracts/create/{client}', [ContractController::class, 'create'])->
 // Ruta para obtener las sucursales en el login
 Route::get('/user/branches', [LoginController::class, 'getBranches'])->name('user.branches');
 
+// Trazabilidad del sistema: reservada al superadministrador (el
+// middleware exige el rol, no un permiso que pueda concederse por error)
+Route::get('/auditoria', [App\Http\Controllers\AuditController::class, 'index'])->name('audits.index');
+Route::get('/auditoria/{audit}', [App\Http\Controllers\AuditController::class, 'show'])->name('audits.show');
+
 // Perfil del usuario autenticado (cada quien edita el suyo: no lleva
 // permisos, siempre opera sobre el usuario de la sesión)
 Route::get('/perfil', [ProfileController::class, 'edit'])->name('profile.edit');
