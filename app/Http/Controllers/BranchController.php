@@ -172,9 +172,21 @@ class BranchController extends Controller
         // La regla unique excluye el registro actual cuando se está editando
         $uniqueName = 'unique:branches,name' . ($ignoreId ? ',' . $ignoreId : '');
 
+        // El prefijo se guarda en mayúsculas: da igual cómo lo escriba
+        // quien edita la sucursal, los contratos quedan uniformes.
+        if ($request->filled('contract_prefix')) {
+            $request->merge([
+                'contract_prefix' => mb_strtoupper(trim($request->input('contract_prefix'))),
+            ]);
+        }
+
         return $request->validate([
             'nit'                    => 'required|string|max:20',
             'name'                   => "required|string|max:40|{$uniqueName}",
+            // Letras del número de contrato (ENG → ENG000001). Se
+            // guardan siempre en mayúsculas y sin símbolos para que el
+            // consecutivo quede uniforme.
+            'contract_prefix'        => 'nullable|string|max:10|regex:/^[A-Za-z0-9]+$/',
             'country'                => 'required|string|max:60',
             'department'             => 'required|string|max:60',
             'municipality'           => 'required|string|max:60',

@@ -57,6 +57,7 @@ class PermissionLabels
         'update' => 'Editar',
         'destroy' => 'Eliminar',
         'export' => 'Exportar',
+        'import' => 'Importar',
         'export-excel' => 'Exportar a Excel',
         'excel' => 'Exportar a Excel',
         'pdf' => 'Exportar a PDF',

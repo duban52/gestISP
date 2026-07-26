@@ -127,6 +127,14 @@ Route::get('/onts/authorized', [OntController::class , 'authorized_ont_index'])-
 //Listar onts no autorizada
 Route::get('/onts/no-authorized', [OntController::class , 'no_authorized_ont_index'])->name('onts.no-authorized');
 Route::get('/olts/{olt}/onts-autofind', [OltController::class, 'ontsAutofind']);
+// Importación masiva de clientes y contratos desde CSV/Excel.
+// IMPORTANTE: van ANTES que cualquier /clients/{client}, o Laravel
+// interpretaría "import" como el identificador de un cliente.
+Route::get('/clients/import', [App\Http\Controllers\ClientImportController::class, 'index'])->name('clients.import.index');
+Route::get('/clients/import/plantilla', [App\Http\Controllers\ClientImportController::class, 'plantilla'])->name('clients.import.template');
+Route::post('/clients/import/preview', [App\Http\Controllers\ClientImportController::class, 'preview'])->name('clients.import.preview');
+Route::post('/clients/import', [App\Http\Controllers\ClientImportController::class, 'store'])->name('clients.import.store');
+
 // Ruta del buscador de clientes
 Route::get('/clients/search', [ClientController::class, 'searchView'])->name('clients.searchView');
 Route::post('/clients/search', [ClientController::class, 'search'])->name('clients.search');

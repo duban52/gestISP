@@ -62,7 +62,7 @@
                     <tbody>
                     @foreach($contracts as $contract)
                         <tr>
-                            <td>{{ $contract->id }}</td>
+                            <td><strong>{{ $contract->numero_visible }}</strong></td>
                             <td>{{ $contract->client->identity_number }}</td>
                             <td>{{ $contract->client->name }}</td>
                             <td>{{ $contract->client->last_name }}</td>
@@ -91,18 +91,14 @@
                             <td>{{ $contract->activation_date ? \Carbon\Carbon::parse($contract->activation_date)->format('d/m/Y') : 'N/A' }}</td>
                             <td>{{ $contract->plan->name ?? 'N/A' }}</td>
                             <td>
-                                <div class="btn-group" role="group">
-                                    <a href="{{ route('contracts.show', $contract) }}"
-                                       class="btn btn-info btn-sm"
-                                       title="Ver contrato">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    <a href="{{ route('contracts.edit', $contract) }}"
-                                       class="btn btn-warning btn-sm"
-                                       title="Editar contrato">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                </div>
+                                {{-- El contrato se administra desde su ficha:
+                                     el botón de edición se retiró porque no
+                                     tenía una pantalla que lo atendiera. --}}
+                                <a href="{{ route('contracts.show', $contract) }}"
+                                   class="btn btn-info btn-sm"
+                                   title="Ver contrato">
+                                    <i class="fas fa-eye"></i>
+                                </a>
                             </td>
                         </tr>
                     @endforeach

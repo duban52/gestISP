@@ -13,9 +13,11 @@ use App\Models\Plan;
 use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Notifications\ClientWelcome;
+use App\Services\ContractNumberGenerator;
 use App\Support\ColombiaLocations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ContractController extends Controller
 {
@@ -120,9 +122,16 @@ class ContractController extends Controller
         ]);
 
 
-        // Crear el contrato con los datos del formulario
+        // Crear el contrato con su número consecutivo de sucursal.
+        // Va en una transacción porque el generador bloquea la fila de
+        // la sucursal para que dos altas simultáneas no repitan número.
+        $contract = DB::transaction(function () use ($request) {
+            $nuevo = Contract::create($request->all());
 
-        $contract = Contract::create($request->all());
+            app(ContractNumberGenerator::class)->asignar($nuevo);
+
+            return $nuevo;
+        });
 
         //Creación de orden automática al crear contrato
 

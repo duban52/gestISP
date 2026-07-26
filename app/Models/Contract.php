@@ -11,6 +11,9 @@ class Contract extends Model
     use HasFactory;
 
     protected $fillable = [
+        // Número visible del contrato (consecutivo por sucursal:
+        // ENG000123). El id sigue siendo el identificador interno.
+        'contract_number',
         'branch_id',
         'client_id',
         'plan_id',
@@ -44,6 +47,18 @@ class Contract extends Model
     ];
 
 
+
+    /**
+     * Número que se le muestra al cliente.
+     *
+     * Los contratos creados antes de existir la numeración por
+     * sucursal no tienen número propio; en ese caso se muestra el id
+     * para que la pantalla nunca quede vacía.
+     */
+    public function getNumeroVisibleAttribute(): string
+    {
+        return $this->contract_number ?: (string) $this->id;
+    }
 
     /**
      * Relación con la tabla Clients (Clientes)

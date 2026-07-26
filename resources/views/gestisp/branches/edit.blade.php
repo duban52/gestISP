@@ -19,6 +19,27 @@
                         <label for="name">Nombre</label>
                         <input type="text" name="name" class="form-control" value="{{ $branch->name }}" required>
                     </div>
+                    {{-- Prefijo de la numeración de contratos de esta
+                         sucursal. Cambiarlo NO renumera los contratos
+                         existentes: solo afecta a los siguientes. --}}
+                    <div class="form-group col-md-6">
+                        <label for="contract_prefix">Prefijo del número de contrato</label>
+                        <input type="text" name="contract_prefix" id="contract_prefix"
+                               class="form-control text-uppercase @error('contract_prefix') is-invalid @enderror"
+                               value="{{ old('contract_prefix', $branch->contract_prefix) }}"
+                               maxlength="10" placeholder="Ej: ENG">
+                        <small class="form-text text-muted">
+                            Letras que anteceden al consecutivo. Con <strong>ENG</strong> los contratos
+                            quedan como <strong>ENG000001</strong>.
+                            @if($branch->contract_next_number)
+                                Último número entregado: <strong>{{ $branch->contract_next_number }}</strong>.
+                            @endif
+                            Cambiarlo no modifica los contratos ya creados.
+                        </small>
+                        @error('contract_prefix')
+                            <span class="invalid-feedback d-block">{{ $message }}</span>
+                        @enderror
+                    </div>
                     <div class="form-group col-md-6">
                         <label for="country">País</label>
                         <input type="text" name="country" class="form-control" value="{{ $branch->country }}" required>

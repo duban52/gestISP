@@ -420,6 +420,15 @@ return [
                     'icon' => 'fas  fa-search',
                     'can' => 'clients.search',
                 ],
+                // Importación masiva desde otro software. Su permiso
+                // (clients.import) se concede desde el módulo de roles.
+                [
+                    'text' => 'Importar clientes',
+                    'route' => 'clients.import.index',
+                    'active' => ['clients/import*'],
+                    'icon' => 'fas  fa-file-import',
+                    'can' => 'clients.import',
+                ],
                 [
                     'text' => 'Listado de clientes',
                     'route' => 'contracts.index',
