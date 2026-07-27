@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Invoice;
+use App\Notifications\Concerns\ArmaCorreo;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -16,6 +17,7 @@ use Illuminate\Notifications\Notification;
 class InvoiceDueSoon extends Notification implements ShouldQueue
 {
     use Queueable;
+    use ArmaCorreo;
     use RespetaCanales;
 
     public function __construct(
@@ -31,17 +33,38 @@ class InvoiceDueSoon extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $sucursal = $this->invoice->branch?->name ?? config('app.name');
-        $total = '$' . number_format((float) $this->invoice->pending_invoice_amount, 0, ',', '.');
+        $vence = optional($this->invoice->due_date)->format('d/m/Y');
+        $dias = $this->diasRestantes;
 
-        return (new MailMessage)
-            ->subject('Su factura vence pronto')
-            ->greeting('Hola ' . $notifiable->name . ',')
-            ->line("Le recordamos que su factura {$this->invoice->displayNumber()} vence en {$this->diasRestantes} día(s).")
-            ->line('Saldo pendiente: ' . $total)
-            ->line('Vencimiento: ' . optional($this->invoice->due_date)->format('d/m/Y'))
-            ->line('Pague a tiempo para evitar la suspensión del servicio.')
-            ->salutation('Gracias, ' . $sucursal);
+        return $this->correo(
+            'Su factura vence ' . ($dias === 1 ? 'mañana' : 'en ' . $dias . ' días'),
+            [
+                'titulo' => 'Recordatorio de pago',
+                'preheader' => 'Su factura ' . $this->invoice->displayNumber() . ' vence pronto.',
+                'saludo' => 'Hola ' . $notifiable->name . ',',
+                'parrafos' => [
+                    $dias === 1
+                        ? 'Le recordamos que su factura vence mañana.'
+                        : 'Le recordamos que su factura vence en ' . $dias . ' días.',
+                ],
+                'destacado' => [
+                    'etiqueta' => 'Saldo pendiente',
+                    'valor' => $this->pesos($this->invoice->pending_invoice_amount),
+                    'nota' => $vence ? 'Vence el ' . $vence : null,
+                ],
+                'datos' => array_filter([
+                    'Número de factura' => $this->invoice->displayNumber(),
+                    'Período facturado' => $this->invoice->billed_month_name,
+                    'Fecha de vencimiento' => $vence,
+                ]),
+                'aviso' => [
+                    'tipo' => 'info',
+                    'texto' => 'Pagando antes de la fecha límite evita la suspensión del servicio. Si ya realizó el pago, ignore este mensaje.',
+                ],
+            ],
+            $this->invoice->branch,
+            'aviso',
+        );
     }
 
     public function toWhatsApp(object $notifiable): WhatsAppMessage

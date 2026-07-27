@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\TechnicalOrder;
+use App\Notifications\Concerns\ArmaCorreo;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -22,6 +23,7 @@ use Illuminate\Notifications\Notification;
 class TechnicalOrderAssignedTechnician extends Notification implements ShouldQueue
 {
     use Queueable;
+    use ArmaCorreo;
     use RespetaCanales;
 
     public function __construct(private readonly TechnicalOrder $order)
@@ -35,16 +37,33 @@ class TechnicalOrderAssignedTechnician extends Notification implements ShouldQue
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject('Se le asignó una orden técnica')
-            ->greeting('Hola ' . $notifiable->name . ',')
-            ->line('Se le asignó una nueva orden de servicio: ' . ($this->order->detail ?: 'atención técnica') . '.')
-            ->when(
-                filled($this->order->contract?->address),
-                fn ($m) => $m->line('Dirección: ' . $this->order->contract->address)
-            )
-            ->action('Ver mis órdenes', route('technicals_orders.my_technical_orders'))
-            ->line('Revise el detalle en el sistema y coordine la visita.');
+        $cliente = $this->order->contract?->client;
+
+        return $this->correo(
+            'Nueva orden asignada: N.º ' . $this->order->id,
+            [
+                'titulo' => 'Se le asignó una orden técnica',
+                'preheader' => ($this->order->detail ?: 'Atención técnica') . ' — ' . ($this->order->contract?->address ?? ''),
+                'saludo' => 'Hola ' . $notifiable->name . ',',
+                'parrafos' => [
+                    'Se le asignó una nueva orden de servicio. Revise el detalle en el sistema y coordine la visita.',
+                ],
+                'datos' => array_filter([
+                    'Número de orden' => $this->order->id,
+                    'Tipo de trabajo' => $this->order->detail ?: 'Atención técnica',
+                    'Cliente' => $cliente ? trim($cliente->name . ' ' . $cliente->last_name) : null,
+                    'Teléfono' => $cliente?->number_phone,
+                    'Dirección' => $this->order->contract?->address,
+                    'Barrio' => $this->order->contract?->neighborhood,
+                    'Comentario inicial' => $this->order->initial_comment,
+                ]),
+                'accion' => [
+                    'texto' => 'Ver mis órdenes',
+                    'url' => route('technicals_orders.my_technical_orders'),
+                ],
+            ],
+            $this->order->branch,
+        );
     }
 
     public function toWhatsApp(object $notifiable): WhatsAppMessage

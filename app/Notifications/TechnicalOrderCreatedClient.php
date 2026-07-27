@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\TechnicalOrder;
+use App\Notifications\Concerns\ArmaCorreo;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -16,6 +17,7 @@ use Illuminate\Notifications\Notification;
 class TechnicalOrderCreatedClient extends Notification implements ShouldQueue
 {
     use Queueable;
+    use ArmaCorreo;
     use RespetaCanales;
 
     public function __construct(private readonly TechnicalOrder $order)
@@ -29,14 +31,25 @@ class TechnicalOrderCreatedClient extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $sucursal = $this->order->branch?->name ?? config('app.name');
-
-        return (new MailMessage)
-            ->subject('Recibimos su solicitud de servicio')
-            ->greeting('Hola ' . $notifiable->name . ',')
-            ->line('Registramos una orden de servicio: ' . ($this->order->detail ?: 'atención técnica') . '.')
-            ->line('Pronto un técnico se pondrá en contacto o lo visitará. Le avisaremos cuando quede resuelta.')
-            ->salutation('Gracias, ' . $sucursal);
+        return $this->correo(
+            'Recibimos su solicitud de servicio',
+            [
+                'titulo' => 'Recibimos su solicitud',
+                'preheader' => 'Orden N.º ' . $this->order->id . ' registrada.',
+                'saludo' => 'Hola ' . $notifiable->name . ',',
+                'parrafos' => [
+                    'Registramos su solicitud y ya está en cola de atención. Un técnico se pondrá en contacto o lo visitará próximamente.',
+                ],
+                'datos' => array_filter([
+                    'Número de orden' => $this->order->id,
+                    'Tipo de solicitud' => $this->order->detail ?: 'Atención técnica',
+                    'Dirección' => $this->order->contract?->address,
+                    'Fecha de registro' => $this->order->created_at?->format('d/m/Y H:i'),
+                ]),
+                'cierre' => 'Le avisaremos por este mismo medio cuando el servicio quede resuelto.',
+            ],
+            $this->order->branch,
+        );
     }
 
     public function toWhatsApp(object $notifiable): WhatsAppMessage

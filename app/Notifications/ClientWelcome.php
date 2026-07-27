@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Contract;
+use App\Notifications\Concerns\ArmaCorreo;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -20,6 +21,7 @@ use Illuminate\Notifications\Notification;
 class ClientWelcome extends Notification implements ShouldQueue
 {
     use Queueable;
+    use ArmaCorreo;
     use RespetaCanales;
 
     public function __construct(private readonly Contract $contract)
@@ -33,15 +35,32 @@ class ClientWelcome extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $sucursal = $this->contract->branch?->name ?? config('app.name');
+        $sucursal = $this->contract->branch;
+        $nombreSucursal = $sucursal?->name ?? config('app.name');
 
-        return (new MailMessage)
-            ->subject('¡Bienvenido a ' . $sucursal . '!')
-            ->greeting('Hola ' . $notifiable->name . ',')
-            ->line('¡Gracias por confiar en nosotros! Su contrato ya quedó registrado.')
-            ->line('Plan contratado: ' . ($this->contract->plan?->name ?? 'servicio de Internet') . '.')
-            ->line('Cualquier novedad la recibirá por este medio. Estamos para servirle.')
-            ->salutation('Un saludo, ' . $sucursal);
+        return $this->correo(
+            '¡Bienvenido a ' . $nombreSucursal . '!',
+            [
+                'titulo' => '¡Bienvenido! Su servicio ya está registrado',
+                'preheader' => 'Gracias por confiar en ' . $nombreSucursal . '.',
+                'saludo' => 'Hola ' . $notifiable->name . ',',
+                'parrafos' => [
+                    '¡Gracias por confiar en nosotros! Su contrato quedó registrado y en breve coordinaremos la instalación de su servicio.',
+                ],
+                'datos' => array_filter([
+                    'Número de contrato' => $this->contract->numero_visible,
+                    'Plan contratado' => $this->contract->plan?->name,
+                    'Dirección del servicio' => $this->contract->address,
+                ]),
+                'aviso' => [
+                    'tipo' => 'exito',
+                    'texto' => 'Guarde su número de contrato: se lo pediremos cuando necesite soporte o quiera consultar el estado de su cuenta.',
+                ],
+                'cierre' => 'Cualquier novedad sobre su servicio y sus facturas le llegará por este medio. Estamos para servirle.',
+            ],
+            $sucursal,
+            'exito',
+        );
     }
 
     public function toWhatsApp(object $notifiable): WhatsAppMessage

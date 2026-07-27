@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Invoice;
+use App\Notifications\Concerns\ArmaCorreo;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -17,6 +18,7 @@ class InvoiceGenerated extends Notification implements ShouldQueue
 {
     use Queueable;
     use RespetaCanales;
+    use ArmaCorreo;
 
     public function __construct(private readonly Invoice $invoice)
     {
@@ -29,16 +31,31 @@ class InvoiceGenerated extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $sucursal = $this->invoice->branch?->name ?? config('app.name');
+        $vence = optional($this->invoice->due_date)->format('d/m/Y');
 
-        return (new MailMessage)
-            ->subject('Nueva factura ' . $this->invoice->displayNumber())
-            ->greeting('Hola ' . $notifiable->name . ',')
-            ->line('Se generó su factura ' . $this->invoice->displayNumber() . '.')
-            ->line('Valor: $' . number_format((float) $this->invoice->total, 0, ',', '.'))
-            ->line('Fecha de vencimiento: ' . optional($this->invoice->due_date)->format('d/m/Y'))
-            ->line('Puede acercarse a nuestros puntos de pago o comunicarse con nosotros para cancelarla.')
-            ->salutation('Gracias, ' . $sucursal);
+        return $this->correo(
+            'Nueva factura ' . $this->invoice->displayNumber(),
+            [
+                'titulo' => 'Su factura del mes ya está disponible',
+                'preheader' => 'Factura ' . $this->invoice->displayNumber() . ' por ' . $this->pesos($this->invoice->total),
+                'saludo' => 'Hola ' . $notifiable->name . ',',
+                'parrafos' => [
+                    'Le informamos que se generó su factura correspondiente al servicio de Internet. A continuación encontrará el detalle.',
+                ],
+                'destacado' => [
+                    'etiqueta' => 'Valor a pagar',
+                    'valor' => $this->pesos($this->invoice->total),
+                    'nota' => $vence ? 'Fecha límite de pago: ' . $vence : null,
+                ],
+                'datos' => array_filter([
+                    'Número de factura' => $this->invoice->displayNumber(),
+                    'Período facturado' => $this->invoice->billed_month_name,
+                    'Fecha de vencimiento' => $vence,
+                ]),
+                'cierre' => 'Puede pagar en nuestros puntos de atención o comunicarse con nosotros para conocer los demás medios de pago disponibles.',
+            ],
+            $this->invoice->branch,
+        );
     }
 
     public function toWhatsApp(object $notifiable): WhatsAppMessage

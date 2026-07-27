@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Invoice;
+use App\Notifications\Concerns\ArmaCorreo;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -16,6 +17,7 @@ use Illuminate\Notifications\Notification;
 class InvoiceOverdue extends Notification implements ShouldQueue
 {
     use Queueable;
+    use ArmaCorreo;
     use RespetaCanales;
 
     public function __construct(private readonly Invoice $invoice)
@@ -29,16 +31,36 @@ class InvoiceOverdue extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $sucursal = $this->invoice->branch?->name ?? config('app.name');
-        $total = '$' . number_format((float) $this->invoice->pending_invoice_amount, 0, ',', '.');
+        $vencio = optional($this->invoice->due_date)->format('d/m/Y');
 
-        return (new MailMessage)
-            ->subject('Su factura está vencida')
-            ->greeting('Hola ' . $notifiable->name . ',')
-            ->line("Su factura {$this->invoice->displayNumber()} se encuentra VENCIDA.")
-            ->line('Saldo pendiente: ' . $total)
-            ->line('Le pedimos ponerse al día para restablecer o mantener su servicio.')
-            ->salutation('Gracias, ' . $sucursal);
+        return $this->correo(
+            'Factura vencida ' . $this->invoice->displayNumber(),
+            [
+                'titulo' => 'Su factura está vencida',
+                'preheader' => 'Saldo pendiente: ' . $this->pesos($this->invoice->pending_invoice_amount),
+                'saludo' => 'Hola ' . $notifiable->name . ',',
+                'parrafos' => [
+                    'Su factura superó la fecha límite de pago y figura como vencida en nuestro sistema.',
+                ],
+                'destacado' => [
+                    'etiqueta' => 'Saldo pendiente',
+                    'valor' => $this->pesos($this->invoice->pending_invoice_amount),
+                    'nota' => $vencio ? 'Venció el ' . $vencio : null,
+                ],
+                'datos' => array_filter([
+                    'Número de factura' => $this->invoice->displayNumber(),
+                    'Período facturado' => $this->invoice->billed_month_name,
+                    'Fecha de vencimiento' => $vencio,
+                ]),
+                'aviso' => [
+                    'tipo' => 'alerta',
+                    'texto' => 'Le pedimos ponerse al día para mantener activo su servicio. Si ya realizó el pago en los últimos días, por favor ignore este mensaje.',
+                ],
+                'cierre' => 'Si tiene alguna dificultad para pagar, comuníquese con nosotros: buscamos la manera de ayudarle.',
+            ],
+            $this->invoice->branch,
+            'alerta',
+        );
     }
 //Definicion de plantilla
     public function toWhatsApp(object $notifiable): WhatsAppMessage
