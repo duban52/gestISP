@@ -336,6 +336,44 @@
                 (value !== null && value !== undefined && value !== '') ? value : '—';
         }
 
+        /**
+         * Muestra la IP de la sesión como enlace a la gestión del
+         * equipo del cliente (http://IP), en una pestaña nueva.
+         *
+         * Solo se enlaza si es una IPv4 válida: el valor lo reporta el
+         * router y aquí se inserta como HTML, así que cualquier cosa
+         * distinta se muestra como texto plano y escapado.
+         */
+        function enlaceIp(ip) {
+            if (ip === null || ip === undefined || ip === '') {
+                return null;
+            }
+
+            const octetos = String(ip).trim().split('.');
+
+            const esIpv4 = octetos.length === 4 && octetos.every(function (o) {
+                return /^\d{1,3}$/.test(o) && Number(o) <= 255;
+            });
+
+            if (!esIpv4) {
+                return escaparHtml(String(ip));
+            }
+
+            const direccion = octetos.join('.');
+
+            return '<a href="http://' + direccion + '" target="_blank" rel="noopener noreferrer"'
+                + ' title="Abrir la gestión del equipo en una pestaña nueva">'
+                + direccion + ' <i class="fas fa-external-link-alt fa-xs"></i></a>';
+        }
+
+        /** Escapa un texto para poder insertarlo como HTML sin riesgo */
+        function escaparHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = texto;
+
+            return div.innerHTML;
+        }
+
         /** Formatea bits por segundo a la unidad más legible */
         function formatBps(bps) {
             if (bps === null || bps === undefined) return '—';
@@ -374,7 +412,7 @@
 
                         setText('st-connected',
                             '<span class="badge badge-success"><i class="fas fa-check-circle"></i> Conectado</span>');
-                        setText('st-address',    s.address);
+                        setText('st-address',    enlaceIp(s.address));
                         setText('st-caller',     s.caller_id);
                         setText('st-uptime',     s.uptime);
                         setText('st-service',    s.service);
