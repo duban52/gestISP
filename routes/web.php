@@ -215,6 +215,23 @@ Route::post('/cash-register/close', [CashRegisterController::class, 'close'])->n
 //pagos
 Route::POST('/payments/search', [PaymentController::class, 'search'])->name('payments.search');
 Route::get('/payments/search', [PaymentController::class, 'searchView'])->name('payments.searchView');
+
+// Cobro múltiple: varias facturas (de varios contratos) en una sola
+// entrega de dinero. Todo o nada; ver BatchPaymentRegistrar.
+Route::post('/payments/batch', [PaymentController::class, 'storeBatch'])->name('payments.storeBatch');
+
+// Recibo de caja en tirilla térmica. El HTML es el que se ve en el
+// modal y el que se manda a la impresora; el PDF es para archivar.
+Route::get('/payments/{payment}/recibo', [App\Http\Controllers\PaymentReceiptController::class, 'show'])->name('payments.receipt');
+Route::get('/payments/{payment}/recibo/pdf', [App\Http\Controllers\PaymentReceiptController::class, 'pdf'])->name('payments.receipt.pdf');
+Route::get('/cobros/{batch}/recibos', [App\Http\Controllers\PaymentReceiptController::class, 'batch'])->name('payments.receipt.batch');
+Route::get('/cobros/{batch}/recibos/pdf', [App\Http\Controllers\PaymentReceiptController::class, 'batchPdf'])->name('payments.receipt.batch.pdf');
+
+// Reporte de retenciones practicadas por los clientes: es el insumo
+// para descontarlas en la declaración de renta, IVA o ICA.
+Route::get('/retenciones', [App\Http\Controllers\RetentionController::class, 'index'])->name('retentions.index');
+Route::get('/retenciones/excel', [App\Http\Controllers\RetentionController::class, 'excel'])->name('retentions.export');
+Route::get('/retenciones/pdf', [App\Http\Controllers\RetentionController::class, 'pdf'])->name('retentions.pdf');
 //Exportar pdf con reporte de pagos
 Route::get('/payments/export-pdf', [PaymentController::class, 'exportPaymentsPDF'])->name('payments.export');
 //Exportar pagos en excel

@@ -154,7 +154,9 @@ class CreditDebitNoteTest extends TestCase
         $factura->refresh();
 
         $this->assertEquals(0, (float) $factura->pending_invoice_amount);
-        $this->assertSame(InvoiceStatus::Pagada->value, $factura->status);
+        // No es "Pagada": el dinero no se recaudó, se ajustó con la
+        // nota. Tiene estado propio para no inflar el recaudo.
+        $this->assertSame(InvoiceStatus::SaldadaConNota->value, $factura->status);
     }
 
     public function test_una_nota_debito_reabre_una_factura_ya_pagada(): void
@@ -189,14 +191,37 @@ class CreditDebitNoteTest extends TestCase
 
     // ==================== Validaciones ====================
 
-    public function test_la_nota_credito_no_puede_superar_el_saldo(): void
+    public function test_la_nota_credito_no_puede_superar_el_valor_facturado(): void
     {
         $factura = $this->factura(50000);
 
+        // Sí puede superar el SALDO pendiente (el excedente queda a
+        // favor del cliente), pero nunca el total facturado: no se
+        // devuelve más de lo que se cobró.
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('supera el saldo pendiente');
+        $this->expectExceptionMessage('supera el valor total');
 
         $this->emitir($factura, ['subtotal' => 60000]);
+    }
+
+    public function test_el_excedente_sobre_el_saldo_queda_a_favor_del_cliente(): void
+    {
+        // Factura de 50.000 con solo 20.000 pendientes
+        $factura = $this->factura(50000, [
+            'pending_invoice_amount' => 20000,
+            'status' => InvoiceStatus::PendienteParcial->value,
+        ]);
+
+        $this->emitir($factura, ['subtotal' => 50000, 'concept_code' => '2']);
+
+        $factura->refresh();
+
+        // 20.000 saldan la factura y 30.000 quedan a favor
+        $this->assertEquals(0, (float) $factura->pending_invoice_amount);
+        $this->assertEquals(
+            30000,
+            app(\App\Billing\Services\CreditBalanceService::class)->saldo($factura->contract),
+        );
     }
 
     public function test_no_se_emiten_notas_sobre_una_factura_anulada(): void

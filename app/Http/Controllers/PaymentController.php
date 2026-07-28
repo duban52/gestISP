@@ -3,18 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Billing\Enums\InvoiceStatus;
+use App\Billing\Enums\RetentionType;
+use App\Billing\Services\BatchPaymentRegistrar;
 use App\Billing\Services\PaymentRegistrar;
 use App\Exports\PaymentsExport;
 use App\Models\CashRegister;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Support\PdfBranding;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -38,7 +39,7 @@ class PaymentController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('check.permission:payments.index')->only('index');
-        $this->middleware('check.permission:payments.create')->only('create', 'store');
+        $this->middleware('check.permission:payments.create')->only('create', 'store', 'storeBatch');
         $this->middleware('check.permission:payments.edit')->only('edit', 'update');
         $this->middleware('check.permission:payments.destroy')->only('destroy');
         $this->middleware('check.permission:payments.search')->only('search');
@@ -77,7 +78,9 @@ class PaymentController extends Controller
         }
 
         $payments = $query
-            ->with(['invoice.contract.client', 'user'])
+            // contract.client va aparte de invoice.contract.client
+            // porque los anticipos no pasan por una factura
+            ->with(['invoice.contract.client', 'contract.client', 'user'])
             ->orderByDesc('payment_date')
             ->get();
 
@@ -137,12 +140,19 @@ class PaymentController extends Controller
     {
         $query = Payment::query();
 
-        // Restringir a la sucursal activa
+        // Restringir a la sucursal activa.
+        //
+        // Se mira por dos caminos porque no todo pago tiene factura:
+        // los ANTICIPOS se cuelgan directamente del contrato. Antes
+        // solo se filtraba por invoice.contract.branch y los anticipos
+        // quedaban invisibles en el registro de pagos, aunque su
+        // dinero sí hubiera entrado a la caja.
         if (session()->has('branch_id')) {
             $branchId = session('branch_id');
 
-            $query->whereHas('invoice.contract.branch', function ($q) use ($branchId) {
-                $q->where('id', $branchId);
+            $query->where(function ($q) use ($branchId) {
+                $q->whereHas('invoice.contract', fn ($c) => $c->where('branch_id', $branchId))
+                    ->orWhereHas('contract', fn ($c) => $c->where('branch_id', $branchId));
             });
         }
 
@@ -199,6 +209,7 @@ class PaymentController extends Controller
 
         return view('gestisp.payments.search', [
             'activeCashRegister' => $this->activeCashRegister(),
+            'retentionCatalog' => RetentionType::catalogo(),
         ]);
     }
 
@@ -233,7 +244,10 @@ class PaymentController extends Controller
         $term = trim($validated['search_term']);
         $field = $validated['search_field'] ?? 'all';
 
-        $query = Invoice::query()->with('contract.client');
+        // Se precargan los ítems porque la tabla muestra el DETALLE de
+        // lo que se está cobrando, no solo el total: el cajero tiene
+        // que poder responder "¿y esto por qué me lo cobran?".
+        $query = Invoice::query()->with(['contract.client', 'invoice_items']);
 
         // Restringir a la sucursal activa (columna propia, con índice)
         if (session()->has('branch_id')) {
@@ -256,7 +270,11 @@ class PaymentController extends Controller
 
         return view('gestisp.payments.search', array_merge(
             compact('invoices', 'totalBalance', 'resultCount'),
-            ['activeCashRegister' => $this->activeCashRegister()],
+            [
+                'activeCashRegister' => $this->activeCashRegister(),
+                // Catálogo DIAN de retenciones para el formulario de cobro
+                'retentionCatalog' => RetentionType::catalogo(),
+            ],
         ));
     }
 
@@ -287,7 +305,16 @@ class PaymentController extends Controller
             'name' => $query->whereHas('contract.client',
                 fn ($q) => $q->whereRaw("CONCAT(name, ' ', last_name) LIKE ?", [$like])),
 
-            'contract' => $query->where('contract_id', is_numeric($term) ? (int) $term : 0),
+            // Por NÚMERO de contrato (ENG000123), que es lo que el
+            // cliente tiene impreso. Se acepta también el id interno
+            // por si alguien lo busca desde otra pantalla.
+            'contract' => $query->whereHas('contract', function ($q) use ($like, $term) {
+                $q->where('contract_number', 'like', $like);
+
+                if (is_numeric($term)) {
+                    $q->orWhere('id', (int) $term);
+                }
+            }),
 
             'invoice' => $query->where(function ($q) use ($like, $term) {
                 $q->where('full_number', 'like', $like);
@@ -319,7 +346,8 @@ class PaymentController extends Controller
                             ->orWhere('aditional_phone', 'like', $like);
                     })
                     ->orWhereHas('contract', function ($c) use ($like) {
-                        $c->where('user_pppoe', 'like', $like)
+                        $c->where('contract_number', 'like', $like)
+                            ->orWhere('user_pppoe', 'like', $like)
                             ->orWhere('address', 'like', $like)
                             ->orWhere('neighborhood', 'like', $like);
                     });
@@ -358,22 +386,20 @@ class PaymentController extends Controller
         DB::beginTransaction();
 
         try {
-            $validated = $request->validate([
+            $validated = $request->validate(array_merge([
                 'invoice_id'       => 'required|exists:invoices,id',
-                'amount'           => 'required|numeric|min:0.01',
+                // Puede ser 0 si el cobro se cubre por completo con
+                // retenciones (el cliente no entrega efectivo).
+                'amount'           => 'required|numeric|min:0',
                 'payment_method'   => 'required|string',
                 'reference_number' => 'nullable|string',
                 'notes'            => 'nullable|string',
-            ]);
+            ], self::REGLAS_RETENCIONES));
 
-            // Toda la regla de negocio (saldo, caja, estados de
-            // factura y contrato, orden de reconexión, movimiento
-            // de caja) vive en el servicio; el recibo PDF queda
-            // dentro de la misma transacción para conservar el
-            // todo-o-nada del flujo original
+            // Toda la regla de negocio (saldo, caja, retenciones,
+            // estados de factura y contrato, orden de reconexión,
+            // movimiento de caja) vive en el servicio.
             $payment = $registrar->register($validated, auth()->id(), session('branch_id'));
-
-            $pdfPath = $this->storeReceiptPdf($payment);
 
             DB::commit();
 
@@ -386,11 +412,22 @@ class PaymentController extends Controller
                     'id'             => $payment->id,
                     'invoice_id'     => $payment->invoice_id,
                     'amount'         => number_format($payment->amount, 2),
+                    'retentions'     => number_format($payment->totalRetenciones(), 2),
                     'payment_method' => $payment->payment_method,
                 ],
                 'new_balance' => number_format($payment->invoice->getPendingAmount(), 2),
-                'pdf_url'     => asset('storage/' . $pdfPath),
+                // El recibo se muestra en el modal (HTML) y se
+                // descarga aparte; ya no se deja un PDF en disco.
+                'receipt_url' => route('payments.receipt', $payment),
+                'receipt_pdf' => route('payments.receipt.pdf', $payment),
             ]);
+
+        } catch (ValidationException $e) {
+            // Debe salir como 422 con el detalle por campo: si se
+            // tragara aquí, el formulario no sabría qué línea corregir.
+            DB::rollBack();
+
+            throw $e;
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -406,30 +443,95 @@ class PaymentController extends Controller
     }
 
     /**
-     * Genera el recibo PDF del pago en storage/temp y retorna su
-     * ruta relativa en el disco público.
+     * Cobra varias facturas en una sola operación (cobro múltiple).
+     *
+     * Es el caso de quien llega a pagar el servicio de varios
+     * familiares: una sola entrega de dinero, pero un recibo por
+     * cada contrato. Todo o nada: si una factura falla, no se cobra
+     * ninguna (ver BatchPaymentRegistrar).
      */
-    private function storeReceiptPdf(Payment $payment): string
+    public function storeBatch(Request $request, BatchPaymentRegistrar $registrar)
     {
-        if (!Storage::disk('public')->exists('temp')) {
-            Storage::disk('public')->makeDirectory('temp');
+        try {
+            $validated = $request->validate(array_merge([
+                'items'                  => 'required|array|min:1',
+                'items.*.invoice_id'     => 'required|exists:invoices,id',
+                'items.*.amount'         => 'required|numeric|min:0',
+                'payment_method'         => 'required|string',
+                'reference_number'       => 'nullable|string',
+                'notes'                  => 'nullable|string',
+                'payer_name'             => 'nullable|string|max:150',
+                'payer_document'         => 'nullable|string|max:40',
+                'payer_phone'            => 'nullable|string|max:40',
+            ], self::reglasRetencionesDeItems()), [
+                'items.required' => 'No hay facturas seleccionadas para cobrar.',
+            ]);
+
+            $batch = $registrar->register($validated, auth()->id(), session('branch_id'));
+
+            return response()->json([
+                'success' => true,
+                'message' => sprintf(
+                    'Se cobraron %d factura(s) de %d contrato(s).',
+                    $batch->payments_count,
+                    $batch->contracts_count,
+                ),
+                'batch' => [
+                    'id' => $batch->id,
+                    'numero' => $batch->numero_visible,
+                    'total' => number_format($batch->total_amount, 2),
+                    'retenciones' => number_format($batch->total_retentions, 2),
+                    'pagos' => $batch->payments_count,
+                    'contratos' => $batch->contracts_count,
+                ],
+                'receipt_url' => route('payments.receipt.batch', $batch),
+                'receipt_pdf' => route('payments.receipt.batch.pdf', $batch),
+            ]);
+
+        } catch (ValidationException $e) {
+            throw $e;
+
+        } catch (\Exception $e) {
+            Log::error('Error en cobro múltiple: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+
+            return response()->json([
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ], 422);
         }
-
-        // Los datos de la empresa salen de la sucursal del contrato
-        // (encabezado del PDF), no de config: cada sucursal tiene
-        // su propio NIT, dirección y logo.
-        $pdf = PdfBranding::make('gestisp.payments.payment-receipt', [
-            'payment' => $payment->load([
-                'invoice.contract.client',
-                'invoice.contract.branch',
-                'user',
-            ]),
-        ]);
-
-        $pdfPath = 'temp/payment_' . $payment->id . '.pdf';
-        Storage::disk('public')->put($pdfPath, $pdf->output());
-
-        return $pdfPath;
     }
 
+    /**
+     * Reglas de validación de las líneas de retención de un cobro
+     * simple. Las comparte store(); storeBatch() usa la variante
+     * anidada dentro de cada ítem.
+     */
+    private const REGLAS_RETENCIONES = [
+        'retentions'                      => 'nullable|array',
+        'retentions.*.type'               => 'required|string|in:renta,iva,ica,timbre',
+        'retentions.*.concept_code'       => 'nullable|string|max:60',
+        'retentions.*.base'               => 'required|numeric|min:0.01',
+        'retentions.*.rate'               => 'required|numeric|min:0|max:100',
+        'retentions.*.amount'             => 'nullable|numeric|min:0',
+        'retentions.*.certificate_number' => 'nullable|string|max:80',
+        'retentions.*.notes'              => 'nullable|string|max:255',
+    ];
+
+    /**
+     * Las mismas reglas, pero anidadas bajo items.*: en el cobro
+     * múltiple cada factura lleva sus propias retenciones.
+     *
+     * @return array<string, string>
+     */
+    private static function reglasRetencionesDeItems(): array
+    {
+        $reglas = [];
+
+        foreach (self::REGLAS_RETENCIONES as $campo => $regla) {
+            $reglas['items.*.' . $campo] = $regla;
+        }
+
+        return $reglas;
+    }
 }

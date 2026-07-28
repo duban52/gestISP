@@ -121,6 +121,17 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
+    /**
+     * Retenciones que el cliente practicó sobre esta factura.
+     *
+     * Cuentan como pago aunque no entren a caja: ese dinero se lo
+     * llevó la DIAN (o el municipio) de nuestra parte.
+     */
+    public function retentions()
+    {
+        return $this->hasMany(PaymentRetention::class);
+    }
+
     /** Secuencia con la que se numeró la factura */
     public function numberingSequence()
     {
@@ -143,15 +154,64 @@ class Invoice extends Model
     }
 
     /**
-     * Saldo pendiente real: total menos los pagos completados.
+     * Saldo pendiente real: total menos lo que ya se abonó.
+     *
+     * "Lo abonado" son DOS cosas, no una:
+     *  - los pagos completados (el dinero que entró a caja), y
+     *  - las retenciones (el dinero que el cliente le entregó al
+     *    Estado a nombre nuestro).
+     *
+     * Dejar las retenciones por fuera dejaría al cliente debiendo un
+     * saldo que ya pagó, y terminaría suspendiéndosele el servicio.
+     *
      * (pending_invoice_amount se recalcula con esta misma regla en
-     * Payment::updateInvoiceBalance; este método es la fuente de
-     * verdad al validar un pago.)
+     * recalcularSaldo(); este método es la fuente de verdad al
+     * validar un pago.)
      */
     public function getPendingAmount()
     {
-        return $this->total - $this->payments()
-                ->where('status', PaymentStatus::Completed->value)
-                ->sum('amount');
+        return round($this->total - $this->totalAbonado(), 2);
+    }
+
+    /**
+     * Total ya cubierto de la factura: pagos completados + retenciones.
+     */
+    public function totalAbonado(): float
+    {
+        $pagos = $this->payments()
+            ->where('status', PaymentStatus::Completed->value)
+            ->sum('amount');
+
+        return round((float) $pagos + $this->totalRetenciones(), 2);
+    }
+
+    /**
+     * Suma de las retenciones practicadas sobre esta factura.
+     *
+     * Se excluyen las que llegaron con un pago que después se
+     * reversó: si el pago deja de contar, su retención tampoco puede
+     * seguir dando por saldada la factura. (Payment usa SoftDeletes,
+     * así que whereHas ya descarta los anulados.)
+     */
+    public function totalRetenciones(): float
+    {
+        $vivas = $this->retentions()->where(function ($q) {
+            $q->whereNull('payment_id')->orWhereHas('payment');
+        });
+
+        return round((float) $vivas->sum('amount'), 2);
+    }
+
+    /**
+     * Recalcula y guarda pending_invoice_amount.
+     *
+     * Debe llamarse después de crear pagos o retenciones. Es público
+     * porque las retenciones se registran DESPUÉS del pago: el hook
+     * de Payment ya corrió y su cálculo se quedó corto.
+     */
+    public function recalcularSaldo(): void
+    {
+        $this->pending_invoice_amount = $this->getPendingAmount();
+        $this->save();
     }
 }

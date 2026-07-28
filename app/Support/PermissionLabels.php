@@ -28,6 +28,7 @@ class PermissionLabels
         'billing_runs' => 'Reportes de facturación',
         'additionalCharges' => 'Cargos adicionales',
         'payments' => 'Pagos',
+        'retentions' => 'Retenciones',
         'cashRegisters' => 'Cajas',
         'cash_register' => 'Cajas',
         'transactions' => 'Movimientos de caja',
@@ -68,6 +69,7 @@ class PermissionLabels
         'summary' => 'Ver resumen de',
         'search' => 'Buscar en',
         'searchView' => 'Buscar en',
+        'receipt' => 'Imprimir el recibo de',
     ];
 
     /**

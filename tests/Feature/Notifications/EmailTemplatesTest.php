@@ -78,6 +78,10 @@ class EmailTemplatesTest extends TestCase
             'plan_id' => $plan->id,
             'status' => 'Activo',
             'user_id' => $this->usuario->id,
+            // Dirección fija: la del factory es aleatoria y puede traer
+            // caracteres que el HTML escapa (comillas, saltos de línea),
+            // lo que hacía fallar la comparación de forma intermitente.
+            'address' => 'Calle 10 numero 20-30',
         ]);
     }
 

@@ -127,24 +127,40 @@
                         <th>ID</th>
                         <th>Identidad cliente</th>
                         <th>Cliente</th>
+                        <th>N.º contrato</th>
                         <th>Monto</th>
                         <th>Método</th>
                         <th>Fecha de pago</th>
                         <th>Cobrado por</th>
+                        <th class="text-center">Recibo</th>
                     </tr>
                     </thead>
                     <tbody>
                     @foreach($payments as $payment)
+                        @php
+                            // Un ANTICIPO no tiene factura: su contrato
+                            // cuelga directamente del pago.
+                            $contrato = $payment->invoice?->contract ?? $payment->contract;
+                            $cliente = $contrato?->client;
+                        @endphp
                         <tr>
                             <td>{{ $payment->id }}</td>
-                            <td>{{ $payment->invoice->contract->client->identity_number ?? '—' }}</td>
+                            <td>{{ $cliente->identity_number ?? '—' }}</td>
                             <td>
-                                {{ $payment->invoice->contract->client->name ?? '—' }}
-                                {{ $payment->invoice->contract->client->last_name ?? '' }}
+                                {{ $cliente->name ?? '—' }}
+                                {{ $cliente->last_name ?? '' }}
                             </td>
 
+                            {{-- Número de contrato, no el id interno --}}
+                            <td>{{ $contrato->numero_visible ?? '—' }}</td>
+
                             {{-- Monto con formato de moneda --}}
-                            <td>${{ number_format($payment->amount, 0, ',', '.') }}</td>
+                            <td>
+                                ${{ number_format($payment->amount, 0, ',', '.') }}
+                                @if($payment->type === 'anticipo')
+                                    <span class="badge badge-info">Anticipo</span>
+                                @endif
+                            </td>
 
                             <td>{{ $payment->payment_method }}</td>
 
@@ -155,18 +171,59 @@
                                 {{ $payment->user->name ?? '—' }}
                                 {{ $payment->user->last_name ?? '' }}
                             </td>
+
+                            {{-- Reimprimir: el cliente que perdió su
+                                 recibo es un caso diario en el mostrador. --}}
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-outline-secondary btn-recibo"
+                                        data-url="{{ route('payments.receipt', $payment) }}"
+                                        data-pdf="{{ route('payments.receipt.pdf', $payment) }}"
+                                        title="Ver el recibo de caja">
+                                    <i class="fas fa-receipt"></i>
+                                </button>
+                            </td>
                         </tr>
                     @endforeach
                     </tbody>
                     {{-- Total de lo mostrado al pie de la tabla --}}
                     <tfoot>
                     <tr>
-                        <th colspan="3" class="text-right">Total mostrado:</th>
+                        <th colspan="4" class="text-right">Total mostrado:</th>
                         <th>${{ number_format($payments->sum('amount'), 0, ',', '.') }}</th>
-                        <th colspan="3"></th>
+                        <th colspan="4"></th>
                     </tr>
                     </tfoot>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    {{-- ============================================================
+         Recibo de caja: se ve aquí mismo, sin salir del listado.
+         Es el mismo modal y la misma tirilla del momento del cobro.
+         ============================================================ --}}
+    <div class="modal fade" id="receiptModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 420px;">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title"><i class="fas fa-receipt mr-1"></i> Recibo de caja</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body p-0">
+                    <iframe id="receiptFrame" title="Recibo de caja"
+                            style="width: 100%; height: 440px; border: 0;"></iframe>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    <div>
+                        <a href="#" class="btn btn-outline-primary" id="receiptDownload" target="_blank">
+                            <i class="fas fa-download"></i> Guardar PDF
+                        </a>
+                        <button type="button" class="btn btn-primary" id="receiptPrint">
+                            <i class="fas fa-print"></i> Imprimir
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -199,14 +256,40 @@
                 // selector de cantidad, reemplazando el select per_page anterior)
                 pageLength: 25,
 
-                // Orden inicial: por fecha de pago (columna 5) descendente
-                order: [[5, 'desc']],
+                // Orden inicial: por fecha de pago (columna 6) descendente.
+                // Se corrió un puesto al agregar la columna de contrato.
+                order: [[6, 'desc']],
 
                 columnDefs: [
+                    // La columna del recibo son botones: no se ordena
+                    { orderable: false, targets: 8 },
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }
                 ]
             });
+        });
+
+        /* ------------------------------------------------------------
+           Reimpresión del recibo
+
+           Se imprime el HTML del iframe y no el PDF: la impresora
+           térmica corta el papel donde termina el contenido, y el
+           navegador le entrega justo ese alto. Un PDF tiene página de
+           alto fijo y sacaría papel en blanco.
+           ------------------------------------------------------------ */
+        $(document).on('click', '.btn-recibo', function () {
+            $('#receiptFrame').attr('src', $(this).data('url'));
+            $('#receiptDownload').attr('href', $(this).data('pdf'));
+            $('#receiptModal').modal('show');
+        });
+
+        $('#receiptPrint').on('click', function () {
+            const marco = document.getElementById('receiptFrame');
+
+            if (marco && marco.contentWindow) {
+                marco.contentWindow.focus();
+                marco.contentWindow.print();
+            }
         });
 
         /**

@@ -58,7 +58,10 @@ class PaymentSearchTest extends BillingTestCase
         $this->assertFinds('Duban', 'name');
         $this->assertFinds('Duban Restrepo');
 
-        // Número de contrato
+        // Número de contrato: el visible (ENG000123), que es el que
+        // el cliente tiene impreso, y también el id interno por si
+        // alguien llega con él desde otra pantalla.
+        $this->assertFinds($this->invoice->contract->numero_visible, 'contract');
         $this->assertFinds((string) $this->invoice->contract_id, 'contract');
 
         // Número de factura formal (completo y parcial)
@@ -71,6 +74,34 @@ class PaymentSearchTest extends BillingTestCase
         // Usuario PPPoE
         $this->assertFinds('duban.restrepo', 'pppoe');
         $this->assertFinds('duban.res');
+    }
+
+    public function test_los_resultados_muestran_el_numero_de_contrato_y_el_detalle(): void
+    {
+        $response = $this->get(route('payments.searchView', [
+            'search_term' => '1042770586',
+        ]))->assertOk();
+
+        // El NÚMERO de contrato, no el id interno: es lo que el
+        // cliente tiene impreso y por lo que pregunta en el mostrador.
+        $response->assertSee($this->invoice->contract->numero_visible);
+
+        // Y el detalle de lo que se le está cobrando, concepto por
+        // concepto: el cajero tiene que poder responder "¿y esto por
+        // qué me lo cobran?" sin abrir la factura.
+        foreach ($this->invoice->invoice_items as $item) {
+            $response->assertSee($item->description);
+        }
+
+        $response->assertSee('Total factura');
+    }
+
+    public function test_la_pantalla_ofrece_retenciones_y_cobro_multiple(): void
+    {
+        $this->get(route('payments.searchView'))
+            ->assertOk()
+            ->assertSee('Aplicar retenciones')
+            ->assertSee('Cobrar seleccionadas');
     }
 
     public function test_no_incluye_facturas_que_no_admiten_pago(): void

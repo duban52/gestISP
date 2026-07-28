@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Billing\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -25,6 +24,9 @@ class Payment extends Model
     protected $fillable = [
         'invoice_id',
         'contract_id',
+        // Lote del cobro múltiple: agrupa los pagos que entraron en
+        // una sola entrega de dinero.
+        'payment_batch_id',
         'type', 'user_id', 'cash_register_id', 'payment_date',
         'amount', 'payment_method', 'status', 'reference_number',
         'notes', 'created_by',
@@ -100,18 +102,45 @@ class Payment extends Model
     /**
      * Recalcula el saldo pendiente de la factura asociada.
      *
-     * Suma solo los pagos con estado "completed" (excluye anulados
-     * o en proceso) y actualiza pending_invoice_amount de la factura.
+     * El cálculo vive en Invoice::recalcularSaldo() porque no solo
+     * intervienen los pagos: las retenciones también abonan la
+     * factura aunque no entren a caja.
      */
     public function updateInvoiceBalance(): void
     {
-        if ($this->invoice) {
-            $totalPaid = $this->invoice->payments()
-                ->where('status', PaymentStatus::Completed->value)
-                ->sum('amount');
+        $this->invoice?->recalcularSaldo();
+    }
 
-            $this->invoice->pending_invoice_amount = $this->invoice->total - $totalPaid;
-            $this->invoice->save();
-        }
+    /** Retenciones que llegaron con este pago. */
+    public function retentions()
+    {
+        return $this->hasMany(PaymentRetention::class);
+    }
+
+    /** Lote de cobro al que pertenece (null si fue un cobro suelto). */
+    public function batch()
+    {
+        return $this->belongsTo(PaymentBatch::class, 'payment_batch_id');
+    }
+
+    /** Contrato del pago (directo en anticipos, vía factura si no). */
+    public function contract()
+    {
+        return $this->belongsTo(Contract::class);
+    }
+
+    /** Suma de las retenciones que acompañaron este pago. */
+    public function totalRetenciones(): float
+    {
+        return round((float) $this->retentions()->sum('amount'), 2);
+    }
+
+    /**
+     * Valor total que canceló el cliente con esta operación:
+     * el efectivo recibido más lo que retuvo para el Estado.
+     */
+    public function totalCancelado(): float
+    {
+        return round((float) $this->amount + $this->totalRetenciones(), 2);
     }
 }

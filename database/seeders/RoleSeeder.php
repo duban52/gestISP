@@ -84,6 +84,12 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'payments.searchView', 'description' => 'Ver resultados de búsqueda de pagos']);
         Permission::create(['name' => 'payments.export', 'description' => 'Exportar pagos en PDF']);
         Permission::create(['name' => 'payments.export-excel', 'description' => 'Exportar pagos en Excel']);
+        Permission::create(['name' => 'payments.receipt', 'description' => 'Ver e imprimir el recibo de caja']);
+
+        // Retenciones que el cliente practica al pagar: se consultan
+        // aparte porque su destinatario natural es contabilidad.
+        Permission::create(['name' => 'retentions.index', 'description' => 'Ver retenciones practicadas']);
+        Permission::create(['name' => 'retentions.export', 'description' => 'Exportar el reporte de retenciones']);
 
         // Cajas
         Permission::create(['name' => 'cashRegisters.index', 'description' => 'Ver cajas']);
@@ -208,7 +214,8 @@ class RoleSeeder extends Seeder
             'contracts.index', 'contracts.show', 'contracts.create', 'contracts.edit', 'contracts.export',
             'invoices.index', 'invoices.show', 'invoices.create', 'invoices.edit', 'invoices.generate', 'invoices.download-pdf', 'invoices.generate_max_pdf', 'invoices.check-pdf-status',
             'additionalCharges.index', 'additionalCharges.create', 'additionalCharges.edit',
-            'payments.index', 'payments.create', 'payments.edit', 'payments.search', 'payments.searchView', 'payments.export', 'payments.export-excel',
+            'payments.index', 'payments.create', 'payments.edit', 'payments.search', 'payments.searchView', 'payments.export', 'payments.export-excel', 'payments.receipt',
+            'retentions.index', 'retentions.export',
             'cashRegisters.index', 'cashRegisters.create', 'cashRegisters.edit', 'cash_register.status', 'cash_register.open', 'cash_register.close', 'cash_register.summary',
             'transactions.index', 'transactions.store', 'transactions.history', 'transactions.export', 'transactions.export-excel',
             'warehouses.index', 'warehouses.create', 'warehouses.edit', 'warehouse.pdf',
@@ -228,7 +235,7 @@ class RoleSeeder extends Seeder
             'clients.index', 'clients.create', 'clients.edit', 'clients.search', 'clients.searchView',
             'contracts.index', 'contracts.show', 'contracts.create', 'contracts.edit',
             'invoices.index', 'invoices.create', 'invoices.show', 'invoices.edit', 'invoices.generate', 'invoices.download-pdf',
-            'payments.index', 'payments.create', 'payments.edit', 'payments.search', 'payments.searchView',
+            'payments.index', 'payments.create', 'payments.edit', 'payments.search', 'payments.searchView', 'payments.receipt',
             'cashRegisters.index', 'cash_register.status', 'cash_register.open', 'cash_register.close',
             'transactions.index', 'transactions.store', 'transactions.history',
             'warehouses.index',

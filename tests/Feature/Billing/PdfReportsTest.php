@@ -85,20 +85,27 @@ class PdfReportsTest extends BillingTestCase
 
         $this->openCashRegister();
 
-        // El cobro genera el recibo y devuelve su URL
+        // El cobro devuelve las dos direcciones del recibo: la que se
+        // muestra en el modal (HTML, la que se manda a la térmica) y
+        // la del PDF para archivar.
         $response = $this->postJson(route('payments.store'), [
             'invoice_id' => $invoice->id,
             'amount' => 80000,
             'payment_method' => 'efectivo',
         ])->assertOk();
 
-        $pdfUrl = $response->json('pdf_url');
-        $this->assertNotEmpty($pdfUrl, 'El cobro no devolvió la URL del recibo');
+        $this->assertNotEmpty($response->json('receipt_url'), 'El cobro no devolvió el recibo');
+        $this->assertNotEmpty($response->json('receipt_pdf'), 'El cobro no devolvió el PDF del recibo');
 
-        // El archivo existe en disco y es un PDF
-        $path = public_path('storage/temp/payment_' . $response->json('payment.id') . '.pdf');
-        $this->assertFileExists($path);
-        $this->assertStringStartsWith('%PDF-', file_get_contents($path));
+        // El recibo se genera al vuelo, no queda en disco: antes se
+        // escribía un PDF por cobro en storage/temp y esos archivos
+        // se acumulaban sin que nadie los borrara.
+        $this->get($response->json('receipt_url'))
+            ->assertOk()
+            ->assertSee('RECIBO DE CAJA');
+
+        $pdf = $this->get($response->json('receipt_pdf'))->assertOk();
+        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
     }
 
     public function test_los_pdfs_usan_tamano_carta_y_llevan_paginacion(): void

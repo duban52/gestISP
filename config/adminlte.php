@@ -499,6 +499,16 @@ return [
                             'icon' => 'fas  fa-balance-scale',
                             'can' => 'cash_register.summary',
                         ],
+                        // Impuestos que los clientes retienen al pagar.
+                        // Es el soporte para descontarlos en la
+                        // declaración, así que se consulta aparte.
+                        [
+                            'text' => 'Retenciones',
+                            'route' => 'retentions.index',
+                            'active' => ['retenciones*'],
+                            'icon' => 'fas  fa-percent',
+                            'can' => 'retentions.index',
+                        ],
 
                     ]
                 ],

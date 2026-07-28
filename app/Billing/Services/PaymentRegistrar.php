@@ -44,13 +44,24 @@ class PaymentRegistrar
 {
     public function __construct(
         private readonly CreditBalanceService $creditBalance,
+        private readonly RetentionApplier $retentions,
     ) {
     }
 
     /**
      * Registra un pago validado sobre una factura.
      *
-     * @param array{invoice_id: int, amount: float|string, payment_method: string, reference_number?: ?string, notes?: ?string} $data
+     * El pago puede venir acompañado de RETENCIONES: impuestos que el
+     * cliente descuenta y consigna al Estado a nombre nuestro. Suman
+     * para saldar la factura pero no entran a la caja (ver
+     * App\Billing\Enums\RetentionType). Por eso aquí se distinguen
+     * dos cifras que antes eran una sola:
+     *
+     *   - $efectivo:       lo que el cajero recibe y va al cuadre
+     *   - $totalCancelado: efectivo + retenciones, que es lo que de
+     *                      verdad abona la factura
+     *
+     * @param array{invoice_id: int, amount: float|string, payment_method: string, reference_number?: ?string, notes?: ?string, retentions?: array<int, array<string, mixed>>, payment_batch_id?: ?int} $data
      */
     public function register(array $data, ?int $userId, ?int $branchId): Payment
     {
@@ -70,8 +81,32 @@ class PaymentRegistrar
 
         $pendingAmount = $invoice->getPendingAmount();
 
-        if ($data['amount'] > $pendingAmount) {
-            throw new RuntimeException('El monto del pago excede el saldo pendiente.');
+        $lineasRetencion = $data['retentions'] ?? [];
+        $totalRetenido = $this->retentions->totalDe($lineasRetencion);
+        $efectivo = round((float) $data['amount'], 2);
+        $totalCancelado = round($efectivo + $totalRetenido, 2);
+
+        if ($efectivo < 0) {
+            throw new RuntimeException('El valor recibido no puede ser negativo.');
+        }
+
+        if ($totalCancelado <= 0) {
+            throw new RuntimeException('El pago debe tener un valor mayor que cero.');
+        }
+
+        // La comparación es contra el TOTAL cancelado: si solo se
+        // mirara el efectivo, un cobro con retención podría dejar la
+        // factura sobrepagada.
+        if ($totalCancelado > $pendingAmount + 0.001) {
+            throw new RuntimeException($totalRetenido > 0
+                ? sprintf(
+                    'El pago ($%s recibidos + $%s retenidos = $%s) excede el saldo pendiente de $%s.',
+                    number_format($efectivo, 2, ',', '.'),
+                    number_format($totalRetenido, 2, ',', '.'),
+                    number_format($totalCancelado, 2, ',', '.'),
+                    number_format($pendingAmount, 2, ',', '.'),
+                )
+                : 'El monto del pago excede el saldo pendiente.');
         }
 
         // Caja abierta OBLIGATORIA para cualquier método de pago:
@@ -86,9 +121,12 @@ class PaymentRegistrar
 
         $payment = Payment::create([
             'invoice_id' => $invoice->id,
+            'contract_id' => $invoice->contract_id,
+            'payment_batch_id' => $data['payment_batch_id'] ?? null,
             'user_id' => $userId,
             'cash_register_id' => $activeCashRegister->id,
-            'amount' => $data['amount'],
+            // El pago guarda SOLO el efectivo: es lo que entró.
+            'amount' => $efectivo,
             'payment_method' => $data['payment_method'],
             'payment_date' => now(),
             'reference_number' => $data['reference_number'] ?? null,
@@ -96,28 +134,38 @@ class PaymentRegistrar
             'status' => PaymentStatus::Completed->value,
         ]);
 
+        // Las retenciones se registran DESPUÉS del pago (necesitan su
+        // id) y recalculan el saldo de la factura al terminar.
+        if ($lineasRetencion) {
+            $this->retentions->aplicar($payment, $invoice, $lineasRetencion);
+            $invoice->refresh();
+        }
+
         PaymentRegistered::dispatch($payment);
 
-        if ($data['amount'] >= $pendingAmount) {
+        if ($totalCancelado >= $pendingAmount - 0.001) {
             $this->settleInvoice($invoice, $branchId);
             InvoicePaid::dispatch($invoice);
         } else {
             $invoice->update(['status' => InvoiceStatus::PendienteParcial->value]);
         }
 
-        // El movimiento de caja se registra siempre (la caja es
-        // obligatoria), identificando la factura por su número
-        CashRegisterTransaction::create([
-            'cash_register_id' => $activeCashRegister->id,
-            'payment_id' => $payment->id,
-            'transaction_type' => 'Ingreso',
-            'amount' => $data['amount'],
-            'payment_method' => $data['payment_method'],
-            'description' => "Pago de factura {$invoice->displayNumber()}",
-            'created_by' => $userId,
-        ]);
+        // El movimiento de caja registra ÚNICAMENTE el efectivo: la
+        // retención no es plata en el cajón y no puede aparecer en el
+        // cuadre. Si el cobro fue todo retención, no hay movimiento.
+        if ($efectivo > 0) {
+            CashRegisterTransaction::create([
+                'cash_register_id' => $activeCashRegister->id,
+                'payment_id' => $payment->id,
+                'transaction_type' => 'Ingreso',
+                'amount' => $efectivo,
+                'payment_method' => $data['payment_method'],
+                'description' => "Pago de factura {$invoice->displayNumber()}",
+                'created_by' => $userId,
+            ]);
 
-        $activeCashRegister->calculateTotals();
+            $activeCashRegister->calculateTotals();
+        }
 
         return $payment;
     }

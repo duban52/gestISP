@@ -297,6 +297,27 @@ class CreditBalanceTest extends BillingTestCase
         $this->assertEquals(40000, app(CreditBalanceService::class)->saldo($contrato));
     }
 
+    public function test_un_anticipo_aparece_en_el_registro_de_pagos(): void
+    {
+        $this->abrirCaja();
+        $contrato = $this->createBillableContract(price: 50000, taxPercent: 0);
+
+        app(PaymentRegistrar::class)->registerAdvance([
+            'contract_id' => $contrato->id,
+            'amount' => 120000,
+            'payment_method' => 'Efectivo',
+        ], $this->admin->id);
+
+        // El anticipo es dinero que entró a la caja: tiene que verse
+        // en el registro de pagos. Antes el listado filtraba solo por
+        // invoice.contract.branch y los anticipos, que no tienen
+        // factura, quedaban invisibles.
+        $this->get(route('payments.index'))
+            ->assertOk()
+            ->assertSee($contrato->numero_visible)
+            ->assertSee('Anticipo');
+    }
+
     public function test_el_saldo_a_favor_queda_en_la_trazabilidad(): void
     {
         $this->abrirCaja();
