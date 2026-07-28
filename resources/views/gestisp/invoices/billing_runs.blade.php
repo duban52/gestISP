@@ -41,6 +41,7 @@
                         <th>IVA</th>
                         <th>Total facturado</th>
                         <th>Ejecutado por</th>
+                        <th class="text-center">Detalle</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -55,6 +56,13 @@
                             <td>${{ number_format($run->total_tax, 2) }}</td>
                             <td><strong>${{ number_format($run->total_billed, 2) }}</strong></td>
                             <td>{{ $run->user->name ?? '—' }} {{ $run->user->last_name ?? '' }}</td>
+                            {{-- Detalle de lo facturado, con sus descargas --}}
+                            <td class="text-center">
+                                <a href="{{ route('billing_runs.show', $run) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Ver el detalle de esta facturación">
+                                    <i class="fas fa-eye"></i> Ver
+                                </a>
+                            </td>
                         </tr>
                     @endforeach
                     </tbody>

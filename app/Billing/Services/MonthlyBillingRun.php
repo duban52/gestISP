@@ -59,9 +59,28 @@ class MonthlyBillingRun
         $totalTax = 0.0;
         $totalBilled = 0.0;
 
+        // La corrida se registra ANTES de facturar (con los totales
+        // en cero) para poder sellar cada factura con su id. Así el
+        // reporte sabe exactamente qué facturas salieron de aquí, en
+        // lugar de deducirlo por fecha.
+        $run = $contracts->isNotEmpty()
+            ? BillingRun::create([
+                'branch_id' => $branchId,
+                'user_id' => $userId,
+                'billed_year_month' => $today->format('Ym'),
+                'contracts_count' => $contracts->count(),
+                'generated_count' => 0,
+                'skipped_count' => 0,
+                'total_subtotal' => 0,
+                'total_tax' => 0,
+                'total_billed' => 0,
+                'executed_at' => $today,
+            ])
+            : null;
+
         foreach ($contracts as $contract) {
             try {
-                $result = $this->invoiceGenerator->generateForContract($contract, $today, $userId);
+                $result = $this->invoiceGenerator->generateForContract($contract, $today, $userId, $run?->id);
 
                 if ($result['generated']) {
                     $generated++;
@@ -77,21 +96,14 @@ class MonthlyBillingRun
             }
         }
 
-        // Registrar la corrida para el reporte de facturación
-        if ($contracts->isNotEmpty()) {
-            BillingRun::create([
-                'branch_id' => $branchId,
-                'user_id' => $userId,
-                'billed_year_month' => $today->format('Ym'),
-                'contracts_count' => $contracts->count(),
-                'generated_count' => $generated,
-                'skipped_count' => $skipped,
-                'total_subtotal' => $totalSubtotal,
-                'total_tax' => $totalTax,
-                'total_billed' => $totalBilled,
-                'executed_at' => $today,
-            ]);
-        }
+        // Cerrar la corrida con los totales reales
+        $run?->update([
+            'generated_count' => $generated,
+            'skipped_count' => $skipped,
+            'total_subtotal' => $totalSubtotal,
+            'total_tax' => $totalTax,
+            'total_billed' => $totalBilled,
+        ]);
 
         return [
             'total_contracts' => $contracts->count(),
@@ -100,6 +112,9 @@ class MonthlyBillingRun
             'total_subtotal' => $totalSubtotal,
             'total_tax' => $totalTax,
             'total_billed' => $totalBilled,
+            // Permite llevar al usuario directo al detalle de lo que
+            // acaba de generar y ofrecerle el reporte descargable
+            'billing_run_id' => $run?->id,
         ];
     }
 }

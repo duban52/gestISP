@@ -172,6 +172,28 @@ Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'voidInvoice'
 // Reporte gerencial de corridas de facturación
 Route::get('/invoices/billing-runs', [InvoiceController::class, 'billingRuns'])->name('invoices.billing_runs');
 
+// Detalle de una corrida: qué se facturó y a quién, con sus descargas.
+// Van DESPUÉS del listado para que "billing-runs" no se interprete
+// como el identificador de una corrida.
+Route::get('/invoices/billing-runs/{billingRun}', [App\Http\Controllers\BillingRunController::class, 'show'])->name('billing_runs.show');
+Route::get('/invoices/billing-runs/{billingRun}/excel', [App\Http\Controllers\BillingRunController::class, 'excel'])->name('billing_runs.excel');
+Route::get('/invoices/billing-runs/{billingRun}/csv', [App\Http\Controllers\BillingRunController::class, 'csv'])->name('billing_runs.csv');
+Route::get('/invoices/billing-runs/{billingRun}/pdf', [App\Http\Controllers\BillingRunController::class, 'pdf'])->name('billing_runs.pdf');
+
+// Pagos por adelantado (anticipos) y saldo a favor del contrato
+Route::get('/contratos/{contract}/anticipo', [App\Http\Controllers\AdvancePaymentController::class, 'create'])->name('advance.create');
+Route::post('/contratos/{contract}/anticipo', [App\Http\Controllers\AdvancePaymentController::class, 'store'])->name('advance.store');
+Route::get('/contratos/{contract}/saldo-a-favor', [App\Http\Controllers\AdvancePaymentController::class, 'movimientos'])->name('advance.movements');
+
+// Notas crédito y débito: corrigen una factura ya emitida sin
+// modificarla. Cada acción tiene su permiso propio.
+Route::get('/notas', [App\Http\Controllers\CreditDebitNoteController::class, 'index'])->name('notes.index');
+Route::get('/notas/nueva', [App\Http\Controllers\CreditDebitNoteController::class, 'create'])->name('notes.create');
+Route::post('/notas', [App\Http\Controllers\CreditDebitNoteController::class, 'store'])->name('notes.store');
+Route::get('/notas/{note}', [App\Http\Controllers\CreditDebitNoteController::class, 'show'])->name('notes.show');
+Route::get('/notas/{note}/pdf', [App\Http\Controllers\CreditDebitNoteController::class, 'pdf'])->name('notes.pdf');
+Route::post('/notas/{note}/anular', [App\Http\Controllers\CreditDebitNoteController::class, 'void'])->name('notes.void');
+
 // Resumen de cajas por período (cuadre entre puntos de cobro)
 Route::get('/cash-register/summary', [CashRegisterController::class, 'summary'])->name('cash_register.summary');
 

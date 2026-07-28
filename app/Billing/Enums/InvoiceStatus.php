@@ -23,6 +23,13 @@ enum InvoiceStatus: string
     case PendienteRiesgoCorte = 'Pendiente con riesgo de corte';
     case Vencida = 'Vencida';
     case Pagada = 'Pagada';
+    /**
+     * La factura quedó en cero por una NOTA CRÉDITO, no porque el
+     * cliente pagara. Contablemente no es lo mismo: el ingreso no se
+     * recaudó, se anuló o se ajustó. Tenerlo aparte evita que un
+     * informe de recaudo cuente como cobrado lo que nunca entró.
+     */
+    case SaldadaConNota = 'Saldada con nota crédito';
     case CargadaANuevaFactura = 'Cargada a nueva factura';
     case Anulada = 'Anulada';
 
@@ -66,9 +73,24 @@ enum InvoiceStatus: string
     {
         return [
             self::Pagada->value,
+            self::SaldadaConNota->value,
             self::CargadaANuevaFactura->value,
             self::Anulada->value,
             self::Borrador->value,
+        ];
+    }
+
+    /**
+     * Estados en los que la factura ya no debe nada, sin importar
+     * cómo se saldó (cobrada o ajustada con nota crédito).
+     *
+     * @return array<int, string>
+     */
+    public static function settled(): array
+    {
+        return [
+            self::Pagada->value,
+            self::SaldadaConNota->value,
         ];
     }
 }

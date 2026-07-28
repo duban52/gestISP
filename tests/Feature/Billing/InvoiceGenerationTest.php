@@ -20,9 +20,16 @@ class InvoiceGenerationTest extends BillingTestCase
 
         $response = $this->post(route('invoices.generate'));
 
-        $response->assertRedirect(route('invoices.index'));
+        // Al terminar se lleva al detalle de la corrida recién
+        // ejecutada, donde está el reporte descargable de lo generado
+        // (antes se volvía al listado de facturas).
+        $run = \App\Models\BillingRun::latest('id')->firstOrFail();
+        $response->assertRedirect(route('billing_runs.show', $run->id));
 
         $invoice = Invoice::where('contract_id', $contract->id)->first();
+
+        // Y la factura queda ligada a esa corrida
+        $this->assertSame($run->id, $invoice?->billing_run_id);
 
         $this->assertNotNull($invoice, 'La factura no se generó');
         $this->assertSame(InvoiceStatus::Pendiente->value, $invoice->status);

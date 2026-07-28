@@ -7,11 +7,14 @@ use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Enums\PaymentStatus;
 use App\Billing\Events\InvoicePaid;
 use App\Billing\Events\PaymentRegistered;
+use App\Models\AccountCredit;
 use App\Models\CashRegister;
 use App\Models\CashRegisterTransaction;
+use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\TechnicalOrder;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -39,6 +42,10 @@ use RuntimeException;
  */
 class PaymentRegistrar
 {
+    public function __construct(
+        private readonly CreditBalanceService $creditBalance,
+    ) {
+    }
 
     /**
      * Registra un pago validado sobre una factura.
@@ -113,6 +120,88 @@ class PaymentRegistrar
         $activeCashRegister->calculateTotals();
 
         return $payment;
+    }
+
+    /**
+     * Registra un ANTICIPO: dinero que el cliente entrega sin que
+     * exista una factura, para adelantar meses de servicio.
+     *
+     * El dinero entra igual que cualquier cobro (caja abierta
+     * obligatoria y movimiento en el cuadre) pero, en lugar de saldar
+     * una factura concreta, queda a favor del contrato. Acto seguido
+     * se aplica a las facturas abiertas que haya —de la más antigua a
+     * la más nueva— y lo que sobre queda disponible para las que se
+     * generen los meses siguientes.
+     *
+     * @param  array{contract_id: int, amount: float|string, payment_method: string, reference_number?: ?string, notes?: ?string}  $data
+     * @return array{payment: Payment, aplicado: float, saldo_a_favor: float}
+     */
+    public function registerAdvance(array $data, ?int $userId): array
+    {
+        $contract = Contract::findOrFail($data['contract_id']);
+
+        $monto = round((float) $data['amount'], 2);
+
+        if ($monto <= 0) {
+            throw new RuntimeException('El valor del anticipo debe ser mayor que cero.');
+        }
+
+        // Misma exigencia que cualquier cobro: sin caja abierta no
+        // entra dinero al sistema.
+        $activeCashRegister = CashRegister::where('status', 'open')
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$activeCashRegister) {
+            throw new RuntimeException('No hay una caja abierta para recibir pagos. Abra su caja antes de cobrar.');
+        }
+
+        return DB::transaction(function () use ($contract, $monto, $data, $userId, $activeCashRegister) {
+            $payment = Payment::create([
+                'invoice_id' => null,
+                'contract_id' => $contract->id,
+                'type' => 'anticipo',
+                'user_id' => $userId,
+                'cash_register_id' => $activeCashRegister->id,
+                'amount' => $monto,
+                'payment_method' => $data['payment_method'],
+                'payment_date' => now(),
+                'reference_number' => $data['reference_number'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'status' => PaymentStatus::Completed->value,
+            ]);
+
+            CashRegisterTransaction::create([
+                'cash_register_id' => $activeCashRegister->id,
+                'payment_id' => $payment->id,
+                'transaction_type' => 'Ingreso',
+                'amount' => $monto,
+                'payment_method' => $data['payment_method'],
+                'description' => "Anticipo del contrato {$contract->numero_visible}",
+                'created_by' => $userId,
+            ]);
+
+            $activeCashRegister->calculateTotals();
+
+            $this->creditBalance->abonar(
+                $contract,
+                $monto,
+                AccountCredit::ORIGEN_ANTICIPO,
+                'Pago por adelantado recibido en caja',
+                ['payment_id' => $payment->id],
+            );
+
+            // Se abona de inmediato a lo que ya deba
+            $aplicado = $this->creditBalance->aplicarAFacturasAbiertas($contract);
+
+            PaymentRegistered::dispatch($payment);
+
+            return [
+                'payment' => $payment,
+                'aplicado' => $aplicado,
+                'saldo_a_favor' => $this->creditBalance->saldo($contract),
+            ];
+        });
     }
 
     /**

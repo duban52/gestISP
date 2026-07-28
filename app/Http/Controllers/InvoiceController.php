@@ -69,6 +69,10 @@ class InvoiceController extends Controller
             ->where('clients.branch_id', $branchId)
             ->where('contracts.branch_id', $branchId)
             ->select('invoices.*')
+            // El listado muestra el número de contrato y la
+            // identificación del cliente: se precargan para no hacer
+            // dos consultas por cada fila de la tabla.
+            ->with(['contract.client'])
             ->orderBy('invoices.created_at', 'desc')
             ->get(); // Cambiado de simplePaginate(10) a get()
 
@@ -96,7 +100,9 @@ class InvoiceController extends Controller
      */
     public function show(Invoice $invoice)
     {
-        $invoice->load(['contract.client', 'contract.plan.services', 'invoice_items']);
+        // Se cargan también las notas: la ficha muestra las
+        // correcciones ya emitidas sobre esta factura.
+        $invoice->load(['contract.client', 'contract.plan.services', 'invoice_items', 'notes']);
 
         $code = '123456789012';
         $barcode = DNS1DFacade::getBarcodeHTML($code, 'C128');
@@ -172,6 +178,15 @@ class InvoiceController extends Controller
             number_format($result['total_billed'], 2),
             number_format($result['total_tax'], 2)
         );
+
+        // Se lleva al usuario al detalle de lo que acaba de generar:
+        // ahí ve factura por factura y puede descargar el reporte en
+        // Excel, CSV o PDF para archivarlo de inmediato.
+        if (!empty($result['billing_run_id'])) {
+            return redirect()
+                ->route('billing_runs.show', $result['billing_run_id'])
+                ->with('success', $message . '. Descargue el reporte para guardarlo.');
+        }
 
         return redirect()->route('invoices.index')
             ->with('success', $message);

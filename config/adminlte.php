@@ -450,6 +450,15 @@ return [
                     'icon' => 'fas  fa-receipt',
                     'can' => 'invoices.index',
                 ],
+                // Corrección de facturas ya emitidas. Se concede
+                // aparte: consultarlas no es lo mismo que emitirlas.
+                [
+                    'text' => 'Notas crédito/débito',
+                    'route' => 'notes.index',
+                    'icon' => 'fas  fa-file-invoice',
+                    'active' => ['notas*'],
+                    'can' => 'notes.index',
+                ],
                 [
                     'text' => 'Cobranza',
                     'icon' => 'fas  fa-dollar-sign',

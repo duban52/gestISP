@@ -64,6 +64,8 @@
                     <thead>
                     <tr>
                         <th>ID</th>
+                        <th>N.º contrato</th>
+                        <th>Identificación</th>
                         <th>Cliente</th>
                         <th>Período</th>
                         <th>Fecha de emisión</th>
@@ -79,6 +81,11 @@
                             {{-- Número formal (prefijo-consecutivo); las facturas
                                  históricas sin numerar muestran su id --}}
                             <td>{{ $invoice->displayNumber() }}</td>
+                            {{-- Número de contrato visible (no el id interno) e
+                                 identificación: son los datos por los que se
+                                 busca a un cliente en el mostrador --}}
+                            <td>{{ $invoice->contract->contract_number ?? '—' }}</td>
+                            <td>{{ $invoice->contract->client->identity_number ?? '—' }}</td>
                             <td>{{ $invoice->contract->client->name }} {{ $invoice->contract->client->last_name }}</td>
                             <td>{{ $invoice->billed_period_short ?? 'N/A' }}</td>
                             <td>{{ \Carbon\Carbon::parse($invoice->issue_date)->format('d/m/Y') }}</td>
@@ -274,25 +281,27 @@
                 "order": [[0, "desc"]], // Ordenar por ID descendente por defecto
 
                 // Configuración de columnas
+                // Los índices se corrieron dos posiciones al agregar
+                // las columnas de contrato e identificación.
                 "columnDefs": [
                     {
-                        "targets": [5], // Columna Total
+                        "targets": [7], // Columna Total
                         "type": "num-fmt", // Para ordenamiento numérico
                         "className": "text-right"
                     },
                     {
-                        "targets": [7], // Columna Acciones
+                        "targets": [9], // Columna Acciones
                         "orderable": false,
                         "searchable": false,
                         "className": "text-center"
                     },
                     {
-                        "targets": [3, 4], // Columnas de fechas
+                        "targets": [5, 6], // Columnas de fechas
                         "type": "date",
                         "className": "text-center"
                     },
                     {
-                        "targets": [6], // Columna Estado
+                        "targets": [8], // Columna Estado
                         "className": "text-center"
                     }
                 ],

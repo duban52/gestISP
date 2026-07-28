@@ -485,6 +485,28 @@
                         <div class="tab-content pt-3" id="contractTabsContent">
                             <!-- Estado de Cuenta -->
                             <div class="tab-pane fade show active" id="account-status" role="tabpanel" aria-labelledby="account-status-tab">
+                                {{-- Saldo a favor: dinero del cliente aún sin
+                                     consumir (anticipos o excedentes de notas
+                                     crédito). Se aplica solo a las próximas
+                                     facturas. --}}
+                                @php($saldoAFavor = $contract->saldoAFavor())
+                                <div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
+                                    <div>
+                                        @if($saldoAFavor > 0)
+                                            <span class="badge badge-success p-2" style="font-size:.95rem;">
+                                                <i class="fas fa-piggy-bank mr-1"></i>
+                                                Saldo a favor: ${{ number_format($saldoAFavor, 2, ',', '.') }}
+                                            </span>
+                                            <a href="{{ route('advance.movements', $contract) }}" class="ml-1">ver movimientos</a>
+                                        @endif
+                                    </div>
+                                    @can('payments.create')
+                                        <a href="{{ route('advance.create', $contract) }}" class="btn btn-success btn-sm">
+                                            <i class="fas fa-piggy-bank mr-1"></i> Recibir pago por adelantado
+                                        </a>
+                                    @endcan
+                                </div>
+
                                 {{-- Resumen: saldo pendiente del contrato --}}
                                 <div class="row mb-3">
                                     <div class="col-sm-4">
@@ -525,6 +547,7 @@
                                                 <th class="text-right">Total</th>
                                                 <th class="text-right">Saldo</th>
                                                 <th>Estado</th>
+                                                <th class="text-center">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -535,6 +558,23 @@
                                                     <td class="text-right">${{ number_format($invoice->total, 2) }}</td>
                                                     <td class="text-right">${{ number_format($invoice->pending_invoice_amount, 2) }}</td>
                                                     <td><span class="badge badge-{{ $badgeFor($invoice->status) }}">{{ $invoice->status }}</span></td>
+                                                    <td class="text-center text-nowrap">
+                                                        <a href="{{ route('invoices.show', $invoice->id) }}"
+                                                           class="btn btn-outline-info btn-sm" title="Ver factura">
+                                                            <i class="fas fa-eye"></i>
+                                                        </a>
+                                                        {{-- Corregir la factura con una nota crédito o
+                                                             débito: solo si se tiene el permiso --}}
+                                                        @can('notes.create')
+                                                            @if($invoice->status !== \App\Billing\Enums\InvoiceStatus::Anulada->value)
+                                                                <a href="{{ route('notes.create', ['invoice' => $invoice->id]) }}"
+                                                                   class="btn btn-outline-warning btn-sm"
+                                                                   title="Emitir nota crédito o débito">
+                                                                    <i class="fas fa-file-invoice"></i>
+                                                                </a>
+                                                            @endif
+                                                        @endcan
+                                                    </td>
                                                 </tr>
                                             @endforeach
                                         </tbody>

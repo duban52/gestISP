@@ -30,6 +30,7 @@ class Invoice extends Model
     protected $fillable = [
         'contract_id',
         'branch_id',
+        'billing_run_id',
         'type',
         'prefix',
         'number',
@@ -79,6 +80,18 @@ class Invoice extends Model
     ];
 
     /** Usuario que generó la factura */
+    /** Notas crédito/débito emitidas sobre esta factura */
+    public function notes()
+    {
+        return $this->hasMany(CreditDebitNote::class, 'invoice_id')->latest('id');
+    }
+
+    /** Corrida de facturación que generó esta factura */
+    public function billingRun()
+    {
+        return $this->belongsTo(BillingRun::class);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

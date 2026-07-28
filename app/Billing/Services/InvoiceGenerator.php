@@ -43,6 +43,7 @@ class InvoiceGenerator
 {
     public function __construct(
         private readonly InvoiceNumerator $numerator,
+        private readonly CreditBalanceService $creditBalance,
     ) {
     }
 
@@ -51,8 +52,12 @@ class InvoiceGenerator
      *
      * @return array{generated: bool, reason?: string, invoice_id?: int}
      */
-    public function generateForContract(Contract $contract, CarbonInterface $today, ?int $userId): array
-    {
+    public function generateForContract(
+        Contract $contract,
+        CarbonInterface $today,
+        ?int $userId,
+        ?int $billingRunId = null,
+    ): array {
         if ($contract->status === ContractStatus::Suspendido->value) {
             return ['generated' => false, 'reason' => 'Contract suspended'];
         }
@@ -69,7 +74,7 @@ class InvoiceGenerator
 
         $settings = BranchBillingSetting::forBranch($contract->branch_id);
 
-        $invoice = DB::transaction(function () use ($contract, $today, $userId, $yearMonth, $settings) {
+        $invoice = DB::transaction(function () use ($contract, $today, $userId, $yearMonth, $settings, $billingRunId) {
             $startOfMonth = $today->copy()->startOfMonth();
             $endOfMonth = $today->copy()->endOfMonth();
 
@@ -86,6 +91,8 @@ class InvoiceGenerator
             $invoice = Invoice::create([
                 'contract_id' => $contract->id,
                 'branch_id' => $contract->branch_id,
+                // Corrida que la generó (null si se creó por otra vía)
+                'billing_run_id' => $billingRunId,
                 'type' => InvoiceType::Mensualidad->value,
                 'user_id' => $userId,
                 'issue_date' => $today,
@@ -136,7 +143,13 @@ class InvoiceGenerator
 
         InvoiceIssued::dispatch($invoice);
 
-        return ['generated' => true, 'invoice_id' => $invoice->id, 'invoice' => $invoice];
+        // Si el cliente tiene saldo a favor (pagó por adelantado o le
+        // quedó a favor una nota crédito), la factura se abona sola.
+        // Es lo que hace que "pagar seis meses" funcione: cada mes la
+        // factura nueva se salda con ese dinero hasta agotarlo.
+        $this->creditBalance->aplicarAFactura($invoice);
+
+        return ['generated' => true, 'invoice_id' => $invoice->id, 'invoice' => $invoice->refresh()];
     }
 
     /**

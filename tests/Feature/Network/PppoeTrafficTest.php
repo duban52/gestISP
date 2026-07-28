@@ -104,6 +104,12 @@ class PppoeTrafficTest extends TestCase
 
     public function test_calcula_la_velocidad_con_la_segunda_muestra(): void
     {
+        // El cálculo divide por los segundos transcurridos entre
+        // las dos muestras. Sin congelar el reloj, el tiempo real
+        // que tarda la prueba se suma a esos 60 s y el resultado
+        // baja (la suite completa lo hacía fallar por ~1 s).
+        $this->freezeTime();
+
         // Muestra previa de hace 60 segundos
         PppoeSessionMetric::create([
             'pppoe_account_id' => $this->account->id,
@@ -126,6 +132,12 @@ class PppoeTrafficTest extends TestCase
 
     public function test_descarta_el_pico_falso_al_reconectarse_la_sesion(): void
     {
+        // El cálculo divide por los segundos transcurridos entre
+        // las dos muestras. Sin congelar el reloj, el tiempo real
+        // que tarda la prueba se suma a esos 60 s y el resultado
+        // baja (la suite completa lo hacía fallar por ~1 s).
+        $this->freezeTime();
+
         PppoeSessionMetric::create([
             'pppoe_account_id' => $this->account->id,
             'in_octets' => 9_000_000,

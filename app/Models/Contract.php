@@ -91,6 +91,27 @@ class Contract extends Model
         return $this->hasMany(AditionalCharge::class);
     }
 
+    /** Movimientos del saldo a favor del cliente */
+    public function accountCredits()
+    {
+        return $this->hasMany(AccountCredit::class)->latest('id');
+    }
+
+    /**
+     * Saldo a favor disponible: lo que el cliente tiene abonado y
+     * todavía no se ha consumido en facturas.
+     */
+    public function saldoAFavor(): float
+    {
+        $entradas = $this->accountCredits()
+            ->where('movement', AccountCredit::ENTRADA)->sum('amount');
+
+        $aplicados = $this->accountCredits()
+            ->where('movement', AccountCredit::APLICACION)->sum('amount');
+
+        return round((float) $entradas - (float) $aplicados, 2);
+    }
+
     /**
      * Comentarios/notas internas sobre el contrato (más recientes
      * primero).

@@ -23,7 +23,9 @@ class Payment extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'invoice_id', 'user_id', 'cash_register_id', 'payment_date',
+        'invoice_id',
+        'contract_id',
+        'type', 'user_id', 'cash_register_id', 'payment_date',
         'amount', 'payment_method', 'status', 'reference_number',
         'notes', 'created_by',
     ];

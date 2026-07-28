@@ -12,13 +12,44 @@
 
     <div class="row d-flex justify-content-center">
 
-        <div class="card col-md-10 d-flex justify-content-end pl-3 pt-3 pb-3 pr-3 mt-3">
-            <div>
-                <a href="{{ route('invoices.download-pdf', $invoice->id) }}" title="Descargar PDF" class="btn btn-danger">
-                    <i class="far fa-file-pdf"></i>
-                </a>
-            </div>
+        <div class="card col-md-10 pl-3 pt-3 pb-3 pr-3 mt-3">
+            @if(session('success'))
+                <div class="alert alert-success">{{ session('success') }}</div>
+            @endif
 
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                {{-- Notas ya emitidas sobre esta factura --}}
+                <div>
+                    @if($invoice->notes->isNotEmpty())
+                        <strong class="mr-2">Notas emitidas:</strong>
+                        @foreach($invoice->notes as $nota)
+                            <a href="{{ route('notes.show', $nota) }}"
+                               class="badge badge-{{ $nota->vigente ? ($nota->tipo()->disminuye() ? 'success' : 'warning') : 'secondary' }} mr-1"
+                               title="{{ $nota->concept_label }}">
+                                {{ $nota->full_number }}
+                                {{ $nota->tipo()->disminuye() ? '−' : '+' }}${{ number_format((float) $nota->total, 0, ',', '.') }}
+                            </a>
+                        @endforeach
+                    @endif
+                </div>
+
+                <div>
+                    {{-- Corregir la factura con una nota: solo para
+                         quien tenga el permiso de emitirlas --}}
+                    @can('notes.create')
+                        @if($invoice->status !== \App\Billing\Enums\InvoiceStatus::Anulada->value)
+                            <a href="{{ route('notes.create', ['invoice' => $invoice->id]) }}"
+                               class="btn btn-warning" title="Emitir nota crédito o débito sobre esta factura">
+                                <i class="fas fa-file-invoice"></i> Nota crédito/débito
+                            </a>
+                        @endif
+                    @endcan
+
+                    <a href="{{ route('invoices.download-pdf', $invoice->id) }}" title="Descargar PDF" class="btn btn-danger">
+                        <i class="far fa-file-pdf"></i>
+                    </a>
+                </div>
+            </div>
         </div>
         <div class="card col-md-5 ml-md-1">
             <div class="card-header">

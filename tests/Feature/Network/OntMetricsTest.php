@@ -146,6 +146,12 @@ class OntMetricsTest extends TestCase
 
     public function test_calcula_el_ancho_de_banda_por_diferencia_de_contadores(): void
     {
+        // El cálculo divide por los segundos transcurridos entre
+        // las dos muestras. Sin congelar el reloj, el tiempo real
+        // que tarda la prueba se suma a esos 60 s y el resultado
+        // baja (la suite completa lo hacía fallar por ~1 s).
+        $this->freezeTime();
+
         $poller = app(OntPoller::class);
         $method = new \ReflectionMethod($poller, 'calculateRates');
         $method->setAccessible(true);
@@ -167,6 +173,12 @@ class OntMetricsTest extends TestCase
 
     public function test_descarta_el_reinicio_del_contador(): void
     {
+        // El cálculo divide por los segundos transcurridos entre
+        // las dos muestras. Sin congelar el reloj, el tiempo real
+        // que tarda la prueba se suma a esos 60 s y el resultado
+        // baja (la suite completa lo hacía fallar por ~1 s).
+        $this->freezeTime();
+
         $poller = app(OntPoller::class);
         $method = new \ReflectionMethod($poller, 'calculateRates');
         $method->setAccessible(true);
