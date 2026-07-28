@@ -343,6 +343,12 @@ Route::delete('/routers/{router}',     [RouterController::class, 'destroy'])->na
 Route::get('/api/routers',                     [RouterController::class, 'apiRouters'])->name('api.routers');
 Route::get('/api/routers/{router}/profiles',   [RouterController::class, 'apiProfiles'])->name('api.routers.profiles');
 
+// Cortes masivos de servicio. Van ANTES de /pppoe/{pppoe} o la ruta
+// del detalle se traga "cortes" como si fuera el id de una cuenta.
+Route::get('/pppoe/cortes',          [App\Http\Controllers\PppoeCutoffController::class, 'create'])->name('pppoe.cutoff');
+Route::post('/pppoe/cortes/revisar', [App\Http\Controllers\PppoeCutoffController::class, 'preview'])->name('pppoe.cutoff.preview');
+Route::post('/pppoe/cortes/ejecutar',[App\Http\Controllers\PppoeCutoffController::class, 'execute'])->name('pppoe.cutoff.execute');
+
 //Ver estados de sesiones pppoe
 Route::get('/pppoe/{pppoe}',                  [PppoeAccountController::class, 'show'])->name('pppoe.show');
 Route::get('/pppoe/{pppoe}/realtime-session', [PppoeAccountController::class, 'realtimeSession'])->name('pppoe.realtime');

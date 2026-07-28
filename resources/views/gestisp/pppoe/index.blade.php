@@ -34,9 +34,16 @@
                 </button>
             </form>
         </div>
-        <button class="btn btn-primary" id="btnNuevaCuenta">
-            <i class="fas fa-plus"></i> Nueva Cuenta PPPoE
-        </button>
+        <div>
+            @can('pppoe.cutoff')
+                <a href="{{ route('pppoe.cutoff') }}" class="btn btn-outline-danger mr-1">
+                    <i class="fas fa-user-slash"></i> Cortes masivos
+                </a>
+            @endcan
+            <button class="btn btn-primary" id="btnNuevaCuenta">
+                <i class="fas fa-plus"></i> Nueva Cuenta PPPoE
+            </button>
+        </div>
     </div>
 
     <div class="card mt-3">
@@ -49,6 +56,7 @@
                         <th>Router</th>
                         <th>Perfil</th>
                         <th>IP Remota</th>
+                        <th>N.º contrato</th>
                         <th>Cliente</th>
                         <th>Estado</th>
                         <th>Comentario</th>
@@ -62,18 +70,28 @@
                             <td>{{ $account->router->name ?? 'N/A' }}</td>
                             <td>{{ $account->profile }}</td>
                             <td>{{ $account->remote_address ?? '—' }}</td>
+                            {{-- Número de contrato, no el id interno: es el
+                                 que el cliente tiene impreso y el que se pega
+                                 en la pantalla de cortes masivos. --}}
                             <td>
                                 @if($account->contract_id)
-                                    {{ $account->contract->client->name ?? '—' }}
-                                    {{ $account->contract->client->last_name ?? '' }}
+                                    <strong>{{ $account->contract->numero_visible }}</strong>
                                 @else
                                     {{-- Las cuentas importadas del router llegan
-                                         sin cliente: se vinculan desde su ficha --}}
+                                         sin contrato: se vinculan desde su ficha --}}
                                     <a href="{{ route('pppoe.show', $account) }}"
                                        class="badge badge-warning"
                                        title="Vincular esta cuenta con un contrato">
                                         <i class="fas fa-unlink mr-1"></i> Sin contrato
                                     </a>
+                                @endif
+                            </td>
+                            <td>
+                                @if($account->contract_id)
+                                    {{ $account->contract->client->name ?? '—' }}
+                                    {{ $account->contract->client->last_name ?? '' }}
+                                @else
+                                    —
                                 @endif
                             </td>
                             <td>
@@ -308,7 +326,9 @@
                 },
                 pageLength: 25,
                 columnDefs: [
-                    { orderable: false, targets: [7] },
+                    // Acciones: se corrió del 7 al 8 al agregar la
+                    // columna del número de contrato.
+                    { orderable: false, targets: [8] },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

@@ -70,6 +70,7 @@ class PermissionLabels
         'search' => 'Buscar en',
         'searchView' => 'Buscar en',
         'receipt' => 'Imprimir el recibo de',
+        'cutoff' => 'Ejecutar cortes masivos de',
     ];
 
     /**

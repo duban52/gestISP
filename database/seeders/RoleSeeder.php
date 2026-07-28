@@ -180,6 +180,9 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'pppoe.destroy', 'description' => 'Eliminar cuentas PPPoE']);
         Permission::create(['name' => 'pppoe.import', 'description' => 'Importar cuentas PPPoE desde el router']);
         Permission::create(['name' => 'pppoe.restart', 'description' => 'Reiniciar sesiones PPPoE']);
+        // Permiso propio: dejar sin internet a media sucursal de
+        // un clic no es lo mismo que consultar el listado.
+        Permission::create(['name' => 'pppoe.cutoff', 'description' => 'Ejecutar cortes masivos de servicio']);
 
         //Usuarios
         Permission::create(['name' => 'users.index', 'description' => 'Ver usuarios']);
@@ -226,7 +229,7 @@ class RoleSeeder extends Seeder
             'routers.index', 'routers.create', 'routers.edit', 'routers.destroy',
             'olts.index', 'olts.create', 'olts.edit', 'olts.vlans',
             'onts.index', 'onts.show', 'onts.activate', 'onts.destroy', 'onts.relocate', 'onts.catv',
-            'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart',
+            'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart', 'pppoe.cutoff',
             'reports.index', 'reports.growth', 'reports.technical', 'reports.billing', 'reports.provisioning'
         ]);
 

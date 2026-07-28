@@ -599,6 +599,16 @@ return [
                     'icon' => 'fas  fa-user-check',
                     'can' => 'pppoe.index',
                 ],
+                // Corte de servicio por lotes. Permiso propio: dejar
+                // sin internet a media sucursal no es lo mismo que
+                // consultar el listado de cuentas.
+                [
+                    'text' => 'Cortes masivos',
+                    'route' => 'pppoe.cutoff',
+                    'active' => ['pppoe/cortes*'],
+                    'icon' => 'fas  fa-user-slash',
+                    'can' => 'pppoe.cutoff',
+                ],
                 [
                     'text' => 'OLT´s',
                     'route' => 'olts.index',
