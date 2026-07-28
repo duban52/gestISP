@@ -105,10 +105,62 @@ class CashRegisterController extends Controller
     /**
      * Display a listing of the resource.
      */
+    /**
+     * Pantalla de gestión de caja del usuario.
+     *
+     * Se arma en el servidor y no por AJAX como antes: la pantalla
+     * necesita el desglose por método de pago y los últimos
+     * movimientos, y pedirlos por partes dejaba la vista en blanco
+     * mientras cargaba.
+     *
+     * El desglose por método importa más de lo que parece: el
+     * esperado en caja suma TODOS los métodos, pero en el cajón solo
+     * está el efectivo. Sin separarlos, quien cuenta el dinero
+     * reporta un faltante por cada transferencia que recibió.
+     */
     public function index()
     {
-        //
-        return view('gestisp.cashRegisters.index');
+        $caja = CashRegister::where('user_id', auth()->id())
+            ->where('branch_id', session('branch_id'))
+            ->where('status', 'open')
+            ->first();
+
+        $movimientos = collect();
+        $porMetodo = collect();
+
+        if ($caja) {
+            $movimientos = $caja->transactions()
+                ->with([
+                    'user',
+                    'payment.invoice.contract.client',
+                    'payment.contract.client',
+                ])
+                ->orderByDesc('id')
+                ->get();
+
+            // Ingresos menos egresos de cada método: es lo que debería
+            // haber de cada forma de pago al cerrar.
+            $porMetodo = $movimientos
+                ->groupBy(fn ($m) => $m->payment_method ?: 'Sin método')
+                ->map(fn ($filas) => [
+                    'ingresos' => round((float) $filas->where('transaction_type', 'Ingreso')->sum('amount'), 2),
+                    'egresos' => round((float) $filas->where('transaction_type', 'Egreso')->sum('amount'), 2),
+                    'movimientos' => $filas->count(),
+                ])
+                ->sortByDesc('ingresos');
+        }
+
+        // Última caja cerrada: da contexto cuando no hay ninguna
+        // abierta ("cerraste hace 2 horas con $X").
+        $ultimoCierre = CashRegister::where('user_id', auth()->id())
+            ->where('branch_id', session('branch_id'))
+            ->where('status', 'closed')
+            ->latest('closed_at')
+            ->first();
+
+        return view('gestisp.cashRegisters.index', compact(
+            'caja', 'movimientos', 'porMetodo', 'ultimoCierre'
+        ));
     }
 
     /**
@@ -186,7 +238,9 @@ class CashRegisterController extends Controller
             'branch_id' => $branchId,
             'user_id' => auth()->id(),
             'initial_amount' => $validated['initial_amount'],
-            'opening_notes' => $validated['opening_notes'],
+            // ?? null por lo mismo que en close(): el campo es
+            // opcional y validate() no devuelve la clave si no viene.
+            'opening_notes' => $validated['opening_notes'] ?? null,
             'opened_at' => now(),
             'status' => 'open'
         ]);
@@ -218,10 +272,17 @@ class CashRegisterController extends Controller
             'closing_notes' => 'nullable|string'
         ]);
 
-        // Actualizar el registro con los datos de cierre
+        // Actualizar el registro con los datos de cierre.
+        //
+        // closing_notes va con ?? null porque es opcional: si no se
+        // envía, validate() no devuelve la clave y acceder a ella
+        // tumbaba el cierre con un error 500. Funcionaba de milagro
+        // porque el formulario siempre manda el campo, aunque venga
+        // vacío; cualquier otro cliente (o un campo renombrado) lo
+        // rompía.
         $cashRegister->update([
             'final_amount' => $validated['final_amount'],
-            'closing_notes' => $validated['closing_notes'],
+            'closing_notes' => $validated['closing_notes'] ?? null,
             'closed_at' => now(),
             'status' => 'closed'
         ]);
@@ -231,8 +292,34 @@ class CashRegisterController extends Controller
 
         // Generar el comprobante de cierre (arqueo). Se precarga la
         // sucursal porque el encabezado del PDF la identifica.
+        // Retenciones recibidas durante el turno.
+        //
+        // NO entran al arqueo: ese dinero nunca estuvo en el cajón, y
+        // meterlo descuadraría el conteo. Van al comprobante por una
+        // razón puramente operativa: el cajero recibió del cliente un
+        // CERTIFICADO de retención en papel y tiene que entregarlo.
+        // Sin ese certificado la empresa no puede descontar el
+        // impuesto, así que el comprobante de cierre le sirve de
+        // recordatorio de qué documentos debe pasar con la caja.
+        $retentions = PaymentRetention::with(['contract.client', 'invoice'])
+            ->whereHas('payment', fn ($q) => $q->where('cash_register_id', $cashRegister->id))
+            ->orderBy('id')
+            ->get();
+
+        // El detalle de movimientos identifica al cliente de cada
+        // cobro (contrato e identificación), así que se precarga la
+        // cadena completa: sin esto son cuatro consultas por fila.
+        // Los anticipos cuelgan del contrato sin pasar por factura,
+        // de ahí las dos ramas.
         $pdf = PdfBranding::make('gestisp.cashRegisters.report', [
-            'cashRegister' => $cashRegister->load(['transactions.user', 'user', 'branch'])
+            'cashRegister' => $cashRegister->load([
+                'transactions.user',
+                'transactions.payment.invoice.contract.client',
+                'transactions.payment.contract.client',
+                'user',
+                'branch',
+            ]),
+            'retentions' => $retentions,
         ]);
 
         // Guardar el PDF

@@ -158,7 +158,24 @@
                 <td class="nowrap">{{ $transaction->created_at->format('d/m/Y h:i a') }}</td>
                 <td>{{ $transaction->transaction_type }}</td>
                 <td>{{ ucfirst($transaction->payment_method ?: '—') }}</td>
-                <td>{{ $transaction->description }}</td>
+                <td>
+                    {{-- La descripción se REHACE desde las relaciones y no
+                         se toma de la columna guardada: así los movimientos
+                         viejos ("Pago de factura 18", con el id) también
+                         salen con el número de factura, el número de
+                         contrato y la identificación del cliente. --}}
+                    {{ $transaction->descripcionLegible() }}
+                    {{-- Forma de BLOQUE a propósito: la abreviada
+                         @php(...) se empareja con el @endphp de
+                         cualquier bloque posterior del archivo y se
+                         traga el HTML que quede en medio. --}}
+                    @php
+                        $detalleCliente = $transaction->detalleDelCliente();
+                    @endphp
+                    @if($detalleCliente)
+                        <br><span style="color:#666; font-size: 6.5px;">{{ $detalleCliente }}</span>
+                    @endif
+                </td>
                 <td class="text-right {{ $transaction->transaction_type === 'Egreso' ? 'negative' : '' }}">
                     {{ $transaction->transaction_type === 'Egreso' ? '−' : '' }}${{ number_format($transaction->amount, 2) }}
                 </td>
@@ -180,6 +197,72 @@
             </tfoot>
         @endif
     </table>
+
+    {{-- ---------- Certificados de retención por entregar ----------
+
+         Este bloque NO hace parte del arqueo y por eso va después del
+         cuadre, con su propia advertencia: ese dinero nunca estuvo en
+         el cajón y sumarlo descuadraría el conteo.
+
+         Está aquí por una razón operativa: el cajero recibió del
+         cliente un CERTIFICADO de retención en papel y debe
+         entregarlo con la caja. Sin ese documento la empresa no puede
+         descontar el impuesto, así que el comprobante de cierre le
+         sirve de lista de chequeo de lo que tiene que pasar.
+
+         Si se decide que el comprobante debe limitarse al arqueo,
+         basta con borrar este bloque: nada más depende de él.
+         ------------------------------------------------------------ --}}
+    @if(($retentions ?? collect())->isNotEmpty())
+        <div class="section-title">Retenciones recibidas en el turno — no hacen parte del arqueo</div>
+
+        <table class="data">
+            <thead>
+            <tr>
+                <th style="width: 16%">Contrato</th>
+                <th style="width: 26%">Cliente</th>
+                <th style="width: 14%">Factura</th>
+                <th style="width: 22%">Retención</th>
+                <th style="width: 12%">Certificado</th>
+                <th style="width: 10%" class="text-right">Valor</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach($retentions as $retencion)
+                <tr>
+                    <td>{{ $retencion->contract?->numero_visible ?? '—' }}</td>
+                    <td>
+                        {{ trim(($retencion->contract?->client?->name ?? '') . ' ' . ($retencion->contract?->client?->last_name ?? '')) ?: '—' }}
+                        <br><span style="color:#666">{{ $retencion->contract?->client?->identity_number }}</span>
+                    </td>
+                    <td>{{ $retencion->invoice?->displayNumber() ?? '—' }}</td>
+                    <td>{{ $retencion->tipo_corto }} {{ rtrim(rtrim(number_format((float) $retencion->rate, 3, ',', '.'), '0'), ',') }}%</td>
+                    <td>
+                        @if($retencion->certificate_number)
+                            {{ $retencion->certificate_number }}
+                        @else
+                            <span class="negative">Pendiente</span>
+                        @endif
+                    </td>
+                    <td class="text-right">${{ number_format((float) $retencion->amount, 2) }}</td>
+                </tr>
+            @endforeach
+            </tbody>
+            <tfoot>
+            <tr>
+                <td colspan="5">TOTAL RETENIDO (no ingresó a la caja)</td>
+                <td class="text-right">${{ number_format((float) $retentions->sum('amount'), 2) }}</td>
+            </tr>
+            </tfoot>
+        </table>
+
+        <div class="note">
+            Estos valores <strong>no se cuentan en el arqueo</strong>: el cliente los descontó del pago
+            y los consignó a la DIAN o al municipio a nombre de la empresa. Se relacionan aquí para que
+            el responsable de la caja <strong>entregue los certificados de retención</strong> junto con
+            el efectivo. Sin el certificado el impuesto no se puede descontar en la declaración.
+        </div>
+    @endif
 
     {{-- ---------- Observaciones ---------- --}}
     @if($cashRegister->opening_notes || $cashRegister->closing_notes)

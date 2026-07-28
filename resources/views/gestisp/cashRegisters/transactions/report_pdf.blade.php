@@ -114,7 +114,18 @@
                 <td>{{ ucfirst($transaction->payment_method ?: '—') }}</td>
                 <td>Caja #{{ $transaction->cash_register_id ?? '—' }}</td>
                 <td>{{ $transaction->user->name ?? '—' }} {{ $transaction->user->last_name ?? '' }}</td>
-                <td>{{ $transaction->description }}</td>
+                <td>
+                    {{-- Igual que en el comprobante de cierre: se rehace
+                         desde las relaciones para que también los
+                         movimientos viejos identifiquen al cliente. --}}
+                    {{ $transaction->descripcionLegible() }}
+                    @php
+                        $detalleCliente = $transaction->detalleDelCliente();
+                    @endphp
+                    @if($detalleCliente)
+                        <br><span style="color:#666; font-size: 6.5px;">{{ $detalleCliente }}</span>
+                    @endif
+                </td>
                 <td class="text-right {{ $transaction->transaction_type === 'Egreso' ? 'negative' : '' }}">
                     {{ $transaction->transaction_type === 'Egreso' ? '−' : '' }}${{ number_format($transaction->amount, 2) }}
                 </td>

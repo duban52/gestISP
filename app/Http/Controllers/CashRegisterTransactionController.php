@@ -132,7 +132,15 @@ class CashRegisterTransactionController extends Controller
 
         // Precargar el usuario: el PDF muestra quién registró cada
         // movimiento (evita N+1 en el detalle)
-        $transactions = $query->with('user')->orderByDesc('created_at')->get();
+        // La columna de descripción identifica al cliente de cada
+        // cobro, así que se precarga la cadena entera (por factura y,
+        // en los anticipos, por contrato directo). Sin esto son
+        // varias consultas por fila del reporte.
+        $transactions = $query->with([
+            'user',
+            'payment.invoice.contract.client',
+            'payment.contract.client',
+        ])->orderByDesc('created_at')->get();
 
         // El PDF informa el período consultado en su encabezado
         $from = $request->start_date;
