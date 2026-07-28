@@ -489,7 +489,18 @@
                                      consumir (anticipos o excedentes de notas
                                      crédito). Se aplica solo a las próximas
                                      facturas. --}}
-                                @php($saldoAFavor = $contract->saldoAFavor())
+                                {{-- Se usa la forma de BLOQUE (@php … @endphp) y no
+                                     la abreviada @php(...): Blade empareja los
+                                     bloques con una expresión no ávida, así que
+                                     una forma abreviada seguida más abajo por un
+                                     @endphp de otro bloque se empareja con ESE, y
+                                     se traga como PHP crudo todo lo que hay en
+                                     medio (la tabla de facturas dejaba de
+                                     compilarse). Mezclar las dos formas en un
+                                     mismo archivo rompe la vista. --}}
+                                @php
+                                    $saldoAFavor = $contract->saldoAFavor();
+                                @endphp
                                 <div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
                                     <div>
                                         @if($saldoAFavor > 0)
@@ -552,10 +563,25 @@
                                         </thead>
                                         <tbody>
                                             @foreach($invoices as $invoice)
+                                                @php
+                                                    // Retenciones que ayudaron a saldar esta factura
+                                                    $retenido = (float) $invoice->retentions->sum('amount');
+                                                @endphp
                                                 <tr>
                                                     <td>{{ $invoice->displayNumber() }}</td>
                                                     <td>{{ $invoice->billed_month_name }}</td>
-                                                    <td class="text-right">${{ number_format($invoice->total, 2) }}</td>
+                                                    <td class="text-right">
+                                                        ${{ number_format($invoice->total, 2) }}
+                                                        @if($retenido > 0)
+                                                            {{-- Sin esta línea, la factura aparece
+                                                                 pagada con un pago menor al total y
+                                                                 parece un descuadre. --}}
+                                                            <small class="d-block text-info"
+                                                                   title="{{ $invoice->retentions->pluck('descripcion')->implode(' · ') }}">
+                                                                Retenido ${{ number_format($retenido, 2) }}
+                                                            </small>
+                                                        @endif
+                                                    </td>
                                                     <td class="text-right">${{ number_format($invoice->pending_invoice_amount, 2) }}</td>
                                                     <td><span class="badge badge-{{ $badgeFor($invoice->status) }}">{{ $invoice->status }}</span></td>
                                                     <td class="text-center text-nowrap">

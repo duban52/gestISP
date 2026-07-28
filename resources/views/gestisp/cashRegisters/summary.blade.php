@@ -83,6 +83,44 @@
         </div>
     @endif
 
+    {{-- ============================================================
+         Retenciones del período.
+
+         NO entran al cuadre y por eso van en un bloque aparte, con
+         borde distinto: ese dinero nunca estuvo en el cajón, el
+         cliente lo consignó al Estado a nombre de la empresa.
+
+         Se muestran porque sin ellas quien concilie el recaudo
+         contra las facturas ve un hueco sin explicación: hay
+         facturas marcadas como pagadas por más dinero del que entró.
+         ============================================================ --}}
+    @if($retentionTotals['total'] > 0)
+        <div class="card card-outline card-info">
+            <div class="card-header py-2">
+                <strong><i class="fas fa-percent mr-1"></i> Retenciones del período — no hacen parte del cuadre</strong>
+            </div>
+            <div class="card-body py-2">
+                <div class="d-flex flex-wrap align-items-center">
+                    <span class="h5 mb-0 mr-3">
+                        Total retenido: <strong>${{ number_format($retentionTotals['total'], 2) }}</strong>
+                    </span>
+                    @foreach($retentionTotals['by_type'] as $tipo)
+                        <span class="badge badge-light border mr-2" style="font-size: .95rem;">
+                            {{ $tipo['label'] }}: ${{ number_format($tipo['total'], 2) }}
+                        </span>
+                    @endforeach
+                </div>
+                <p class="text-muted small mb-0 mt-2">
+                    {{ $retentionTotals['count'] }} retención(es) practicadas por clientes agentes de
+                    retención. Ese dinero <strong>no ingresó a la caja</strong>: el cliente lo consignó
+                    a la DIAN o al municipio a nombre de la empresa, y por eso las facturas quedaron
+                    canceladas por más de lo que se recibió en efectivo.
+                    <a href="{{ route('retentions.index', ['from' => $from, 'to' => $to]) }}">Ver el detalle</a>.
+                </p>
+            </div>
+        </div>
+    @endif
+
     {{-- Detalle por caja --}}
     <div class="card">
         <div class="card-body">

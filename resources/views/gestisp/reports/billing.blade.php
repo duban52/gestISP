@@ -23,9 +23,13 @@
         </div>
         <div class="col-12 col-sm-6 col-lg-3">
             @include('gestisp.reports.partials.kpi', [
-                'titulo' => 'Recaudado',
+                'titulo' => 'Recaudado en caja',
                 'valor' => '$' . number_format($resumen['recaudado'], 0, ',', '.'),
                 'icono' => 'fa-hand-holding-usd', 'color' => 'success',
+                // La tasa se calcula sobre lo CANCELADO (efectivo +
+                // retenciones), no sobre el efectivo: si no, un
+                // cliente que pagó completo con retención parecería
+                // moroso.
                 'pie' => 'Tasa de recaudo ' . number_format($resumen['tasa_recaudo'], 1) . '%',
             ])
         </div>
@@ -48,6 +52,61 @@
             ])
         </div>
     </div>
+
+    {{-- ============================================================
+         Conciliación entre lo facturado y lo cobrado.
+
+         Solo aparece si hubo retenciones. Es la explicación de por
+         qué entró menos efectivo del que se facturó sin que el
+         cliente deba nada: parte del pago se la llevó el Estado.
+
+         OJO con la cifra de arriba: lo FACTURADO no se toca. Es la
+         base de la declaración de renta e IVA (DIAN), del reporte de
+         ingresos a la CRC y de la contraprestación de MinTIC, y los
+         tres miden ingreso causado, no caja. La retención no es menos
+         ingreso: es un anticipo de impuesto nuestro.
+         ============================================================ --}}
+    @if(($resumen['retenido'] ?? 0) > 0)
+        <div class="row">
+            <div class="col-12 col-lg-6">
+                <div class="card card-outline card-info">
+                    <div class="card-header py-2">
+                        <h3 class="card-title">
+                            <i class="fas fa-balance-scale mr-1"></i> Conciliación de lo cobrado
+                        </h3>
+                    </div>
+                    <div class="card-body py-2">
+                        <table class="table table-sm mb-2">
+                            <tr>
+                                <td>Recaudado en caja</td>
+                                <td class="text-right">${{ number_format($resumen['recaudado'], 0, ',', '.') }}</td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    (+) Retenido por los clientes
+                                    <i class="fas fa-question-circle text-muted"
+                                       title="Impuestos que el cliente descontó del pago y consignó a la DIAN o al municipio a nombre de la empresa. Pagó completo; ese dinero es un anticipo de nuestros impuestos."></i>
+                                </td>
+                                <td class="text-right text-info">
+                                    ${{ number_format($resumen['retenido'], 0, ',', '.') }}
+                                </td>
+                            </tr>
+                            <tr class="border-top">
+                                <th>Cancelado por los clientes</th>
+                                <th class="text-right">${{ number_format($resumen['cancelado'], 0, ',', '.') }}</th>
+                            </tr>
+                        </table>
+                        <p class="text-muted small mb-0">
+                            Lo retenido <strong>no es cartera</strong>: la factura quedó pagada. Tampoco
+                            disminuye lo facturado, que es la cifra que se declara a la DIAN y se reporta
+                            a la CRC y a MinTIC.
+                            <a href="{{ route('retentions.index') }}">Ver el detalle de retenciones</a>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 
     <div class="row">
         <div class="col-12">

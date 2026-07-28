@@ -172,6 +172,11 @@ class ContractController extends Controller
         // cliente: se entregan las colecciones completas (sin paginar)
         // con las relaciones precargadas para evitar consultas N+1.
         $invoices = Invoice::where('contract_id', $contract->id)
+                // Las retenciones se precargan porque el estado de
+                // cuenta las muestra: sin ellas, una factura saldada
+                // con retención se ve como "Pagada" con un pago menor
+                // al total y parece un error.
+                ->with('retentions')
                 ->orderBy('updated_at', 'desc')
                 ->get();
         $additionalCharges = AditionalCharge::where('contract_id', $contract->id)

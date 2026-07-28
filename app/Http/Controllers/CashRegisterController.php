@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Enums\RetentionType;
 use App\Models\CashRegister;
 use App\Models\CashRegisterTransaction;
+use App\Models\PaymentRetention;
 use App\Support\PdfBranding;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -74,8 +76,30 @@ class CashRegisterController extends Controller
             ->groupBy('payment_method')
             ->map(fn ($rows) => $rows->sum('total'));
 
+        // Retenciones practicadas por los clientes en el período.
+        //
+        // NO forman parte del cuadre: ese dinero nunca estuvo en el
+        // cajón, el cliente lo consignó al Estado a nombre nuestro.
+        // Se muestran aparte, como nota informativa, porque sin ellas
+        // quien concilie el recaudo contra las facturas ve un hueco
+        // sin explicación: hay facturas marcadas como pagadas por más
+        // dinero del que entró.
+        $retentions = PaymentRetention::query()
+            ->where('branch_id', session('branch_id'))
+            ->whereBetween('created_at', ["{$from} 00:00:00", "{$to} 23:59:59"])
+            ->get();
+
+        $retentionTotals = [
+            'total' => round((float) $retentions->sum('amount'), 2),
+            'count' => $retentions->count(),
+            'by_type' => $retentions->groupBy('type')->map(fn ($filas) => [
+                'label' => RetentionType::tryFrom($filas->first()->type)?->etiqueta() ?? $filas->first()->type,
+                'total' => round((float) $filas->sum('amount'), 2),
+            ])->values(),
+        ];
+
         return view('gestisp.cashRegisters.summary', compact(
-            'registers', 'methodBreakdown', 'totals', 'methodTotals', 'from', 'to'
+            'registers', 'methodBreakdown', 'totals', 'methodTotals', 'retentionTotals', 'from', 'to'
         ));
     }
     /**

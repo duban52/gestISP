@@ -17,7 +17,7 @@
                 <span class="summary-value">${{ number_format($resumen['facturado'], 0, ',', '.') }}</span>
             </td>
             <td>
-                <span class="summary-label">Recaudado</span>
+                <span class="summary-label">Recaudado en caja</span>
                 <span class="summary-value positive">${{ number_format($resumen['recaudado'], 0, ',', '.') }}</span>
             </td>
             <td>
@@ -30,6 +30,40 @@
             </td>
         </tr>
     </table>
+
+    {{-- ---------- Conciliación de lo cobrado ----------
+         Solo cuando hubo retenciones. Explica por qué entró menos
+         efectivo del facturado sin que nadie deba nada. Lo FACTURADO
+         no se toca: es la base de la declaración a la DIAN y de los
+         reportes a la CRC y a MinTIC, que miden ingreso causado. --}}
+    @if(($resumen['retenido'] ?? 0) > 0)
+        <div class="section-title">Conciliación entre lo facturado y lo cobrado</div>
+
+        <table class="data">
+            <tbody>
+            <tr>
+                <td>Recaudado en caja</td>
+                <td class="text-right">${{ number_format($resumen['recaudado'], 0, ',', '.') }}</td>
+            </tr>
+            <tr>
+                <td>(+) Retenido por los clientes (anticipo de impuesto)</td>
+                <td class="text-right">${{ number_format($resumen['retenido'], 0, ',', '.') }}</td>
+            </tr>
+            <tr>
+                <td class="strong">Cancelado por los clientes</td>
+                <td class="text-right strong">${{ number_format($resumen['cancelado'], 0, ',', '.') }}</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="note">
+            Las retenciones son impuestos que el cliente descontó del pago y consignó a la DIAN o al
+            municipio <strong>a nombre de la empresa</strong>. La factura quedó pagada, de modo que
+            ese valor <strong>no es cartera</strong>; y tampoco disminuye lo facturado, que es la
+            cifra que se declara a la DIAN y se reporta a la CRC y a MinTIC. Constituye un anticipo
+            de impuesto descontable en la declaración correspondiente.
+        </div>
+    @endif
 
     <div class="section-title">Facturado y recaudado por período</div>
     <table class="data">

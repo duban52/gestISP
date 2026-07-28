@@ -6,6 +6,7 @@ use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Enums\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\PaymentRetention;
 use App\Reports\Support\ReportPeriod;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -213,6 +214,15 @@ class BillingReport
     {
         $facturado = $this->totalFacturado($this->period);
         $recaudado = $this->totalRecaudado($this->period);
+        $retenido = $this->totalRetenido($this->period);
+
+        // Lo que el cliente CANCELÓ es el efectivo más lo que retuvo:
+        // ese dinero también pagó la factura, solo que lo recibió el
+        // Estado. La tasa de recaudo se calcula sobre esta cifra o de
+        // lo contrario un cliente que pagó el 100% con retención del
+        // 4% aparecería como si hubiera pagado el 96%, y su saldo se
+        // vería como cartera cuando no debe nada.
+        $cancelado = round($recaudado + $retenido, 2);
 
         $anterior = $this->period->anterior();
 
@@ -222,11 +232,19 @@ class BillingReport
             ->sum('invoices.pending_invoice_amount');
 
         return [
+            // Lo FACTURADO es la cifra que se declara a la DIAN, se
+            // reporta a la CRC y sirve de base a la contraprestación
+            // de MinTIC. Las retenciones NO la disminuyen: la factura
+            // se pagó completa, solo cambió quién recibió cada parte.
+            // (Lo que sí la disminuye es una nota crédito, porque esa
+            // corrige la factura.)
             'facturado' => $facturado,
             'recaudado' => $recaudado,
+            'retenido' => $retenido,
+            'cancelado' => $cancelado,
             'cartera' => round($cartera, 2),
             'cartera_vencida' => round($vencida, 2),
-            'tasa_recaudo' => $facturado > 0 ? round($recaudado / $facturado * 100, 1) : 0.0,
+            'tasa_recaudo' => $facturado > 0 ? round($cancelado / $facturado * 100, 1) : 0.0,
             'ticket_promedio' => $this->ticketPromedio(),
             'facturado_previo' => $this->totalFacturado($anterior),
             'recaudado_previo' => $this->totalRecaudado($anterior),
@@ -254,6 +272,28 @@ class BillingReport
         return round((float) $this->pagosQuery()
             ->whereBetween('payments.payment_date', [$periodo->from, $periodo->to])
             ->sum('payments.amount'), 2);
+    }
+
+    /**
+     * Impuestos que los clientes retuvieron en el período.
+     *
+     * No entró a la caja —lo consignó el cliente a la DIAN o al
+     * municipio a nombre nuestro— pero sí canceló factura, así que
+     * hace parte de la conciliación entre lo facturado y lo cobrado.
+     * No es cartera y tampoco es ingreso adicional.
+     */
+    private function totalRetenido(ReportPeriod $periodo): float
+    {
+        return round((float) PaymentRetention::query()
+            ->when($this->branchId, fn ($q) => $q->where('branch_id', $this->branchId))
+            // created_at lleva hora, así que el rango se abre al
+            // día completo: con las fechas peladas se perdería todo
+            // lo retenido el último día del período.
+            ->whereBetween('created_at', [
+                $periodo->from->startOfDay(),
+                $periodo->to->endOfDay(),
+            ])
+            ->sum('amount'), 2);
     }
 
     /**
