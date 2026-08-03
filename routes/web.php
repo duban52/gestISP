@@ -358,6 +358,9 @@ Route::post('/pppoe/{pppoe}/restart-session', [PppoeAccountController::class, 'r
 // PPPoE
 Route::get('/pppoe',                       [PppoeAccountController::class, 'index'])->name('pppoe.index');
 Route::post('/pppoe',                      [PppoeAccountController::class, 'store'])->name('pppoe.store');
+// Propone usuario/clave/comentario. Va por POST porque lleva datos
+// personales, que no deben viajar en la URL.
+Route::post('/pppoe/credenciales/sugerir', [PppoeAccountController::class, 'suggestCredentials'])->name('pppoe.suggest');
 Route::put('/pppoe/{pppoe}',               [PppoeAccountController::class, 'update'])->name('pppoe.update');
 Route::post('/pppoe/{pppoe}/toggle',       [PppoeAccountController::class, 'toggleState'])->name('pppoe.toggle');
 //Vincular la cuenta con un contrato. Va aparte de la edición: esta

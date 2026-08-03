@@ -141,7 +141,7 @@ class PppoeCutoffController extends Controller
                     'tamano_kb' => round($archivo->getSize() / 1024, 1),
                 ],
                 null,
-                'pppoe',
+                'red',
             );
 
             return $this->cortes->identificadoresDesdeArchivo($archivo);

@@ -6,9 +6,11 @@ use App\Models\Contract;
 use App\Models\PppoeAccount;
 use App\Models\Router;
 use App\Services\MikrotikApiService;
+use App\Services\PppoeCredentialGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -33,11 +35,56 @@ class PppoeAccountController extends Controller
         $this->middleware('check.permission:pppoe.edit')->only('linkContract', 'unlinkContract');
         $this->middleware('check.permission:pppoe.index')->only('index', 'apiActiveSessions');
         $this->middleware('check.permission:pppoe.show')->only('show', 'realtimeSession', 'metricsHistory');
-        $this->middleware('check.permission:pppoe.create')->only('store');
+        $this->middleware('check.permission:pppoe.create')->only('store', 'suggestCredentials');
         $this->middleware('check.permission:pppoe.edit')->only('update', 'toggleState');
         $this->middleware('check.permission:pppoe.destroy')->only('destroy');
         $this->middleware('check.permission:pppoe.import')->only('importFromRouter');
         $this->middleware('check.permission:pppoe.restart')->only('restartSession');
+    }
+
+    /**
+     * Propone usuario, contraseña y comentario para una cuenta nueva.
+     *
+     * Sirve a los dos caminos del formulario: si llega contract_id se
+     * toman los datos del contrato; si no, los que el operador
+     * escribió a mano (el titular existe, pero en otro sistema).
+     *
+     * Va por POST y no por GET porque lleva nombre e identificación
+     * de una persona, y eso no debe quedar escrito en la URL ni en
+     * los registros del servidor.
+     *
+     * El router importa: la unicidad del usuario es POR ROUTER, así
+     * que el diferenciador solo se puede calcular sabiendo en cuál se
+     * va a crear la cuenta.
+     */
+    public function suggestCredentials(Request $request, PppoeCredentialGenerator $generador): JsonResponse
+    {
+        $validated = $request->validate([
+            'router_id' => 'nullable|exists:routers,id',
+            'contract_id' => 'nullable|exists:contracts,id',
+            'nombres' => 'nullable|string|max:120',
+            'apellidos' => 'nullable|string|max:120',
+            'identificacion' => 'nullable|string|max:40',
+            'referencia' => 'nullable|string|max:60',
+        ]);
+
+        $routerId = isset($validated['router_id']) ? (int) $validated['router_id'] : null;
+
+        if (!empty($validated['contract_id'])) {
+            $contrato = Contract::with('client')->findOrFail($validated['contract_id']);
+
+            return response()->json($generador->paraContrato($contrato, $routerId));
+        }
+
+        return response()->json($generador->generar([
+            'nombres' => $validated['nombres'] ?? null,
+            'apellidos' => $validated['apellidos'] ?? null,
+            'identificacion' => $validated['identificacion'] ?? null,
+            'referencia' => $validated['referencia'] ?? null,
+            // El titular está en otro sistema: la referencia es el
+            // contrato o número de cliente de ESE sistema.
+            'etiqueta_referencia' => 'Ref.',
+        ], $routerId));
     }
 
     public function index(): View
@@ -50,17 +97,58 @@ class PppoeAccountController extends Controller
         return view('gestisp.pppoe.index', compact('routers', 'accounts'));
     }
 
+    /**
+     * Crea una cuenta PPPoE en el router y la registra.
+     *
+     * CUENTAS CON Y SIN CONTRATO
+     * --------------------------
+     * Lo normal es que la cuenta pertenezca a un contrato: se busca
+     * el cliente y de ahí salen el usuario, la clave y el comentario.
+     * Pero no toda cuenta le factura a alguien — enlaces entre sedes
+     * propias, cámaras, antenas de la misma empresa, pruebas de
+     * laboratorio. Antes esos casos obligaban a inventar un contrato
+     * o a crear la cuenta a mano en el Mikrotik, por fuera del
+     * sistema (y por tanto fuera de todo control).
+     *
+     * Marcando "no pertenece a un contrato" la cuenta se crea sin
+     * contract_id y el COMENTARIO pasa a ser obligatorio: si nadie
+     * responde por la cuenta desde un contrato, al menos tiene que
+     * quedar escrito para qué es.
+     */
     public function store(Request $request): RedirectResponse
     {
+        // La casilla manda: un contract_id que quedara en el
+        // formulario no debe vincular una cuenta que se pidió suelta.
+        $sinContrato = $request->boolean('sin_contrato');
+
         $validated = $request->validate([
             'router_id'      => 'required|exists:routers,id',
-            'contract_id'    => 'nullable|exists:contracts,id',
+            'sin_contrato'   => 'nullable|boolean',
+            'contract_id'    => [
+                Rule::requiredIf(fn () => !$sinContrato),
+                'nullable',
+                'exists:contracts,id',
+            ],
             'username'       => 'required|string|max:255',
             'password'       => 'required|string|max:255',
             'profile'        => 'required|string|max:255',
             'remote_address' => 'nullable|ip',
-            'comment'        => 'nullable|string|max:255',
+            // Sin contrato el comentario es lo único que dice para
+            // qué existe esta cuenta: se vuelve obligatorio.
+            'comment'        => [
+                Rule::requiredIf(fn () => $sinContrato),
+                'nullable',
+                'string',
+                'max:255',
+            ],
+        ], [
+            'contract_id.required' => 'Seleccione el contrato o marque que la cuenta no pertenece a ninguno.',
+            'comment.required' => 'Describa para qué es esta cuenta: es lo único que la identifica sin contrato.',
         ]);
+
+        if ($sinContrato) {
+            $validated['contract_id'] = null;
+        }
 
         $router = Router::findOrFail($validated['router_id']);
 
@@ -79,7 +167,7 @@ class PppoeAccountController extends Controller
             return back()->with('error', 'Error al crear en Mikrotik: ' . $e->getMessage())->withInput();
         }
 
-        PppoeAccount::create([
+        $cuenta = PppoeAccount::create([
             'branch_id'      => session('branch_id'),
             'router_id'      => $validated['router_id'],
             'contract_id'    => $validated['contract_id'] ?? null,
@@ -101,7 +189,45 @@ class PppoeAccountController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Cuenta PPPoE creada correctamente.');
+        $this->auditarCreacion($cuenta, $router, $sinContrato);
+
+        return back()->with('success', $sinContrato
+            ? 'Cuenta PPPoE creada SIN contrato asociado.'
+            : 'Cuenta PPPoE creada correctamente.');
+    }
+
+    /**
+     * Deja constancia de la creación de la cuenta.
+     *
+     * Interesa sobre todo el caso SIN contrato: una cuenta que
+     * consume ancho de banda y no le factura a nadie tiene que poder
+     * rastrearse hasta quién la creó y para qué dijo que era.
+     */
+    private function auditarCreacion(PppoeAccount $cuenta, Router $router, bool $sinContrato): void
+    {
+        $contrato = $cuenta->contract;
+
+        app(\App\Services\Audit\AuditLogger::class)->action(
+            'pppoe.created',
+            sprintf(
+                'Creó la cuenta PPPoE %s en %s (%s)',
+                $cuenta->username,
+                $router->name,
+                $sinContrato
+                    ? 'sin contrato: ' . ($cuenta->comment ?: 'sin descripción')
+                    : 'contrato ' . ($contrato?->numero_visible ?? '—'),
+            ),
+            [
+                'usuario_pppoe' => $cuenta->username,
+                'router' => $router->name,
+                'perfil' => $cuenta->profile,
+                'sin_contrato' => $sinContrato,
+                'contrato' => $contrato?->numero_visible,
+                'comentario' => $cuenta->comment,
+            ],
+            $cuenta,
+            'red',
+        );
     }
 
     public function update(Request $request, PppoeAccount $pppoe): RedirectResponse

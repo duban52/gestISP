@@ -346,7 +346,7 @@ class PppoeMassCutoff
                 'origen' => 'corte_masivo',
             ],
             $cuenta,
-            'pppoe',
+            'red',
         );
 
         return ['resultado' => 'cortada'];
@@ -389,7 +389,7 @@ class PppoeMassCutoff
                     ->all(),
             ],
             null,
-            'pppoe',
+            'red',
         );
     }
 

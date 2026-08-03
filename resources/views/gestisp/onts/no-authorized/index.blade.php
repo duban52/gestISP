@@ -85,30 +85,76 @@
                             <input type="text" class="form-control" id="modalModel" disabled>
                         </div>
 
-                        <div class="form-group">
-                            <label>Buscar Contrato</label>
-                            <input
-                                type="text"
-                                id="buscarContrato"
-                                class="form-control"
-                                placeholder="Buscar por identificación, nombre o # contrato...">
-                            <div id="resultadosContrato"
-                                 class="list-group mt-1"
-                                 style="display:none; position:absolute; z-index:9999; width:90%;">
+                        {{-- ============================================================
+                             ¿A quién pertenece la ONT?
+
+                             Lo normal es que sea de un contrato. Pero hay
+                             equipos que no le facturan a nadie —pruebas de
+                             laboratorio, repetidores propios, enlaces a una
+                             sede de la empresa— y antes había que inventarles
+                             un contrato para poder autorizarlos.
+
+                             La casilla llega DESMARCADA a propósito: el caso
+                             con contrato es la norma y no debe costar un clic
+                             extra. Marcarla es declarar una excepción, y como
+                             tal queda anotada en la trazabilidad.
+                             ============================================================ --}}
+                        <div class="custom-control custom-switch mb-3">
+                            <input type="checkbox" class="custom-control-input"
+                                   id="ontSinContrato" name="sin_contrato" value="1">
+                            <label class="custom-control-label" for="ontSinContrato">
+                                Esta ONT <strong>no pertenece a un contrato</strong>
+                            </label>
+                        </div>
+
+                        <div id="ontBloqueContrato">
+                            <div class="form-group">
+                                <label>Buscar Contrato</label>
+                                <input
+                                    type="text"
+                                    id="buscarContrato"
+                                    class="form-control"
+                                    placeholder="Buscar por identificación, nombre o # contrato...">
+                                <div id="resultadosContrato"
+                                     class="list-group mt-1"
+                                     style="display:none; position:absolute; z-index:9999; width:90%;">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Cliente seleccionado</label>
+                                <input
+                                    type="text"
+                                    id="clienteSeleccionadoView"
+                                    class="form-control"
+                                    disabled
+                                    placeholder="Ninguno seleccionado">
                             </div>
                         </div>
+
+                        <div class="alert alert-info py-2 d-none" id="ontAvisoSinContrato">
+                            <i class="fas fa-info-circle"></i>
+                            La ONT quedará registrada <strong>sin cliente asociado</strong>.
+                            Escriba abajo para qué es: será lo único que la identifique.
+                        </div>
+
+                        {{-- La descripción es el rótulo con el que la ONT queda
+                             escrita en la OLT. Antes era un campo oculto que se
+                             llenaba solo y nadie veía qué se iba a mandar al
+                             equipo; ahora se muestra siempre: de solo lectura
+                             cuando sale del contrato, y editable cuando no hay
+                             contrato que la provea. --}}
                         <div class="form-group">
-                            <label>Cliente seleccionado</label>
-                            <input
-                                type="text"
-                                id="clienteSeleccionadoView"
-                                class="form-control"
-                                disabled
-                                placeholder="Ninguno seleccionado">
+                            <label>
+                                Descripción en la OLT <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="description" id="selectedDescription"
+                                   class="form-control" maxlength="64" readonly required>
+                            <small class="form-text text-muted" id="ontAyudaDescripcion">
+                                Se toma del contrato seleccionado.
+                            </small>
                         </div>
 
                         <input type="hidden" name="contract_id" id="selectedContractId">
-                        <input type="hidden" name="description"  id="selectedDescription">
 
                         <div class="form-group">
                             <label>VLAN</label>
@@ -414,6 +460,48 @@
             }
         });
 
+        /* ============================================================
+           ONT CON O SIN CONTRATO
+
+           Un solo interruptor cambia el modo del formulario. La
+           descripción es el mismo campo en los dos casos —lo que va a
+           la OLT— y solo cambia si se llena sola o se escribe a mano.
+           Tener un único campo evita el clásico "dos inputs con el
+           mismo name" donde nunca se sabe cuál gana al enviar.
+           ============================================================ */
+        document.getElementById('ontSinContrato').addEventListener('change', function () {
+            aplicarModoContratoOnt(this.checked);
+        });
+
+        function aplicarModoContratoOnt(sinContrato) {
+            const bloque      = document.getElementById('ontBloqueContrato');
+            const aviso       = document.getElementById('ontAvisoSinContrato');
+            const descripcion = document.getElementById('selectedDescription');
+            const ayuda       = document.getElementById('ontAyudaDescripcion');
+
+            bloque.classList.toggle('d-none', sinContrato);
+            aviso.classList.toggle('d-none', !sinContrato);
+
+            // Al cambiar de modo se limpia lo del modo anterior: si no,
+            // queda un contrato elegido en un formulario que dice que
+            // no tiene contrato.
+            document.getElementById('selectedContractId').value      = '';
+            document.getElementById('clienteSeleccionadoView').value  = '';
+            document.getElementById('buscarContrato').value           = '';
+            document.getElementById('resultadosContrato').style.display = 'none';
+            descripcion.value = '';
+
+            descripcion.readOnly = !sinContrato;
+
+            ayuda.textContent = sinContrato
+                ? 'Ej.: "Repetidor parque principal" o "ONT de pruebas laboratorio".'
+                : 'Se toma del contrato seleccionado.';
+
+            if (sinContrato) {
+                descripcion.focus();
+            }
+        }
+
         // Buscador de contratos
         let buscarTimeout = null;
 
@@ -496,6 +584,13 @@
             document.getElementById('activarCampos').style.display = 'block';
             document.getElementById('activarBotones').style.display = 'flex';
             document.getElementById('activarProgreso').style.display = 'none';
+
+            // Se vuelve siempre al modo por defecto (con contrato):
+            // que la casilla quede marcada de la ONT anterior sería la
+            // forma más fácil de dejar un equipo sin cliente por
+            // descuido.
+            document.getElementById('ontSinContrato').checked = false;
+            aplicarModoContratoOnt(false);
         });
     </script>
 @endsection

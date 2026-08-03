@@ -323,6 +323,27 @@ class OltSshService
     /**
      * Activa una ONT en la OLT via SSH y retorna el ont_id asignado
      */
+    /**
+     * Limpia una descripción antes de meterla en un comando de la OLT.
+     *
+     * El comando se arma como  desc "loquesea"  y la descripción la
+     * escribe una persona. Una comilla doble cerraría la cadena y
+     * todo lo que viniera detrás lo interpretaría la OLT como más
+     * comandos; un salto de línea equivale a pulsar Enter en la
+     * consola. Ninguna de las dos cosas puede llegar al equipo.
+     *
+     * Se recorta además al límite que aceptan los firmware Huawei
+     * para este campo, porque una descripción más larga hace que el
+     * comando entero sea rechazado.
+     */
+    public static function descripcionSegura(?string $descripcion): string
+    {
+        // Fuera comillas, barras invertidas y todo carácter de control
+        $limpia = preg_replace('/["\\\\\x00-\x1F\x7F]+/u', ' ', (string) $descripcion);
+
+        return mb_substr(trim(preg_replace('/\s+/u', ' ', $limpia)), 0, 64);
+    }
+
     public function activateOnt(Olt $olt, array $data): array
     {
         $parts     = explode('/', $data['fspon']);
@@ -343,7 +364,7 @@ class OltSshService
                 "ont add {$port} sn-auth {$data['ont_sn']} omci",
                 "ont-lineprofile-id {$data['ont_lineprofile']}",
                 "ont-srvprofile-id {$data['ont_srvprofile']}",
-                "desc \"{$data['client_name']}\"",
+                'desc "' . self::descripcionSegura($data['client_name']) . '"',
             ]), false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('ONT ADD OUTPUT', ['olt' => $olt->name, 'output' => $ontAddOutput]);
@@ -563,7 +584,7 @@ class OltSshService
                 "ont add {$newPort} sn-auth {$ont->sn} omci",
                 "ont-lineprofile-id {$newData['ont_lineprofile']}",
                 "ont-srvprofile-id {$newData['ont_srvprofile']}",
-                "desc \"{$ont->description}\"",
+                'desc "' . self::descripcionSegura($ont->description) . '"',
             ]), false, self::SSH_LONG_TIMEOUT);
 
             Log::debug('MOVE ONT - ont add output', ['output' => $ontAddOutput]);

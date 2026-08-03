@@ -10,6 +10,7 @@ use App\Services\OltSshService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 /**
  * Controlador de ONTs
@@ -168,18 +169,57 @@ class OntController extends Controller
         return back()->with('success', 'ONT desvinculada del contrato.');
     }
 
+    /**
+     * Autoriza una ONT en la OLT y la registra.
+     *
+     * ONTs CON Y SIN CONTRATO
+     * -----------------------
+     * Lo normal es que la ONT pertenezca a un contrato: se busca el
+     * cliente y de ahí sale la descripción con la que queda rotulada
+     * en la OLT. Pero no siempre hay contrato detrás — equipos de
+     * prueba en el laboratorio, repetidores de la misma empresa,
+     * enlaces a una sede propia, ONTs de demostración. Antes había
+     * que inventarle un contrato o dejar el equipo sin autorizar.
+     *
+     * Marcando "no pertenece a un contrato" se escribe la descripción
+     * a mano y la ONT queda registrada sin contract_id. Es la
+     * EXCEPCIÓN, no la norma: por eso la casilla llega desmarcada y
+     * el caso queda anotado en la trazabilidad, para que un equipo
+     * suelto en la red siempre tenga a alguien que responda por él.
+     */
     public function activate(Request $request): \Illuminate\Http\RedirectResponse
     {
+        // La casilla decide si el contrato es obligatorio. Se lee del
+        // request y no de la presencia de contract_id, para que un
+        // campo oculto que quedó con valor no cuele una activación
+        // vinculada cuando el usuario pidió lo contrario.
+        $sinContrato = $request->boolean('sin_contrato');
+
         $validated = $request->validate([
             'olt_id'          => 'required|exists:olts,id',
             'ont_sn'          => 'required|string',
             'ont_location'    => 'required|string',
-            'contract_id'     => 'required|exists:contracts,id',
-            'description'     => 'required|string',
+            'sin_contrato'    => 'nullable|boolean',
+            'contract_id'     => [
+                Rule::requiredIf(fn () => !$sinContrato),
+                'nullable',
+                'exists:contracts,id',
+            ],
+            // Siempre obligatoria: es el rótulo con el que la ONT
+            // queda escrita en la OLT y lo único que la identifica
+            // cuando no hay contrato.
+            'description'     => 'required|string|max:150',
             'vlan'            => 'required|integer',
             'ont_lineprofile' => 'required|integer',
             'ont_srvprofile'  => 'required|integer',
+        ], [
+            'contract_id.required' => 'Seleccione el contrato o marque que la ONT no pertenece a ninguno.',
+            'description.required' => 'La descripción es obligatoria: es el rótulo de la ONT en la OLT.',
         ]);
+
+        // Sin contrato: se ignora cualquier id que viniera en el
+        // formulario.
+        $contractId = $sinContrato ? null : $validated['contract_id'];
 
         $olt = Olt::findOrFail($validated['olt_id']);
         $validated['fspon']       = $validated['ont_location'];
@@ -197,7 +237,7 @@ class OntController extends Controller
         $ont = Ont::create([
             'branch_id'    => session('branch_id'),
             'olt_id'       => $validated['olt_id'],
-            'contract_id'  => $validated['contract_id'],
+            'contract_id'  => $contractId,
             'slot'         => $parts[1],
             'port'         => $parts[2],
             'onu_id'       => $result['ont_id'],
@@ -209,11 +249,53 @@ class OntController extends Controller
             'status'       => 1,
         ]);
 
-// Actualizar el cpe_sn en el contrato con el serial de la ONT registrada
-        Contract::where('id', $validated['contract_id'])
-            ->update(['cpe_sn' => $validated['ont_sn']]);
+        // El serial solo se copia al contrato cuando hay contrato
+        if ($contractId) {
+            Contract::where('id', $contractId)->update(['cpe_sn' => $validated['ont_sn']]);
+        }
 
-        return back()->with('success', 'ONT activada y registrada correctamente.');
+        $this->auditarActivacion($ont, $olt, $contractId, $sinContrato);
+
+        return back()->with('success', $sinContrato
+            ? 'ONT activada y registrada SIN contrato asociado.'
+            : 'ONT activada y registrada correctamente.');
+    }
+
+    /**
+     * Deja constancia de la autorización.
+     *
+     * Se registra siempre, pero interesa especialmente el caso SIN
+     * contrato: un equipo suelto en la red, que no le factura a
+     * nadie, tiene que poder rastrearse hasta quién lo autorizó y con
+     * qué justificación escribió en la descripción.
+     */
+    private function auditarActivacion(Ont $ont, Olt $olt, ?int $contractId, bool $sinContrato): void
+    {
+        $contrato = $contractId ? Contract::find($contractId) : null;
+
+        app(\App\Services\Audit\AuditLogger::class)->action(
+            'onts.activated',
+            sprintf(
+                'Autorizó la ONT %s en %s (%s)',
+                $ont->sn,
+                $olt->name,
+                $sinContrato
+                    ? 'sin contrato: ' . $ont->description
+                    : 'contrato ' . ($contrato?->numero_visible ?? $contractId),
+            ),
+            [
+                'sn' => $ont->sn,
+                'olt' => $olt->name,
+                'ubicacion' => "{$ont->slot}/{$ont->port}",
+                'onu_id' => $ont->onu_id,
+                'vlan' => $ont->vlan,
+                'descripcion' => $ont->description,
+                'sin_contrato' => $sinContrato,
+                'contrato' => $contrato?->numero_visible,
+            ],
+            $ont,
+            'red',
+        );
     }
 
     /**

@@ -160,18 +160,97 @@
                         </button>
                     </div>
                     <div class="modal-body">
-                        <div class="form-group">
-                            <label>Buscar Contrato <span class="text-danger">*</span></label>
-                            <input type="text" id="buscarContratoPppoe" class="form-control"
-                                   placeholder="Identificación, nombre o # contrato...">
-                            <div id="resultadosContratoPppoe" class="list-group mt-1"
-                                 style="display:none; position:absolute; z-index:9999; width:90%;"></div>
+                        {{-- ============================================================
+                             ¿A quién pertenece la cuenta?
+
+                             Lo normal es que sea de un contrato. Pero no toda
+                             cuenta le factura a alguien: enlaces entre sedes
+                             propias, cámaras, antenas de la empresa, pruebas.
+                             Esos casos obligaban antes a inventar un contrato
+                             o a crear el secret a mano en el Mikrotik, por
+                             fuera del sistema y de todo control.
+
+                             La casilla llega DESMARCADA: el caso con contrato
+                             es la norma y no debe costar un clic extra.
+                             ============================================================ --}}
+                        <div class="custom-control custom-switch mb-3">
+                            <input type="checkbox" class="custom-control-input"
+                                   id="pppoeSinContrato" name="sin_contrato" value="1">
+                            <label class="custom-control-label" for="pppoeSinContrato">
+                                Esta cuenta <strong>no pertenece a un contrato</strong>
+                            </label>
                         </div>
-                        <div class="form-group">
-                            <label>Cliente seleccionado</label>
-                            <input type="text" id="clientePppoeView" class="form-control" disabled
-                                   placeholder="Ninguno seleccionado">
+
+                        <div id="pppoeBloqueContrato">
+                            <div class="form-group">
+                                <label>Buscar Contrato <span class="text-danger">*</span></label>
+                                <input type="text" id="buscarContratoPppoe" class="form-control"
+                                       placeholder="Identificación, nombre o # contrato...">
+                                <div id="resultadosContratoPppoe" class="list-group mt-1"
+                                     style="display:none; position:absolute; z-index:9999; width:90%;"></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Cliente seleccionado</label>
+                                <input type="text" id="clientePppoeView" class="form-control" disabled
+                                       placeholder="Ninguno seleccionado">
+                            </div>
                         </div>
+
+                        {{-- ============================================================
+                             Datos del titular cuando NO hay contrato.
+
+                             El caso típico no es "una cuenta de nadie", sino
+                             "una cuenta cuyo titular está en otro sistema":
+                             quien lleva la base de clientes por fuera de
+                             gestISP igual necesita que el usuario, la clave y
+                             el comentario se armen con las reglas de la casa.
+
+                             Son OPCIONALES a propósito: también hay cuentas
+                             que de verdad no tienen titular —una cámara, una
+                             antena, un enlace entre sedes— y esas se llenan a
+                             mano. Lo único obligatorio sin contrato es el
+                             comentario.
+                             ============================================================ --}}
+                        <div class="card card-outline card-info d-none" id="pppoeBloqueTitular">
+                            <div class="card-header py-2">
+                                <h3 class="card-title" style="font-size: .95rem;">
+                                    <i class="fas fa-user-edit mr-1"></i> Datos del titular
+                                    <small class="text-muted">(opcional — para generar la cuenta)</small>
+                                </h3>
+                            </div>
+                            <div class="card-body py-2">
+                                <div class="row">
+                                    <div class="col-md-6 form-group mb-2">
+                                        <label class="mb-1">Nombres</label>
+                                        <input type="text" id="titularNombres" class="form-control form-control-sm"
+                                               maxlength="120" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-6 form-group mb-2">
+                                        <label class="mb-1">Apellidos</label>
+                                        <input type="text" id="titularApellidos" class="form-control form-control-sm"
+                                               maxlength="120" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-6 form-group mb-2">
+                                        <label class="mb-1">Identificación</label>
+                                        <input type="text" id="titularIdentificacion" class="form-control form-control-sm"
+                                               maxlength="40" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-6 form-group mb-2">
+                                        <label class="mb-1">N.º de contrato o cliente</label>
+                                        <input type="text" id="titularReferencia" class="form-control form-control-sm"
+                                               maxlength="60" autocomplete="off"
+                                               placeholder="Del sistema externo">
+                                    </div>
+                                </div>
+                                <small class="text-muted">
+                                    Con estos datos se arman solos el usuario, la contraseña y el comentario,
+                                    con las mismas reglas que una cuenta con contrato. Todo queda editable.
+                                    Si la cuenta no tiene titular (una antena, una cámara), deje esto vacío
+                                    y escriba los campos de abajo a mano.
+                                </small>
+                            </div>
+                        </div>
+
                         <input type="hidden" name="contract_id" id="pppoeContractId">
 
                         <div class="form-group">
@@ -207,8 +286,14 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Comentario</label>
-                            <input type="text" name="comment" id="pppoeComment" class="form-control">
+                            <label>
+                                Comentario
+                                <span class="text-danger d-none" id="pppoeComentarioObligatorio">*</span>
+                            </label>
+                            <input type="text" name="comment" id="pppoeComment" class="form-control" maxlength="255">
+                            <small class="form-text text-muted" id="pppoeAyudaComentario">
+                                Se arma solo con los datos del contrato.
+                            </small>
                         </div>
                         <div class="form-group">
                             <label>IP Remota (opcional)</label>
@@ -378,51 +463,153 @@
                 });
         }
 
-        // ============ Generación automática de credenciales ============
+        /* ============================================================
+           GENERACIÓN AUTOMÁTICA DE CREDENCIALES
 
-        /**
-         * Normaliza texto: minúsculas, sin tildes, sin caracteres raros
-         */
-        function normalizar(texto) {
-            return (texto || '')
-                .toLowerCase()
-                .normalize('NFD')                    // separa tildes de las letras
-                .replace(/[\u0300-\u036f]/g, '')     // elimina las tildes
-                .replace(/ñ/g, 'n')
-                .replace(/[^a-z0-9\s]/g, '')         // solo letras, números y espacios
-                .trim();
+           Las reglas ya no viven aquí: las aplica el servidor
+           (App\Services\PppoeCredentialGenerator). El motivo es que
+           además de armar el nombre hay que comprobar que esté LIBRE
+           en el router, y eso solo se puede consultar contra la base.
+           Si el nombre ya existe, el servidor devuelve uno con
+           diferenciador (_2, _3, ...).
+
+           Como la unicidad es por router, cualquier cambio de router
+           obliga a volver a pedir la propuesta.
+           ============================================================ */
+        let credencialesTimeout = null;
+
+        /** Datos con los que se pide la propuesta, segun el modo. */
+        function datosParaCredenciales() {
+            const sinContrato = document.getElementById('pppoeSinContrato').checked;
+            const routerId    = document.getElementById('crearRouterSelect').value || null;
+
+            if (!sinContrato) {
+                const contratoId = document.getElementById('pppoeContractId').value;
+
+                return contratoId ? { router_id: routerId, contract_id: contratoId } : null;
+            }
+
+            const nombres   = document.getElementById('titularNombres').value.trim();
+            const apellidos = document.getElementById('titularApellidos').value.trim();
+
+            // Sin al menos nombre o apellido no hay nada que proponer:
+            // es el caso de la camara o la antena, que se llena a mano.
+            if (nombres === '' && apellidos === '') {
+                return null;
+            }
+
+            return {
+                router_id: routerId,
+                nombres: nombres,
+                apellidos: apellidos,
+                identificacion: document.getElementById('titularIdentificacion').value.trim(),
+                referencia: document.getElementById('titularReferencia').value.trim(),
+            };
         }
 
-        function generarCredenciales(contrato) {
-            // Primer nombre y primer apellido (por si son compuestos)
-            const primerNombre   = normalizar(contrato.client_name).split(/\s+/)[0]     || '';
-            const primerApellido = normalizar(contrato.client_lastname).split(/\s+/)[0] || '';
+        /** Pide la propuesta y rellena los campos (todos editables). */
+        function proponerCredenciales() {
+            const datos = datosParaCredenciales();
 
-            // Primeros 5 dígitos de la identidad (solo números)
-            const identidad    = (contrato.identity_number || '').replace(/\D/g, '');
-            const cincoDigitos = identidad.substring(0, 5);
+            if (!datos) {
+                return;
+            }
 
-            // usuario: primernombre_primerapellido_numerodecontrato
-            document.getElementById('pppoeUsername').value =
-                `${primerNombre}_${primerApellido}_${contrato.id}`;
+            fetch('{{ route('pppoe.suggest') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify(datos),
+            })
+                .then(r => r.ok ? r.json() : null)
+                .then(propuesta => {
+                    if (!propuesta) {
+                        return;
+                    }
 
-            // contraseña: primerapellido_primeroscincodigitosdeidentidad
-            document.getElementById('pppoePassword').value =
-                `${primerApellido}_${cincoDigitos}`;
+                    // Solo se rellena lo que venga con valor: asi una
+                    // propuesta incompleta no borra lo que el operador
+                    // ya escribio a mano.
+                    if (propuesta.username) {
+                        document.getElementById('pppoeUsername').value = propuesta.username;
+                    }
+                    if (propuesta.password) {
+                        document.getElementById('pppoePassword').value = propuesta.password;
+                    }
+                    if (propuesta.comment) {
+                        document.getElementById('pppoeComment').value = propuesta.comment;
+                    }
+                })
+                .catch(() => { /* el operador puede escribirlas a mano */ });
+        }
 
-            // comentario: numero de contrato, número de identidad nombre completo
-            document.getElementById('pppoeComment').value =
-                `Contrato ${contrato.id}, CC ${contrato.identity_number} ${contrato.client_name} ${contrato.client_lastname}`;
+        /** Version con retardo, para no pedir en cada tecla. */
+        function proponerCredencialesConRetardo() {
+            clearTimeout(credencialesTimeout);
+            credencialesTimeout = setTimeout(proponerCredenciales, 400);
+        }
+
+        ['titularNombres', 'titularApellidos', 'titularIdentificacion', 'titularReferencia']
+            .forEach(function (id) {
+                document.getElementById(id).addEventListener('input', proponerCredencialesConRetardo);
+            });
+
+        // El diferenciador depende del router: al cambiarlo hay que
+        // recalcular o se podria proponer un nombre ya ocupado alli.
+        document.getElementById('crearRouterSelect').addEventListener('change', proponerCredencialesConRetardo);
+
+        /* ============================================================
+           CUENTA CON O SIN CONTRATO
+
+           Un interruptor cambia el modo. Sin contrato no hay de dónde
+           sacar usuario, clave ni comentario, así que se escriben a
+           mano y el comentario pasa a ser obligatorio: es lo único
+           que dirá para qué existe la cuenta (el servidor lo exige
+           igual, esto solo lo anticipa en pantalla).
+           ============================================================ */
+        document.getElementById('pppoeSinContrato').addEventListener('change', function () {
+            aplicarModoContratoPppoe(this.checked);
+        });
+
+        function aplicarModoContratoPppoe(sinContrato) {
+            document.getElementById('pppoeBloqueContrato').classList.toggle('d-none', sinContrato);
+            document.getElementById('pppoeBloqueTitular').classList.toggle('d-none', !sinContrato);
+            document.getElementById('pppoeComentarioObligatorio').classList.toggle('d-none', !sinContrato);
+
+            ['titularNombres', 'titularApellidos', 'titularIdentificacion', 'titularReferencia']
+                .forEach(id => document.getElementById(id).value = '');
+
+            // Al cambiar de modo se limpia lo del anterior: si no,
+            // queda un contrato elegido en un formulario que declara
+            // que no tiene contrato.
+            document.getElementById('pppoeContractId').value            = '';
+            document.getElementById('clientePppoeView').value           = '';
+            document.getElementById('buscarContratoPppoe').value        = '';
+            document.getElementById('resultadosContratoPppoe').style.display = 'none';
+            document.getElementById('pppoeUsername').value              = '';
+            document.getElementById('pppoePassword').value              = '';
+            document.getElementById('pppoeComment').value               = '';
+
+            const comentario = document.getElementById('pppoeComment');
+
+            comentario.required = sinContrato;
+
+            document.getElementById('pppoeAyudaComentario').textContent = sinContrato
+                ? 'Obligatorio. Ej.: "Enlace sede Yarumal" o "Cámara parque principal".'
+                : 'Se arma solo con los datos del contrato.';
         }
 
         // ============ Abrir modal crear ============
         document.getElementById('btnNuevaCuenta').addEventListener('click', function () {
-            document.getElementById('buscarContratoPppoe').value = '';
-            document.getElementById('clientePppoeView').value    = '';
-            document.getElementById('pppoeContractId').value     = '';
-            document.getElementById('pppoeUsername').value       = '';
-            document.getElementById('pppoePassword').value       = '';
-            document.getElementById('pppoeComment').value        = '';
+            // Siempre se abre en el modo por defecto: que quede
+            // marcada la casilla de la cuenta anterior sería la forma
+            // más fácil de dejar una cuenta huérfana por descuido.
+            document.getElementById('pppoeSinContrato').checked = false;
+            aplicarModoContratoPppoe(false);
+
             $('#modalCrearPppoe').modal('show');
         });
 
@@ -504,7 +691,7 @@
                                 resultados.innerHTML     = '';
 
                                 // Autogenerar usuario, contraseña y comentario
-                                generarCredenciales(contrato);
+                                proponerCredenciales();
                             });
 
                             resultados.appendChild(item);
