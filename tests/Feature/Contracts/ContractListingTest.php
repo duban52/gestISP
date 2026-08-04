@@ -338,6 +338,43 @@ class ContractListingTest extends TestCase
         $this->assertNotContains('password_wifi', $respuesta->viewData('columnasActivas'));
     }
 
+    public function test_el_selector_de_columnas_usa_identificadores_reales(): void
+    {
+        $this->contrato(['contract_number' => 'ENG000105']);
+
+        $respuesta = $this->get(route('contracts.index'))->assertOk();
+
+        // El selector agrupa las columnas para que se puedan leer. Al
+        // agrupar hay que CONSERVAR las claves: sin eso los id salían
+        // como col_0, col_1… repetidos en cada grupo, y al pulsar una
+        // casilla el navegador marcaba otra —la primera con ese id—.
+        // Además el valor enviado era "0" y la selección se descartaba
+        // entera al validarla contra el catálogo.
+        $respuesta->assertSee('id="col_contract_number"', false);
+        $respuesta->assertSee('id="col_password_wifi"', false);
+        $respuesta->assertSee('value="social_stratum"', false);
+        $respuesta->assertDontSee('id="col_0"', false);
+    }
+
+    public function test_el_selector_marca_las_columnas_activas(): void
+    {
+        $this->contrato(['contract_number' => 'ENG000106']);
+
+        $respuesta = $this->get(route('contracts.index', [
+            'columnas' => ['contract_number', 'ssid_wifi'],
+        ]))->assertOk();
+
+        // Al abrir el selector deben verse marcadas las que están en
+        // uso; con las claves perdidas ninguna aparecía marcada.
+        $html = $respuesta->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/id="col_ssid_wifi"[^>]*checked/',
+            $html,
+            'La columna activa no aparece marcada en el selector',
+        );
+    }
+
     public function test_se_pueden_pedir_columnas_tecnicas(): void
     {
         $this->contrato([

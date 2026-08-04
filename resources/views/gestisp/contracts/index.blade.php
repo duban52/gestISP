@@ -316,7 +316,17 @@
                         // Agrupadas para que la lista sea legible: son
                         // treinta columnas y en una sola fila no se
                         // encuentra nada.
-                        $porGrupo = collect($columnas)->groupBy('grupo');
+                        //
+                        // preserveKeys: true es IMPRESCINDIBLE. Sin él
+                        // groupBy() descarta las claves y las reemplaza
+                        // por 0,1,2… en CADA grupo: los id quedaban
+                        // repetidos entre grupos (col_0 en Cliente y
+                        // col_0 en Ubicación), así que al pulsar una
+                        // casilla el navegador marcaba la primera con
+                        // ese id — otra distinta. Y el valor enviado
+                        // era "0" en vez del nombre de la columna, con
+                        // lo que la selección se descartaba entera.
+                        $porGrupo = collect($columnas)->groupBy('grupo', preserveKeys: true);
                     @endphp
 
                     @foreach($porGrupo as $grupo => $delGrupo)
