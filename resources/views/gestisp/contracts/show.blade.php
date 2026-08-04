@@ -42,7 +42,7 @@
 
             <div class="card col-md-10">
                 <div class="card-head d-flex justify-content-between p-3">
-                    <p><strong>Número de contrato:</strong> {{$contract->id}}</p>
+                    <p><strong>Número de contrato:</strong> <strong class="text-info">{{$contract->contract_number}}</strong></p>
                     <p><strong>Estado:</strong>
                         <strong
                             @if($contract->status == 'Activo') class="text-success"
