@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Billing\Enums\ContractStatus;
 use App\Models\Contract;
 use App\Models\PppoeAccount;
 use App\Models\Router;
@@ -38,12 +39,17 @@ use RuntimeException;
  * porque es lo que tiene a mano quien hace la cartera. Un contrato
  * puede tener varias cuentas y en ese caso se cortan todas.
  *
- * LO QUE NO HACE
- * --------------
- * No cambia el estado del CONTRATO. El corte aquí es una acción
- * operativa sobre la red; los estados de contrato (Pre-suspensión,
- * Suspendido, Por Reconexión) los maneja el flujo de facturación y
- * mezclarlos desde aquí desincronizaría esa máquina de estados.
+ * EL CONTRATO QUEDA SUSPENDIDO
+ * ----------------------------
+ * Si la cuenta está vinculada a un contrato, éste pasa a
+ * **Suspendido**. No es un adorno: es lo que hace que, cuando el
+ * cliente pague, `PaymentRegistrar` genere sola la orden técnica de
+ * reconexión y lo deje en "Por Reconexión". Sin eso el contrato
+ * seguiría diciendo "Activo" con el servicio cortado, y al pagar no
+ * se avisaría a nadie de que hay que ir a reconectarlo.
+ *
+ * Las cuentas SIN contrato (enlaces propios, cámaras) simplemente se
+ * cortan: no hay estado que mover.
  */
 class PppoeMassCutoff
 {
@@ -250,7 +256,17 @@ class PppoeMassCutoff
     {
         // Cada corte son dos llamadas al router; una tanda grande
         // supera de largo el tiempo de una petición normal.
-        set_time_limit(600);
+        //
+        // SOLO en peticiones web. En consola PHP corre SIN límite, y
+        // set_time_limit() no lo amplía: lo IMPONE y reinicia el
+        // contador. Llamarlo desde la suite de pruebas convertía el
+        // proceso entero en uno de 600 segundos a partir de ese test,
+        // y los cientos de pruebas que venían después morían con un
+        // "Maximum execution time exceeded" que no tenía nada que ver
+        // con ellas.
+        if (!app()->runningInConsole()) {
+            set_time_limit(600);
+        }
 
         $filas = $this->resolver($identificadores, $branchId);
 
@@ -329,6 +345,8 @@ class PppoeMassCutoff
 
         $cuenta->update(['disabled' => true]);
 
+        $this->suspenderContrato($cuenta);
+
         // Auditoría POR CUENTA: es la que responde "¿por qué me
         // cortaron?" cuando el cliente llama tres semanas después.
         $this->auditLogger->action(
@@ -350,6 +368,53 @@ class PppoeMassCutoff
         );
 
         return ['resultado' => 'cortada'];
+    }
+
+    /**
+     * Deja el contrato en Suspendido al cortarle el servicio.
+     *
+     * Se salta los que ya lo están para no reescribir lo mismo, y los
+     * que están "Por Reconexión" —esos ya pagaron y esperan la visita
+     * del técnico: devolverlos a Suspendido borraría esa señal.
+     */
+    private function suspenderContrato(PppoeAccount $cuenta): void
+    {
+        $contrato = $cuenta->contract;
+
+        if (!$contrato) {
+            return;
+        }
+
+        $estadosQueNoSeTocan = [
+            ContractStatus::Suspendido->value,
+            ContractStatus::PorReconexion->value,
+        ];
+
+        if (in_array($contrato->status, $estadosQueNoSeTocan, true)) {
+            return;
+        }
+
+        $anterior = $contrato->status;
+
+        $contrato->update(['status' => ContractStatus::Suspendido->value]);
+
+        $this->auditLogger->action(
+            'contracts.suspended',
+            sprintf(
+                'Suspendió el contrato %s por corte masivo (estaba %s)',
+                $contrato->numero_visible,
+                $anterior,
+            ),
+            [
+                'contrato' => $contrato->numero_visible,
+                'estado_anterior' => $anterior,
+                'estado_nuevo' => ContractStatus::Suspendido->value,
+                'usuario_pppoe' => $cuenta->username,
+                'origen' => 'corte_masivo',
+            ],
+            $contrato,
+            'contratos',
+        );
     }
 
     /**

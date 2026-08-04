@@ -353,7 +353,12 @@ class PppoeAccountController extends Controller
      */
     public function importFromRouter(Router $router): RedirectResponse
     {
-        set_time_limit(300); // 5 minutos para importaciones grandes
+        // 5 minutos para importaciones grandes, pero SOLO en web: en
+        // consola PHP corre sin límite y set_time_limit() no lo
+        // amplía, lo impone. Ver la nota en PppoeMassCutoff::ejecutar.
+        if (!app()->runningInConsole()) {
+            set_time_limit(300);
+        }
 
         try {
             $secrets = $this->mikrotik->getPppSecrets($router);
