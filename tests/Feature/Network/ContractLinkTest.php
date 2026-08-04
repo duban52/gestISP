@@ -274,6 +274,76 @@ class ContractLinkTest extends TestCase
         $this->assertNull($cuenta->fresh()->contract_id);
     }
 
+    public function test_vincular_una_cuenta_copia_las_credenciales_al_contrato(): void
+    {
+        $contrato = $this->contrato(['user_pppoe' => null, 'password_pppoe' => null]);
+        $cuenta = $this->cuenta(['username' => 'abdenago_tobon', 'password' => 'clave-secreta']);
+
+        $this->post(route('pppoe.link_contract', $cuenta), [
+            'contract_id' => $contrato->id,
+        ])->assertRedirect();
+
+        // Sin esto la ficha del contrato mostraba "Usuario PPPoE" y
+        // "Contraseña PPPoE" en blanco aunque la cuenta estuviera
+        // conectada, y quien atiende el teléfono no tenía de dónde
+        // leerlas.
+        $contrato->refresh();
+
+        $this->assertSame('abdenago_tobon', $contrato->user_pppoe);
+        $this->assertSame('clave-secreta', $contrato->password_pppoe);
+    }
+
+    public function test_desvincular_limpia_las_credenciales_del_contrato(): void
+    {
+        $contrato = $this->contrato();
+        $cuenta = $this->cuenta(['username' => 'unica.cuenta', 'password' => 'x']);
+
+        $this->post(route('pppoe.link_contract', $cuenta), ['contract_id' => $contrato->id]);
+        $this->delete(route('pppoe.unlink_contract', $cuenta))->assertRedirect();
+
+        $contrato->refresh();
+
+        $this->assertNull($contrato->user_pppoe);
+        $this->assertNull($contrato->password_pppoe);
+    }
+
+    public function test_al_desvincular_el_contrato_refleja_la_cuenta_que_le_queda(): void
+    {
+        $contrato = $this->contrato();
+
+        $primera = $this->cuenta(['username' => 'cuenta.uno', 'password' => 'uno']);
+        $segunda = $this->cuenta(['username' => 'cuenta.dos', 'password' => 'dos']);
+
+        $this->post(route('pppoe.link_contract', $primera), ['contract_id' => $contrato->id]);
+        $this->post(route('pppoe.link_contract', $segunda), ['contract_id' => $contrato->id]);
+
+        // El contrato refleja la última vinculada
+        $this->assertSame('cuenta.dos', $contrato->fresh()->user_pppoe);
+
+        $this->delete(route('pppoe.unlink_contract', $segunda))->assertRedirect();
+
+        // Al quitarla queda la otra: dejarlo en blanco haría creer
+        // que el cliente se quedó sin cuenta cuando sigue con servicio.
+        $this->assertSame('cuenta.uno', $contrato->fresh()->user_pppoe);
+        $this->assertSame('uno', $contrato->fresh()->password_pppoe);
+    }
+
+    public function test_desvincular_no_borra_credenciales_de_otra_cuenta(): void
+    {
+        $contrato = $this->contrato(['user_pppoe' => 'otra.cuenta', 'password_pppoe' => 'otra-clave']);
+        $cuenta = $this->cuenta(['username' => 'cuenta.suelta', 'password' => 'x']);
+
+        // Se vincula sin pasar por el servicio, para simular un
+        // contrato cuyas credenciales apuntan a otra cuenta.
+        $cuenta->update(['contract_id' => $contrato->id]);
+
+        $this->delete(route('pppoe.unlink_contract', $cuenta))->assertRedirect();
+
+        // No son las de esta cuenta: borrarlas sería perder un dato
+        // que no nos corresponde.
+        $this->assertSame('otra.cuenta', $contrato->fresh()->user_pppoe);
+    }
+
     public function test_desvincula_una_cuenta_pppoe(): void
     {
         $contrato = $this->contrato();
