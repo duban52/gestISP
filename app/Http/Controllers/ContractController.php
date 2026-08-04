@@ -13,11 +13,14 @@ use App\Models\Plan;
 use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Notifications\ClientWelcome;
+use App\Services\ContractDiagnostics;
 use App\Services\ContractNumberGenerator;
+use App\Services\ContractQuery;
 use App\Support\ColombiaLocations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ContractController extends Controller
 {
@@ -29,67 +32,90 @@ class ContractController extends Controller
         $this->middleware('check.permission:contracts.edit')->only('edit', 'update');
         $this->middleware('check.permission:contracts.destroy')->only('destroy');
         $this->middleware('check.permission:contracts.show')->only('show');
-        $this->middleware('check.permission:contracts.export')->only('export');
+        $this->middleware('check.permission:contracts.export')->only('export', 'exportFiltered');
+        $this->middleware('check.permission:contracts.show')->only('diagnostics');
     }
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request)
+    /**
+     * Listado de contratos con filtros combinables.
+     *
+     * Toda la lógica vive en App\Services\ContractQuery, que también
+     * usa la exportación: así el Excel contiene EXACTAMENTE lo que se
+     * está viendo en pantalla, sin dos juegos de filtros que puedan
+     * separarse con el tiempo.
+     *
+     * Las columnas visibles las elige el usuario; el catálogo está en
+     * el mismo servicio y se valida contra él, porque las claves
+     * llegan del navegador.
+     */
+    public function index(Request $request, ContractQuery $consulta)
     {
-        // Inicializa la consulta base
-        $query = Contract::query();
+        $filtros = $request->all();
 
-        // Filtrar por la sucursal actual si está configurada en la sesión
-        if (session()->has('branch_id')) {
-            $query->where('branch_id', session('branch_id'));
-        }
+        $contracts = $consulta->construir($filtros)->get();
 
-        // Verificar si hay filtros adicionales para la búsqueda
-        if ($request->filled('filter_field') && $request->filled('filter_value')) {
-            $field = $request->filter_field;
-            $value = $request->filter_value;
+        return view('gestisp.contracts.index', [
+            'contracts' => $contracts,
+            'columnas' => ContractQuery::columnas(),
+            'columnasActivas' => ContractQuery::columnasValidas($request->input('columnas')),
+            'planes' => Plan::where('branch_id', session('branch_id'))->orderBy('name')->get(),
+            'estados' => \App\Billing\Enums\ContractStatus::cases(),
+            'filtros' => $filtros,
+            // Totales de lo filtrado: es lo primero que se mira al
+            // sacar un listado de cartera.
+            'totalSaldo' => (float) $contracts->sum('saldo_pendiente'),
+        ]);
+    }
 
-            // Mapear los campos de relaciones para su correcto uso
-            $fieldMappings = [
-                'client.identity_number' => 'clients.identity_number',
-                'client.name' => 'clients.name',
-                'client.last_name' => 'clients.last_name',
-                'client.number_phone' => 'clients.number_phone',
-                'client.email' => 'clients.email',
-                'client.type_client' => 'clients.type_client',
-                'contract.id' => 'contracts.id',
-                'contract.address' => 'contracts.address',
-                'contract.cpe_sn' => 'contracts.cpe_sn',
-                'contract.user_pppoe' => 'contracts.user_pppoe',
-                'contract.status' => 'contracts.status',
-                'contract.social_stratum' => 'contracts.social_stratum',
-                'contract.activation_date' => 'contracts.activation_date',
-                'plan.name' => 'plans.name',
-            ];
+    /**
+     * Exporta a Excel el listado tal como está filtrado.
+     *
+     * Recibe los mismos parámetros que el listado y los pasa por el
+     * mismo servicio: lo que se descarga no puede diferir de lo que
+     * se ve.
+     */
+    public function exportFiltered(Request $request, ContractQuery $consulta)
+    {
+        $columnas = ContractQuery::columnasValidas($request->input('columnas'));
+        $contratos = $consulta->construir($request->all())->get();
 
-            if (array_key_exists($field, $fieldMappings)) {
-                $mappedField = $fieldMappings[$field];
+        app(\App\Services\Audit\AuditLogger::class)->action(
+            'contracts.exported',
+            sprintf('Exportó un listado de %d contrato(s) con %d columna(s)', $contratos->count(), count($columnas)),
+            [
+                'registros' => $contratos->count(),
+                'columnas' => $columnas,
+                'filtros' => array_filter($request->except(['columnas', '_token'])),
+            ],
+            null,
+            'contratos',
+        );
 
-                // Aplicar los filtros, manejando relaciones
-                if (str_contains($mappedField, 'clients')) {
-                    $query->whereHas('client', function ($query) use ($mappedField, $value) {
-                        $query->where(str_replace('clients.', '', $mappedField), 'like', '%' . $value . '%');
-                    });
-                } elseif (str_contains($mappedField, 'plans')) {
-                    $query->whereHas('plan', function ($query) use ($mappedField, $value) {
-                        $query->where(str_replace('plans.', '', $mappedField), 'like', '%' . $value . '%');
-                    });
-                } else {
-                    $query->where($mappedField, 'like', '%' . $value . '%');
-                }
-            }
-        }
+        return Excel::download(
+            new \App\Exports\ContractsFilteredExport($contratos, $columnas),
+            'contratos-' . now()->format('Y-m-d') . '.xlsx',
+        );
+    }
 
-        // Paginación flexible
-        $perPage = $request->get('per_page', 8);
-        $contracts = $query->get();
+    /**
+     * Diagnóstico rápido de la conexión (JSON, para la ficha).
+     *
+     * Va por AJAX y no dentro de show() porque consultar el Mikrotik
+     * es una llamada de red que puede tardar o fallar: la ficha del
+     * contrato tiene que abrir al instante y este bloque llenarse
+     * después. Si el router no responde, se dice y ya.
+     *
+     * NO se registra en la trazabilidad: es una consulta de lectura
+     * que dispara la propia pantalla al abrirse, y anotarla llenaría
+     * la bitácora de ruido sin contar nada que hiciera una persona.
+     */
+    public function diagnostics(Contract $contract, ContractDiagnostics $diagnostico)
+    {
+        abort_if((int) $contract->branch_id !== (int) session('branch_id'), 403);
 
-        return view('gestisp.contracts.index', compact('contracts'));
+        return response()->json($diagnostico->para($contract));
     }
 
     /**

@@ -319,6 +319,66 @@ class PppoeMassCutoffTest extends TestCase
         $this->assertTrue($segunda->fresh()->disabled);
     }
 
+    // ============ Efecto sobre el contrato ============
+
+    public function test_el_corte_deja_el_contrato_suspendido(): void
+    {
+        $cuenta = $this->contratoConCuenta('ENG000200');
+        $this->mikrotikQueCorta();
+
+        $this->postJson(route('pppoe.cutoff.execute'), [
+            'identificadores' => ['ENG000200'],
+        ])->assertOk();
+
+        // Es lo que hace que, al pagar, PaymentRegistrar genere sola
+        // la orden técnica de reconexión.
+        $this->assertSame('Suspendido', $cuenta->contract->fresh()->status);
+        $this->assertDatabaseHas('audits', ['action' => 'contracts.suspended']);
+    }
+
+    public function test_no_devuelve_a_suspendido_un_contrato_por_reconexion(): void
+    {
+        $cuenta = $this->contratoConCuenta('ENG000210');
+
+        // Ya pagó y espera la visita del técnico: devolverlo a
+        // Suspendido borraría esa señal.
+        \App\Models\Contract::whereKey($cuenta->contract_id)
+            ->update(['status' => 'Por Reconexión']);
+
+        $this->mikrotikQueCorta();
+
+        $this->postJson(route('pppoe.cutoff.execute'), [
+            'identificadores' => ['ENG000210'],
+        ])->assertOk();
+
+        $this->assertSame('Por Reconexión', $cuenta->contract->fresh()->status);
+    }
+
+    public function test_una_cuenta_sin_contrato_se_corta_sin_tocar_estados(): void
+    {
+        $suelta = PppoeAccount::create([
+            'branch_id' => $this->branch->id,
+            'router_id' => $this->router->id,
+            'contract_id' => null,
+            'mikrotik_id' => '*CC',
+            'username' => 'enlace.sede',
+            'password' => 'x',
+            'profile' => 'default',
+            'service' => 'pppoe',
+            'disabled' => false,
+        ]);
+
+        $this->mikrotikQueCorta();
+
+        $this->postJson(route('pppoe.cutoff.execute'), [
+            'identificadores' => ['enlace.sede'],
+        ])->assertOk();
+
+        $this->assertTrue($suelta->fresh()->disabled);
+        // No hay contrato: no hay estado que mover
+        $this->assertDatabaseMissing('audits', ['action' => 'contracts.suspended']);
+    }
+
     // ==================== Trazabilidad ====================
 
     public function test_cada_corte_queda_registrado_con_su_contrato(): void

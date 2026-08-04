@@ -314,6 +314,26 @@
                         </div>
                     </div>
                 </div>
+                {{-- ============================================================
+                     Diagnóstico de la conexión
+
+                     Es para quien contesta el teléfono: cuando el cliente
+                     llama diciendo "no tengo internet", aquí se ve en
+                     segundos si la cuenta está conectada, con qué IP, y
+                     cómo está la ONT — sin entrar a otros tres módulos.
+
+                     Se carga por AJAX porque consulta el Mikrotik, que es
+                     una llamada de red que puede tardar o fallar: la ficha
+                     tiene que abrir al instante igual.
+                     ============================================================ --}}
+                <div class="card-body pb-0" id="diagnosticoConexion"
+                     data-url="{{ route('contracts.diagnostics', $contract) }}">
+                    <div class="text-muted">
+                        <span class="spinner-border spinner-border-sm"></span>
+                        Consultando el estado de la conexión...
+                    </div>
+                </div>
+
                 <div class="card-body row">
                     <p class="col-6"><strong>NAP y puerto:</strong> {{ $contract->nap_port }}</p>
                     <p class="col-6"><strong>Serial del CPE:</strong> {{ $contract->cpe_sn }}</p>
@@ -848,6 +868,126 @@
             $('#pdfViewerModal').on('hidden.bs.modal', function () {
                 $('#pdfViewerFrame').attr('src', '');
             });
+
+            /* ============================================================
+               DIAGNÓSTICO DE LA CONEXIÓN
+
+               Va aparte del resto de la ficha porque consulta el
+               Mikrotik: si el router no responde, se dice ahí mismo y
+               el contrato sigue abriéndose con normalidad.
+               ============================================================ */
+            const $diag = $('#diagnosticoConexion');
+
+            fetch($diag.data('url'))
+                .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                .then(pintarDiagnostico)
+                .catch(function () {
+                    $diag.html(
+                        '<div class="alert alert-light border py-2 mb-0">' +
+                        '<i class="fas fa-plug text-muted"></i> No se pudo obtener el estado de la conexión.' +
+                        '</div>'
+                    );
+                });
+
+            function pintarDiagnostico(datos) {
+                if (!datos.pppoe && !datos.ont) {
+                    $diag.html(
+                        '<div class="alert alert-light border py-2 mb-0">' +
+                        '<i class="fas fa-info-circle text-muted"></i> ' +
+                        'Este contrato no tiene ONT ni cuenta PPPoE vinculada.' +
+                        '</div>'
+                    );
+                    return;
+                }
+
+                $diag.html('<div class="row">' + bloquePppoe(datos.pppoe) + bloqueOnt(datos.ont) + '</div>');
+            }
+
+            function bloquePppoe(p) {
+                if (!p) {
+                    return tarjeta('Cuenta PPPoE', 'secondary',
+                        '<span class="text-muted">Sin cuenta vinculada</span>');
+                }
+
+                let cuerpo = '<div><strong>' + escapar(p.usuario) + '</strong>';
+                cuerpo += ' <small class="text-muted">' + escapar(p.perfil || '') + '</small></div>';
+
+                // Deshabilitada = cortada a propósito. Es la primera
+                // explicación que hay que descartar antes de culpar a
+                // la red.
+                if (!p.habilitada) {
+                    cuerpo += '<div class="mt-1"><span class="badge badge-danger">Cuenta deshabilitada</span> ' +
+                        '<small class="text-muted">corte administrativo</small></div>';
+                }
+
+                if (!p.consulta_ok) {
+                    cuerpo += '<div class="mt-1 text-muted"><i class="fas fa-exclamation-triangle"></i> ' +
+                        escapar(p.mensaje || 'No se pudo consultar el router') + '</div>';
+                    return tarjeta('Cuenta PPPoE', 'secondary', cuerpo);
+                }
+
+                if (p.conectada) {
+                    cuerpo += '<div class="mt-1"><span class="badge badge-success">Conectada</span></div>';
+
+                    if (p.ip) {
+                        // La IP es un enlace: desde aquí se entra a
+                        // administrar el equipo del cliente.
+                        cuerpo += '<div class="mt-1"><i class="fas fa-network-wired text-muted"></i> ' +
+                            '<a href="http://' + encodeURIComponent(p.ip) + '" target="_blank" rel="noopener">' +
+                            escapar(p.ip) + ' <i class="fas fa-external-link-alt small"></i></a></div>';
+                    }
+
+                    if (p.uptime) {
+                        cuerpo += '<div><i class="fas fa-clock text-muted"></i> Conectada hace ' + escapar(p.uptime) + '</div>';
+                    }
+                } else {
+                    cuerpo += '<div class="mt-1"><span class="badge badge-danger">Sin conexión</span></div>';
+                }
+
+                return tarjeta('Cuenta PPPoE', p.conectada ? 'success' : 'danger', cuerpo);
+            }
+
+            function bloqueOnt(o) {
+                if (!o) {
+                    return tarjeta('ONT', 'secondary',
+                        '<span class="text-muted">Sin ONT vinculada</span>');
+                }
+
+                let cuerpo = '<div><code>' + escapar(o.sn) + '</code></div>';
+                cuerpo += '<div class="text-muted small">' + escapar(o.olt || '') + ' · ' + escapar(o.ubicacion) + '</div>';
+
+                if (!o.habilitada) {
+                    cuerpo += '<div class="mt-1"><span class="badge badge-danger">ONT deshabilitada</span></div>';
+                }
+
+                cuerpo += '<div class="mt-1"><span class="badge badge-' + (o.en_linea ? 'success' : 'danger') + '">' +
+                    (o.en_linea ? 'En línea' : 'Fuera de línea') + '</span></div>';
+
+                if (o.potencia !== null) {
+                    cuerpo += '<div class="mt-1"><i class="fas fa-signal text-muted"></i> ' +
+                        '<span class="badge badge-' + o.banda_color + '">' +
+                        Number(o.potencia).toFixed(2) + ' dBm</span> ' +
+                        '<small class="text-muted">' + escapar(o.banda_etiqueta || '') + '</small></div>';
+                }
+
+                if (o.medida) {
+                    cuerpo += '<div class="text-muted small mt-1">Última lectura ' + escapar(o.medida) + '</div>';
+                }
+
+                return tarjeta('ONT', o.en_linea ? 'success' : 'danger', cuerpo);
+            }
+
+            function tarjeta(titulo, color, cuerpo) {
+                return '<div class="col-md-6 mb-2">' +
+                    '<div class="card card-outline card-' + color + ' mb-0">' +
+                    '  <div class="card-header py-1"><strong>' + titulo + '</strong></div>' +
+                    '  <div class="card-body py-2">' + cuerpo + '</div>' +
+                    '</div></div>';
+            }
+
+            function escapar(v) {
+                return $('<div>').text(v == null ? '' : v).html();
+            }
         });
     </script>
 @endsection

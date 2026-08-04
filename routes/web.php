@@ -206,6 +206,11 @@ Route::get('check-pdf-status', [InvoiceController::class, 'checkPdfStatus'])->na
 
 // Ruta para exportar contratos a excel
 Route::get('/contracts/export', [ContractController::class, 'export'])->name('contracts.export');
+// Exporta el listado TAL COMO quedó filtrado, con las columnas que el
+// usuario tenga activas. Comparte servicio con el listado.
+Route::get('/contracts/export-filtrado', [ContractController::class, 'exportFiltered'])->name('contracts.export_filtered');
+// Diagnóstico de la conexión: va por AJAX porque consulta el Mikrotik
+Route::get('/contratos/{contract}/diagnostico', [ContractController::class, 'diagnostics'])->name('contracts.diagnostics');
 
 // Gestión de la caja
 Route::get('/cash-register/status', [CashRegisterController::class, 'status'])->name('cash_register.status');

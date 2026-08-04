@@ -1,102 +1,290 @@
+{{-- ============================================================
+     Listado de contratos con filtros combinables
+
+     Todos los filtros se ACUMULAN: los que se llenen se aplican a la
+     vez. Es lo que permite las preguntas con las que de verdad se
+     trabaja —"los de tal barrio con dos meses de mora", "los
+     activados en marzo que todavía no tienen ONT"— en vez del único
+     campo/valor que había antes.
+
+     Las COLUMNAS las elige el usuario. El catálogo vive en
+     App\Services\ContractQuery y lo comparten esta tabla y la
+     exportación, de modo que el Excel trae exactamente lo que se ve.
+     La selección se recuerda en el navegador (localStorage): quien
+     saca listados de cartera todos los días no debería reconfigurar
+     las columnas cada mañana.
+     ============================================================ --}}
 @extends('adminlte::page')
 
-@section('title', 'Clientes')
+@section('title', 'Contratos')
 
-{{-- Agregar CSS de DataTables --}}
-@section('css')
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap4.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap4.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap4.min.css">
-    <link rel="stylesheet" href="{{asset('/css/gestisp/styles.css')}}">
+@section('content_header')
+    <h1 class="mb-0"><i class="fas fa-file-contract mr-2"></i>Listado de contratos</h1>
 @endsection
 
 @section('content')
-    <div class="card mt-3">
-        <div class="card-head pt-3">
-            <div class="row d-flex justify-content-between mb-4 pr-3">
-                <div class="col-md-8">
-                    <h2 class="ml-2 P3">LISTADO DE CLIENTES</h2>
-                    <div class="ml-2">
-                        <span class="badge badge-info badge-lg">
-                            Total Contratos: {{ $contracts->count() }}
-                        </span>
-                    </div>
-                </div>
-                <div class="col-md-4 text-center text-md-right">
-                    <a href="{{ route('contracts.export') }}" class="btn btn-success" title="Exportar contratos a Excel">
-                        <i class="fas fa-file-excel"></i> Exportar Excel
-                    </a>
+
+    @if(session('success-delete'))
+        <div class="alert alert-danger">{{ session('success-delete') }}</div>
+    @elseif(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+
+    {{-- ============================================================
+         Filtros
+         ============================================================ --}}
+    <form method="GET" action="{{ route('contracts.index') }}" id="formFiltros">
+        <div class="card card-outline card-primary shadow-sm">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-filter mr-1"></i> Filtros</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
                 </div>
             </div>
 
-            @if(session('success-delete'))
-                <div class="alert alert-danger">
-                    {{ session('success-delete') }}
+            <div class="card-body">
+                {{-- Búsqueda libre: es lo que se usa el 90% de las
+                     veces ("búsqueme a este"), así que va primero y
+                     ocupa toda la fila. --}}
+                <div class="form-group">
+                    <label for="q">Búsqueda rápida</label>
+                    <input type="text" name="q" id="q" class="form-control form-control-lg"
+                           value="{{ $filtros['q'] ?? '' }}"
+                           placeholder="Contrato, cédula, nombre, teléfono, dirección, usuario PPPoE o serial...">
                 </div>
-            @elseif(session('success'))
-                <div class="alert alert-success">
-                    {{ session('success') }}
+
+                <div class="row">
+                    <div class="col-md-3 form-group">
+                        <label>Estado</label>
+                        <select name="status[]" class="form-control select-multiple" multiple>
+                            @foreach($estados as $estado)
+                                <option value="{{ $estado->value }}"
+                                    @selected(in_array($estado->value, (array) ($filtros['status'] ?? [])))>
+                                    {{ $estado->value }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="col-md-3 form-group">
+                        <label>Plan</label>
+                        <select name="plan_id[]" class="form-control select-multiple" multiple>
+                            @foreach($planes as $plan)
+                                <option value="{{ $plan->id }}"
+                                    @selected(in_array((string) $plan->id, (array) ($filtros['plan_id'] ?? [])))>
+                                    {{ $plan->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="col-md-3 form-group">
+                        <label>Estrato</label>
+                        <select name="social_stratum[]" class="form-control select-multiple" multiple>
+                            @foreach([1, 2, 3, 4, 5, 6] as $estrato)
+                                <option value="{{ $estrato }}"
+                                    @selected(in_array((string) $estrato, (array) ($filtros['social_stratum'] ?? [])))>
+                                    Estrato {{ $estrato }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="col-md-3 form-group">
+                        <label>Barrio</label>
+                        <input type="text" name="neighborhood" class="form-control"
+                               value="{{ $filtros['neighborhood'] ?? '' }}">
+                    </div>
+
+                    <div class="col-md-3 form-group">
+                        <label>Dirección contiene</label>
+                        <input type="text" name="address" class="form-control"
+                               value="{{ $filtros['address'] ?? '' }}">
+                    </div>
+
+                    <div class="col-md-3 form-group">
+                        <label>Municipio</label>
+                        <input type="text" name="municipality" class="form-control"
+                               value="{{ $filtros['municipality'] ?? '' }}">
+                    </div>
+
+                    <div class="col-md-3 form-group">
+                        <label>Activado desde</label>
+                        <input type="date" name="activation_from" class="form-control"
+                               value="{{ $filtros['activation_from'] ?? '' }}">
+                    </div>
+
+                    <div class="col-md-3 form-group">
+                        <label>Activado hasta</label>
+                        <input type="date" name="activation_to" class="form-control"
+                               value="{{ $filtros['activation_to'] ?? '' }}">
+                    </div>
                 </div>
-            @endif
+
+                {{-- ---------- Cartera y equipos ---------- --}}
+                <div class="row border-top pt-3">
+                    <div class="col-md-3 form-group">
+                        <label>
+                            Meses de saldo (mínimo)
+                            <i class="fas fa-question-circle text-muted"
+                               title="Cada factura sin pagar es un mes. Escriba 2 para los que llevan dos meses debiendo."></i>
+                        </label>
+                        <input type="number" name="facturas_min" class="form-control" min="0" step="1"
+                               value="{{ $filtros['facturas_min'] ?? '' }}" placeholder="Ej.: 2">
+                    </div>
+
+                    <div class="col-md-2 form-group">
+                        <label>Saldo desde</label>
+                        <input type="number" name="saldo_min" class="form-control" step="0.01"
+                               value="{{ $filtros['saldo_min'] ?? '' }}">
+                    </div>
+
+                    <div class="col-md-2 form-group">
+                        <label>Saldo hasta</label>
+                        <input type="number" name="saldo_max" class="form-control" step="0.01"
+                               value="{{ $filtros['saldo_max'] ?? '' }}">
+                    </div>
+
+                    <div class="col-md-2 form-group">
+                        <label>Tiene ONT</label>
+                        <select name="has_ont" class="form-control">
+                            <option value="">Indiferente</option>
+                            <option value="si" @selected(($filtros['has_ont'] ?? '') === 'si')>Sí</option>
+                            <option value="no" @selected(($filtros['has_ont'] ?? '') === 'no')>No</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2 form-group">
+                        <label>Tiene PPPoE</label>
+                        <select name="has_pppoe" class="form-control">
+                            <option value="">Indiferente</option>
+                            <option value="si" @selected(($filtros['has_pppoe'] ?? '') === 'si')>Sí</option>
+                            <option value="no" @selected(($filtros['has_pppoe'] ?? '') === 'no')>No</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-1 form-group">
+                        <label>Permanencia</label>
+                        <select name="permanence_clause" class="form-control">
+                            <option value="">—</option>
+                            <option value="1" @selected(($filtros['permanence_clause'] ?? '') === '1')>Sí</option>
+                            <option value="0" @selected(($filtros['permanence_clause'] ?? '') === '0')>No</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-footer d-flex justify-content-between align-items-center flex-wrap">
+                <div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ route('contracts.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-eraser"></i> Limpiar
+                    </a>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-outline-dark" data-toggle="modal" data-target="#modalColumnas">
+                        <i class="fas fa-columns"></i> Columnas
+                    </button>
+                    {{-- Exporta lo filtrado, con las columnas activas.
+                         El formulario se reenvía a la ruta de descarga
+                         para no repetir aquí todos los parámetros. --}}
+                    <button type="button" class="btn btn-success" id="btnExportar">
+                        <i class="fas fa-file-excel"></i> Exportar lo filtrado
+                    </button>
+                </div>
+            </div>
         </div>
 
+        {{-- Las columnas activas viajan con el formulario --}}
+        <div id="columnasOcultas"></div>
+    </form>
+
+    {{-- ---------- Resumen de lo filtrado ---------- --}}
+    <div class="row">
+        <div class="col-6 col-md-3">
+            <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-info"><i class="fas fa-file-contract"></i></span>
+                <div class="info-box-content">
+                    <span class="info-box-text">Contratos</span>
+                    <span class="info-box-number">{{ $contracts->count() }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-danger"><i class="fas fa-wallet"></i></span>
+                <div class="info-box-content">
+                    <span class="info-box-text">Saldo pendiente</span>
+                    <span class="info-box-number">${{ number_format($totalSaldo, 0, ',', '.') }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ============================================================
+         Tabla
+         ============================================================ --}}
+    <div class="card shadow-sm">
         <div class="card-body">
             <div class="table-responsive">
-                <table id="contractsTable" class="table table-hover table-striped">
-                    <thead>
+                <table id="contractsTable" class="table table-hover table-sm" style="width:100%">
+                    <thead class="thead-light">
                     <tr>
-                        <th>Número de contrato</th>
-                        <th>Número de documento</th>
-                        <th>Nombre</th>
-                        <th>Apellido</th>
-                        <th>Teléfono</th>
-                        <th>Correo electrónico</th>
-                        <th>Dirección</th>
-                        <th>Usuario PPPoE</th>
-                        <th>Estado</th>
-                        <th>Fecha de activación</th>
-                        <th>Plan</th>
-                        <th>Acciones</th>
+                        @foreach($columnasActivas as $clave)
+                            <th>{{ $columnas[$clave]['titulo'] }}</th>
+                        @endforeach
+                        <th class="text-center">Acciones</th>
                     </tr>
                     </thead>
                     <tbody>
                     @foreach($contracts as $contract)
                         <tr>
-                            <td><strong>{{ $contract->numero_visible }}</strong></td>
-                            <td>{{ $contract->client->identity_number }}</td>
-                            <td>{{ $contract->client->name }}</td>
-                            <td>{{ $contract->client->last_name }}</td>
-                            <td>{{ $contract->client->number_phone }}</td>
-                            <td>{{ $contract->client->email }}</td>
-                            <td>{{ $contract->address }}</td>
-                            <td>{{ $contract->user_pppoe }}</td>
-                            <td>
-                                @switch($contract->status)
-                                    @case('Activo')
-                                        <span class="badge badge-success">{{ ucfirst($contract->status) }}</span>
-                                        @break
-                                    @case('Cortadp')
-                                        <span class="badge badge-danger">{{ ucfirst($contract->status) }}</span>
-                                        @break
-                                    @case('Suspendido')
-                                        <span class="badge badge-warning">{{ ucfirst($contract->status) }}</span>
-                                        @break
-                                    @case('Por Instalar')
-                                        <span class="badge badge-secondary">{{ ucfirst($contract->status) }}</span>
-                                        @break
-                                    @default
-                                        <span class="badge badge-info">{{ $contract->status }}</span>
-                                @endswitch
-                            </td>
-                            <td>{{ $contract->activation_date ? \Carbon\Carbon::parse($contract->activation_date)->format('d/m/Y') : 'N/A' }}</td>
-                            <td>{{ $contract->plan->name ?? 'N/A' }}</td>
-                            <td>
-                                {{-- El contrato se administra desde su ficha:
-                                     el botón de edición se retiró porque no
-                                     tenía una pantalla que lo atendiera. --}}
+                            @foreach($columnasActivas as $clave)
+                                <td>
+                                    @switch($clave)
+                                        @case('contract_number')
+                                            <a href="{{ route('contracts.show', $contract) }}">
+                                                <strong>{{ $contract->numero_visible }}</strong>
+                                            </a>
+                                            @break
+
+                                        @case('status')
+                                            <span class="badge badge-{{
+                                                str_contains(strtolower($contract->status ?? ''), 'activo') ? 'success'
+                                                : (str_contains(strtolower($contract->status ?? ''), 'suspend') ? 'danger'
+                                                : (str_contains(strtolower($contract->status ?? ''), 'reconex') ? 'info' : 'warning'))
+                                            }}">{{ $contract->status }}</span>
+                                            @break
+
+                                        @case('saldo_pendiente')
+                                            <span class="{{ (float) ($contract->saldo_pendiente ?? 0) > 0 ? 'text-danger font-weight-bold' : 'text-muted' }}">
+                                                ${{ number_format((float) ($contract->saldo_pendiente ?? 0), 0, ',', '.') }}
+                                            </span>
+                                            @break
+
+                                        @case('facturas_pendientes')
+                                            @if(($contract->facturas_pendientes ?? 0) > 0)
+                                                <span class="badge badge-{{ $contract->facturas_pendientes >= 2 ? 'danger' : 'warning' }}">
+                                                    {{ $contract->facturas_pendientes }}
+                                                </span>
+                                            @else
+                                                <span class="text-muted">0</span>
+                                            @endif
+                                            @break
+
+                                        @default
+                                            {{ \App\Services\ContractQuery::valor($contract, $clave) ?: '—' }}
+                                    @endswitch
+                                </td>
+                            @endforeach
+
+                            <td class="text-center text-nowrap">
                                 <a href="{{ route('contracts.show', $contract) }}"
-                                   class="btn btn-info btn-sm"
-                                   title="Ver contrato">
+                                   class="btn btn-sm btn-info" title="Ver contrato">
                                     <i class="fas fa-eye"></i>
                                 </a>
                             </td>
@@ -108,182 +296,174 @@
         </div>
     </div>
 
-    <!-- Modal para configurar columnas -->
-    <div class="modal fade" id="columnModal" tabindex="-1" role="dialog" aria-labelledby="columnModalLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
+    {{-- ============================================================
+         Selector de columnas
+         ============================================================ --}}
+    <div class="modal fade" id="modalColumnas" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="columnModalLabel">Configurar Columnas Visibles</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <h5 class="modal-title"><i class="fas fa-columns mr-1"></i> Columnas del listado</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_contract" data-column="0" checked>
-                        <label class="form-check-label" for="col_contract">Número de contrato</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_document" data-column="1" checked>
-                        <label class="form-check-label" for="col_document">Número de documento</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_name" data-column="2" checked>
-                        <label class="form-check-label" for="col_name">Nombre</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_lastname" data-column="3" checked>
-                        <label class="form-check-label" for="col_lastname">Apellido</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_phone" data-column="4" checked>
-                        <label class="form-check-label" for="col_phone">Teléfono</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_email" data-column="5" checked>
-                        <label class="form-check-label" for="col_email">Correo electrónico</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_address" data-column="6" checked>
-                        <label class="form-check-label" for="col_address">Dirección</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_pppoe" data-column="7" checked>
-                        <label class="form-check-label" for="col_pppoe">Usuario PPPoE</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_status" data-column="8" checked>
-                        <label class="form-check-label" for="col_status">Estado</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_activation" data-column="9" checked>
-                        <label class="form-check-label" for="col_activation">Fecha de activación</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input toggle-column" id="col_plan" data-column="10" checked>
-                        <label class="form-check-label" for="col_plan">Plan</label>
-                    </div>
+                    <p class="text-muted">
+                        Marque lo que quiere ver. La selección se recuerda en este navegador
+                        y es la que se lleva la exportación.
+                    </p>
+
+                    @php
+                        // Agrupadas para que la lista sea legible: son
+                        // treinta columnas y en una sola fila no se
+                        // encuentra nada.
+                        $porGrupo = collect($columnas)->groupBy('grupo');
+                    @endphp
+
+                    @foreach($porGrupo as $grupo => $delGrupo)
+                        <h6 class="text-uppercase text-muted mt-3">{{ $grupo }}</h6>
+                        <div class="row">
+                            @foreach($delGrupo as $clave => $columna)
+                                <div class="col-md-4">
+                                    <div class="custom-control custom-checkbox mb-1">
+                                        <input type="checkbox" class="custom-control-input col-toggle"
+                                               id="col_{{ $clave }}" value="{{ $clave }}"
+                                               @checked(in_array($clave, $columnasActivas))>
+                                        <label class="custom-control-label" for="col_{{ $clave }}">
+                                            {{ $columna['titulo'] }}
+                                        </label>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endforeach
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" data-dismiss="modal">Aplicar</button>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" id="btnColumnasDefecto">
+                        Volver a las de siempre
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btnAplicarColumnas">
+                        <i class="fas fa-check"></i> Aplicar
+                    </button>
                 </div>
             </div>
         </div>
     </div>
+
 @endsection
 
-{{-- Agregar JavaScript de DataTables --}}
+@section('css')
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+    <style>
+        /* Los multiselect se ven altos por defecto y descuadran la fila */
+        .select2-container { width: 100% !important; }
+        #contractsTable td, #contractsTable th { font-size: .875rem; }
+    </style>
+@endsection
+
 @section('js')
-    <!-- DataTables JS -->
-    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap4.min.js"></script>
-    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap4.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap4.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        $(document).ready(function() {
-            // Inicializar DataTable
-            var table = $('#contractsTable').DataTable({
-                // Configuración básica
-                "processing": true,
-                "responsive": true,
-                "autoWidth": false,
+        $(function () {
+            const CLAVE_COLUMNAS = 'gestisp.contratos.columnas';
 
-                // Configuración de idioma en español
-                "language": {
-                    "url": "https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json"
+            $('.select-multiple').select2({
+                placeholder: 'Todos',
+                allowClear: true,
+                closeOnSelect: false,
+            });
+
+            $('#contractsTable').DataTable({
+                language: {
+                    url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
+                    emptyTable: 'Ningún contrato coincide con los filtros.'
                 },
-
-                // Configuración de paginación
-                "pageLength": 25,
-                "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
-
-                // Configuración de ordenamiento
-                "order": [[0, "desc"]], // Ordenar por número de contrato descendente por defecto
-
-                // Configuración de columnas
-                "columnDefs": [
-                    {
-                        "targets": [0, 1], // Columnas ID contrato y documento
-                        "className": "text-center"
-                    },
-                    {
-                        "targets": [4], // Columna teléfono
-                        "className": "text-center"
-                    },
-                    {
-                        "targets": [8], // Columna Estado
-                        "className": "text-center"
-                    },
-                    {
-                        "targets": [9], // Columna Fecha de activación
-                        "type": "date",
-                        "className": "text-center"
-                    },
-                    {
-                        "targets": [11], // Columna Acciones
-                        "orderable": false,
-                        "searchable": false,
-                        "className": "text-center"
-                    }
-                ],
-
-                // Botones de exportación
-                "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"<"float-right"B>>>frtip',
-                "buttons": [
-                    {
-                        text: '<i class="fas fa-columns"></i> Columnas',
-                        className: 'btn btn-secondary btn-sm',
-                        action: function(e, dt, node, config) {
-                            $('#columnModal').modal('show');
-                        }
-                    },
-                    {
-                        extend: 'copy',
-                        text: '<i class="fas fa-copy"></i> Copiar',
-                        className: 'btn btn-secondary btn-sm'
-                    },
-                    {
-                        extend: 'csv',
-                        text: '<i class="fas fa-file-csv"></i> CSV',
-                        className: 'btn btn-success btn-sm'
-                    },
-                    {
-                        extend: 'excel',
-                        text: '<i class="fas fa-file-excel"></i> Excel',
-                        className: 'btn btn-success btn-sm'
-                    },
-                    {
-                        extend: 'pdf',
-                        text: '<i class="fas fa-file-pdf"></i> PDF',
-                        className: 'btn btn-danger btn-sm',
-                        orientation: 'landscape',
-                        pageSize: 'A4'
-                    },
-                    {
-                        extend: 'print',
-                        text: '<i class="fas fa-print"></i> Imprimir',
-                        className: 'btn btn-info btn-sm'
-                    }
+                pageLength: 50,
+                order: [],
+                columnDefs: [
+                    { orderable: false, targets: -1 },
+                    { defaultContent: '—', targets: '_all' }
                 ]
             });
 
-            // Funcionalidad para mostrar/ocultar columnas
-            $('.toggle-column').on('change', function() {
-                var column = table.column($(this).data('column'));
-                column.visible($(this).is(':checked'));
+            /* ============================================================
+               Columnas
+
+               La selección se guarda en el navegador y se reenvía en
+               cada filtrado. Quien saca listados de cartera todos los
+               días no debería reconfigurarlas cada mañana.
+               ============================================================ */
+            function columnasElegidas() {
+                return $('.col-toggle:checked').map((i, el) => el.value).get();
+            }
+
+            function escribirOcultas(columnas) {
+                const $destino = $('#columnasOcultas').empty();
+
+                columnas.forEach(function (clave) {
+                    $destino.append(
+                        $('<input>', { type: 'hidden', name: 'columnas[]', value: clave })
+                    );
+                });
+            }
+
+            $('#btnAplicarColumnas').on('click', function () {
+                const elegidas = columnasElegidas();
+
+                if (elegidas.length === 0) {
+                    // Una tabla sin columnas no le sirve a nadie
+                    alert('Deje al menos una columna marcada.');
+                    return;
+                }
+
+                localStorage.setItem(CLAVE_COLUMNAS, JSON.stringify(elegidas));
+                escribirOcultas(elegidas);
+
+                $('#formFiltros').submit();
             });
 
-            // Funcionalidad para filtros personalizados
-            $('#contractsTable_filter input').attr('placeholder', 'Buscar en todos los campos...');
+            $('#btnColumnasDefecto').on('click', function () {
+                localStorage.removeItem(CLAVE_COLUMNAS);
+                window.location = "{{ route('contracts.index') }}";
+            });
+
+            // Al cargar: si el navegador recuerda una selección y la URL
+            // no trae otra, se reaplica.
+            const guardadas = localStorage.getItem(CLAVE_COLUMNAS);
+            const urlTraeColumnas = window.location.search.includes('columnas');
+
+            if (guardadas && !urlTraeColumnas) {
+                const columnas = JSON.parse(guardadas);
+
+                escribirOcultas(columnas);
+
+                // Solo se recarga si de verdad cambian: si no, cada
+                // visita al listado provocaría una recarga en bucle.
+                const actuales = @json($columnasActivas);
+                const iguales = columnas.length === actuales.length
+                    && columnas.every(c => actuales.includes(c));
+
+                if (!iguales) {
+                    $('#formFiltros').submit();
+                }
+            } else {
+                escribirOcultas(@json($columnasActivas));
+            }
+
+            /* ---------------- Exportar ---------------- */
+            $('#btnExportar').on('click', function () {
+                const $form = $('#formFiltros');
+                const accionOriginal = $form.attr('action');
+
+                // Se reenvía el MISMO formulario a la ruta de descarga:
+                // así el Excel recibe idénticos filtros y columnas sin
+                // duplicar aquí la lista de parámetros.
+                $form.attr('action', "{{ route('contracts.export_filtered') }}").submit();
+                $form.attr('action', accionOriginal);
+            });
         });
     </script>
 @endsection
