@@ -13,6 +13,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -58,7 +60,9 @@ class MaterialMovementController extends Controller
      */
     public function index(): View
     {
-        $materials  = Material::orderBy('name')->get();
+        // Catálogo de ESTA sucursal: mostrar el de todas llenaba el
+        // buscador de materiales que en esta bodega no existen.
+        $materials  = Material::deSucursal()->with('category')->orderBy('name')->get();
         $warehouses = Warehouse::where('branch_id', session('branch_id'))->get();
 
         return view('gestisp.materials.movements.index', compact('materials', 'warehouses'));
@@ -89,14 +93,29 @@ class MaterialMovementController extends Controller
             $request->validate([
                 'type'                            => 'required|in:Entrada,Salida,Transferencia',
                 'materials'                       => 'required|array|min:1',
-                'materials.*.material_id'         => 'required|exists:materials,id',
+                // De ESTA sucursal: con un simple exists bastaba con
+                // enviar el id de otra sede para mover material ajeno.
+                'materials.*.material_id'         => [
+                    'required',
+                    Rule::exists('materials', 'id')->where('branch_id', session('branch_id')),
+                ],
                 'materials.*.quantity'            => 'required|numeric|min:1',
                 'materials.*.unit_of_measurement' => 'required|string',
                 'materials.*.serial_numbers'      => 'nullable|array',
                 'materials.*.serial_numbers.*'    => 'string',
-                'warehouse_origin_id'             => 'nullable|exists:warehouses,id|required_if:type,Salida,Transferencia',
-                'warehouse_destination_id'        => 'nullable|exists:warehouses,id|required_if:type,Entrada,Transferencia',
+                'warehouse_origin_id'             => [
+                    'nullable', 'required_if:type,Salida,Transferencia',
+                    Rule::exists('warehouses', 'id')->where('branch_id', session('branch_id')),
+                ],
+                'warehouse_destination_id'        => [
+                    'nullable', 'required_if:type,Entrada,Transferencia',
+                    Rule::exists('warehouses', 'id')->where('branch_id', session('branch_id')),
+                ],
                 'reason'                          => 'required|string|max:100',
+            ], [
+                'materials.*.material_id.exists' => 'Uno de los materiales no pertenece a esta sucursal.',
+                'warehouse_origin_id.exists' => 'El almacén de origen no pertenece a esta sucursal.',
+                'warehouse_destination_id.exists' => 'El almacén de destino no pertenece a esta sucursal.',
             ]);
 
             $movements = [];
@@ -195,6 +214,8 @@ class MaterialMovementController extends Controller
                 }
             });
 
+            $this->auditarMovimiento($request, $movements);
+
             // ---- PDF de resumen del movimiento ----
             $pdf     = \App\Support\PdfBranding::make('gestisp.materials.movements.pdf_summary', compact('movements'));
             $pdfPath = storage_path('app/public/movimiento_' . time() . '.pdf');
@@ -204,6 +225,12 @@ class MaterialMovementController extends Controller
                 'success-create' => 'Movimiento registrado exitosamente.',
                 'pdfPath'        => $pdfPath,
             ]);
+
+        } catch (ValidationException $e) {
+            // Debe salir con el detalle POR CAMPO: si se tragara aquí,
+            // el formulario mostraría un "error" genérico y el usuario
+            // no sabría qué línea corregir.
+            throw $e;
 
         } catch (\Exception $e) {
             Log::error('Error al procesar movimiento de material', [
@@ -317,6 +344,8 @@ class MaterialMovementController extends Controller
      */
     public function getAvailableSerialNumbers($warehouseId, $materialId): JsonResponse
     {
+        $this->exigirAlmacenDeLaSucursal((int) $warehouseId);
+
         $serialNumbers = Inventory::where('warehouse_id', $warehouseId)
             ->where('material_id', $materialId)
             ->whereNotNull('serial_number')
@@ -332,6 +361,8 @@ class MaterialMovementController extends Controller
      */
     public function getAvailableQuantity($warehouseId, $materialId): JsonResponse
     {
+        $this->exigirAlmacenDeLaSucursal((int) $warehouseId);
+
         $material = Material::findOrFail($materialId);
 
         $quantity = $material->is_equipment
@@ -343,6 +374,76 @@ class MaterialMovementController extends Controller
                 ->sum('quantity');
 
         return response()->json(['quantity' => $quantity]);
+    }
+
+    /**
+     * Impide consultar el stock de un almacén de otra sucursal.
+     *
+     * Son endpoints JSON con el id en la URL: sin esto, cambiar el
+     * número bastaba para leer las existencias y los seriales de otra
+     * sede desde la consola del navegador.
+     */
+    private function exigirAlmacenDeLaSucursal(int $warehouseId): void
+    {
+        abort_unless(
+            Warehouse::where('id', $warehouseId)
+                ->where('branch_id', session('branch_id'))
+                ->exists(),
+            403,
+            'Ese almacén pertenece a otra sucursal.',
+        );
+    }
+
+    /**
+     * Deja el movimiento completo en la trazabilidad.
+     *
+     * Los cambios de cada fila (inventario, movimientos) ya los
+     * registra el oyente global de modelos, pero esas filas sueltas no
+     * responden la pregunta que se hace un jefe de almacén: QUIÉN sacó
+     * QUÉ, de DÓNDE y POR QUÉ. Esta única entrada sí.
+     *
+     * @param  array<int, MaterialMovement>  $movements
+     */
+    private function auditarMovimiento(Request $request, array $movements): void
+    {
+        $resumen = collect($movements)
+            ->groupBy('material_id')
+            ->map(fn ($filas) => [
+                'material' => $filas->first()->material?->name,
+                'cantidad' => $filas->sum('quantity'),
+                'unidad' => $filas->first()->unit_of_measurement,
+                'seriales' => $filas->pluck('serial_number')->filter()->values()->all(),
+            ])
+            ->values()
+            ->all();
+
+        $origen = $request->warehouse_origin_id
+            ? Warehouse::find($request->warehouse_origin_id)?->description
+            : null;
+
+        $destino = $request->warehouse_destination_id
+            ? Warehouse::find($request->warehouse_destination_id)?->description
+            : null;
+
+        app(\App\Services\Audit\AuditLogger::class)->action(
+            'movements.registered',
+            sprintf(
+                'Registró una %s de %d material(es)%s%s',
+                mb_strtolower($request->type),
+                count($resumen),
+                $origen ? ' desde ' . $origen : '',
+                $destino ? ' hacia ' . $destino : '',
+            ),
+            [
+                'tipo' => $request->type,
+                'motivo' => $request->reason,
+                'almacen_origen' => $origen,
+                'almacen_destino' => $destino,
+                'materiales' => $resumen,
+            ],
+            null,
+            'inventario',
+        );
     }
 
     /**

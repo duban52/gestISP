@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -14,12 +15,17 @@ use Illuminate\Database\Eloquent\Model;
  *   por cada serial.
  * - Consumibles (false): se rastrean solo por cantidad
  *   (cable, conectores, grapas, cinta).
+ *
+ * PERTENECE A UNA SUCURSAL. Antes el catálogo era global y un
+ * material creado en una sede aparecía en todas, aunque su
+ * inventario estuviera solo en la primera.
  */
 class Material extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'branch_id',
         'name',
         'category_id',
         'is_equipment',
@@ -28,6 +34,24 @@ class Material extends Model
     protected $casts = [
         'is_equipment' => 'boolean',
     ];
+
+    /** Sucursal dueña del material */
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    /**
+     * Limita la consulta a una sucursal (por defecto, la activa).
+     *
+     * Se usa en TODAS las consultas del módulo. Es un scope normal y
+     * no un global scope a propósito: un global scope escondería el
+     * filtro y costaría entender por qué un informe no encuentra algo.
+     */
+    public function scopeDeSucursal(Builder $query, ?int $branchId = null): Builder
+    {
+        return $query->where('branch_id', $branchId ?? session('branch_id'));
+    }
 
     /** Categoría a la que pertenece el material */
     public function category()

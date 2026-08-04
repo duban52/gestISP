@@ -129,63 +129,117 @@
          - /movements/serials/{warehouse}/{material}: seriales (equipos)
          ============================================================ --}}
     <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="materialModalLabel">Agregar Material</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="materialModalLabel">
+                        <i class="fas fa-boxes mr-1"></i> Agregar material al movimiento
+                    </h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
+
                 <div class="modal-body">
+                    {{-- Contexto: de qué almacén sale o a cuál entra.
+                         Sin esto el operador no sabe contra qué stock
+                         se está comparando la disponibilidad. --}}
+                    <div class="alert alert-light border py-2 mb-3" id="modal-contexto"></div>
+
                     <div class="form-group">
-                        <label>Material</label>
-                        <select id="modal-material-select" class="form-control material-select select2" required>
-                            <option value="">Seleccione un material</option>
+                        <label for="modal-material-select">
+                            Material <span class="text-danger">*</span>
+                        </label>
+                        <select id="modal-material-select" class="form-control material-select" required>
+                            <option value=""></option>
                             @foreach ($materials as $material)
                                 <option value="{{ $material->id }}"
-                                        data-is-equipment="{{ $material->is_equipment }}"
+                                        data-is-equipment="{{ $material->is_equipment ? 1 : 0 }}"
+                                        data-category="{{ $material->category->name ?? 'Sin categoría' }}"
                                         data-name="{{ $material->name }}">
                                     {{ $material->name }}
                                 </option>
                             @endforeach
                         </select>
-                        {{-- Disponibilidad consultada por AJAX según almacén origen --}}
-                        <small id="available-quantity-text" class="text-info mt-1" style="display: none;">
-                            Cantidad disponible: <span id="available-quantity">0</span>
-                        </small>
+
+                        {{-- Disponibilidad real en el almacén de origen --}}
+                        <div class="mt-2 d-none" id="available-quantity-text">
+                            <span class="badge badge-info" style="font-size: .9rem;">
+                                Disponible: <strong id="available-quantity">0</strong>
+                            </span>
+                            <small class="text-muted ml-1" id="available-hint"></small>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Cantidad</label>
-                        <input type="number" id="modal-quantity" class="form-control quantity-input" required min="1">
+                    <div class="row">
+                        <div class="form-group col-md-6">
+                            <label for="modal-quantity">Cantidad <span class="text-danger">*</span></label>
+                            <input type="number" id="modal-quantity" class="form-control quantity-input"
+                                   min="1" step="1" placeholder="0">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="modal-unit-of-measurement">
+                                Unidad de medida <span class="text-danger">*</span>
+                            </label>
+                            <select id="modal-unit-of-measurement" class="form-control">
+                                <option value="">Seleccione...</option>
+                                <option value="Unidades">Unidades</option>
+                                <option value="Metros">Metros</option>
+                                <option value="Litros">Litros</option>
+                                <option value="Paquetes">Paquetes</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Unidad de Medida</label>
-                        <select id="modal-unit-of-measurement" class="form-control" required>
-                            <option value="">Seleccione...</option>
-                            <option value="Unidades">Unidades</option>
-                            <option value="Metros">Metros</option>
-                            <option value="Litros">Litros</option>
-                            <option value="Paquetes">Paquetes</option>
-                        </select>
+                    {{-- ============================================================
+                         Seriales — solo para EQUIPOS.
+
+                         Dos comportamientos según el tipo de movimiento:
+                           · Entrada: los equipos aún no existen en el
+                             sistema, así que se ESCRIBEN sus seriales.
+                           · Salida/Transferencia: ya están en el almacén,
+                             así que se ELIGEN de los disponibles.
+                         ============================================================ --}}
+                    <div id="modal-serial-numbers-container" class="d-none">
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="mb-0">
+                                <i class="fas fa-barcode mr-1"></i> Números de serie
+                            </label>
+                            <span class="badge badge-secondary" id="serial-counter">0 de 0</span>
+                        </div>
+
+                        {{-- Salida / Transferencia: elegir de los que hay --}}
+                        <div id="serial-picker" class="d-none">
+                            <select id="serial-number-select" class="form-control" multiple></select>
+                            <small class="form-text text-muted">
+                                Escriba para filtrar. Debe elegir tantos seriales como unidades.
+                            </small>
+                            <div class="alert alert-warning py-2 mt-2 d-none" id="serial-vacio">
+                                Este equipo no tiene unidades con serial en el almacén de origen.
+                            </div>
+                        </div>
+
+                        {{-- Entrada: escribir los seriales que ingresan --}}
+                        <div id="serial-inputs" class="d-none">
+                            <ul id="serial-number-list" class="list-unstyled mb-0"></ul>
+                            <small class="form-text text-muted">
+                                Un serial por unidad. Se generan tantas casillas como cantidad indique.
+                            </small>
+                        </div>
                     </div>
 
-                    {{-- Solo visible para equipos: selección de seriales --}}
-                    <div id="modal-serial-numbers-container" style="display:none;">
-                        <label for="serial-number-select">Números de Serie Disponibles</label>
-                        <select id="serial-number-select" class="form-control" multiple>
-                            {{-- Seriales cargados por AJAX --}}
-                        </select>
-                        <ul id="serial-number-list" style="list-style-type: none; padding: 0; margin-top: 10px;">
-                            {{-- Seriales seleccionados --}}
-                        </ul>
-                    </div>
+                    {{-- Los errores se muestran aquí, junto al campo que
+                         los causa, y no en una ventana emergente que tapa
+                         el formulario y obliga a cerrarla para corregir. --}}
+                    <div class="alert alert-danger mt-3 d-none" id="modal-error"></div>
                 </div>
+
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" id="add-material-modal-btn">Agregar Material</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="add-material-modal-btn">
+                        <i class="fas fa-plus"></i> Agregar al movimiento
+                    </button>
                 </div>
             </div>
         </div>

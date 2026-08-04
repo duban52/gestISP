@@ -4,8 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Material;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -18,6 +19,10 @@ use Illuminate\View\View;
  *
  * El stock por almacén vive en la tabla inventories; este catálogo
  * solo define QUÉ materiales existen y su categoría.
+ *
+ * TODO ES POR SUCURSAL. Cada sede lleva su propio catálogo: antes
+ * era global y un material creado en una sucursal aparecía en todas,
+ * aunque su inventario estuviera solo en la primera.
  */
 class MaterialController extends Controller
 {
@@ -46,7 +51,8 @@ class MaterialController extends Controller
      */
     public function index(): View
     {
-        $materials = Material::with('category')
+        $materials = Material::deSucursal()
+            ->with('category')
             ->withCount('inventories')
             ->get();
 
@@ -58,7 +64,7 @@ class MaterialController extends Controller
      */
     public function create(): View
     {
-        $categories = Category::all();
+        $categories = Category::deSucursal()->orderBy('name')->get();
 
         return view('gestisp.materials.create', compact('categories'));
     }
@@ -75,6 +81,7 @@ class MaterialController extends Controller
         $validated = $this->validateMaterial($request);
 
         Material::create([
+            'branch_id'    => session('branch_id'),
             'name'         => $validated['name'],
             'category_id'  => $validated['category_id'],
             'is_equipment' => $request->boolean('is_equipment'),
@@ -90,7 +97,9 @@ class MaterialController extends Controller
      */
     public function edit(Material $material): View
     {
-        $categories = Category::all();
+        $this->exigirMismaSucursal($material);
+
+        $categories = Category::deSucursal()->orderBy('name')->get();
 
         return view('gestisp.materials.edit', compact('material', 'categories'));
     }
@@ -104,6 +113,8 @@ class MaterialController extends Controller
      */
     public function update(Request $request, Material $material): RedirectResponse
     {
+        $this->exigirMismaSucursal($material);
+
         $validated = $this->validateMaterial($request);
 
         $material->update([
@@ -126,6 +137,8 @@ class MaterialController extends Controller
      */
     public function destroy(Material $material): RedirectResponse
     {
+        $this->exigirMismaSucursal($material);
+
         // Bloquear si hay existencias registradas en algún almacén
         if ($material->inventories()->exists()) {
             return back()->with(
@@ -156,8 +169,32 @@ class MaterialController extends Controller
     {
         return $request->validate([
             'name'         => 'required|string|max:255',
-            'category_id'  => 'required|exists:categories,id',
+            // La categoría debe ser de ESTA sucursal: con un simple
+            // exists: bastaba con enviar el id de otra sede para
+            // colar un material bajo una categoría ajena.
+            'category_id'  => [
+                'required',
+                Rule::exists('categories', 'id')->where('branch_id', session('branch_id')),
+            ],
             'is_equipment' => 'nullable|boolean',
+        ], [
+            'category_id.exists' => 'La categoría elegida no existe en esta sucursal.',
         ]);
+    }
+
+    /**
+     * Corta el paso a materiales de otra sucursal.
+     *
+     * El enlace de edición nunca los ofrece, pero la ruta acepta
+     * cualquier id: sin esto bastaba con cambiar el número en la URL
+     * para editar o borrar el catálogo de otra sede.
+     */
+    private function exigirMismaSucursal(Material $material): void
+    {
+        abort_unless(
+            (int) $material->branch_id === (int) session('branch_id'),
+            403,
+            'Ese material pertenece a otra sucursal.',
+        );
     }
 }
