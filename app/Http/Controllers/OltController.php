@@ -8,6 +8,7 @@ use App\Models\Ont;
 use App\Models\SrvProfile;
 use App\Models\VlanOlt;
 use App\Services\OltSshService;
+use App\Services\OltStatistics;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
@@ -39,7 +40,7 @@ class OltController extends Controller
         $this->oltSshService = $oltSshService;
 
         $this->middleware('auth');
-        $this->middleware('check.permission:olts.index')->only('index', 'apiOlts');
+        $this->middleware('check.permission:olts.index')->only('index', 'show', 'apiOltStatus');
         $this->middleware('check.permission:olts.create')->only('create', 'store');
         $this->middleware('check.permission:olts.edit')
             ->only('edit', 'update', 'viewVlans', 'viewLineProfiles', 'viewSrvProfiles');
@@ -51,10 +52,49 @@ class OltController extends Controller
         $this->middleware('check.permission:onts.index')->only('ontsAutofind');
     }
 
+    /**
+     * Listado de OLTs.
+     *
+     * SE DIBUJA AL INSTANTE, con lo que ya está en la base: nombre,
+     * IP, cuántas ONTs cuelgan y el último estado conocido. El estado
+     * EN VIVO (temperatura, uptime) lo pide después el navegador, una
+     * petición por OLT.
+     *
+     * Antes se hacía al revés: la pantalla esperaba a que el servidor
+     * abriera una sesión SSH contra CADA equipo. Con tres OLTs eran
+     * varios segundos, y si una estaba apagada había que esperar su
+     * tiempo de espera completo antes de ver la primera fila. Una OLT
+     * caída dejaba el listado entero en blanco.
+     */
     public function index(): View
     {
+        $olts = Olt::byBranch(session('branch_id'))
+            // El conteo va en la misma consulta: pedirlo por fila
+            // sería un N+1 con tantas consultas como OLTs.
+            ->withCount('onts')
+            ->orderBy('name')
+            ->get();
 
-        return view('gestisp.olts.index');
+        return view('gestisp.olts.index', compact('olts'));
+    }
+
+    /**
+     * Ficha de una OLT: estado, ONTs y calidad de la red óptica.
+     *
+     * Las cifras salen de la base (las mantienen al día `onts:poll` y
+     * `onts:sync-power`), no del equipo: pedírselas a la OLT en cada
+     * visita serían decenas de consultas SNMP y medio minuto de espera.
+     * El estado del chasis sí se consulta, pero aparte y en segundo
+     * plano, igual que en el listado.
+     */
+    public function show(Olt $olt, OltStatistics $estadisticas): View
+    {
+        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
+
+        return view('gestisp.olts.show', [
+            'olt' => $olt->loadCount('onts'),
+            'resumen' => $estadisticas->resumen($olt),
+        ]);
     }
 
     public function create(): View
@@ -118,23 +158,32 @@ class OltController extends Controller
         }
     }
 
-    public function apiOlts(): JsonResponse
+    /**
+     * Estado en vivo de UNA OLT (temperatura, uptime, conectividad).
+     *
+     * Una petición por equipo, a propósito: así una OLT apagada solo
+     * retrasa su propia fila y las demás aparecen al momento. Cuando
+     * era una sola petición para todas, el tiempo de espera de la que
+     * no respondía bloqueaba la pantalla completa.
+     *
+     * Consultar el equipo NO se registra en la trazabilidad: es
+     * telemetría automática que dispara la pantalla sola, y llenaría
+     * la bitácora de ruido sin contar nada que hiciera una persona.
+     */
+    public function apiOltStatus(Olt $olt): JsonResponse
     {
-        $olts = Olt::byBranch(session('branch_id'))->get();
+        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
 
-        $data = $olts->map(function ($olt) {
-            $remoteData = $this->getRemoteData($olt);
-            return [
-                'id' => $olt->id,
-                'name' => $olt->name,
-                'ip_address' => $olt->ip_address,
-                'status_text' => $remoteData['status'],
-                'temperature' => $remoteData['temperature'],
-                'uptime' => $remoteData['uptime'],
-            ];
-        });
+        $datos = $this->getRemoteData($olt);
 
-        return response()->json($data);
+        return response()->json([
+            'id' => $olt->id,
+            'status_text' => $datos['status'],
+            'conectada' => $datos['status'] === 'Conectado',
+            'temperature' => $datos['temperature'],
+            'uptime' => $datos['uptime'],
+            'consultado' => $olt->fresh()->status_checked_at?->diffForHumans(),
+        ]);
     }
 
 
@@ -168,7 +217,10 @@ class OltController extends Controller
      */
     private function updateOltStatus(Olt $olt, array $data, bool $connected = true): void
     {
-        $updateData = ['status' => $connected];
+        // La marca de tiempo se guarda SIEMPRE, conectada o no: es lo
+        // que permite decirle al operador si lo que ve en pantalla es
+        // de hace un minuto o de ayer.
+        $updateData = ['status' => $connected, 'status_checked_at' => now()];
 
         if ($connected) {
             $updateData['temperature'] = is_numeric($data['temperature']) ? $data['temperature'] : null;

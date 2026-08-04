@@ -759,6 +759,11 @@ class OntController extends Controller
             return back()->with('error', 'No se pudo reiniciar la ONT: ' . $e->getMessage());
         }
 
+        $this->auditarAccionSobreOnt(
+            $ont, $olt, 'onts.rebooted',
+            'Reinició la ONT %s (%s)',
+        );
+
         return back()->with(
             'success',
             'Se envió el reinicio a la ONT. El equipo tarda cerca de un minuto en volver a conectarse.'
@@ -778,11 +783,56 @@ class OntController extends Controller
 
         $ont->update(['admin_enabled' => $enable]);
 
+        // El oyente global de modelos ya registra el cambio de
+        // admin_enabled, pero como un genérico "Modificó la ONT" que
+        // no dice lo importante: que se le cortó (o devolvió) el
+        // servicio a un cliente concreto.
+        $this->auditarAccionSobreOnt(
+            $ont, $olt,
+            $enable ? 'onts.enabled' : 'onts.disabled',
+            ($enable ? 'Habilitó' : 'Deshabilitó') . ' la ONT %s (%s)',
+        );
+
         return back()->with(
             $enable ? 'success' : 'success-update',
             $enable
                 ? 'ONT habilitada: el servicio del cliente queda restablecido.'
                 : 'ONT deshabilitada: el servicio del cliente queda suspendido.'
+        );
+    }
+
+    /**
+     * Deja constancia de una acción ejecutada sobre el equipo.
+     *
+     * Estas tres operaciones dejan a un cliente sin servicio (o se lo
+     * devuelven), así que la bitácora tiene que poder responder quién
+     * lo hizo y sobre qué contrato — no basta el "Modificó la ONT"
+     * que genera el oyente automático de modelos.
+     */
+    private function auditarAccionSobreOnt(Ont $ont, Olt $olt, string $accion, string $plantilla): void
+    {
+        $contrato = $ont->contract;
+
+        app(\App\Services\Audit\AuditLogger::class)->action(
+            $accion,
+            sprintf(
+                $plantilla,
+                $ont->sn,
+                $contrato?->numero_visible
+                    ? 'contrato ' . $contrato->numero_visible
+                    : 'sin contrato: ' . ($ont->description ?: 'sin descripción'),
+            ),
+            [
+                'sn' => $ont->sn,
+                'olt' => $olt->name,
+                'ubicacion' => "{$ont->slot}/{$ont->port}/{$ont->onu_id}",
+                'contrato' => $contrato?->numero_visible,
+                'cliente' => $contrato?->client
+                    ? trim($contrato->client->name . ' ' . $contrato->client->last_name)
+                    : null,
+            ],
+            $ont,
+            'red',
         );
     }
 }

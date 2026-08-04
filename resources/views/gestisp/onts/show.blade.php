@@ -123,30 +123,52 @@
                             {{-- Reinicio: primer paso de soporte cuando el
                                  cliente reporta lentitud o se quedó sin
                                  navegación. No cambia la configuración. --}}
-                            <form method="POST" action="{{ route('onts.reboot', $ont) }}"
-                                  onsubmit="return confirm('¿Reiniciar la ONT del cliente?\n\nQuedará sin servicio alrededor de un minuto mientras el equipo vuelve a conectarse. Su configuración no se modifica.');">
-                                @csrf
-                                <button type="submit" class="btn btn-warning">
-                                    <i class="fas fa-redo-alt"></i> Reiniciar ONT
-                                </button>
-                            </form>
+                            {{-- ============================================================
+                                 Acciones sobre el equipo.
+
+                                 Las tres van por consola contra la OLT y tardan
+                                 entre varios segundos y un minuto. Antes se
+                                 enviaban con un confirm() del navegador y la
+                                 página quedaba congelada, sin nada que indicara
+                                 que el sistema estaba trabajando: el operador
+                                 volvía a pulsar y se mandaba la orden dos veces.
+
+                                 Ahora cada una abre un modal de confirmación
+                                 que, al aceptar, se convierte en un aviso de
+                                 progreso y bloquea el cierre hasta que la OLT
+                                 responde. Es el mismo patrón que ya usa la
+                                 autorización de ONTs.
+                                 ============================================================ --}}
+                            <button type="button" class="btn btn-warning btn-accion-olt"
+                                    data-accion="{{ route('onts.reboot', $ont) }}"
+                                    data-titulo="Reiniciar la ONT"
+                                    data-icono="fa-redo-alt"
+                                    data-color="warning"
+                                    data-mensaje="El equipo se reiniciará y el cliente quedará sin servicio alrededor de un minuto. Su configuración no se modifica."
+                                    data-progreso="Enviando el reinicio a la OLT...">
+                                <i class="fas fa-redo-alt"></i> Reiniciar ONT
+                            </button>
 
                             @if($ont->admin_enabled === false)
-                                <form method="POST" action="{{ route('onts.enable', $ont) }}"
-                                      onsubmit="return confirm('¿Habilitar la ONT y restablecer el servicio del cliente?');">
-                                    @csrf
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="fas fa-play-circle"></i> Habilitar ONT
-                                    </button>
-                                </form>
+                                <button type="button" class="btn btn-success btn-accion-olt"
+                                        data-accion="{{ route('onts.enable', $ont) }}"
+                                        data-titulo="Habilitar la ONT"
+                                        data-icono="fa-play-circle"
+                                        data-color="success"
+                                        data-mensaje="Se restablecerá el servicio del cliente."
+                                        data-progreso="Habilitando la ONT en la OLT...">
+                                    <i class="fas fa-play-circle"></i> Habilitar ONT
+                                </button>
                             @else
-                                <form method="POST" action="{{ route('onts.disable', $ont) }}"
-                                      onsubmit="return confirm('¿Deshabilitar la ONT? Se cortará el servicio del cliente hasta que vuelva a habilitarla.');">
-                                    @csrf
-                                    <button type="submit" class="btn btn-danger">
-                                        <i class="fas fa-stop-circle"></i> Deshabilitar ONT
-                                    </button>
-                                </form>
+                                <button type="button" class="btn btn-danger btn-accion-olt"
+                                        data-accion="{{ route('onts.disable', $ont) }}"
+                                        data-titulo="Deshabilitar la ONT"
+                                        data-icono="fa-stop-circle"
+                                        data-color="danger"
+                                        data-mensaje="Se cortará el servicio del cliente hasta que vuelva a habilitarla."
+                                        data-progreso="Deshabilitando la ONT en la OLT...">
+                                    <i class="fas fa-stop-circle"></i> Deshabilitar ONT
+                                </button>
                             @endif
                         </div>
                     </div>
@@ -433,10 +455,109 @@
             </div>
         </div>
     </div>
+
+    {{-- ============================================================
+         Confirmación y progreso de las acciones sobre la OLT
+
+         Un solo modal sirve para reiniciar, habilitar y deshabilitar:
+         el botón que lo abre le pasa el título, el mensaje y la ruta.
+         Al confirmar, el cuerpo se sustituye por el aviso de progreso
+         y se bloquea el cierre — la orden viaja por consola hasta el
+         equipo y puede tardar un minuto.
+         ============================================================ --}}
+    <div class="modal fade" id="modalAccionOlt" tabindex="-1" role="dialog" data-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header" id="accionOltCabecera">
+                    <h5 class="modal-title" id="accionOltTitulo"></h5>
+                    <button type="button" class="close" data-dismiss="modal" id="accionOltCerrar">
+                        <span>&times;</span>
+                    </button>
+                </div>
+
+                {{-- Paso 1: confirmar --}}
+                <div id="accionOltConfirmar">
+                    <div class="modal-body">
+                        <div class="text-center mb-3">
+                            <i class="fas" id="accionOltIcono" style="font-size: 3rem;"></i>
+                        </div>
+                        <p class="text-center mb-2" id="accionOltMensaje"></p>
+                        <p class="text-center text-muted mb-0">
+                            <small>La orden se envía por consola a la OLT y puede tardar hasta un minuto.</small>
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                        <form method="POST" id="accionOltForm" class="d-inline">
+                            @csrf
+                            <button type="submit" class="btn" id="accionOltConfirmarBtn">Confirmar</button>
+                        </form>
+                    </div>
+                </div>
+
+                {{-- Paso 2: en curso --}}
+                <div id="accionOltProgreso" style="display:none;">
+                    <div class="modal-body text-center py-5">
+                        <div class="spinner-border text-primary" style="width:3.5rem;height:3.5rem;"></div>
+                        <h5 class="mt-4 mb-2" id="accionOltProgresoTexto"></h5>
+                        <p class="text-muted mb-0">
+                            No cierre esta ventana ni recargue la página.<br>
+                            <strong>Está esperando la respuesta del equipo.</strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('js')
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        /* ============================================================
+           Acciones sobre la OLT (reiniciar / habilitar / deshabilitar)
+
+           Antes eran formularios con confirm() del navegador: al
+           aceptar, la página quedaba congelada sin señal alguna de que
+           el sistema estaba trabajando, y el operador volvía a pulsar
+           el botón mandando la orden dos veces al equipo.
+           ============================================================ */
+        $(document).on('click', '.btn-accion-olt', function () {
+            const $boton = $(this);
+            const color = $boton.data('color');
+
+            $('#accionOltTitulo').text($boton.data('titulo'));
+            $('#accionOltMensaje').text($boton.data('mensaje'));
+            $('#accionOltProgresoTexto').text($boton.data('progreso'));
+            $('#accionOltForm').attr('action', $boton.data('accion'));
+
+            $('#accionOltIcono')
+                .attr('class', 'fas ' + $boton.data('icono') + ' text-' + color);
+
+            $('#accionOltCabecera')
+                .attr('class', 'modal-header bg-' + color + ' text-white');
+
+            $('#accionOltCerrar').attr('class', 'close text-white');
+
+            $('#accionOltConfirmarBtn')
+                .attr('class', 'btn btn-' + color)
+                .html('<i class="fas ' + $boton.data('icono') + '"></i> Confirmar');
+
+            // Se vuelve al paso 1 por si el modal ya se había usado
+            $('#accionOltConfirmar').show();
+            $('#accionOltProgreso').hide();
+
+            $('#modalAccionOlt').modal('show');
+        });
+
+        // Al enviar: se muestra el progreso y se cierra la salida, para
+        // que no haya forma de mandar la orden dos veces.
+        $('#accionOltForm').on('submit', function () {
+            $('#accionOltConfirmar').hide();
+            $('#accionOltProgreso').show();
+            $('#accionOltCerrar').hide();
+        });
+    </script>
     <script>
         const ontId          = {{ $ont->id }};
         const realtimeUrl    = `/onts/${ontId}/realtime`;

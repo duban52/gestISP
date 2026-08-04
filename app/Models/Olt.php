@@ -25,12 +25,14 @@ class Olt extends Model
         'active',
         'temperature',
         'status',
-        'uptime'
+        'uptime',
+        'status_checked_at',
     ];
 
     protected $casts = [
         'active' => 'boolean',
         'status' => 'boolean',
+        'status_checked_at' => 'datetime',
         'ssh_port' => 'integer',
         'telnet_port' => 'integer',
         'snmp_port' => 'integer',
@@ -42,6 +44,25 @@ class Olt extends Model
     protected $hidden = [
         'password',
     ];
+
+    /**
+     * ¿Los datos de estado que hay guardados son recientes?
+     *
+     * El listado los muestra de inmediato y consulta el equipo
+     * después: hay que poder decirle al operador si lo que está
+     * viendo es de hace un minuto o de ayer.
+     */
+    public function estadoEsReciente(int $minutos = 10): bool
+    {
+        return $this->status_checked_at !== null
+            && $this->status_checked_at->gt(now()->subMinutes($minutos));
+    }
+
+    /** Texto del momento de la última comprobación, o null. */
+    public function getEstadoConsultadoAttribute(): ?string
+    {
+        return $this->status_checked_at?->diffForHumans();
+    }
 
     /**
      * Relación con ONTs

@@ -279,7 +279,9 @@ Route::put('technicals_orders/reject/{technical_order}', [TechnicalOrderControll
 Route::middleware('auth')->get('/notifications/poll', [NotificationController::class, 'poll'])->name('notifications.poll');
 Route::middleware('auth')->post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read_all');
 
-Route::middleware('auth')->get('/api/olts', [OltController::class, 'apiOlts'])->name('api.olts');
+// Estado en vivo de UNA OLT. Una petición por equipo para que una
+// OLT apagada solo retrase su propia fila del listado.
+Route::middleware('auth')->get('/api/olts/{olt}/status', [OltController::class, 'apiOltStatus'])->name('api.olts.status');
 Route::middleware('auth')->get('/api/vlansolt/{olt}', [OltController::class, 'viewVlans'])->name('api.vlansolt');
 Route::middleware('auth')->get('/api/lineprofiles/{olt}', [OltController::class, 'viewLineProfiles'])->name('api.lineProfile');
 Route::middleware('auth')->get('/api/srvprofiles/{olt}', [OltController::class, 'viewSrvProfiles'])->name('api.srvProfile');
