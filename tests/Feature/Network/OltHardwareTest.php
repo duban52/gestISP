@@ -266,16 +266,66 @@ class OltHardwareTest extends TestCase
             || $desaparecido->discovered_at->eq($segundo->discovered_at));
     }
 
-    /** @test */
-    public function una_olt_sin_red_no_se_puede_descubrir(): void
+    /**
+     * @test
+     *
+     * Una OLT enseña sus puertos con o sin papeleo.
+     *
+     * Antes se exigía que la OLT perteneciera a una red para poder
+     * descubrirla, y estaba al revés: los puertos son un hecho físico
+     * del equipo y la red es documentación posterior. Obligar a
+     * documentar antes de poder mirar impedía justo lo que se quiere al
+     * enchufar una OLT nueva: ver qué trae.
+     */
+    public function una_olt_sin_red_igual_muestra_sus_puertos(): void
     {
         $this->olt->update(['optical_network_id' => null]);
-        $this->simularSnmp([1 => 'GPON_UNI 0/1/0']);
+        $this->simularSnmp([1 => 'GPON_UNI 0/1/0', 2 => 'GPON_UNI 0/1/1']);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/no pertenece a ninguna red/');
+        $resumen = app(OltHardwareDiscovery::class)->descubrir($this->olt);
 
+        $this->assertSame(2, $resumen['pon']);
+        $this->assertSame(2, PonPort::where('olt_id', $this->olt->id)->count());
+        // Quedan sin red: existen, pero todavía no están documentados
+        $this->assertSame(2, PonPort::whereNull('optical_network_id')->count());
+
+        // Y se ven en la ficha
+        $this->get(route('olts.show', $this->olt))
+            ->assertOk()
+            ->assertSee('Tarjetas y puertos');
+    }
+
+    /** @test */
+    public function al_asignar_la_olt_a_una_red_sus_puertos_la_adoptan(): void
+    {
+        $this->olt->update(['optical_network_id' => null]);
+        $this->simularSnmp([1 => 'GPON_UNI 0/1/0', 2 => 'GPON_UNI 0/1/1']);
         app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->post(route('networks.olts.attach', $this->red), ['olt_id' => $this->olt->id])
+            ->assertRedirect();
+
+        $this->assertSame(
+            2,
+            PonPort::where('optical_network_id', $this->red->id)->count(),
+            'Los puertos ya descubiertos deberían adoptar la red al asignar la OLT.',
+        );
+    }
+
+    /** @test */
+    public function quitar_la_olt_de_la_red_no_borra_sus_puertos(): void
+    {
+        $this->simularSnmp([1 => 'GPON_UNI 0/1/0']);
+        app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->delete(route('networks.olts.detach', [$this->red, $this->olt]))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        // El puerto sigue: es del equipo, no de la red
+        $this->assertSame(1, PonPort::count());
+        $this->assertNull(PonPort::first()->optical_network_id);
+        $this->assertNull($this->olt->fresh()->optical_network_id);
     }
 
     /** @test */
@@ -414,6 +464,153 @@ class OltHardwareTest extends TestCase
         // Las peores primero: rx_power es varchar, y sin convertir a
         // número "-19.5" quedaría antes que "-27.8".
         $this->assertEqualsWithDelta(-27.8, $datos['peores_onts'][0]['rx_power'], 0.01);
+    }
+
+    /**
+     * @test
+     *
+     * El botón de la ficha tiene que DECIR qué pasó.
+     *
+     * Falló en producción justo por esto: la ficha no pintaba ningún
+     * mensaje flash, así que al pulsar "Descubrir puertos" la página
+     * recargaba en silencio y parecía que el botón no hacía nada,
+     * tanto si salía bien como si salía mal.
+     */
+    public function el_boton_de_descubrir_dice_como_le_fue(): void
+    {
+        $this->simularSnmp([1 => 'GPON_UNI 0/1/0', 20 => 'XGE 0/9/0']);
+
+        $this->post(route('olts.discover_ports', $this->olt))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->get(route('olts.show', $this->olt))
+            ->assertOk()
+            ->assertSee('1 puerto(s) PON');
+    }
+
+    /** @test */
+    public function si_no_reconoce_ningun_puerto_lo_dice_y_muestra_lo_que_vio(): void
+    {
+        // Un equipo que nombra sus puertos de una forma que el patrón
+        // no contempla: lo que hay que evitar es el "terminado: 0
+        // puertos", que no dice qué corregir.
+        $this->simularSnmp([
+            1 => 'PON-PORT-A-0-1-0',
+            2 => 'PON-PORT-A-0-1-1',
+        ]);
+
+        $respuesta = $this->post(route('olts.discover_ports', $this->olt))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $mensaje = session('error');
+
+        $this->assertStringContainsString('2 interfaz', $mensaje);
+        $this->assertStringContainsString('pon_discovery_pattern', $mensaje);
+        // Y enseña cómo las nombra el equipo, que es el dato con el que
+        // se corrige el patrón.
+        $this->assertStringContainsString('PON-PORT-A-0-1-0', $mensaje);
+    }
+
+    /**
+     * @test
+     *
+     * El patrón acepta las formas habituales de nombrar un puerto PON,
+     * pero NO las interfaces de cada ONT: llevan el onu_id detrás y, si
+     * colaran, cada cliente se registraría como si fuera un puerto.
+     */
+    public function el_patron_reconoce_varias_formas_y_descarta_las_onts(): void
+    {
+        $this->simularSnmp([
+            1 => 'GPON_UNI 0/1/0',
+            2 => 'GPON 0/1/1',
+            3 => 'EPON0/2/0',
+            4 => 'gpon-olt_0/3/1',
+            // Estas son ONTs, no puertos
+            50 => 'GPON ONT 0/1/0:5',
+            51 => 'GPON_UNI 0/1/0:12',
+        ]);
+
+        $resumen = app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->assertSame(4, $resumen['pon']);
+        $this->assertSame(2, $resumen['sin_clasificar']);
+        $this->assertSame(0, PonPort::whereIn('port', [5, 12])->where('slot', 1)->count());
+    }
+
+    /**
+     * @test
+     *
+     * Las MA5800 prefijan cada interfaz con marca, modelo y versión.
+     *
+     * Estas cadenas son LITERALES de la OLT Blutv Yarumal (V100R018).
+     * El patrón original estaba anclado a "GPON_UNI 0/1/2" y no
+     * reconocía ni un puerto de este equipo: ni PON ni uplink. Es la
+     * prueba de que un patrón anclado al inicio no vale.
+     */
+    public function reconoce_las_interfaces_de_una_ma5800_con_prefijo_de_fabricante(): void
+    {
+        $this->simularSnmp([
+            1 => 'Huawei-MA5800-V100R018-GPON 0/1/0',
+            2 => 'Huawei-MA5800-V100R018-GPON 0/1/1',
+            3 => 'Huawei-MA5800-V100R018-GPON 0/3/15',
+            40 => 'Huawei-MA5800-V100R018-ETHERNET 0/8/0',
+            41 => 'Huawei-MA5800-V100R018-ETHERNET 0/8/3',
+            // Una ONT del mismo equipo: lleva el onu_id detrás y NO
+            // puede colarse como puerto.
+            60 => 'Huawei-MA5800-V100R018-GPON 0/1/0:5',
+            // Interfaces internas que la OLT siempre publica
+            90 => 'InLoopBack0',
+            91 => 'NULL0',
+            92 => 'MEth0',
+            93 => 'Vlanif150',
+        ]);
+
+        $resumen = app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->assertSame(3, $resumen['pon']);
+        $this->assertSame(2, $resumen['uplinks']);
+        // Dos tarjetas con PON (slot 1 y 3) y una de subida (slot 8)
+        $this->assertSame(3, $resumen['tarjetas']);
+
+        $ultimo = PonPort::where('slot', 3)->where('port', 15)->first();
+        $this->assertNotNull($ultimo, 'No se reconoció el puerto 0/3/15.');
+
+        // La ONT no quedó registrada como puerto
+        $this->assertSame(0, PonPort::where('slot', 1)->where('port', 5)->count());
+    }
+
+    /**
+     * @test
+     *
+     * Cuando no reconoce nada, la muestra tiene que ser ÚTIL.
+     *
+     * La primera vez que falló, los ejemplos fueron InLoopBack0, NULL0,
+     * MEth0 y Vlanif150: las internas van primero en la tabla y llenaron
+     * el cupo, así que no se vio ni un puerto y hubo que adivinar cómo
+     * los nombraba el equipo. Ahora van delante las que tienen forma de
+     * puerto físico.
+     */
+    public function los_ejemplos_priorizan_las_interfaces_con_forma_de_puerto(): void
+    {
+        $this->simularSnmp([
+            90 => 'InLoopBack0',
+            91 => 'NULL0',
+            92 => 'MEth0',
+            93 => 'Vlanif150',
+            94 => 'Vlanif200',
+            95 => 'Vlanif300',
+            96 => 'Vlanif400',
+            97 => 'Vlanif500',
+            // La que de verdad importa, y que aparece la última
+            1 => 'ALGO-RARO-PON 0/1/0',
+        ]);
+
+        $resumen = app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->assertSame(0, $resumen['pon']);
+        $this->assertSame('ALGO-RARO-PON 0/1/0', $resumen['ejemplos'][0]);
     }
 
     /** @test */

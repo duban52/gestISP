@@ -159,21 +159,46 @@ class OpticalNetworkController extends Controller
 
         Olt::whereKey($validado['olt_id'])->update(['optical_network_id' => $network->id]);
 
-        return back()->with('success', 'OLT agregada a la red.');
+        // Los puertos que ya se hubieran descubierto sin red la adoptan
+        // ahora. Sin esto habría que redescubrir a mano para que la OLT
+        // sirviera de algo dentro de la red, y no es evidente.
+        $adoptados = PonPort::where('olt_id', $validado['olt_id'])
+            ->whereNull('optical_network_id')
+            ->update(['optical_network_id' => $network->id]);
+
+        return back()->with('success', $adoptados > 0
+            ? "OLT agregada a la red junto con {$adoptados} puerto(s) PON ya descubierto(s)."
+            : 'OLT agregada a la red.');
     }
 
     public function detachOlt(OpticalNetwork $network, Olt $olt): RedirectResponse
     {
         $this->exigirSucursal($network);
 
-        if ($olt->ponPorts()->exists()) {
-            return back()->with('error',
-                'No se puede quitar: la OLT tiene puertos PON documentados en esta red.');
+        // Lo que impide sacar la OLT no son sus puertos —esos son del
+        // equipo y se van con él— sino las CAJAS colgadas de ellos, que
+        // sí son documentación de esta red y quedarían huérfanas.
+        $conCajas = $olt->ponPorts()->has('napBoxes')->count();
+
+        if ($conCajas > 0) {
+            return back()->with('error', sprintf(
+                'No se puede quitar: %d puerto(s) PON de esta OLT tienen cajas NAP colgando. '
+                . 'Muévalas o elimínelas primero.',
+                $conCajas,
+            ));
         }
 
         $olt->update(['optical_network_id' => null]);
 
-        return back()->with('success', 'OLT quitada de la red.');
+        // Sus puertos dejan de estar documentados en esta red, pero
+        // siguen existiendo: son del equipo, no de la red.
+        $sueltos = PonPort::where('olt_id', $olt->id)
+            ->where('optical_network_id', $network->id)
+            ->update(['optical_network_id' => null, 'network_zone_id' => null]);
+
+        return back()->with('success', $sueltos > 0
+            ? "OLT quitada de la red. Sus {$sueltos} puerto(s) siguen registrados, ahora sin red."
+            : 'OLT quitada de la red.');
     }
 
     // ==================== Zonas ====================

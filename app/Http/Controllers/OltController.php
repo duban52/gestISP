@@ -159,6 +159,23 @@ class OltController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
+        // Cero puertos NO es un éxito, aunque técnicamente no falle
+        // nada: casi siempre significa que el patrón no reconoce cómo
+        // ESTE equipo nombra sus interfaces. Decir "terminado: 0
+        // puertos" dejaría a la persona sin saber qué corregir, así que
+        // se le muestra lo que el equipo sí devolvió.
+        if ($resumen['pon'] === 0) {
+            $ejemplos = implode(', ', $resumen['ejemplos']);
+
+            return back()->with('error', sprintf(
+                'La OLT respondió con %d interfaz(ces), pero ninguna se reconoció como puerto PON. '
+                . 'Seguramente este equipo los nombra de otra forma; hay que ajustar «pon_discovery_pattern» '
+                . 'en config/olt_snmp.php.%s',
+                $resumen['interfaces'],
+                $ejemplos !== '' ? ' Así nombra el equipo sus interfaces: ' . $ejemplos : '',
+            ));
+        }
+
         return back()->with('success', sprintf(
             'Descubrimiento terminado: %d tarjeta(s), %d puerto(s) PON (%d nuevo(s)) y %d uplink(s).',
             $resumen['tarjetas'],

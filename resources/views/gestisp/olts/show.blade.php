@@ -36,6 +36,11 @@
 
 @section('content')
 
+{{-- Sin esto, un "descubrir puertos" que falla recarga la página en
+     silencio y parece que el botón no hace nada: el mensaje que
+     explica POR QUÉ falló se pierde. --}}
+@include('gestisp.networks.partials.alertas')
+
 @php
     $conteos = $resumen['conteos'];
     $potencia = $resumen['potencia'];
@@ -250,10 +255,17 @@
                             </a>
                         </div>
                     @else
+                        {{-- Los puertos se descubren y se ven igual sin
+                             red: son del equipo. Lo que hace falta una
+                             red es DOCUMENTARLOS —colgarles cajas y
+                             repartirlos en zonas—, y eso es lo que dice
+                             este aviso, sin bloquear nada. --}}
                         <div class="alert alert-light border mt-3 mb-0 py-2 small">
-                            Esta OLT no pertenece a ninguna red documentada.
-                            <a href="{{ route('networks.index') }}">Asígnela a una</a>
-                            para poder descubrir sus puertos y registrar cajas NAP.
+                            Esta OLT no pertenece a ninguna red documentada. Sus puertos se
+                            descubren y se consultan igual, pero para colgarles cajas NAP o
+                            repartirlos en zonas hay que
+                            <a href="{{ route('networks.index') }}">asignarla a una red</a>.
+                            Al hacerlo, los puertos ya descubiertos la adoptan solos.
                         </div>
                     @endif
                 </div>

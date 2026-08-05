@@ -297,22 +297,51 @@ return [
             /*
             | Patrón de un PUERTO PON, con los tres números de su
             | posición física capturados en orden frame/slot/port.
-            | Sobre el equipo real las interfaces se llaman
-            | "GPON_UNI 0/1/2".
+            |
+            | Se aceptan varias formas de nombrarlo porque cambian entre
+            | versiones de firmware y entre marcas: "GPON_UNI 0/1/2" es
+            | lo que publican las MA5600/MA5800, pero otros equipos usan
+            | "GPON 0/1/2", "EPON0/1/2" o "gpon-olt_0/1/2".
+            |
+            | El anclaje final es lo que evita confundir el PUERTO con
+            | las interfaces de cada ONT, que llevan el onu_id detrás
+            | ("GPON ONT 0/1/2:5"): si se quitara, cada ONT se
+            | registraría como si fuera un puerto.
+            |
+            | Si su equipo los nombra de otra forma, véala con
+            | `php artisan olt:probe-ports {id} --interfaces` y ajuste
+            | esta expresión.
             */
-            'pon_discovery_pattern' => '/^GPON_UNI\s+(\d+)\/(\d+)\/(\d+)$/',
+            /*
+            | El "(?:^|-)" del principio es lo que permite el prefijo de
+            | fabricante: las MA5800 publican las interfaces como
+            | "Huawei-MA5800-V100R018-GPON 0/1/0", no como "GPON 0/1/0".
+            | Verificado contra la OLT Blutv Yarumal (V100R018).
+            |
+            | El "$" del final es lo que separa el PUERTO de las ONTs:
+            | las interfaces de ONT llevan el onu_id detrás
+            | ("GPON 0/1/0:5"). Sin ese anclaje, cada cliente se
+            | registraría como si fuera un puerto físico.
+            */
+            'pon_discovery_pattern' => '/(?:^|-)\s*(?:GPON[_\- ]?UNI|XGPON|GPON|EPON|gpon-olt_|epon-olt_)[\s_\-]*(\d+)\/(\d+)\/(\d+)\s*$/i',
 
             /*
             | Patrón de un puerto UPLINK. Cubre los nombres que usan
             | las MA5600/MA5800 para los puertos de subida:
+            | "Huawei-MA5800-V100R018-ETHERNET 0/8/0" (verificado),
             | "GE 0/9/0", "XGE 0/9/1", "10GE 0/19/0", "ETH 0/9/2".
             |
             | Se listan por nombre en vez de "todo lo que no sea PON"
             | a propósito: una OLT publica decenas de interfaces
-            | internas (vlanif, null, meth) que no son puertos de
-            | subida y solo ensuciarían la pantalla.
+            | internas (InLoopBack0, NULL0, MEth0, Vlanif150) que no son
+            | puertos de subida y solo ensuciarían la pantalla.
+            |
+            | Las alternativas van de más larga a más corta porque la
+            | expresión se resuelve en ese orden: con "ETH" delante,
+            | "ETHERNET 0/8/0" entraría por "ETH" y fallaría al buscar
+            | los números en "ERNET".
             */
-            'uplink_discovery_pattern' => '/^(?:X?GE|10GE|40GE|100GE|ETH|Eth-Trunk)\s*(\d+)\/(\d+)\/(\d+)$/i',
+            'uplink_discovery_pattern' => '/(?:^|-)\s*(?:XGIGABITETHERNET|GIGABITETHERNET|ETHERNET|Eth-Trunk|100GE|40GE|10GE|XGE|GE|ETH)[\s_\-]*(\d+)\/(\d+)\/(\d+)\s*$/i',
 
             /*
             |----------------------------------------------------------

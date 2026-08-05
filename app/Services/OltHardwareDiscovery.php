@@ -55,18 +55,14 @@ class OltHardwareDiscovery
     /**
      * Recorre la OLT y actualiza su inventario físico.
      *
-     * @return array{tarjetas: int, pon: int, pon_nuevos: int, uplinks: int, interfaces: int}
+     * @return array{tarjetas: int, pon: int, pon_nuevos: int, uplinks: int, interfaces: int, sin_clasificar: int, ejemplos: array<int, string>}
      */
     public function descubrir(Olt $olt): array
     {
-        if (!$olt->optical_network_id) {
-            throw new RuntimeException(
-                "La OLT {$olt->name} no pertenece a ninguna red óptica. "
-                . 'Asígnela a una red antes de descubrir sus puertos: los puertos PON '
-                . 'se documentan dentro de una red.'
-            );
-        }
-
+        // La OLT NO necesita pertenecer a una red para que se le miren
+        // los puertos: son un hecho físico del equipo y la red es
+        // documentación posterior. Un puerto descubierto sin red queda
+        // sin ella y la adopta cuando la OLT se asigne a una.
         $cliente = $this->clientes->forOlt($olt);
 
         if (!$cliente) {
@@ -104,6 +100,11 @@ class OltHardwareDiscovery
 
         $pon = [];
         $uplinks = [];
+        // Interfaces que no encajaron con ningún patrón. Se guardan unas
+        // pocas para poder DECIR qué se vio cuando no se reconoce nada:
+        // sin eso, un patrón que no encaja se ve igual que una OLT sin
+        // puertos, y no hay forma de saber qué corregir.
+        $sinClasificar = [];
 
         $patronPon = $marca['pon_discovery_pattern'] ?? null;
         $patronUplink = $marca['uplink_discovery_pattern'] ?? null;
@@ -135,7 +136,11 @@ class OltHardwareDiscovery
                     'oper' => $this->estadoLegible($operEstado[$ifIndex] ?? null),
                     'speed' => isset($velocidad[$ifIndex]) ? (int) $velocidad[$ifIndex] : null,
                 ];
+
+                continue;
             }
+
+            $sinClasificar[] = $descripcion;
         }
 
         $resumen = DB::transaction(function () use ($olt, $pon, $uplinks) {
@@ -152,6 +157,8 @@ class OltHardwareDiscovery
         });
 
         $resumen['interfaces'] = count($descripciones);
+        $resumen['sin_clasificar'] = count($sinClasificar);
+        $resumen['ejemplos'] = $this->ejemplosUtiles($sinClasificar);
 
         $this->auditLogger->action(
             'olts.ports_discovered',
@@ -169,6 +176,33 @@ class OltHardwareDiscovery
         );
 
         return $resumen;
+    }
+
+    /**
+     * Ejemplos de interfaces sin reconocer, para poder corregir el patrón.
+     *
+     * Se priorizan las que TIENEN forma de puerto físico (llevan un
+     * f/s/p), porque son las candidatas a ser el puerto que no se
+     * reconoció. Sin este orden, la muestra se llena de interfaces
+     * internas —InLoopBack0, NULL0, MEth0, Vlanif150— que siempre
+     * aparecen primero y no dicen nada: pasó exactamente eso en la
+     * primera OLT donde falló, y hubo que adivinar el nombre real.
+     *
+     * @param  array<int, string>  $sinClasificar
+     * @return array<int, string>
+     */
+    private function ejemplosUtiles(array $sinClasificar): array
+    {
+        $unicas = array_values(array_unique($sinClasificar));
+
+        $conPosicion = array_values(array_filter(
+            $unicas,
+            fn (string $d) => preg_match('/\d+\/\d+\/\d+/', $d) === 1,
+        ));
+
+        $resto = array_values(array_diff($unicas, $conPosicion));
+
+        return array_slice(array_merge($conPosicion, $resto), 0, 12);
     }
 
     // ==================== Guardado ====================

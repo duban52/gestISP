@@ -291,6 +291,14 @@ class OdnManager
         try {
             $resumen = app(OltHardwareDiscovery::class)->descubrir($olt);
 
+            // Los puertos que quedaron sin red —porque la OLT no estaba
+            // asignada a ninguna— pasan a ésta: se está pidiendo el
+            // descubrimiento DESDE esta red, así que es la que se
+            // quiere documentar.
+            PonPort::where('olt_id', $olt->id)
+                ->whereNull('optical_network_id')
+                ->update(['optical_network_id' => $red->id]);
+
             return $resumen['pon_nuevos'];
         } catch (RuntimeException $e) {
             // La OLT puede estar caída, sin SNMP o sin la extensión
