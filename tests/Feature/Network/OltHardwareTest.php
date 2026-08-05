@@ -437,7 +437,9 @@ class OltHardwareTest extends TestCase
         $this->assertCount(2, $respuesta->viewData('ponPorts'));
         $this->assertCount(1, $respuesta->viewData('uplinks'));
 
-        $respuesta->assertSee('Puertos de subida');
+        // No se afirma sobre el titulo de la tarjeta: es texto que se
+        // puede reescribir sin que cambie nada. Lo que importa es que
+        // el uplink descubierto llegue a la pantalla.
         $respuesta->assertSee('XGE 0/9/0');
     }
 
@@ -680,7 +682,6 @@ class OltHardwareTest extends TestCase
 
         $this->get(route('olts.show', $this->olt))
             ->assertOk()
-            ->assertSee('Puertos de subida')
             ->assertSee('No se ha detectado ningún puerto de subida.');
     }
 

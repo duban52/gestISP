@@ -100,6 +100,40 @@
             </div>
         @endif
 
+        {{-- ============================================================
+             De qué hilo se alimenta
+
+             Una caja cuelga de un hilo de un cable, y ese cable casi
+             siempre viene de una mufla. Anotarlo es lo que cierra la
+             cadena OLT → puerto PON → cable → mufla → cable → ESTA
+             caja, y sin ese eslabón el análisis de impacto se corta
+             justo antes del cliente: se sabría que una mufla se cae
+             pero no a quién deja sin servicio.
+
+             Es opcional: hay cajas que se documentan antes de que el
+             cable exista.
+             ============================================================ --}}
+        <h6 class="text-uppercase text-muted mt-3">De dónde le llega la fibra</h6>
+
+        <div class="row">
+            <div class="col-md-6 form-group">
+                <label for="feedCable">Cable <small class="text-muted">(opcional)</small></label>
+                <select class="form-control" id="feedCable">
+                    <option value="">Sin registrar</option>
+                </select>
+                <small class="form-text text-muted" id="ayudaCable">Se cargan al elegir la red.</small>
+            </div>
+            <div class="col-md-6 form-group">
+                <label for="feed_strand_id">Hilo</label>
+                <select class="form-control" name="feed_strand_id" id="feed_strand_id" disabled>
+                    <option value="">—</option>
+                </select>
+                <small class="form-text text-muted">
+                    Solo se ofrecen los hilos con un extremo libre.
+                </small>
+            </div>
+        </div>
+
         {{-- ---------- Ubicación ---------- --}}
         <h6 class="text-uppercase text-muted mt-3">Dónde está</h6>
 
@@ -229,6 +263,25 @@
 
         const CATALOGO = {!! $catalogo->toJson() !!};
 
+        {{-- Cables por red, para el selector de alimentación. Solo el
+             código y la capacidad: los hilos se piden aparte, porque una
+             red con cincuenta cables de 48 son miles y no tiene sentido
+             cargarlos todos para elegir uno. --}}
+        @php
+            $cablesPorRed = $redes->mapWithKeys(fn ($r) => [
+                $r->id => $r->fiberCables->map(fn ($c) => [
+                    'id' => $c->id,
+                    'texto' => $c->code . ' — ' . $c->fiber_count . ' hilos'
+                        . ($c->name ? ' (' . $c->name . ')' : ''),
+                ])->values(),
+            ]);
+        @endphp
+
+        const CABLES = {!! $cablesPorRed->toJson() !!};
+        const HILO_ACTUAL = {!! json_encode(old('feed_strand_id', $nap->feed_strand_id ?? null)) !!};
+        const CABLE_ACTUAL = {!! json_encode($nap->feedStrand?->fiber_cable_id ?? null) !!};
+        const URL_HILOS = "{{ route('cables.strands', ['cable' => '__ID__']) }}";
+
         const PUERTO_ACTUAL = @json(old('pon_port_id', $nap->pon_port_id ?? null));
         const ZONA_ACTUAL = @json(old('network_zone_id', $nap->network_zone_id ?? null));
 
@@ -261,8 +314,80 @@
             });
         }
 
-        $('#optical_network_id').on('change', llenarDependientes);
+        /* ============================================================
+           De qué hilo se alimenta la caja
+
+           Dos pasos: primero el cable de la red, y al elegirlo se piden
+           sus hilos disponibles. Se piden al servidor en ese momento y
+           no al cargar la página porque el hilo libre de ahora puede
+           estar ocupado dentro de diez minutos.
+           ============================================================ */
+        function llenarCables() {
+            const redId = $('#optical_network_id').val();
+            const $cables = $('#feedCable').empty().append(new Option('Sin registrar', ''));
+            const cables = CABLES[redId] || [];
+
+            $('#feed_strand_id').empty().append(new Option('—', '')).prop('disabled', true);
+
+            if (cables.length === 0) {
+                $('#ayudaCable').text('Esta red todavía no tiene cables registrados.');
+                return;
+            }
+
+            cables.forEach(function (c) {
+                $cables.append(new Option(c.texto, c.id, false, String(CABLE_ACTUAL) === String(c.id)));
+            });
+
+            $('#ayudaCable').text(cables.length + ' cable(s) en esta red.');
+
+            if (CABLE_ACTUAL) {
+                llenarHilos();
+            }
+        }
+
+        function llenarHilos() {
+            const cableId = $('#feedCable').val();
+            const $hilos = $('#feed_strand_id').empty().append(new Option('—', ''));
+
+            if (!cableId) {
+                $hilos.prop('disabled', true);
+                return;
+            }
+
+            $hilos.prop('disabled', true).append(new Option('Buscando hilos…', ''));
+
+            const url = URL_HILOS.replace('__ID__', cableId)
+                + (HILO_ACTUAL ? '?actual=' + encodeURIComponent(HILO_ACTUAL) : '');
+
+            fetch(url)
+                .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                .then(function (hilos) {
+                    $hilos.empty().append(new Option('Sin asignar', '')).prop('disabled', false);
+
+                    if (hilos.length === 0) {
+                        $hilos.append(new Option('Este cable no tiene hilos libres', ''));
+                        return;
+                    }
+
+                    hilos.forEach(function (h) {
+                        const texto = h.texto + (h.origen ? ' — ' + h.origen : '');
+                        $hilos.append(new Option(texto, h.id, false, String(HILO_ACTUAL) === String(h.id)));
+                    });
+                })
+                .catch(function () {
+                    $hilos.empty().append(new Option('No se pudieron cargar los hilos', ''));
+                });
+        }
+
+        $('#feedCable').on('change', llenarHilos);
+
+        $('#optical_network_id').on('change', function () {
+            llenarDependientes();
+            llenarCables();
+        });
+
         llenarDependientes();
+        llenarCables();
 
         /* ============================================================
            Mapa

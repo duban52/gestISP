@@ -194,6 +194,16 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'naps.edit', 'description' => 'Editar cajas NAP y sus puertos']);
         Permission::create(['name' => 'naps.destroy', 'description' => 'Eliminar cajas NAP']);
 
+        // Planta de fibra: muflas, empalmes y cables
+        Permission::create(['name' => 'closures.index', 'description' => 'Ver muflas y sus empalmes']);
+        Permission::create(['name' => 'closures.create', 'description' => 'Crear muflas']);
+        Permission::create(['name' => 'closures.edit', 'description' => 'Editar muflas, fusiones y splitters']);
+        Permission::create(['name' => 'closures.destroy', 'description' => 'Eliminar muflas']);
+        Permission::create(['name' => 'cables.index', 'description' => 'Ver cables de fibra y sus hilos']);
+        Permission::create(['name' => 'cables.create', 'description' => 'Crear cables de fibra']);
+        Permission::create(['name' => 'cables.edit', 'description' => 'Editar cables y marcar hilos']);
+        Permission::create(['name' => 'cables.destroy', 'description' => 'Eliminar cables de fibra']);
+
         //Usuarios
         Permission::create(['name' => 'users.index', 'description' => 'Ver usuarios']);
         Permission::create(['name' => 'users.create', 'description' => 'Crear usuarios']);
@@ -242,6 +252,8 @@ class RoleSeeder extends Seeder
             'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart', 'pppoe.cutoff',
             'networks.index', 'networks.create', 'networks.edit', 'networks.destroy',
             'naps.index', 'naps.create', 'naps.edit', 'naps.destroy',
+            'closures.index', 'closures.create', 'closures.edit', 'closures.destroy',
+            'cables.index', 'cables.create', 'cables.edit', 'cables.destroy',
             'reports.index', 'reports.growth', 'reports.technical', 'reports.billing', 'reports.provisioning'
         ]);
 

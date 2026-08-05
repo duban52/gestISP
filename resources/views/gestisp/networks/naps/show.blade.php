@@ -223,6 +223,32 @@
                             <td class="text-muted">Splitter</td>
                             <td>{{ $nap->splitter_ratio ?? '—' }}</td>
                         </tr>
+                        {{-- El hilo que la alimenta cierra la cadena
+                             hasta la cabecera. Sin él, el análisis de
+                             impacto de una mufla se corta justo antes de
+                             esta caja y no llega a decir a qué clientes
+                             afecta. --}}
+                        <tr>
+                            <td class="text-muted">Se alimenta de</td>
+                            <td>
+                                @if($nap->feedStrand)
+                                    <a href="{{ route('cables.show', $nap->feedStrand->fiber_cable_id) }}">
+                                        {{ $nap->feedStrand->cable->code }}
+                                    </a>
+                                    <span class="badge"
+                                          style="background: {{ $nap->feedStrand->buffer_hex }}; color: {{ \App\Support\FiberColors::textoSobre($nap->feedStrand->buffer_color) }};">
+                                        B{{ $nap->feedStrand->buffer_number }} {{ $nap->feedStrand->buffer_color }}
+                                    </span>
+                                    <span class="badge"
+                                          style="background: {{ $nap->feedStrand->color_hex }}; color: {{ \App\Support\FiberColors::textoSobre($nap->feedStrand->strand_color) }};">
+                                        H{{ $nap->feedStrand->strand_number }} {{ $nap->feedStrand->strand_color }}
+                                    </span>
+                                @else
+                                    <span class="text-muted">Sin registrar</span>
+                                    <a href="{{ route('naps.edit', $nap) }}" class="small ml-1">Anotarlo</a>
+                                @endif
+                            </td>
+                        </tr>
                         <tr>
                             <td class="text-muted">Dirección</td>
                             <td>{{ $nap->address ?? '—' }}</td>
@@ -246,6 +272,47 @@
                     </table>
                 </div>
             </div>
+
+            {{-- ============================================================
+                 Por dónde le llega la fibra
+
+                 Los tramos van de la cabecera al cliente, en el sentido
+                 en que viaja la señal. Es lo que se recorre cuando hay
+                 una atenuación alta y hay que decidir por dónde empezar
+                 a medir.
+                 ============================================================ --}}
+            @if(!empty($ruta))
+                <div class="card shadow-sm">
+                    <div class="card-header py-2">
+                        <h3 class="card-title"><i class="fas fa-route mr-1"></i> Por dónde le llega</h3>
+                    </div>
+                    <div class="card-body py-2">
+                        @foreach($ruta as $tramo)
+                            <div class="d-flex py-2 {{ !$loop->first ? 'border-top' : '' }}">
+                                <div class="mr-2 text-muted">
+                                    <i class="fas fa-{{ $loop->first ? 'server' : 'grip-lines' }}"></i>
+                                </div>
+                                <div>
+                                    <strong>{{ $tramo['cable'] }}</strong>
+                                    <span class="badge badge-light border">{{ $tramo['tipo'] }}</span>
+                                    <small class="d-block text-muted">
+                                        {{ $tramo['desde'] }} <i class="fas fa-arrow-right"></i> {{ $tramo['hasta'] }}
+                                    </small>
+                                    <small class="d-block text-muted">
+                                        Hilo {{ $tramo['hilo'] }}
+                                        @if($tramo['longitud_m'])
+                                            · {{ number_format($tramo['longitud_m']) }} m
+                                        @endif
+                                    </small>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="card-footer py-2 text-muted small">
+                        De la cabecera hacia el cliente, en el sentido en que viaja la señal.
+                    </div>
+                </div>
+            @endif
 
             <div class="card shadow-sm">
                 <div class="card-header py-2">

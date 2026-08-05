@@ -676,6 +676,20 @@ return [
                     'can' => 'naps.index',
                 ],
                 [
+                    'text' => 'Muflas / empalmes',
+                    'route' => 'closures.index',
+                    'active' => ['muflas', 'muflas/*'],
+                    'icon' => 'fas  fa-box-open',
+                    'can' => 'closures.index',
+                ],
+                [
+                    'text' => 'Cables de fibra',
+                    'route' => 'cables.index',
+                    'active' => ['cables', 'cables/*'],
+                    'icon' => 'fas  fa-grip-lines',
+                    'can' => 'cables.index',
+                ],
+                [
                     'text' => 'Mapa de la red',
                     'route' => 'naps.map',
                     'active' => ['naps/mapa*'],

@@ -55,6 +55,18 @@ class OpticalNetwork extends Model
         return $this->hasMany(PonPort::class);
     }
 
+    /** Muflas de la red. */
+    public function spliceClosures()
+    {
+        return $this->hasMany(SpliceClosure::class)->orderBy('code');
+    }
+
+    /** Cables de la red. */
+    public function fiberCables()
+    {
+        return $this->hasMany(FiberCable::class)->orderBy('code');
+    }
+
     public function napBoxes()
     {
         return $this->hasMany(NapBox::class);

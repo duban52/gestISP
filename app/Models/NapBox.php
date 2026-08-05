@@ -38,6 +38,7 @@ class NapBox extends Model
         'status',
         'notes',
         'user_id',
+        'feed_strand_id',
     ];
 
     protected $casts = [
@@ -54,6 +55,19 @@ class NapBox extends Model
     public function ponPort()
     {
         return $this->belongsTo(PonPort::class);
+    }
+
+    /**
+     * Hilo que alimenta la caja.
+     *
+     * Es el eslabón que cierra la cadena OLT → puerto PON → cable →
+     * mufla → cable → ESTA caja → puerto → contrato. Sin él el
+     * recorrido de la planta se corta justo antes del cliente, que es
+     * donde hace falta.
+     */
+    public function feedStrand()
+    {
+        return $this->belongsTo(CableStrand::class, 'feed_strand_id');
     }
 
     public function zone()

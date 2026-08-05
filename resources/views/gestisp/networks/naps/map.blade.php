@@ -56,6 +56,16 @@
                     <span class="badge badge-info ml-1">&nbsp;</span> <small>50-80%</small>
                     <span class="badge badge-warning ml-1">&nbsp;</span> <small>80-90%</small>
                     <span class="badge badge-danger ml-1">&nbsp;</span> <small>Más de 90%</small>
+
+                    {{-- Las muflas se pueden apagar: en una zona densa
+                         se solapan con las cajas y a veces se quiere ver
+                         solo una de las dos capas. --}}
+                    <div class="custom-control custom-switch d-inline-block ml-3">
+                        <input type="checkbox" class="custom-control-input" id="verMuflas" checked>
+                        <label class="custom-control-label small" for="verMuflas">
+                            <i class="fas fa-box-open"></i> Muflas
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -103,6 +113,22 @@
         .nap-info    { background: #17a2b8; }
         .nap-warning { background: #ffc107; color: #212529; }
         .nap-danger  { background: #dc3545; }
+
+        /* La mufla se dibuja CUADRADA y en gris oscuro para que no se
+           confunda con una caja a simple vista: son elementos distintos
+           y en una zona densa aparecen mezclados. */
+        .marcador-mufla {
+            width: 26px; height: 26px;
+            border: 2px solid #fff;
+            border-radius: 4px;
+            background: #343a40;
+            color: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .7rem;
+        }
     </style>
 @endsection
 
@@ -211,8 +237,78 @@
                     .finally(() => $('#cargandoMapa').hide());
             }
 
-            $('#filtroRed').on('change', cargar);
+            /* ============================================================
+               Muflas
+
+               Van en su propia capa y NO en el agrupador de cajas: si
+               se mezclaran, un grupo diría "12" sin distinguir cuántas
+               son cajas y cuántas muflas, que es justo lo que hay que
+               diferenciar al planear una intervención.
+               ============================================================ */
+            const capaMuflas = L.layerGroup().addTo(mapa);
+
+            function cargarMuflas() {
+                const redId = $('#filtroRed').val();
+                const url = "{{ route('closures.map_data') }}" + (redId ? '?network_id=' + redId : '');
+
+                capaMuflas.clearLayers();
+
+                fetch(url)
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(function (muflas) {
+                        muflas.forEach(function (m) {
+                            const icono = L.divIcon({
+                                className: '',
+                                html: '<div class="marcador-mufla"><i class="fas fa-box-open"></i></div>',
+                                iconSize: [26, 26],
+                                iconAnchor: [13, 13],
+                            });
+
+                            const marcador = L.marker([m.lat, m.lng], { icon: icono });
+
+                            marcador.bindTooltip(
+                                '<strong>' + escapar(m.codigo) + '</strong>' +
+                                (m.nombre ? '<br>' + escapar(m.nombre) : '') +
+                                '<br>' + escapar(m.tipo) +
+                                '<br>Fusiones: <strong>' + m.fusiones + '</strong> de ' + m.capacidad,
+                                { direction: 'top', offset: [0, -10] }
+                            );
+
+                            marcador.bindPopup(
+                                '<div style="min-width:190px">' +
+                                '<h6 class="mb-1">Mufla ' + escapar(m.codigo) + '</h6>' +
+                                (m.direccion ? '<div class="text-muted small">' + escapar(m.direccion) + '</div>' : '') +
+                                '<hr class="my-2">' +
+                                '<div>' + m.fusiones + ' de ' + m.capacidad + ' fusiones (' + m.porcentaje + '%)</div>' +
+                                '<a href="' + m.url + '" class="btn btn-sm btn-dark btn-block mt-2">Ver la mufla</a>' +
+                                '</div>'
+                            );
+
+                            capaMuflas.addLayer(marcador);
+                        });
+                    })
+                    .catch(function () {
+                        // Sin muflas el mapa sigue siendo útil: no se
+                        // interrumpe nada, solo no se pinta esta capa.
+                    });
+            }
+
+            $('#verMuflas').on('change', function () {
+                if (this.checked) {
+                    mapa.addLayer(capaMuflas);
+                } else {
+                    mapa.removeLayer(capaMuflas);
+                }
+            });
+
+            $('#filtroRed').on('change', function () {
+                cargar();
+                cargarMuflas();
+            });
+
             $('#filtroCupo').on('change', pintar);
+
+            cargarMuflas();
 
             function escapar(v) {
                 return $('<div>').text(v == null ? '' : v).html();

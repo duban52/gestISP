@@ -92,11 +92,15 @@ class NapBoxController extends Controller
         $nap->load([
             'network', 'zone', 'ponPort.olt', 'user',
             'ports.contract.client',
+            'feedStrand.cable',
         ]);
 
         return view('gestisp.networks.naps.show', [
             'nap' => $nap,
             'ocupacion' => $nap->ocupacion(),
+            // Por dónde le llega la fibra desde la cabecera. Vacío
+            // mientras no se haya documentado el hilo que la alimenta.
+            'ruta' => app(\App\Services\FiberPathTracer::class)->rutaDeCaja($nap),
         ]);
     }
 
@@ -104,7 +108,7 @@ class NapBoxController extends Controller
     {
         return view('gestisp.networks.naps.create', [
             'redes' => OpticalNetwork::deSucursal()
-                ->with(['ponPorts.olt', 'zones'])
+                ->with(['ponPorts.olt', 'zones', 'fiberCables'])
                 ->orderBy('name')
                 ->get(),
             'redSeleccionada' => $request->input('network_id'),
@@ -117,10 +121,18 @@ class NapBoxController extends Controller
 
         $red = OpticalNetwork::deSucursal()->findOrFail($datos['optical_network_id']);
 
+        $hilo = $this->hiloDeAlimentacion($datos, $red);
+        unset($datos['feed_strand_id']);
+
         $caja = $this->odn->crearCaja($red, $datos);
 
+        // Se conecta DESPUÉS de crearla, porque hasta que la caja no
+        // existe no hay a qué asignarle el hilo. Va por el servicio de
+        // la planta para que quede en la trazabilidad.
+        $aviso = $this->conectarAlimentacion($caja, $hilo);
+
         return redirect()->route('naps.show', $caja)
-            ->with('success', "Caja {$caja->code} creada con {$caja->capacity} puertos.");
+            ->with('success', "Caja {$caja->code} creada con {$caja->capacity} puertos." . $aviso);
     }
 
     public function edit(NapBox $nap): View
@@ -130,7 +142,7 @@ class NapBoxController extends Controller
         return view('gestisp.networks.naps.edit', [
             'nap' => $nap,
             'redes' => OpticalNetwork::deSucursal()
-                ->with(['ponPorts.olt', 'zones'])
+                ->with(['ponPorts.olt', 'zones', 'fiberCables'])
                 ->orderBy('name')
                 ->get(),
         ]);
@@ -150,10 +162,19 @@ class NapBoxController extends Controller
             return back()->with('error', $e->getMessage())->withInput();
         }
 
-        unset($datos['capacity']);
+        $hilo = $this->hiloDeAlimentacion($datos, $nap->network);
+
+        unset($datos['capacity'], $datos['feed_strand_id']);
         $nap->update($datos);
 
-        return redirect()->route('naps.show', $nap)->with('success', 'Caja actualizada.');
+        // Solo se toca la alimentación si el formulario mandó el campo:
+        // así una pantalla que no lo tenga no desconecta la caja sin
+        // que nadie se lo haya pedido.
+        $aviso = $request->has('feed_strand_id')
+            ? $this->conectarAlimentacion($nap, $hilo)
+            : '';
+
+        return redirect()->route('naps.show', $nap)->with('success', 'Caja actualizada.' . $aviso);
     }
 
     public function destroy(NapBox $nap): RedirectResponse
@@ -378,6 +399,54 @@ class NapBoxController extends Controller
         ])->values());
     }
 
+    // ==================== Alimentación ====================
+
+    /**
+     * Resuelve el hilo que alimenta la caja, comprobando que sea suyo.
+     *
+     * El id llega del navegador: el hilo tiene que ser de un cable de
+     * la MISMA red, o se estaría documentando una caja alimentada por
+     * una fibra de otra red.
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    private function hiloDeAlimentacion(array $datos, OpticalNetwork $red): ?\App\Models\CableStrand
+    {
+        if (empty($datos['feed_strand_id'])) {
+            return null;
+        }
+
+        $hilo = \App\Models\CableStrand::with('cable')->find($datos['feed_strand_id']);
+
+        abort_unless(
+            $hilo && (int) $hilo->cable?->optical_network_id === (int) $red->id,
+            403,
+            'Ese hilo pertenece a otra red.',
+        );
+
+        return $hilo;
+    }
+
+    /**
+     * Conecta el hilo y devuelve el texto que se añade al mensaje.
+     *
+     * No lanza: la caja ya está creada o actualizada, y un fallo aquí
+     * es de documentación, no de servicio. Convertirlo en error haría
+     * creer que no se guardó nada.
+     */
+    private function conectarAlimentacion(NapBox $caja, ?\App\Models\CableStrand $hilo): string
+    {
+        try {
+            app(\App\Services\FiberPlantManager::class)->alimentarCaja($caja, $hilo);
+        } catch (RuntimeException $e) {
+            return ' El hilo de alimentación no se anotó: ' . $e->getMessage();
+        }
+
+        return $hilo
+            ? ' Se alimenta de ' . $hilo->etiqueta_completa . '.'
+            : '';
+    }
+
     // ==================== Apoyo ====================
 
     /** @return array<string, mixed> */
@@ -418,6 +487,10 @@ class NapBoxController extends Controller
             'longitude' => 'required|numeric|between:-180,180',
             'status' => ['required', Rule::in(array_keys(NapBox::estados()))],
             'notes' => 'nullable|string|max:1000',
+            // De qué hilo se alimenta. Opcional: hay cajas que se
+            // documentan antes de que exista el cable que las va a
+            // alimentar, y exigirlo bloquearía el registro.
+            'feed_strand_id' => ['nullable', Rule::exists('cable_strands', 'id')],
         ], [
             'pon_port_id.exists' => 'El puerto PON elegido no pertenece a esa red.',
             'network_zone_id.exists' => 'La zona elegida no pertenece a esa red.',

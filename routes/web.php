@@ -416,6 +416,48 @@ Route::delete('/naps/{nap}',     [App\Http\Controllers\NapBoxController::class, 
 Route::put('/naps/puertos/{port}',            [App\Http\Controllers\NapBoxController::class, 'updatePort'])->name('naps.port.update');
 Route::delete('/naps/puertos/{port}/liberar', [App\Http\Controllers\NapBoxController::class, 'releasePort'])->name('naps.port.release');
 
+/*
+|--------------------------------------------------------------------------
+| Planta de fibra: muflas y cables
+|--------------------------------------------------------------------------
+| Las rutas fijas van ANTES que las de parámetro: si "/muflas/mapa"
+| quedara después de "/muflas/{closure}", Laravel intentaría buscar una
+| mufla con código "mapa".
+*/
+
+// Muflas / cajas de empalme
+Route::get('/muflas',                 [App\Http\Controllers\SpliceClosureController::class, 'index'])->name('closures.index');
+Route::get('/muflas/mapa/datos',      [App\Http\Controllers\SpliceClosureController::class, 'mapData'])->name('closures.map_data');
+Route::get('/muflas/nueva',           [App\Http\Controllers\SpliceClosureController::class, 'create'])->name('closures.create');
+Route::post('/muflas',                [App\Http\Controllers\SpliceClosureController::class, 'store'])->name('closures.store');
+Route::get('/muflas/{closure}',       [App\Http\Controllers\SpliceClosureController::class, 'show'])->name('closures.show');
+Route::get('/muflas/{closure}/editar', [App\Http\Controllers\SpliceClosureController::class, 'edit'])->name('closures.edit');
+Route::put('/muflas/{closure}',       [App\Http\Controllers\SpliceClosureController::class, 'update'])->name('closures.update');
+Route::delete('/muflas/{closure}',    [App\Http\Controllers\SpliceClosureController::class, 'destroy'])->name('closures.destroy');
+Route::get('/api/muflas/{closure}/impacto', [App\Http\Controllers\SpliceClosureController::class, 'impact'])->name('closures.impact');
+
+// Lo que se hace dentro de una mufla
+Route::post('/muflas/{closure}/fusiones',   [App\Http\Controllers\SpliceClosureController::class, 'storeSplice'])->name('splices.store');
+Route::delete('/fusiones/{splice}',         [App\Http\Controllers\SpliceClosureController::class, 'destroySplice'])->name('splices.destroy');
+Route::post('/muflas/{closure}/splitters',  [App\Http\Controllers\SpliceClosureController::class, 'storeSplitter'])->name('splitters.store');
+Route::delete('/splitters/{splitter}',      [App\Http\Controllers\SpliceClosureController::class, 'destroySplitter'])->name('splitters.destroy');
+// La ruta de salidas va DESPUÉS de la de splitter, pero con un prefijo
+// distinto ("salidas"), así que no hay ambigüedad posible.
+Route::put('/splitters/salidas/{output}',   [App\Http\Controllers\SpliceClosureController::class, 'connectOutput'])->name('splitters.output.connect');
+
+// Cables de fibra
+Route::get('/cables',                 [App\Http\Controllers\FiberCableController::class, 'index'])->name('cables.index');
+Route::get('/cables/nuevo',           [App\Http\Controllers\FiberCableController::class, 'create'])->name('cables.create');
+Route::post('/cables',                [App\Http\Controllers\FiberCableController::class, 'store'])->name('cables.store');
+Route::get('/cables/{cable}',         [App\Http\Controllers\FiberCableController::class, 'show'])->name('cables.show');
+Route::get('/cables/{cable}/editar',  [App\Http\Controllers\FiberCableController::class, 'edit'])->name('cables.edit');
+Route::put('/cables/{cable}',         [App\Http\Controllers\FiberCableController::class, 'update'])->name('cables.update');
+Route::delete('/cables/{cable}',      [App\Http\Controllers\FiberCableController::class, 'destroy'])->name('cables.destroy');
+Route::put('/cables/hilos/{strand}',  [App\Http\Controllers\FiberCableController::class, 'updateStrand'])->name('cables.strand.update');
+// Hilos disponibles de un cable, para el formulario de la caja NAP.
+Route::get('/api/cables/{cable}/hilos', [App\Http\Controllers\FiberCableController::class, 'strands'])->name('cables.strands');
+Route::get('/api/cables/{cable}/impacto', [App\Http\Controllers\FiberCableController::class, 'impact'])->name('cables.impact');
+
 // Cortes masivos de servicio. Van ANTES de /pppoe/{pppoe} o la ruta
 // del detalle se traga "cortes" como si fuera el id de una cuenta.
 Route::get('/pppoe/cortes',          [App\Http\Controllers\PppoeCutoffController::class, 'create'])->name('pppoe.cutoff');

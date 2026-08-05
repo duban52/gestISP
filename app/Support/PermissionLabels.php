@@ -46,6 +46,8 @@ class PermissionLabels
         'pppoe' => 'Cuentas PPPoE',
         'networks' => 'Redes opticas',
         'naps' => 'Cajas NAP',
+        'closures' => 'Muflas',
+        'cables' => 'Cables de fibra',
         'users' => 'Usuarios',
         'roles' => 'Roles',
     ];
