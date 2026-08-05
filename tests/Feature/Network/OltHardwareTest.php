@@ -610,7 +610,8 @@ class OltHardwareTest extends TestCase
         $resumen = app(OltHardwareDiscovery::class)->descubrir($this->olt);
 
         $this->assertSame(0, $resumen['pon']);
-        $this->assertSame('ALGO-RARO-PON 0/1/0', $resumen['ejemplos'][0]);
+        // Cada ejemplo va precedido de su ifIndex entre corchetes
+        $this->assertSame('[1] ALGO-RARO-PON 0/1/0', $resumen['ejemplos'][0]);
     }
 
     /**

@@ -609,7 +609,12 @@
          HTML pesaría más que la propia ficha.
          ============================================================ --}}
     <div class="modal fade" id="modalPuerto" tabindex="-1" role="dialog">
-        <div class="modal-dialog modal-lg" role="document">
+        {{-- "modal-dialog-scrollable": el contenido puede ser largo
+             —dos tablas, la gráfica, las cajas y las peores ONTs— y sin
+             esto el modal crece hasta empujar la página entera, de modo
+             que hay que bajar mucho para llegar al final y se pierde de
+             vista el título. Así scrollea solo el cuerpo. --}}
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
             <div class="modal-content">
                 <div class="modal-header py-2">
                     <h5 class="modal-title">
@@ -647,6 +652,17 @@
         .puerto-pon .puerto-onts {
             font-size: .65rem;
             opacity: .85;
+        }
+
+        /* Altura fija para la gráfica del modal. Chart.js con
+           maintainAspectRatio:false toma la altura del CONTENEDOR, no
+           la del canvas: sin esto la gráfica se estira hasta ocupar
+           media pantalla. position:relative es lo que necesita para
+           medir bien al redimensionar. */
+        .grafica-puerto {
+            position: relative;
+            height: 190px;
+            margin-bottom: .5rem;
         }
     </style>
 @endsection
@@ -833,7 +849,14 @@
                 if (d.trafico.muestras.length > 1) {
                     html += '<h6 class="text-uppercase text-muted small">' +
                         'Tráfico de las últimas ' + d.trafico.horas + ' horas</h6>';
-                    html += '<canvas id="graficaPuerto" height="90"></canvas>';
+                    // El lienzo va dentro de un contenedor con ALTURA
+                    // FIJA. Con maintainAspectRatio:false, Chart.js
+                    // ignora el atributo height del canvas y lo estira
+                    // hasta llenar a su padre; si el padre es el cuerpo
+                    // del modal, que no tiene altura, la gráfica crece
+                    // sin freno y hay que bajar media pantalla para ver
+                    // el resto del contenido.
+                    html += '<div class="grafica-puerto"><canvas id="graficaPuerto"></canvas></div>';
                 } else {
                     html += '<div class="alert alert-light border py-2 small mb-3">' +
                         '<i class="fas fa-chart-line text-muted"></i> ' +
