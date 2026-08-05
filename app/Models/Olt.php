@@ -77,6 +77,18 @@ class Olt extends Model
         return $this->hasMany(PonPort::class);
     }
 
+    /** Tarjetas, tal como las descubrió el equipo */
+    public function boards()
+    {
+        return $this->hasMany(OltBoard::class)->orderBy('frame')->orderBy('slot');
+    }
+
+    /** Puertos de subida */
+    public function uplinks()
+    {
+        return $this->hasMany(OltUplink::class)->orderBy('frame')->orderBy('slot')->orderBy('port');
+    }
+
     /**
      * Relación con ONTs
      */

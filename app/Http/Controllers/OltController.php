@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\LineProfile;
 use App\Models\Olt;
 use App\Models\Ont;
+use App\Models\PonPort;
 use App\Models\SrvProfile;
 use App\Models\VlanOlt;
+use App\Services\OltHardwareDiscovery;
 use App\Services\OltSshService;
 use App\Services\OltStatistics;
 use Illuminate\Http\Request;
@@ -91,17 +93,79 @@ class OltController extends Controller
     {
         abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
 
+        // Los puertos se agrupan por tarjeta porque es como está el
+        // equipo en el rack y como habla de él la gente de planta. Una
+        // MA5800 puede pasar de los doscientos puertos: una rejilla
+        // plana de doscientas casillas no hay quien la lea.
+        $puertos = $olt->ponPorts()
+            ->with(['zone', 'napBoxes'])
+            ->withCount('napBoxes')
+            ->orderBy('frame')->orderBy('slot')->orderBy('port')
+            ->get();
+
+        // Cuántas ONTs cuelgan de cada puerto, en UNA consulta. Es el
+        // dato que da sentido al resto: 300 Mbps entre 48 clientes no
+        // es lo mismo que 300 Mbps entre 4.
+        $ontsPorPuerto = $estadisticas->ontsPorPuerto($olt);
+
+        foreach ($puertos as $puerto) {
+            $conteo = $ontsPorPuerto[$puerto->slot . '/' . $puerto->port] ?? ['total' => 0, 'online' => 0];
+            $puerto->onts_total = $conteo['total'];
+            $puerto->onts_online = $conteo['online'];
+        }
+
         return view('gestisp.olts.show', [
             'olt' => $olt->loadCount('onts'),
             'resumen' => $estadisticas->resumen($olt),
-            // Puertos PON DOCUMENTADOS en el modulo de redes. Son otra
-            // cosa que los puertos deducidos de las ONTs: estos llevan
-            // splitter, zona y las cajas que cuelgan de ellos.
-            'ponPorts' => $olt->ponPorts()
-                ->with(['zone', 'napBoxes.ports.contract'])
-                ->orderBy('frame')->orderBy('slot')->orderBy('port')
-                ->get(),
+            'tarjetas' => $olt->boards()->get(),
+            // Puertos PON: los descubre el equipo y los documenta el
+            // módulo de redes. Los dos datos viven en la misma fila.
+            'ponPorts' => $puertos,
+            'puertosPorTarjeta' => $puertos->groupBy(fn ($p) => $p->frame . '/' . $p->slot),
+            'uplinks' => $olt->uplinks()->get(),
         ]);
+    }
+
+    /**
+     * Detalle de un puerto PON para el modal (JSON).
+     *
+     * Va por AJAX y no dentro de show() porque la ficha tiene que abrir
+     * al instante aunque la OLT tenga doscientos puertos: cargar la
+     * serie de tráfico de todos por adelantado sería traerse decenas de
+     * miles de filas para mostrar una.
+     */
+    public function ponPort(PonPort $port, OltStatistics $estadisticas): JsonResponse
+    {
+        $port->loadMissing('olt', 'zone', 'napBoxes.ports.contract.client');
+
+        abort_if((int) $port->olt->branch_id !== (int) session('branch_id'), 403);
+
+        return response()->json($estadisticas->detalleDePuerto($port));
+    }
+
+    /**
+     * Lanza el descubrimiento de tarjetas y puertos desde la pantalla.
+     *
+     * Es una acción manual además de la tarea nocturna: cuando se
+     * instala una tarjeta nueva nadie quiere esperar a mañana.
+     */
+    public function discoverPorts(Olt $olt, OltHardwareDiscovery $descubridor): RedirectResponse
+    {
+        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
+
+        try {
+            $resumen = $descubridor->descubrir($olt);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', sprintf(
+            'Descubrimiento terminado: %d tarjeta(s), %d puerto(s) PON (%d nuevo(s)) y %d uplink(s).',
+            $resumen['tarjetas'],
+            $resumen['pon'],
+            $resumen['pon_nuevos'],
+            $resumen['uplinks'],
+        ));
     }
 
     public function create(): View

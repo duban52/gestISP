@@ -193,6 +193,60 @@
                                     <button class="btn btn-sm btn-primary btn-block"><i class="fas fa-plus"></i></button>
                                 </div>
                             </div>
+
+                            {{-- ============================================================
+                                 Puertos que entran en la zona
+
+                                 Se ofrecen TODOS los puertos del equipo, no solo los que
+                                 ya tienen clientes: una zona se define al planear, y lo
+                                 que hay que repartir en ese momento son precisamente los
+                                 puertos vacíos.
+
+                                 Los que ya están en otra zona se muestran marcados, para
+                                 no moverlos sin darse cuenta.
+                                 ============================================================ --}}
+                            @php
+                                $puertosLibres = $network->ponPorts->groupBy(fn ($p) => $p->olt?->name ?? 'Sin OLT');
+                            @endphp
+
+                            @if($network->ponPorts->isNotEmpty())
+                                <div class="mt-2">
+                                    <a data-toggle="collapse" href="#puertosNuevaZona" class="small text-muted"
+                                       role="button">
+                                        <i class="fas fa-caret-down"></i>
+                                        Asignar puertos PON a esta zona ({{ $network->ponPorts->count() }} disponibles)
+                                    </a>
+
+                                    <div class="collapse mt-2" id="puertosNuevaZona">
+                                        <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto;">
+                                            @foreach($puertosLibres as $nombreOlt => $puertos)
+                                                <div class="text-uppercase text-muted small mb-1">{{ $nombreOlt }}</div>
+                                                <div class="d-flex flex-wrap mb-2">
+                                                    @foreach($puertos as $puerto)
+                                                        <div class="custom-control custom-checkbox mr-3 mb-1">
+                                                            <input type="checkbox" class="custom-control-input"
+                                                                   id="zp_{{ $puerto->id }}"
+                                                                   name="pon_port_ids[]" value="{{ $puerto->id }}">
+                                                            <label class="custom-control-label small" for="zp_{{ $puerto->id }}">
+                                                                <code>{{ $puerto->etiqueta }}</code>
+                                                                @if($puerto->zone)
+                                                                    <span class="badge badge-light border ml-1"
+                                                                          title="Ya está en otra zona">{{ $puerto->zone->name }}</span>
+                                                                @endif
+                                                            </label>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="small text-muted mt-2">
+                                    Esta red todavía no tiene puertos PON.
+                                    Descúbralos desde la ficha de la OLT para poder repartirlos en zonas.
+                                </div>
+                            @endif
                         </form>
                     @endcan
                 </div>

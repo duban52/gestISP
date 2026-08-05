@@ -11,6 +11,7 @@ use App\Models\OpticalNetwork;
 use App\Models\PonPort;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -283,6 +284,24 @@ class OdnManager
      */
     public function detectarPuertosPon(OpticalNetwork $red, Olt $olt): int
     {
+        // Primero se le pregunta al equipo: así aparecen TODOS los
+        // puertos que tiene, incluidos los vacíos, que son justo los
+        // que interesan al planear dónde crecer. Deducirlos de las ONTs
+        // solo encuentra los que ya están en uso.
+        try {
+            $resumen = app(OltHardwareDiscovery::class)->descubrir($olt);
+
+            return $resumen['pon_nuevos'];
+        } catch (RuntimeException $e) {
+            // La OLT puede estar caída, sin SNMP o sin la extensión
+            // instalada. En ese caso se cae al método viejo: da menos
+            // puertos, pero es mejor que no dar ninguno.
+            Log::info(
+                "Descubrimiento SNMP no disponible para la OLT {$olt->name} "
+                . "({$e->getMessage()}); se deducen los puertos de las ONTs conectadas."
+            );
+        }
+
         $enUso = Ont::where('olt_id', $olt->id)
             ->select('slot', 'port')
             ->distinct()

@@ -182,28 +182,78 @@ class OpticalNetworkController extends Controller
     {
         $this->exigirSucursal($network);
 
-        $datos = $request->validate([
-            'name' => 'required|string|max:120',
-            'description' => 'nullable|string|max:255',
-            'color' => 'nullable|string|max:7',
-        ]);
+        $datos = $this->validarZona($request, $network);
+        $puertos = $datos['pon_port_ids'] ?? [];
+        unset($datos['pon_port_ids']);
 
-        $network->zones()->create($datos);
+        $zona = $network->zones()->create($datos);
 
-        return back()->with('success', 'Zona creada.');
+        $asignados = $this->asignarPuertosAZona($zona, $puertos);
+
+        return back()->with('success', $asignados > 0
+            ? "Zona creada con {$asignados} puerto(s) PON."
+            : 'Zona creada.');
     }
 
     public function updateZone(Request $request, NetworkZone $zone): RedirectResponse
     {
         $this->exigirSucursal($zone->network);
 
-        $zone->update($request->validate([
+        $datos = $this->validarZona($request, $zone->network);
+        $puertos = $datos['pon_port_ids'] ?? [];
+        unset($datos['pon_port_ids']);
+
+        $zone->update($datos);
+
+        // Solo se tocan los puertos si el formulario los mandó: así una
+        // pantalla que solo cambie el nombre no vacía la zona.
+        if ($request->has('pon_port_ids')) {
+            $this->asignarPuertosAZona($zone, $puertos, reemplazar: true);
+        }
+
+        return back()->with('success', 'Zona actualizada.');
+    }
+
+    /**
+     * Cuelga puertos PON de una zona.
+     *
+     * Los ids llegan del navegador, así que se comprueba que sean de la
+     * MISMA red: sin esto se podría meter en una zona un puerto de otra
+     * red cambiando el formulario.
+     *
+     * @param  array<int, int|string>  $puertoIds
+     */
+    private function asignarPuertosAZona(NetworkZone $zona, array $puertoIds, bool $reemplazar = false): int
+    {
+        if ($reemplazar) {
+            PonPort::where('network_zone_id', $zona->id)
+                ->whereNotIn('id', $puertoIds ?: [0])
+                ->update(['network_zone_id' => null]);
+        }
+
+        if (empty($puertoIds)) {
+            return 0;
+        }
+
+        return PonPort::whereIn('id', $puertoIds)
+            ->where('optical_network_id', $zona->optical_network_id)
+            ->update(['network_zone_id' => $zona->id]);
+    }
+
+    /** @return array<string, mixed> */
+    private function validarZona(Request $request, OpticalNetwork $red): array
+    {
+        return $request->validate([
             'name' => 'required|string|max:120',
             'description' => 'nullable|string|max:255',
             'color' => 'nullable|string|max:7',
-        ]));
-
-        return back()->with('success', 'Zona actualizada.');
+            'pon_port_ids' => 'nullable|array',
+            'pon_port_ids.*' => [
+                Rule::exists('pon_ports', 'id')->where('optical_network_id', $red->id),
+            ],
+        ], [
+            'pon_port_ids.*.exists' => 'Alguno de los puertos elegidos no pertenece a esta red.',
+        ]);
     }
 
     public function destroyZone(NetworkZone $zone): RedirectResponse
@@ -316,8 +366,8 @@ class OpticalNetworkController extends Controller
         }
 
         return back()->with('success', $creados > 0
-            ? "Se registraron {$creados} puerto(s) PON en uso. Complete el splitter y la zona de cada uno."
-            : 'No se encontraron puertos nuevos: los que están en uso ya estaban registrados.');
+            ? "Se registraron {$creados} puerto(s) PON del equipo. Complete el splitter y la zona de cada uno."
+            : 'No se encontraron puertos nuevos: los del equipo ya estaban registrados.');
     }
 
     // ==================== Apoyo ====================

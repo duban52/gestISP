@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Olt;
+use App\Models\OltPortMetric;
 use App\Models\Ont;
+use App\Models\PonPort;
 use Illuminate\Support\Collection;
 
 /**
@@ -187,6 +189,171 @@ class OltStatistics
             ])
             ->sortBy('puerto')
             ->values()
+            ->all();
+    }
+
+    /**
+     * Bits por segundo en algo que se lea de un vistazo.
+     *
+     * Se usan múltiplos de 1000 y no de 1024: el ancho de banda de red
+     * se mide en unidades decimales (un enlace de 1 Gbps son
+     * 1.000.000.000 bits), al contrario que el almacenamiento.
+     */
+    public static function formatoBps(?int $bps): string
+    {
+        if ($bps === null) {
+            return '—';
+        }
+
+        return match (true) {
+            $bps >= 1_000_000_000 => round($bps / 1_000_000_000, 2) . ' Gbps',
+            $bps >= 1_000_000 => round($bps / 1_000_000, 1) . ' Mbps',
+            $bps >= 1_000 => round($bps / 1_000) . ' kbps',
+            default => $bps . ' bps',
+        };
+    }
+
+    /**
+     * Cuántas ONTs cuelgan de cada puerto y cuántas están en línea.
+     *
+     * Se resuelve con UNA agregación en SQL, no trayéndose las ONTs:
+     * en una OLT con dos mil ONTs, recorrerlas en PHP para contarlas
+     * por puerto es lo que hace que la ficha tarde.
+     *
+     * @return array<string, array{total: int, online: int}>  ["1/2" => …]
+     */
+    public function ontsPorPuerto(Olt $olt): array
+    {
+        $filas = Ont::where('olt_id', $olt->id)
+            ->selectRaw('slot, port, COUNT(*) AS total, SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS online')
+            ->groupBy('slot', 'port')
+            ->get();
+
+        $resultado = [];
+
+        foreach ($filas as $fila) {
+            $resultado[$fila->slot . '/' . $fila->port] = [
+                'total' => (int) $fila->total,
+                'online' => (int) $fila->online,
+            ];
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Todo lo que muestra el modal de un puerto PON.
+     *
+     * Junta en una sola respuesta lo que hay que mirar cuando se
+     * sospecha de un puerto: cómo está el puerto en el equipo, cuánto
+     * tráfico mueve, cuántos clientes dependen de él, qué cajas cuelgan
+     * y cómo va la señal de sus ONTs.
+     *
+     * @return array<string, mixed>
+     */
+    public function detalleDePuerto(PonPort $puerto, int $horas = 6): array
+    {
+        $onts = Ont::where('olt_id', $puerto->olt_id)
+            ->where('slot', $puerto->slot)
+            ->where('port', $puerto->port)
+            ->with('contract.client')
+            ->get();
+
+        $enLinea = $onts->filter(fn (Ont $o) => (int) $o->status === 1);
+        // conPotencia() devuelve ONTs, no números: rx_power es varchar
+        // y hay que convertirlo antes de promediar o comparar.
+        $potencias = $this->conPotencia($enLinea)->map(fn (Ont $o) => (float) $o->rx_power);
+
+        // La serie de tráfico. Va acotada en horas y no completa
+        // porque es una gráfica de "qué está pasando", no un informe
+        // histórico: seis horas cubren el pico de la noche anterior.
+        $serie = OltPortMetric::where('port_type', $puerto->getMorphClass())
+            ->where('port_id', $puerto->id)
+            ->ultimasHoras($horas)
+            ->get(['measured_at', 'in_bps', 'out_bps']);
+
+        return [
+            'puerto' => [
+                'id' => $puerto->id,
+                'etiqueta' => $puerto->etiqueta,
+                'descripcion' => $puerto->description,
+                'zona' => $puerto->zone?->name,
+                'splitter' => $puerto->splitter_ratio,
+                'max_onts' => $puerto->max_onts,
+                'if_index' => $puerto->if_index,
+                'estado' => $puerto->estado_legible,
+                'color_estado' => $puerto->color_estado,
+                'admin_status' => $puerto->admin_status,
+                'descubierto' => $puerto->estaDescubierto(),
+                'tx_power' => $puerto->tx_power !== null ? (float) $puerto->tx_power : null,
+                'in_bps' => $puerto->in_bps,
+                'out_bps' => $puerto->out_bps,
+                'medido_en' => $puerto->measured_at?->diffForHumans(),
+            ],
+            'onts' => [
+                'total' => $onts->count(),
+                'en_linea' => $enLinea->count(),
+                'fuera' => $onts->count() - $enLinea->count(),
+                // Ocupación contra el tope configurado del puerto: es
+                // lo que dice si todavía se puede seguir instalando.
+                'ocupacion' => $puerto->max_onts > 0
+                    ? round($onts->count() / $puerto->max_onts * 100, 1)
+                    : null,
+                'potencia_media' => $potencias->isNotEmpty()
+                    ? round($potencias->avg(), 2)
+                    : null,
+                'peor' => $potencias->isNotEmpty() ? round($potencias->min(), 2) : null,
+            ],
+            'cajas' => $puerto->napBoxes->map(fn ($caja) => [
+                'id' => $caja->id,
+                'codigo' => $caja->code,
+                'nombre' => $caja->name,
+                'ocupacion' => $caja->ocupacion(),
+                'url' => route('naps.show', $caja->id),
+            ])->values(),
+            'trafico' => [
+                'horas' => $horas,
+                'muestras' => $serie->map(fn ($m) => [
+                    'momento' => $m->measured_at->format('H:i'),
+                    'in' => (int) $m->in_bps,
+                    'out' => (int) $m->out_bps,
+                ])->values(),
+            ],
+            // Las peores del puerto, para saltar directo a la ONT
+            // problemática sin salir del modal.
+            'peores_onts' => $this->peoresDelPuerto($puerto),
+        ];
+    }
+
+    /**
+     * Las cinco ONTs con peor señal de un puerto.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function peoresDelPuerto(PonPort $puerto, int $limite = 5): array
+    {
+        return Ont::where('olt_id', $puerto->olt_id)
+            ->where('slot', $puerto->slot)
+            ->where('port', $puerto->port)
+            ->whereNotNull('rx_power')
+            ->where('rx_power', '!=', '')
+            ->where('status', 1)
+            // rx_power es varchar: sin el CAST se ordena como texto y
+            // "-15.0" quedaría antes que "-28.5", al revés de lo real.
+            ->orderByRaw('CAST(rx_power AS DECIMAL(10,3)) ASC')
+            ->limit($limite)
+            ->with('contract.client')
+            ->get()
+            ->map(fn (Ont $ont) => [
+                'id' => $ont->id,
+                'sn' => $ont->sn,
+                'onu_id' => $ont->onu_id,
+                'rx_power' => (float) $ont->rx_power,
+                'banda' => self::bandaDe((float) $ont->rx_power),
+                'contrato' => $ont->contract?->numero_visible,
+                'cliente' => trim(($ont->contract?->client?->name ?? '') . ' ' . ($ont->contract?->client?->last_name ?? '')) ?: null,
+                'url' => route('onts.show', $ont->id),
+            ])
             ->all();
     }
 

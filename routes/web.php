@@ -287,6 +287,21 @@ Route::middleware('auth')->post('/notifications/read-all', [NotificationControll
 // Estado en vivo de UNA OLT. Una petición por equipo para que una
 // OLT apagada solo retrase su propia fila del listado.
 Route::middleware('auth')->get('/api/olts/{olt}/status', [OltController::class, 'apiOltStatus'])->name('api.olts.status');
+
+// Detalle de UN puerto PON, para el modal de la ficha. Va aparte
+// porque cargar la serie de tráfico de todos los puertos al abrir la
+// ficha serían decenas de miles de filas para mostrar una.
+// Va con olts.index, que es el mismo permiso con el que se abre la
+// ficha de la OLT: no existe un "olts.show" aparte.
+Route::middleware(['auth', 'check.permission:olts.index'])
+    ->get('/api/pon-ports/{port}', [OltController::class, 'ponPort'])
+    ->name('api.pon_ports.show');
+
+// Descubrimiento manual del hardware: cuando se instala una tarjeta
+// nueva nadie quiere esperar a la tarea de la madrugada.
+Route::middleware(['auth', 'check.permission:olts.edit'])
+    ->post('/olts/{olt}/descubrir-puertos', [OltController::class, 'discoverPorts'])
+    ->name('olts.discover_ports');
 Route::middleware('auth')->get('/api/vlansolt/{olt}', [OltController::class, 'viewVlans'])->name('api.vlansolt');
 Route::middleware('auth')->get('/api/lineprofiles/{olt}', [OltController::class, 'viewLineProfiles'])->name('api.lineProfile');
 Route::middleware('auth')->get('/api/srvprofiles/{olt}', [OltController::class, 'viewSrvProfiles'])->name('api.srvProfile');

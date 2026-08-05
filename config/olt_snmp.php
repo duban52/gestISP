@@ -268,6 +268,98 @@ return [
 
             /*
             |----------------------------------------------------------
+            | Descubrimiento del hardware (olt:discover-ports)
+            |----------------------------------------------------------
+            | Con esto se sabe qué tarjetas y qué puertos PON TIENE el
+            | equipo, no solo dónde hay ONTs conectadas. Es lo que
+            | permite colgar una caja de un puerto todavía vacío, que
+            | es justo el que interesa al planear el crecimiento.
+            |
+            | Todo lo de este bloque sale de la IF-MIB estándar
+            | (RFC 2863). No es específico de Huawei y responde en
+            | cualquier equipo con SNMP: si algún día se añade otra
+            | marca, lo más probable es que solo haya que cambiar los
+            | dos patrones de abajo.
+            */
+            'interfaces' => [
+                'if_name' => '.1.3.6.1.2.1.31.1.1.1.1',
+                // ifAlias: la descripción que el operador escribió en
+                // el puerto. Es dato de campo: suele decir a dónde va.
+                'if_alias' => '.1.3.6.1.2.1.31.1.1.1.18',
+                'admin_status' => '.1.3.6.1.2.1.2.2.1.7',
+                'oper_status' => '.1.3.6.1.2.1.2.2.1.8',
+                // ifHighSpeed, en Mbps. Se usa ésta y no ifSpeed
+                // porque ifSpeed es de 32 bits y se satura en 4 Gbps:
+                // un uplink de 10G reportaría un valor absurdo.
+                'high_speed' => '.1.3.6.1.2.1.31.1.1.1.15',
+            ],
+
+            /*
+            | Patrón de un PUERTO PON, con los tres números de su
+            | posición física capturados en orden frame/slot/port.
+            | Sobre el equipo real las interfaces se llaman
+            | "GPON_UNI 0/1/2".
+            */
+            'pon_discovery_pattern' => '/^GPON_UNI\s+(\d+)\/(\d+)\/(\d+)$/',
+
+            /*
+            | Patrón de un puerto UPLINK. Cubre los nombres que usan
+            | las MA5600/MA5800 para los puertos de subida:
+            | "GE 0/9/0", "XGE 0/9/1", "10GE 0/19/0", "ETH 0/9/2".
+            |
+            | Se listan por nombre en vez de "todo lo que no sea PON"
+            | a propósito: una OLT publica decenas de interfaces
+            | internas (vlanif, null, meth) que no son puertos de
+            | subida y solo ensuciarían la pantalla.
+            */
+            'uplink_discovery_pattern' => '/^(?:X?GE|10GE|40GE|100GE|ETH|Eth-Trunk)\s*(\d+)\/(\d+)\/(\d+)$/i',
+
+            /*
+            |----------------------------------------------------------
+            | Enriquecimientos OPCIONALES — SIN VERIFICAR
+            |----------------------------------------------------------
+            | Lo que sigue es específico de Huawei y, a diferencia del
+            | resto de este archivo, NO está comprobado contra el
+            | equipo real: son los OIDs que documenta la MIB, pero la
+            | columna exacta cambia entre versiones de firmware.
+            |
+            | Están puestos porque, si responden, aportan; y si no
+            | responden no se rompe nada: el descubrimiento funciona
+            | igual con la IF-MIB de arriba y la pantalla muestra un
+            | guion donde no haya dato.
+            |
+            | Para comprobarlos contra SU equipo y corregirlos:
+            |
+            |     php artisan olt:probe-ports {id_de_la_olt}
+            |
+            | Ponga el valor en null para dejar de consultarlos.
+            */
+            'pon_optical' => [
+                // Potencia de transmisión del módulo óptico del
+                // puerto PON, tabla hwGponOltOpticalDdmInfo. El
+                // sufijo es el ifIndex del puerto.
+                'tx_power' => [
+                    'oid' => '.1.3.6.1.4.1.2011.6.128.1.1.4.1.1.4',
+                    'scale' => 0.01,
+                    'unit' => 'dBm',
+                    'label' => 'Potencia Tx del puerto',
+                    'invalid' => [2147483647, -1],
+                    'min' => -20,
+                    'max' => 20,
+                ],
+            ],
+
+            'boards' => [
+                // Nombre del modelo de tarjeta (GPBD, GPFD, H901XGHD).
+                // Si no responde, la tarjeta se muestra por su
+                // posición ("Tarjeta 0/1") y su tipo se deduce de los
+                // puertos que tiene: no se pierde funcionalidad.
+                'name' => '.1.3.6.1.4.1.2011.6.3.3.2.1.2',
+                'status' => '.1.3.6.1.4.1.2011.6.3.3.2.1.7',
+            ],
+
+            /*
+            |----------------------------------------------------------
             | Inventario de ONTs (para la importación)
             |----------------------------------------------------------
             | Estas tablas SÍ admiten recorrido completo (walk), a

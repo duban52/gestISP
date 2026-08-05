@@ -31,6 +31,18 @@ class PonPort extends Model
         'splitter_ratio',
         'max_onts',
         'active',
+        // Lo que llena el descubridor desde el equipo. Va aparte de lo
+        // anterior a propósito: arriba está lo que documenta una
+        // persona y aquí lo que reporta la OLT.
+        'if_index',
+        'board_name',
+        'admin_status',
+        'oper_status',
+        'tx_power',
+        'in_bps',
+        'out_bps',
+        'measured_at',
+        'discovered_at',
     ];
 
     protected $casts = [
@@ -39,6 +51,12 @@ class PonPort extends Model
         'slot' => 'integer',
         'port' => 'integer',
         'max_onts' => 'integer',
+        'if_index' => 'integer',
+        'tx_power' => 'decimal:2',
+        'in_bps' => 'integer',
+        'out_bps' => 'integer',
+        'measured_at' => 'datetime',
+        'discovered_at' => 'datetime',
     ];
 
     public function network()
@@ -75,10 +93,63 @@ class PonPort extends Model
             ->where('port', $this->port);
     }
 
+    public function metrics()
+    {
+        return $this->morphMany(OltPortMetric::class, 'port');
+    }
+
     /** Nombre tal como lo escribe la OLT: 0/1/1 */
     public function getEtiquetaAttribute(): string
     {
         return "{$this->frame}/{$this->slot}/{$this->port}";
+    }
+
+    /**
+     * ¿Este puerto lo confirmó el equipo, o solo está documentado?
+     *
+     * Un puerto documentado a mano que el descubridor nunca vio suele
+     * ser un error de tecleo en el slot o el puerto. Marcarlo evita que
+     * alguien cuelgue cajas de un puerto que no existe.
+     */
+    public function estaDescubierto(): bool
+    {
+        return $this->discovered_at !== null;
+    }
+
+    public function estaArriba(): bool
+    {
+        return $this->oper_status === 'up';
+    }
+
+    /**
+     * Estado del puerto en una sola palabra, mezclando lo que dice el
+     * equipo con lo que se sabe de la ocupación.
+     */
+    public function getEstadoLegibleAttribute(): string
+    {
+        if (!$this->estaDescubierto()) {
+            return 'Sin confirmar';
+        }
+
+        return match ($this->oper_status) {
+            'up' => 'Activo',
+            'down' => $this->admin_status === 'down' ? 'Deshabilitado' : 'Caído',
+            null => 'Sin dato',
+            default => ucfirst($this->oper_status),
+        };
+    }
+
+    public function getColorEstadoAttribute(): string
+    {
+        if (!$this->estaDescubierto()) {
+            return 'secondary';
+        }
+
+        return match ($this->oper_status) {
+            'up' => 'success',
+            'down' => $this->admin_status === 'down' ? 'secondary' : 'danger',
+            default => 'warning',
+        };
     }
 
     /** Cuántas ONTs cuelgan realmente del puerto. */

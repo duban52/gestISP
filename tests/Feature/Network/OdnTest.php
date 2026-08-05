@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Contract;
 use App\Models\NapBox;
 use App\Models\NapPort;
+use App\Models\NetworkZone;
 use App\Models\Olt;
 use App\Models\OpticalNetwork;
 use App\Models\Plan;
@@ -499,6 +500,69 @@ class OdnTest extends TestCase
         ] as $url) {
             $this->get($url)->assertOk();
         }
+    }
+
+    // ==================== Zonas ====================
+
+    /** @test */
+    public function una_zona_se_crea_repartiendo_puertos_pon(): void
+    {
+        $otroPon = PonPort::create([
+            'optical_network_id' => $this->red->id,
+            'olt_id' => $this->pon->olt_id,
+            'frame' => 0, 'slot' => 1, 'port' => 2,
+            'max_onts' => 64, 'active' => true,
+        ]);
+
+        $this->post(route('zones.store', $this->red), [
+            'name' => 'Centro',
+            'color' => '#ff0000',
+            'pon_port_ids' => [$this->pon->id, $otroPon->id],
+        ])->assertRedirect();
+
+        $zona = NetworkZone::where('name', 'Centro')->firstOrFail();
+
+        $this->assertSame($zona->id, $this->pon->fresh()->network_zone_id);
+        $this->assertSame($zona->id, $otroPon->fresh()->network_zone_id);
+    }
+
+    /** @test */
+    public function una_zona_no_puede_llevarse_puertos_de_otra_red(): void
+    {
+        $otraRed = OpticalNetwork::create([
+            'branch_id' => $this->branch->id,
+            'name' => 'Red norte',
+            'nap_prefix' => 'NRT',
+            'nap_next_number' => 1,
+            'active' => true,
+            'user_id' => $this->admin->id,
+        ]);
+
+        $this->post(route('zones.store', $otraRed), [
+            'name' => 'Intrusa',
+            // El puerto es de la red del setUp, no de ésta
+            'pon_port_ids' => [$this->pon->id],
+        ])->assertSessionHasErrors('pon_port_ids.0');
+
+        $this->assertNull($this->pon->fresh()->network_zone_id);
+    }
+
+    /** @test */
+    public function editar_una_zona_sin_mandar_puertos_no_la_vacia(): void
+    {
+        $this->post(route('zones.store', $this->red), [
+            'name' => 'Centro',
+            'pon_port_ids' => [$this->pon->id],
+        ])->assertRedirect();
+
+        $zona = NetworkZone::where('name', 'Centro')->firstOrFail();
+
+        // Una pantalla que solo cambia el nombre no manda los puertos
+        $this->put(route('zones.update', $zona), ['name' => 'Centro histórico'])
+            ->assertRedirect();
+
+        $this->assertSame('Centro histórico', $zona->fresh()->name);
+        $this->assertSame($zona->id, $this->pon->fresh()->network_zone_id);
     }
 
     // ==================== Trazabilidad ====================

@@ -35,6 +35,16 @@ class Kernel extends ConsoleKernel
             ->appendOutputTo(storage_path('logs/onts-poll.log'))
             ->onFailure(fn () => Log::error('La tarea programada onts:poll terminó con error. Revise storage/logs/onts-poll.log'));
 
+        // Tráfico de los puertos PON y de los uplinks. Cuesta dos
+        // recorridos de tabla por OLT, independientemente de cuántos
+        // puertos tenga, así que va con la misma cadencia.
+        $schedule->command('olt:poll-ports')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/olt-ports.log'))
+            ->onFailure(fn () => Log::error('La tarea programada olt:poll-ports terminó con error. Revise storage/logs/olt-ports.log'));
+
         // Tráfico de las cuentas PPPoE (una petición por router).
         $schedule->command('pppoe:poll')
             ->everyFiveMinutes()
@@ -51,6 +61,21 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/onts-poll.log'))
             ->onFailure(fn () => Log::error('El mantenimiento nocturno de ONTs falló.'));
+
+        // Redescubrimiento del hardware: detecta tarjetas y puertos
+        // añadidos. Va una vez al día porque una OLT no cambia de
+        // tarjetas todas las tardes, y poda su historial.
+        $schedule->command('olt:discover-ports')
+            ->dailyAt('03:15')
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/olt-ports.log'))
+            ->onFailure(fn () => Log::error('El descubrimiento de puertos de OLT falló.'));
+
+        $schedule->command('olt:poll-ports --prune=30')
+            ->dailyAt('04:00')
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/olt-ports.log'))
+            ->onFailure(fn () => Log::error('El mantenimiento del historial de puertos falló.'));
 
         $schedule->command('pppoe:poll --prune=30')
             ->dailyAt('03:45')
