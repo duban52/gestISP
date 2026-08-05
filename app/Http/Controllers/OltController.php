@@ -94,6 +94,13 @@ class OltController extends Controller
         return view('gestisp.olts.show', [
             'olt' => $olt->loadCount('onts'),
             'resumen' => $estadisticas->resumen($olt),
+            // Puertos PON DOCUMENTADOS en el modulo de redes. Son otra
+            // cosa que los puertos deducidos de las ONTs: estos llevan
+            // splitter, zona y las cajas que cuelgan de ellos.
+            'ponPorts' => $olt->ponPorts()
+                ->with(['zone', 'napBoxes.ports.contract'])
+                ->orderBy('frame')->orderBy('slot')->orderBy('port')
+                ->get(),
         ]);
     }
 

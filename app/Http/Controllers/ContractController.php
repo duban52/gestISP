@@ -61,6 +61,11 @@ class ContractController extends Controller
             'columnas' => ContractQuery::columnas(),
             'columnasActivas' => ContractQuery::columnasValidas($request->input('columnas')),
             'planes' => Plan::where('branch_id', session('branch_id'))->orderBy('name')->get(),
+            // Para el filtro por caja. Solo el código y el nombre: no
+            // hacen falta los puertos y son cientos de cajas.
+            'cajasNap' => \App\Models\NapBox::deSucursal()
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
             'estados' => \App\Billing\Enums\ContractStatus::cases(),
             'filtros' => $filtros,
             // Totales de lo filtrado: es lo primero que se mira al
@@ -215,8 +220,20 @@ class ContractController extends Controller
             ->get();
         $comments = $contract->comments()->with('user')->get();
 
+        // Cajas NAP de la sucursal para el selector de datos técnicos.
+        // Se precargan sus puertos con el contrato de cada uno porque
+        // el formulario solo debe ofrecer los que están libres.
+        $napBoxes = \App\Models\NapBox::deSucursal()
+            ->with(['ports.contract'])
+            ->orderBy('code')
+            ->get();
+
+        // La caja del puerto actual se precarga para poder enlazarla
+        // desde los datos técnicos sin una consulta por cada visita.
+        $contract->loadMissing('napPort.napBox');
+
         // Devolver la vista con los datos necesarios
-        return view('gestisp.contracts.show', compact('branches', 'clients', 'plans', 'users', 'contract', 'invoices', 'additionalCharges', 'technicalOrders', 'comments'));
+        return view('gestisp.contracts.show', compact('branches', 'clients', 'plans', 'users', 'contract', 'invoices', 'additionalCharges', 'technicalOrders', 'comments', 'napBoxes'));
     }
 
     /**
@@ -248,17 +265,89 @@ class ContractController extends Controller
             ]);
         }else{
             $contract->update([
-                'nap_port' => $request->nap_port,
                 'cpe_sn' => $request->cpe_sn,
                 'user_pppoe' => $request->user_pppoe,
                 'password_pppoe' => $request->password_pppoe,
                 'ssid_wifi' => $request->ssid_wifi,
                 'password_wifi' => $request->password_wifi,
             ]);
+
+            // El puerto de NAP no es un campo más: ocupar o liberar uno
+            // cambia la disponibilidad de la caja y queda en la
+            // trazabilidad, así que pasa por el servicio del módulo.
+            //
+            // Si el puerto se ocupó entre que se abrió el formulario y
+            // se guardó, el servicio avisa con un mensaje que se
+            // entiende; el resto de datos técnicos ya quedó guardado, y
+            // así se dice para que nadie crea que se perdió todo.
+            try {
+                $this->actualizarPuertoNap($request, $contract);
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+                // TRAMPA: los abort() de Laravel lanzan HttpException,
+                // que EXTIENDE RuntimeException. Sin este catch primero,
+                // el de abajo se tragaría el 403 de "esa caja es de otra
+                // sucursal" y lo convertiría en un redirect con mensaje,
+                // es decir, en un control de acceso que no controla nada.
+                throw $e;
+            } catch (\RuntimeException $e) {
+                return redirect()->back()->with(
+                    'error',
+                    'Se guardaron los datos técnicos, pero no el puerto: ' . $e->getMessage(),
+                );
+            }
         }
 
 
         return redirect()->back()->with('success', 'Datos del contrato actualizados');
+    }
+
+    /**
+     * Instala o saca el contrato de un puerto de caja NAP.
+     *
+     * Antes el campo "nap_port" era texto libre y cada quien lo escribía
+     * a su manera, así que no servía para saber si una caja tenía cupo.
+     * Ahora el formulario manda el id del puerto y aquí se delega en
+     * OdnManager, que es quien valida ocupación, mantiene el texto
+     * legible en sintonía y deja el rastro en trazabilidad.
+     *
+     * Si el formulario no trae el campo (por ejemplo, una pantalla
+     * antigua que solo actualiza el wifi) no se toca nada: solo se
+     * actúa cuando el dato viene de verdad.
+     */
+    private function actualizarPuertoNap(Request $request, Contract $contract): void
+    {
+        if (!$request->has('nap_port_id')) {
+            return;
+        }
+
+        $manager = app(\App\Services\OdnManager::class);
+        $puertoId = $request->input('nap_port_id');
+
+        // Vacío = "sin caja asignada": se libera el que tuviera.
+        if (blank($puertoId)) {
+            $manager->liberarPuerto($contract);
+
+            return;
+        }
+
+        $puerto = \App\Models\NapPort::with('napBox.network')->findOrFail($puertoId);
+
+        // El id del puerto llega del navegador: se comprueba que la caja
+        // sea de la sucursal activa (la caja hereda la sucursal de su
+        // red) para que nadie pueda instalar un contrato en la red de
+        // otra sede manipulando el formulario.
+        abort_unless(
+            (int) $puerto->napBox->network->branch_id === (int) session('branch_id'),
+            403,
+        );
+
+        // Nada que hacer si ya está en ese mismo puerto: evita una
+        // entrada de trazabilidad por cada guardado del formulario.
+        if ((int) $contract->nap_port_id === (int) $puerto->id) {
+            return;
+        }
+
+        $manager->asignarPuerto($contract, $puerto);
     }
 
     /**

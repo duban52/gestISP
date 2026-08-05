@@ -31,7 +31,9 @@
 
     {{-- Resultado de la última importación --}}
     @if(session('resultadoImportacion'))
-        @php($r = session('resultadoImportacion'))
+        @php
+            $r = session('resultadoImportacion');
+        @endphp
         <div class="card card-outline card-success shadow-sm">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-clipboard-check mr-1"></i> Resultado de la importación</h3>

@@ -42,13 +42,65 @@ class ContractDiagnostics
     /**
      * Radiografía completa de la conexión.
      *
-     * @return array{pppoe: array<string, mixed>|null, ont: array<string, mixed>|null}
+     * @return array{pppoe: array<string, mixed>|null, ont: array<string, mixed>|null, nap: array<string, mixed>|null}
      */
     public function para(Contract $contrato): array
     {
         return [
             'pppoe' => $this->pppoe($contrato),
             'ont' => $this->ont($contrato),
+            'nap' => $this->nap($contrato),
+        ];
+    }
+
+    /**
+     * Caja NAP donde está instalado el contrato.
+     *
+     * Va en el diagnóstico y no solo en los datos técnicos porque
+     * responde una pregunta distinta: si además de este cliente hay
+     * otros caídos en la misma caja, el problema no está en la casa
+     * sino en la caja o en el puerto PON que la alimenta.
+     *
+     * Es información de la base, no del equipo, así que nunca falla ni
+     * demora; se entrega junto al resto para que la vista tenga todo
+     * en una sola respuesta.
+     *
+     * @return array<string, mixed>|null  null si el contrato no está en una caja documentada
+     */
+    private function nap(Contract $contrato): ?array
+    {
+        $puerto = $contrato->napPort;
+
+        if (!$puerto) {
+            return null;
+        }
+
+        $caja = $puerto->napBox;
+
+        if (!$caja) {
+            return null;
+        }
+
+        $caja->loadMissing('ports.contract', 'ponPort.olt', 'zone');
+        $ocupacion = $caja->ocupacion();
+
+        return [
+            'caja_id' => $caja->id,
+            'caja' => $caja->code,
+            'nombre' => $caja->name,
+            'puerto' => $puerto->number,
+            'direccion' => $caja->address,
+            'zona' => $caja->zone?->name,
+            'estado_caja' => $caja->estado_legible,
+            'ocupados' => $ocupacion['ocupados'],
+            'capacidad' => $ocupacion['capacidad'],
+            'porcentaje' => $ocupacion['porcentaje'],
+            // Cuántos clientes más dependen de la misma caja: es el
+            // número que dice si vale la pena mandar un técnico.
+            'otros_clientes' => max(0, $ocupacion['ocupados'] - 1),
+            'olt' => $caja->ponPort?->olt?->name,
+            'puerto_pon' => $caja->ponPort?->etiqueta,
+            'url' => route('naps.show', $caja->id),
         ];
     }
 

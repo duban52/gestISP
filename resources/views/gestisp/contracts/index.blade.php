@@ -173,6 +173,32 @@
                             <option value="0" @selected(($filtros['permanence_clause'] ?? '') === '0')>No</option>
                         </select>
                     </div>
+
+                    {{-- Caja NAP: saca de un golpe a todos los clientes
+                         que cuelgan de una misma caja. Es la lista que
+                         se necesita para avisar antes de intervenirla,
+                         o para confirmar una falla compartida. --}}
+                    <div class="col-md-3 form-group">
+                        <label>Caja NAP</label>
+                        <select name="nap_box_id" class="form-control">
+                            <option value="">Todas</option>
+                            @foreach($cajasNap as $caja)
+                                <option value="{{ $caja->id }}"
+                                    @selected((string) ($filtros['nap_box_id'] ?? '') === (string) $caja->id)>
+                                    {{ $caja->code }}@if($caja->name) — {{ $caja->name }}@endif
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="col-md-2 form-group">
+                        <label>Caja documentada</label>
+                        <select name="has_nap" class="form-control">
+                            <option value="">Indiferente</option>
+                            <option value="si" @selected(($filtros['has_nap'] ?? '') === 'si')>Sí</option>
+                            <option value="no" @selected(($filtros['has_nap'] ?? '') === 'no')>No</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 

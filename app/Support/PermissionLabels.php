@@ -44,6 +44,8 @@ class PermissionLabels
         'olts' => 'OLTs',
         'onts' => 'ONTs',
         'pppoe' => 'Cuentas PPPoE',
+        'networks' => 'Redes opticas',
+        'naps' => 'Cajas NAP',
         'users' => 'Usuarios',
         'roles' => 'Roles',
     ];

@@ -217,16 +217,61 @@
                     <h3 class="card-title"><i class="fas fa-project-diagram mr-1"></i> Puertos PON</h3>
                 </div>
                 <div class="card-body py-2" style="max-height: 420px; overflow-y: auto;">
+                    {{-- ============================================================
+                         Dos vistas del mismo puerto, y conviene distinguirlas:
+
+                         DOCUMENTADO  el puerto registrado en el módulo de
+                                      redes, con su splitter, su zona y las
+                                      cajas NAP que cuelgan de él.
+                         EN USO       lo que se deduce de las ONTs conectadas.
+
+                         Un puerto en uso que NO está documentado es una parte
+                         de la red que nadie anotó: se marca, porque es
+                         exactamente lo que este módulo viene a resolver.
+                         ============================================================ --}}
+                    @php
+                        $documentados = $ponPorts->keyBy(fn ($p) => $p->slot . '/' . $p->port);
+                    @endphp
+
                     @forelse($puertos as $puerto)
-                        <div class="d-flex justify-content-between align-items-center py-1">
-                            <span><code>{{ $puerto['puerto'] }}</code></span>
+                        {{-- En forma de bloque, NO en la forma corta de una
+                             sola línea: Blade empareja los bloques de PHP
+                             crudo antes de compilar nada, y la forma corta
+                             la toma como apertura, casándola con el cierre
+                             que venga después —aquí, noventa líneas más
+                             abajo— y tragándose todo lo del medio como PHP.
+                             Por lo mismo, en este comentario no se escribe
+                             ninguna directiva con arroba: el emparejador
+                             tampoco distingue los comentarios. --}}
+                        @php
+                            $doc = $documentados->get($puerto['puerto']);
+                        @endphp
+                        <div class="d-flex justify-content-between align-items-center py-1 {{ !$loop->first ? 'border-top' : '' }}">
                             <span>
+                                <code>{{ $puerto['puerto'] }}</code>
+                                @if($doc)
+                                    @if($doc->zone)
+                                        <span class="badge ml-1" style="background: {{ $doc->zone->color }}; color:#fff;">
+                                            {{ $doc->zone->name }}
+                                        </span>
+                                    @endif
+                                    <small class="d-block text-muted">
+                                        {{ $doc->napBoxes->count() }} caja(s)
+                                        @if($doc->splitter_ratio) · splitter {{ $doc->splitter_ratio }} @endif
+                                    </small>
+                                @else
+                                    <small class="d-block text-warning">
+                                        <i class="fas fa-exclamation-triangle"></i> Sin documentar
+                                    </small>
+                                @endif
+                            </span>
+                            <span class="text-right">
                                 <span class="text-success">{{ $puerto['en_linea'] }}</span>
                                 <span class="text-muted">/ {{ $puerto['total'] }}</span>
                                 {{-- Un puerto GPON admite hasta 128 ONTs por
                                      norma, pero se reparte entre 32 y 64 para
                                      no quedarse sin ancho de banda. --}}
-                                @if($puerto['total'] >= 64)
+                                @if($puerto['total'] >= ($doc->max_onts ?? 64))
                                     <span class="badge badge-warning ml-1" title="Conviene balancear antes de seguir instalando">
                                         Cargado
                                     </span>
@@ -238,6 +283,21 @@
                             No hay ONTs registradas en esta OLT.
                         </p>
                     @endforelse
+
+                    @if($olt->optical_network_id)
+                        <div class="mt-2 pt-2 border-top text-center">
+                            <a href="{{ route('networks.show', $olt->optical_network_id) }}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-sitemap"></i> Ver la red de esta OLT
+                            </a>
+                        </div>
+                    @elseif($ponPorts->isEmpty() && !empty($puertos))
+                        <div class="alert alert-light border mt-2 mb-0 py-2 small">
+                            Esta OLT no pertenece a ninguna red documentada.
+                            <a href="{{ route('networks.index') }}">Asígnela a una</a>
+                            para poder registrar sus puertos y cajas NAP.
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>

@@ -350,6 +350,55 @@ Route::delete('/routers/{router}',     [RouterController::class, 'destroy'])->na
 Route::get('/api/routers',                     [RouterController::class, 'apiRouters'])->name('api.routers');
 Route::get('/api/routers/{router}/profiles',   [RouterController::class, 'apiProfiles'])->name('api.routers.profiles');
 
+/*
+|--------------------------------------------------------------------------
+| Redes ópticas (ODN)
+|--------------------------------------------------------------------------
+| Documentación de la planta externa: redes, zonas, puertos PON y las
+| cajas NAP/CTO donde se conecta el cliente.
+|
+| El orden importa: /naps/mapa va ANTES de /naps/{nap}, o la ruta del
+| detalle se traga "mapa" como si fuera el id de una caja.
+*/
+Route::get('/redes',                  [App\Http\Controllers\OpticalNetworkController::class, 'index'])->name('networks.index');
+Route::get('/redes/nueva',            [App\Http\Controllers\OpticalNetworkController::class, 'create'])->name('networks.create');
+Route::post('/redes',                 [App\Http\Controllers\OpticalNetworkController::class, 'store'])->name('networks.store');
+Route::get('/redes/{network}',        [App\Http\Controllers\OpticalNetworkController::class, 'show'])->name('networks.show');
+Route::get('/redes/{network}/editar', [App\Http\Controllers\OpticalNetworkController::class, 'edit'])->name('networks.edit');
+Route::put('/redes/{network}',        [App\Http\Controllers\OpticalNetworkController::class, 'update'])->name('networks.update');
+Route::delete('/redes/{network}',     [App\Http\Controllers\OpticalNetworkController::class, 'destroy'])->name('networks.destroy');
+
+// OLTs que pertenecen a la red
+Route::post('/redes/{network}/olts',         [App\Http\Controllers\OpticalNetworkController::class, 'attachOlt'])->name('networks.olts.attach');
+Route::delete('/redes/{network}/olts/{olt}', [App\Http\Controllers\OpticalNetworkController::class, 'detachOlt'])->name('networks.olts.detach');
+
+// Zonas: agrupan puertos PON y son con lo que se planea la expansión
+Route::post('/redes/{network}/zonas', [App\Http\Controllers\OpticalNetworkController::class, 'storeZone'])->name('zones.store');
+Route::put('/zonas/{zone}',           [App\Http\Controllers\OpticalNetworkController::class, 'updateZone'])->name('zones.update');
+Route::delete('/zonas/{zone}',        [App\Http\Controllers\OpticalNetworkController::class, 'destroyZone'])->name('zones.destroy');
+
+// Puertos PON
+Route::post('/redes/{network}/puertos-pon',          [App\Http\Controllers\OpticalNetworkController::class, 'storePonPort'])->name('pon_ports.store');
+Route::post('/redes/{network}/puertos-pon/detectar', [App\Http\Controllers\OpticalNetworkController::class, 'detectPonPorts'])->name('pon_ports.detect');
+Route::put('/puertos-pon/{ponPort}',                 [App\Http\Controllers\OpticalNetworkController::class, 'updatePonPort'])->name('pon_ports.update');
+Route::delete('/puertos-pon/{ponPort}',              [App\Http\Controllers\OpticalNetworkController::class, 'destroyPonPort'])->name('pon_ports.destroy');
+
+// Cajas NAP / CTO
+Route::get('/naps',              [App\Http\Controllers\NapBoxController::class, 'index'])->name('naps.index');
+Route::get('/naps/mapa',         [App\Http\Controllers\NapBoxController::class, 'map'])->name('naps.map');
+Route::get('/naps/mapa/datos',   [App\Http\Controllers\NapBoxController::class, 'mapData'])->name('naps.map_data');
+Route::get('/naps/cercanas',     [App\Http\Controllers\NapBoxController::class, 'nearby'])->name('naps.nearby');
+Route::get('/naps/nueva',        [App\Http\Controllers\NapBoxController::class, 'create'])->name('naps.create');
+Route::post('/naps',             [App\Http\Controllers\NapBoxController::class, 'store'])->name('naps.store');
+Route::get('/naps/{nap}',        [App\Http\Controllers\NapBoxController::class, 'show'])->name('naps.show');
+Route::get('/naps/{nap}/editar', [App\Http\Controllers\NapBoxController::class, 'edit'])->name('naps.edit');
+Route::put('/naps/{nap}',        [App\Http\Controllers\NapBoxController::class, 'update'])->name('naps.update');
+Route::delete('/naps/{nap}',     [App\Http\Controllers\NapBoxController::class, 'destroy'])->name('naps.destroy');
+
+// Puertos de una caja
+Route::put('/naps/puertos/{port}',            [App\Http\Controllers\NapBoxController::class, 'updatePort'])->name('naps.port.update');
+Route::delete('/naps/puertos/{port}/liberar', [App\Http\Controllers\NapBoxController::class, 'releasePort'])->name('naps.port.release');
+
 // Cortes masivos de servicio. Van ANTES de /pppoe/{pppoe} o la ruta
 // del detalle se traga "cortes" como si fuera el id de una cuenta.
 Route::get('/pppoe/cortes',          [App\Http\Controllers\PppoeCutoffController::class, 'create'])->name('pppoe.cutoff');

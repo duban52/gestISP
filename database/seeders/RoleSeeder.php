@@ -184,6 +184,16 @@ class RoleSeeder extends Seeder
         // un clic no es lo mismo que consultar el listado.
         Permission::create(['name' => 'pppoe.cutoff', 'description' => 'Ejecutar cortes masivos de servicio']);
 
+        // Redes opticas (ODN): documentacion de la planta externa
+        Permission::create(['name' => 'networks.index', 'description' => 'Ver redes opticas']);
+        Permission::create(['name' => 'networks.create', 'description' => 'Crear redes opticas']);
+        Permission::create(['name' => 'networks.edit', 'description' => 'Editar redes, zonas y puertos PON']);
+        Permission::create(['name' => 'networks.destroy', 'description' => 'Eliminar redes opticas']);
+        Permission::create(['name' => 'naps.index', 'description' => 'Ver cajas NAP y su mapa']);
+        Permission::create(['name' => 'naps.create', 'description' => 'Crear cajas NAP']);
+        Permission::create(['name' => 'naps.edit', 'description' => 'Editar cajas NAP y sus puertos']);
+        Permission::create(['name' => 'naps.destroy', 'description' => 'Eliminar cajas NAP']);
+
         //Usuarios
         Permission::create(['name' => 'users.index', 'description' => 'Ver usuarios']);
         Permission::create(['name' => 'users.create', 'description' => 'Crear usuarios']);
@@ -230,6 +240,8 @@ class RoleSeeder extends Seeder
             'olts.index', 'olts.create', 'olts.edit', 'olts.vlans',
             'onts.index', 'onts.show', 'onts.activate', 'onts.destroy', 'onts.relocate', 'onts.catv',
             'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart', 'pppoe.cutoff',
+            'networks.index', 'networks.create', 'networks.edit', 'networks.destroy',
+            'naps.index', 'naps.create', 'naps.edit', 'naps.destroy',
             'reports.index', 'reports.growth', 'reports.technical', 'reports.billing', 'reports.provisioning'
         ]);
 

@@ -649,6 +649,42 @@ return [
 
         ],
 
+        // ============================================================
+        // Redes opticas (ODN)
+        //
+        // Documentacion de la planta externa. Va despues de
+        // Aprovisionamiento porque describe DONDE esta conectado lo
+        // que aquel modulo activa.
+        // ============================================================
+        [
+            'text' => 'Redes',
+            'icon' => 'fas  fa-project-diagram',
+            'can' => 'networks.index',
+            'submenu' => [
+                [
+                    'text' => 'Redes opticas',
+                    'route' => 'networks.index',
+                    'active' => ['redes*'],
+                    'icon' => 'fas  fa-sitemap',
+                    'can' => 'networks.index',
+                ],
+                [
+                    'text' => 'Cajas NAP / CTO',
+                    'route' => 'naps.index',
+                    'active' => ['naps', 'naps/*'],
+                    'icon' => 'fas  fa-box',
+                    'can' => 'naps.index',
+                ],
+                [
+                    'text' => 'Mapa de la red',
+                    'route' => 'naps.map',
+                    'active' => ['naps/mapa*'],
+                    'icon' => 'fas  fa-map-marked-alt',
+                    'can' => 'naps.index',
+                ],
+            ],
+        ],
+
         [
             'text' => 'Gestión del sistema',
             'icon' => 'fas  fa-cogs',

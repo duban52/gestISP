@@ -21,6 +21,7 @@ class Contract extends Model
         'address',
         'home_type',
         'nap_port',
+        'nap_port_id',
         'cpe_sn',
         'user_pppoe',
         'password_pppoe',
@@ -122,6 +123,18 @@ class Contract extends Model
     }
 
     //Relación con la tabla sucursal
+    /**
+     * Puerto de la caja NAP donde esta instalado el servicio.
+     *
+     * La columna de texto `nap_port` se conserva como historico:
+     * lo que se anoto ahi antes del modulo de redes no se puede
+     * traducir a una caja concreta sin adivinar.
+     */
+    public function napPort()
+    {
+        return $this->belongsTo(NapPort::class, 'nap_port_id');
+    }
+
     public function branch()
     {
         return $this->belongsTo(Branch::class);

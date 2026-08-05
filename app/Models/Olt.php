@@ -11,6 +11,7 @@ class Olt extends Model
 
     protected $fillable = [
         'branch_id',
+        'optical_network_id',
         'name',
         'ip_address',
         'ssh_port',
@@ -62,6 +63,18 @@ class Olt extends Model
     public function getEstadoConsultadoAttribute(): ?string
     {
         return $this->status_checked_at?->diffForHumans();
+    }
+
+    /** Red optica (ODN) a la que pertenece la OLT */
+    public function opticalNetwork()
+    {
+        return $this->belongsTo(OpticalNetwork::class, 'optical_network_id');
+    }
+
+    /** Puertos PON documentados de esta OLT */
+    public function ponPorts()
+    {
+        return $this->hasMany(PonPort::class);
     }
 
     /**

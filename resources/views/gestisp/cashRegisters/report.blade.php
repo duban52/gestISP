@@ -165,10 +165,12 @@
                          salen con el número de factura, el número de
                          contrato y la identificación del cliente. --}}
                     {{ $transaction->descripcionLegible() }}
-                    {{-- Forma de BLOQUE a propósito: la abreviada
-                         @php(...) se empareja con el @endphp de
-                         cualquier bloque posterior del archivo y se
-                         traga el HTML que quede en medio. --}}
+                    {{-- Forma de BLOQUE a propósito: la forma corta de una
+                         sola línea se empareja con el cierre de cualquier
+                         bloque posterior del archivo y se traga el HTML
+                         que quede en medio. (Y por eso aquí tampoco se
+                         escriben esas directivas con arroba: el
+                         emparejador de Blade no distingue comentarios.) --}}
                     @php
                         $detalleCliente = $transaction->detalleDelCliente();
                     @endphp

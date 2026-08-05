@@ -76,7 +76,15 @@ class ContractQuery
             'ont_sn' => ['titulo' => 'Serial ONT (equipo)', 'grupo' => 'Técnico', 'defecto' => false],
             'ont_olt' => ['titulo' => 'OLT', 'grupo' => 'Técnico', 'defecto' => false],
             'ont_potencia' => ['titulo' => 'Potencia ONT', 'grupo' => 'Técnico', 'defecto' => false],
-            'nap_port' => ['titulo' => 'NAP y puerto', 'grupo' => 'Técnico', 'defecto' => false],
+            'nap_port' => ['titulo' => 'NAP y puerto (anotación)', 'grupo' => 'Técnico', 'defecto' => false],
+            // Caja documentada en el módulo de redes. Se ofrece aparte
+            // de la anotación de texto porque son cosas distintas: una
+            // es lo que alguien escribió, la otra es dónde está de
+            // verdad instalado el contrato.
+            'nap_caja' => ['titulo' => 'Caja NAP', 'grupo' => 'Técnico', 'defecto' => false],
+            'nap_numero' => ['titulo' => 'Puerto de la caja', 'grupo' => 'Técnico', 'defecto' => false],
+            'nap_zona' => ['titulo' => 'Zona de red', 'grupo' => 'Técnico', 'defecto' => false],
+            'nap_pon' => ['titulo' => 'Puerto PON', 'grupo' => 'Técnico', 'defecto' => false],
             'user_pppoe' => ['titulo' => 'Usuario PPPoE', 'grupo' => 'Técnico', 'defecto' => false],
             'password_pppoe' => ['titulo' => 'Clave PPPoE', 'grupo' => 'Técnico', 'defecto' => false],
             'ssid_wifi' => ['titulo' => 'SSID wifi', 'grupo' => 'Técnico', 'defecto' => false],
@@ -104,7 +112,13 @@ class ContractQuery
         $pagables = InvoiceStatus::payable();
 
         $query = Contract::query()
-            ->with(['client', 'plan', 'user', 'ont.olt'])
+            ->with([
+                'client', 'plan', 'user', 'ont.olt',
+                // La caja se precarga aunque sus columnas estén ocultas
+                // por defecto: si el usuario las activa, sin esto cada
+                // fila dispararía cuatro consultas más.
+                'napPort.napBox.zone', 'napPort.napBox.ponPort',
+            ])
             // Saldo y facturas por pagar como subconsultas: recorrer
             // los contratos para sumarlos sería un N+1 gigante.
             ->withSum(
@@ -237,6 +251,24 @@ class ContractQuery
         if (($filtros['permanence_clause'] ?? '') !== '') {
             $query->where('contracts.permanence_clause', $filtros['permanence_clause']);
         }
+
+        // Todos los clientes de una caja: es la consulta que se hace
+        // cuando se va a intervenir esa caja y hay que avisar, o cuando
+        // varios reportan falla y se sospecha del mismo punto.
+        if (!empty($filtros['nap_box_id'])) {
+            $query->whereHas(
+                'napPort',
+                fn ($q) => $q->where('nap_box_id', $filtros['nap_box_id']),
+            );
+        }
+
+        // Los contratos sin caja documentada son la lista de trabajo
+        // mientras se termina de levantar la red.
+        if (($filtros['has_nap'] ?? '') === 'si') {
+            $query->whereNotNull('contracts.nap_port_id');
+        } elseif (($filtros['has_nap'] ?? '') === 'no') {
+            $query->whereNull('contracts.nap_port_id');
+        }
     }
 
     /**
@@ -306,6 +338,10 @@ class ContractQuery
             'ont_olt' => (string) ($contrato->ont?->olt?->name ?? ''),
             'ont_potencia' => $contrato->ont?->rx_power ? $contrato->ont->rx_power . ' dBm' : '',
             'nap_port' => (string) $contrato->nap_port,
+            'nap_caja' => (string) ($contrato->napPort?->napBox?->code ?? ''),
+            'nap_numero' => $contrato->napPort ? (string) $contrato->napPort->number : '',
+            'nap_zona' => (string) ($contrato->napPort?->napBox?->zone?->name ?? ''),
+            'nap_pon' => (string) ($contrato->napPort?->napBox?->ponPort?->etiqueta ?? ''),
             'user_pppoe' => (string) $contrato->user_pppoe,
             'password_pppoe' => (string) $contrato->password_pppoe,
             'ssid_wifi' => (string) $contrato->ssid_wifi,

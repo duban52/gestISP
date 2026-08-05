@@ -80,7 +80,9 @@
         </thead>
         <tbody>
         @forelse($facturas as $factura)
-            @php($cliente = $factura->contract?->client)
+            @php
+                $cliente = $factura->contract?->client;
+            @endphp
             <tr>
                 <td>{{ $factura->displayNumber() }}</td>
                 <td>{{ $factura->contract?->contract_number ?? '—' }}</td>

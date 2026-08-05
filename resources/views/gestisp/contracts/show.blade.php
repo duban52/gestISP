@@ -278,10 +278,46 @@
                                     <form action="{{ route('contracts.update', $contract->id) }}" method="post">
                                         @csrf
                                         @method('put')
+                                        {{-- ============================================================
+                                             NAP y puerto
+
+                                             Antes era texto libre y servía para anotar, no
+                                             para saber si un puerto estaba ocupado. Ahora se
+                                             elige la caja y, dentro de ella, un puerto que
+                                             de verdad esté DISPONIBLE: los ocupados por otro
+                                             cliente ni siquiera aparecen.
+                                             ============================================================ --}}
                                         <div class="form-group">
-                                            <label for="">NAP y Puerto:</label>
-                                            <input type="text" class="form-control" name="nap_port" value="{{ $contract->nap_port }}">
+                                            <label>Caja NAP:</label>
+                                            <select class="form-control" id="napBoxSelect">
+                                                <option value="">Sin caja asignada</option>
+                                                @foreach($napBoxes as $caja)
+                                                    <option value="{{ $caja->id }}"
+                                                        @selected($contract->napPort?->nap_box_id === $caja->id)>
+                                                        {{ $caja->code }}
+                                                        @if($caja->name) — {{ $caja->name }} @endif
+                                                        ({{ $caja->puertosDisponibles() }} libres)
+                                                    </option>
+                                                @endforeach
+                                            </select>
                                         </div>
+                                        <div class="form-group">
+                                            <label>Puerto de la caja:</label>
+                                            <select class="form-control" name="nap_port_id" id="napPortSelect">
+                                                <option value="">Sin puerto</option>
+                                            </select>
+                                            <small class="form-text text-muted">
+                                                Solo se listan los puertos libres, más el que ya tiene este contrato.
+                                            </small>
+                                        </div>
+                                        @if($contract->nap_port && !$contract->nap_port_id)
+                                            <div class="alert alert-light border py-2">
+                                                <small>
+                                                    Anotación anterior: <strong>{{ $contract->nap_port }}</strong>.
+                                                    Se conserva como histórico; elija la caja y el puerto reales arriba.
+                                                </small>
+                                            </div>
+                                        @endif
                                         <div class="form-group">
                                             <label for="">Serial del CPE:</label>
                                             <input type="text" class="form-control" name="cpe_sn" value="{{ $contract->cpe_sn }}">
@@ -335,7 +371,21 @@
                 </div>
 
                 <div class="card-body row">
-                    <p class="col-6"><strong>NAP y puerto:</strong> {{ $contract->nap_port }}</p>
+                    {{-- Si el contrato está en una caja documentada se
+                         enlaza: desde la ficha se llega a ver qué otros
+                         clientes cuelgan de la misma caja, que es lo
+                         primero que se mira cuando "se cayó el barrio".
+                         Si solo hay la anotación vieja de texto, se
+                         muestra tal cual para no perder el dato. --}}
+                    <p class="col-6"><strong>NAP y puerto:</strong>
+                        @if($contract->napPort)
+                            <a href="{{ route('naps.show', $contract->napPort->nap_box_id) }}">
+                                {{ $contract->napPort->napBox->code }} / P{{ $contract->napPort->number }}
+                            </a>
+                        @else
+                            {{ $contract->nap_port ?: '—' }}
+                        @endif
+                    </p>
                     <p class="col-6"><strong>Serial del CPE:</strong> {{ $contract->cpe_sn }}</p>
                     <p class="col-6"><strong>Usuario PPPoE:</strong> {{ $contract->user_pppoe }}</p>
                     <p class="col-6"><strong>Contraseña PPPoE:</strong> {{ $contract->password_pppoe }}</p>
@@ -509,15 +559,20 @@
                                      consumir (anticipos o excedentes de notas
                                      crédito). Se aplica solo a las próximas
                                      facturas. --}}
-                                {{-- Se usa la forma de BLOQUE (@php … @endphp) y no
-                                     la abreviada @php(...): Blade empareja los
-                                     bloques con una expresión no ávida, así que
-                                     una forma abreviada seguida más abajo por un
-                                     @endphp de otro bloque se empareja con ESE, y
+                                {{-- Se usa la forma de BLOQUE y no la corta de
+                                     una sola línea: Blade empareja los bloques
+                                     de PHP con una expresión no ávida, así que
+                                     una forma corta seguida más abajo por el
+                                     cierre de otro bloque se empareja con ESE y
                                      se traga como PHP crudo todo lo que hay en
                                      medio (la tabla de facturas dejaba de
                                      compilarse). Mezclar las dos formas en un
-                                     mismo archivo rompe la vista. --}}
+                                     mismo archivo rompe la vista.
+
+                                     En este comentario no se nombran esas
+                                     directivas con arroba: el emparejador corre
+                                     antes de quitar los comentarios y las
+                                     tomaría igual. --}}
                                 @php
                                     $saldoAFavor = $contract->saldoAFavor();
                                 @endphp
@@ -828,6 +883,78 @@
         errorModal.show();
         @endif
 
+        /* ============================================================
+           Caja NAP -> puertos disponibles
+
+           Los puertos viajan con la página en lugar de pedirse por AJAX
+           al cambiar de caja: son pocos por caja y así el selector
+           responde al instante, incluso si la red está lenta.
+
+           Solo se ofrecen los puertos LIBRES; el que ya tiene este
+           contrato se incluye aparte para que no desaparezca al abrir
+           el formulario, y los dañados se excluyen siempre.
+           ============================================================ */
+        (function () {
+            {{-- El array se arma aquí y no dentro de la directiva json:
+                 Blade corta el argumento de una directiva en el primer
+                 paréntesis que cree de cierre sin contar los corchetes,
+                 y una expresión con arrays anidados compila partida.
+                 (Tampoco se nombran directivas con arroba dentro de un
+                 comentario: Blade las compila igual.) --}}
+            @php
+                $puertosPorCaja = $napBoxes->mapWithKeys(fn ($caja) => [
+                    $caja->id => $caja->ports
+                        ->filter(fn ($p) => $p->estaDisponible() || $p->id === $contract->nap_port_id)
+                        ->map(fn ($p) => [
+                            'id' => $p->id,
+                            'numero' => $p->number,
+                            'propio' => $p->id === $contract->nap_port_id,
+                        ])
+                        ->values(),
+                ]);
+            @endphp
+
+            const puertosPorCaja = {!! $puertosPorCaja->toJson() !!};
+
+            const puertoActual = @json($contract->nap_port_id);
+
+            const selCaja = document.getElementById('napBoxSelect');
+            const selPuerto = document.getElementById('napPortSelect');
+
+            if (!selCaja || !selPuerto) {
+                return;
+            }
+
+            function llenarPuertos() {
+                const puertos = puertosPorCaja[selCaja.value] || [];
+
+                selPuerto.innerHTML = '<option value="">Sin puerto</option>';
+
+                puertos.forEach(function (p) {
+                    const opcion = document.createElement('option');
+                    opcion.value = p.id;
+                    opcion.textContent = 'Puerto ' + p.numero + (p.propio ? ' (actual)' : '');
+                    opcion.selected = (p.id === puertoActual);
+                    selPuerto.appendChild(opcion);
+                });
+
+                // Sin caja no hay puerto que elegir: se deshabilita en
+                // vez de dejar un desplegable vacío que confunde.
+                selPuerto.disabled = (selCaja.value === '');
+
+                if (selCaja.value !== '' && puertos.length === 0) {
+                    const aviso = document.createElement('option');
+                    aviso.value = '';
+                    aviso.textContent = 'Esta caja no tiene puertos libres';
+                    aviso.disabled = true;
+                    selPuerto.appendChild(aviso);
+                }
+            }
+
+            selCaja.addEventListener('change', llenarPuertos);
+            llenarPuertos();
+        })();
+
         // DataTables de las pestañas del contrato
         $(function () {
             const opciones = function (extra) {
@@ -890,7 +1017,7 @@
                 });
 
             function pintarDiagnostico(datos) {
-                if (!datos.pppoe && !datos.ont) {
+                if (!datos.pppoe && !datos.ont && !datos.nap) {
                     $diag.html(
                         '<div class="alert alert-light border py-2 mb-0">' +
                         '<i class="fas fa-info-circle text-muted"></i> ' +
@@ -900,7 +1027,54 @@
                     return;
                 }
 
-                $diag.html('<div class="row">' + bloquePppoe(datos.pppoe) + bloqueOnt(datos.ont) + '</div>');
+                $diag.html(
+                    '<div class="row">' +
+                    bloquePppoe(datos.pppoe) +
+                    bloqueOnt(datos.ont) +
+                    bloqueNap(datos.nap) +
+                    '</div>'
+                );
+            }
+
+            /* La caja no dice si el cliente está caído, dice a quién
+               MÁS se lleva por delante si el problema es de la caja.
+               Por eso se muestra cuántos clientes comparten la caja y
+               de qué puerto PON cuelga: con eso se decide si se manda
+               un técnico o se revisa el equipo del cliente. */
+            function bloqueNap(n) {
+                if (!n) {
+                    return '';
+                }
+
+                let cuerpo = '<div><strong>' + escapar(n.caja) + '</strong>';
+                cuerpo += ' <span class="badge badge-light border">Puerto ' + n.puerto + '</span>';
+                if (n.nombre) {
+                    cuerpo += ' <small class="text-muted">' + escapar(n.nombre) + '</small>';
+                }
+                cuerpo += '</div>';
+
+                if (n.direccion) {
+                    cuerpo += '<div class="text-muted small">' + escapar(n.direccion) + '</div>';
+                }
+
+                cuerpo += '<div class="mt-1">Ocupación: <strong>' + n.porcentaje + '%</strong> ' +
+                    '<small class="text-muted">(' + n.ocupados + ' de ' + n.capacidad + ')</small></div>';
+
+                if (n.otros_clientes > 0) {
+                    cuerpo += '<div class="small text-muted">' +
+                        'Otros <strong>' + n.otros_clientes + '</strong> cliente(s) dependen de esta caja.' +
+                        '</div>';
+                }
+
+                if (n.puerto_pon) {
+                    cuerpo += '<div class="small text-muted">PON ' + escapar(n.puerto_pon) +
+                        (n.olt ? ' · ' + escapar(n.olt) : '') + '</div>';
+                }
+
+                cuerpo += '<a href="' + n.url + '" class="btn btn-xs btn-outline-secondary mt-2">' +
+                    '<i class="fas fa-box"></i> Ver la caja</a>';
+
+                return tarjeta('Caja NAP', 'info', cuerpo);
             }
 
             function bloquePppoe(p) {
