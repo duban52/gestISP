@@ -61,7 +61,15 @@ Route::namespace('App\Http\Controllers')->prefix('gestisp')->group(function () {
     Route::resource('plans', 'PlanController')->names('plans');
 
     // Contratos
-    Route::resource('contracts', 'ContractController')->names('contracts');
+    //
+    // Se excluye "create" del resource: más abajo se declara
+    // contracts/create/{client} con ESE mismo nombre, porque aquí un
+    // contrato siempre nace de un cliente concreto. Tener los dos deja
+    // el nombre "contracts.create" duplicado, y aunque en desarrollo
+    // funciona (gana el último), hace fallar `php artisan route:cache`
+    // con "Another route has already been assigned name" — es decir,
+    // impide cachear rutas en producción.
+    Route::resource('contracts', 'ContractController')->except(['create'])->names('contracts');
 
     // Comentarios/notas internas del contrato
     Route::post('contracts/{contract}/comments', [App\Http\Controllers\ContractCommentController::class, 'store'])

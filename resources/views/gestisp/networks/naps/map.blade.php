@@ -59,13 +59,23 @@
 
                     {{-- Las muflas se pueden apagar: en una zona densa
                          se solapan con las cajas y a veces se quiere ver
-                         solo una de las dos capas. --}}
-                    <div class="custom-control custom-switch d-inline-block ml-3">
-                        <input type="checkbox" class="custom-control-input" id="verMuflas" checked>
-                        <label class="custom-control-label small" for="verMuflas">
-                            <i class="fas fa-box-open"></i> Muflas
-                        </label>
-                    </div>
+                         solo una de las dos capas.
+
+                         El interruptor solo aparece si la ruta de las
+                         muflas existe. Este mapa funcionaba desde antes
+                         de que hubiera planta de fibra, y no puede
+                         dejar de funcionar porque falte una ruta de un
+                         módulo posterior: una caché de rutas vieja o un
+                         despliegue a medias tumbaban la página entera
+                         con un 500. --}}
+                    @if(Route::has('closures.map_data'))
+                        <div class="custom-control custom-switch d-inline-block ml-3">
+                            <input type="checkbox" class="custom-control-input" id="verMuflas" checked>
+                            <label class="custom-control-label small" for="verMuflas">
+                                <i class="fas fa-box-open"></i> Muflas
+                            </label>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -247,9 +257,17 @@
                ============================================================ */
             const capaMuflas = L.layerGroup().addTo(mapa);
 
+            // Vacía cuando el módulo de fibra no está desplegado: la
+            // vista no puede llamar a route() de una ruta que no existe.
+            const URL_MUFLAS = @json(Route::has('closures.map_data') ? route('closures.map_data') : null);
+
             function cargarMuflas() {
+                if (!URL_MUFLAS) {
+                    return;
+                }
+
                 const redId = $('#filtroRed').val();
-                const url = "{{ route('closures.map_data') }}" + (redId ? '?network_id=' + redId : '');
+                const url = URL_MUFLAS + (redId ? '?network_id=' + redId : '');
 
                 capaMuflas.clearLayers();
 

@@ -266,10 +266,12 @@ class NapBoxController extends Controller
     {
         return view('gestisp.networks.naps.map', [
             'redes' => OpticalNetwork::deSucursal()->orderBy('name')->get(),
+            // El "o" va AGRUPADO: sin los paréntesis, el orWhere se
+            // sale del filtro de sucursal y la cuenta acaba incluyendo
+            // cajas de otras sedes. Es la trampa clásica de mezclar
+            // where y orWhere en la misma cadena.
             'sinUbicar' => NapBox::deSucursal()
-                ->whereNull('latitude')
-                ->orWhereNull('longitude')
-                ->deSucursal()
+                ->where(fn ($q) => $q->whereNull('latitude')->orWhereNull('longitude'))
                 ->count(),
         ]);
     }
