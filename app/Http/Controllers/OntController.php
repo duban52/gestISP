@@ -6,6 +6,7 @@ use App\Models\Contract;
 use App\Models\Olt;
 use App\Models\Ont;
 use App\Services\OltSnmpService;
+use App\Services\OltStatistics;
 use App\Services\OltSshService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -94,9 +95,104 @@ class OntController extends Controller
             }
         }
 
+        // Filtros del lado del SERVIDOR, no de la tabla. El buscador de
+        // DataTables solo ve lo que ya está en la página, y una sucursal
+        // puede tener miles de ONTs: filtrar aquí es lo que hace que la
+        // pantalla siga abriendo rápido cuando la red crece.
+        if (($estado = $request->query('estado')) !== null && $estado !== '') {
+            // "admin_enabled" es null mientras nadie haya leido el
+            // estado administrativo en la OLT: eso NO es deshabilitada,
+            // es "no se sabe", y cuenta como operativa.
+            match ($estado) {
+                'en_linea' => $query->where('status', 1)
+                    ->where(fn ($q) => $q->whereNull('admin_enabled')->orWhere('admin_enabled', true)),
+                'caida' => $query->where('status', '!=', 1)
+                    ->where(fn ($q) => $q->whereNull('admin_enabled')->orWhere('admin_enabled', true)),
+                'deshabilitada' => $query->where('admin_enabled', false),
+                default => null,
+            };
+        }
+
+        if (($contrato = $request->query('contrato')) === 'si') {
+            $query->whereNotNull('contract_id');
+        } elseif ($contrato === 'no') {
+            $query->whereNull('contract_id');
+        }
+
         $onts = $query->get();
 
-        return view('gestisp.onts.authorized.index', compact('onts', 'oltFiltrada'));
+        // La banda de señal no se puede filtrar en SQL: rx_power es una
+        // columna de TEXTO y los rangos son negativos. Se filtra ya en
+        // memoria, sobre lo que quedó de los filtros de arriba.
+        $banda = $request->query('banda');
+
+        if ($banda) {
+            $onts = $onts->filter(
+                fn (Ont $o) => $o->rx_power !== null && $o->rx_power !== ''
+                    && OltStatistics::bandaDe((float) $o->rx_power) === $banda
+            )->values();
+        }
+
+        return view('gestisp.onts.authorized.index', [
+            'onts' => $onts,
+            'oltFiltrada' => $oltFiltrada,
+            'olts' => Olt::where('branch_id', session('branch_id'))->orderBy('name')->get(),
+            'filtros' => $request->only(['olt', 'estado', 'contrato', 'banda']),
+            'resumen' => $this->resumenDeOnts($onts),
+        ]);
+    }
+
+    /**
+     * Cifras de cabecera del listado de ONTs.
+     *
+     * Se calculan sobre lo FILTRADO, no sobre toda la sucursal: si
+     * alguien mira una OLT concreta, los números tienen que ser los de
+     * esa OLT o no significan nada.
+     *
+     * @param  \Illuminate\Support\Collection<int, Ont>  $onts
+     * @return array<string, mixed>
+     */
+    private function resumenDeOnts($onts): array
+    {
+        $deshabilitadas = $onts->filter(fn (Ont $o) => $o->admin_enabled === false);
+        // Una ONT cortada a propósito no es una falla de red: se saca
+        // del cálculo para que la disponibilidad no se hunda sola
+        // cuando hay muchos cortes por facturación.
+        $enServicio = $onts->reject(fn (Ont $o) => $o->admin_enabled === false);
+        $enLinea = $enServicio->filter(fn (Ont $o) => (int) $o->status === 1);
+
+        $conPotencia = $onts->filter(
+            fn (Ont $o) => $o->rx_power !== null && $o->rx_power !== '' && (int) $o->status === 1
+        );
+
+        $bandas = [];
+
+        foreach (OltStatistics::bandas() as $clave => $definicion) {
+            $bandas[$clave] = $definicion + [
+                'cantidad' => $conPotencia
+                    ->filter(fn (Ont $o) => OltStatistics::bandaDe((float) $o->rx_power) === $clave)
+                    ->count(),
+            ];
+        }
+
+        return [
+            'total' => $onts->count(),
+            'en_linea' => $enLinea->count(),
+            'caidas' => $enServicio->count() - $enLinea->count(),
+            'deshabilitadas' => $deshabilitadas->count(),
+            'sin_contrato' => $onts->whereNull('contract_id')->count(),
+            'disponibilidad' => $enServicio->isEmpty()
+                ? 100.0
+                : round($enLinea->count() / $enServicio->count() * 100, 1),
+            'bandas' => $bandas,
+            // Las que piden una visita: señal débil, crítica o saturada.
+            'con_problema' => $bandas['debil']['cantidad']
+                + $bandas['critica']['cantidad']
+                + $bandas['saturacion']['cantidad'],
+            'potencia_media' => $conPotencia->isNotEmpty()
+                ? round($conPotencia->avg(fn (Ont $o) => (float) $o->rx_power), 2)
+                : null,
+        ];
     }
     public function buscarContrato(Request $request): \Illuminate\Http\JsonResponse
     {
@@ -212,6 +308,12 @@ class OntController extends Controller
             'vlan'            => 'required|integer',
             'ont_lineprofile' => 'required|integer',
             'ont_srvprofile'  => 'required|integer',
+            // Dónde queda conectada la ONT. OPCIONAL a propósito: hay
+            // instalaciones que no pasan por una caja documentada, y
+            // exigirlo bloquearía la activación por un dato de
+            // inventario. Se comprueba que exista; que sea del puerto
+            // PON correcto y esté libre lo valida el servicio.
+            'nap_port_id'     => 'nullable|exists:nap_ports,id',
         ], [
             'contract_id.required' => 'Seleccione el contrato o marque que la ONT no pertenece a ninguno.',
             'description.required' => 'La descripción es obligatoria: es el rótulo de la ONT en la OLT.',
@@ -256,9 +358,68 @@ class OntController extends Controller
 
         $this->auditarActivacion($ont, $olt, $contractId, $sinContrato);
 
-        return back()->with('success', $sinContrato
+        $avisoNap = $this->ocuparPuertoNap($validated['nap_port_id'] ?? null, $contractId, $ont);
+
+        $mensaje = $sinContrato
             ? 'ONT activada y registrada SIN contrato asociado.'
-            : 'ONT activada y registrada correctamente.');
+            : 'ONT activada y registrada correctamente.';
+
+        // La ONT YA quedó activa en la OLT: si algo falla al anotar la
+        // caja, no se puede devolver un error a secas o parecerá que la
+        // activación no se hizo. Se confirma el éxito y se avisa aparte.
+        return back()->with('success', $mensaje . $avisoNap);
+    }
+
+    /**
+     * Anota en qué puerto de qué caja NAP quedó conectada la ONT.
+     *
+     * El puerto lo ocupa el CONTRATO, no el equipo: así lo modela el
+     * inventario de red, porque lo que importa saber cuando se
+     * interviene una caja es a qué clientes se deja sin servicio. Por
+     * eso sin contrato no hay nada que anotar.
+     *
+     * Devuelve el texto que se añade al mensaje de éxito. Nunca lanza:
+     * la ONT ya quedó activa en la OLT, y un fallo aquí es un problema
+     * de inventario, no de servicio. Convertirlo en error haría creer
+     * que la activación no se hizo, y alguien la repetiría.
+     */
+    private function ocuparPuertoNap(?string $napPortId, ?int $contractId, Ont $ont): string
+    {
+        if (!$napPortId) {
+            return '';
+        }
+
+        if (!$contractId) {
+            return ' La caja NAP no se anotó: el puerto de una caja se asigna a un contrato,'
+                . ' y esta ONT quedó sin contrato.';
+        }
+
+        $puerto = \App\Models\NapPort::with('napBox.network', 'napBox.ponPort')->find($napPortId);
+
+        // El id llega del navegador: la caja tiene que ser de la
+        // sucursal activa y colgar del MISMO puerto PON donde acaba de
+        // quedar la ONT. Si no, se estaría registrando una instalación
+        // físicamente imposible.
+        $mismaSucursal = (int) $puerto?->napBox?->network?->branch_id === (int) session('branch_id');
+        $mismoPon = $puerto?->napBox?->ponPort
+            && (int) $puerto->napBox->ponPort->olt_id === (int) $ont->olt_id
+            && (int) $puerto->napBox->ponPort->slot === (int) $ont->slot
+            && (int) $puerto->napBox->ponPort->port === (int) $ont->port;
+
+        if (!$puerto || !$mismaSucursal || !$mismoPon) {
+            return ' La caja NAP no se anotó: el puerto elegido no pertenece al puerto PON de esta ONT.';
+        }
+
+        try {
+            app(\App\Services\OdnManager::class)->asignarPuerto(
+                Contract::findOrFail($contractId),
+                $puerto,
+            );
+        } catch (\RuntimeException $e) {
+            return ' La caja NAP no se anotó: ' . $e->getMessage();
+        }
+
+        return sprintf(' Queda en la caja %s, puerto %d.', $puerto->napBox->code, $puerto->number);
     }
 
     /**

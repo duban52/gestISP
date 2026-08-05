@@ -35,6 +35,12 @@ class NapBoxController extends Controller
     ) {
         $this->middleware('auth');
         $this->middleware('check.permission:naps.index')->only('index', 'show', 'map', 'mapData', 'nearby');
+        // byPonPort se protege con el permiso de AUTORIZAR ONTs, no con
+        // el del módulo de redes: su único consumidor es el modal de
+        // activación, y quien instala tiene que poder ver en qué caja
+        // queda el cliente aunque no administre la red. La consulta ya
+        // está acotada a la sucursal activa.
+        $this->middleware('check.permission:onts.activate')->only('byPonPort');
         $this->middleware('check.permission:naps.create')->only('create', 'store');
         $this->middleware('check.permission:naps.edit')->only('edit', 'update', 'updatePort', 'releasePort');
         $this->middleware('check.permission:naps.destroy')->only('destroy');
@@ -322,6 +328,53 @@ class NapBoxController extends Controller
             'disponibles' => $caja->puertosDisponibles(),
             'capacidad' => $caja->capacity,
             'url' => route('naps.show', $caja),
+        ])->values());
+    }
+
+    /**
+     * Cajas que cuelgan de un puerto PON, con sus puertos libres.
+     *
+     * Lo usa el modal de autorizar una ONT: si la ONT se está activando
+     * en el puerto 0/1/2, las únicas cajas donde puede estar
+     * físicamente conectada son las que cuelgan de ESE puerto. Ofrecer
+     * todas las de la sucursal sería invitar a registrar una instalación
+     * imposible.
+     *
+     * Va por AJAX y no incrustado en la página porque el puerto libre
+     * de hoy puede ser el ocupado de dentro de diez minutos: al abrir el
+     * modal se pregunta de nuevo.
+     */
+    public function byPonPort(Request $request): JsonResponse
+    {
+        $validado = $request->validate([
+            'olt' => ['required', Rule::exists('olts', 'id')->where('branch_id', session('branch_id'))],
+            'slot' => 'required|integer|min:0',
+            'port' => 'required|integer|min:0',
+        ]);
+
+        $cajas = NapBox::deSucursal()
+            ->whereHas('ponPort', fn ($q) => $q
+                ->where('olt_id', $validado['olt'])
+                ->where('slot', $validado['slot'])
+                ->where('port', $validado['port']))
+            ->with(['ports.contract', 'zone'])
+            ->orderBy('code')
+            ->get();
+
+        return response()->json($cajas->map(fn (NapBox $caja) => [
+            'id' => $caja->id,
+            'codigo' => $caja->code,
+            'nombre' => $caja->name,
+            'direccion' => $caja->address,
+            'zona' => $caja->zone?->name,
+            'disponibles' => $caja->puertosDisponibles(),
+            'capacidad' => $caja->capacity,
+            // Solo los libres: un puerto ocupado por otro cliente no es
+            // una opción, y un puerto dañado tampoco.
+            'puertos' => $caja->ports
+                ->filter(fn (NapPort $p) => $p->estaDisponible())
+                ->map(fn (NapPort $p) => ['id' => $p->id, 'numero' => $p->number])
+                ->values(),
         ])->values());
     }
 

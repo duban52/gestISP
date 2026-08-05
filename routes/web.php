@@ -403,6 +403,8 @@ Route::get('/naps',              [App\Http\Controllers\NapBoxController::class, 
 Route::get('/naps/mapa',         [App\Http\Controllers\NapBoxController::class, 'map'])->name('naps.map');
 Route::get('/naps/mapa/datos',   [App\Http\Controllers\NapBoxController::class, 'mapData'])->name('naps.map_data');
 Route::get('/naps/cercanas',     [App\Http\Controllers\NapBoxController::class, 'nearby'])->name('naps.nearby');
+// Cajas de un puerto PON concreto, para el modal de autorizar una ONT.
+Route::get('/naps/por-puerto-pon', [App\Http\Controllers\NapBoxController::class, 'byPonPort'])->name('naps.by_pon_port');
 Route::get('/naps/nueva',        [App\Http\Controllers\NapBoxController::class, 'create'])->name('naps.create');
 Route::post('/naps',             [App\Http\Controllers\NapBoxController::class, 'store'])->name('naps.store');
 Route::get('/naps/{nap}',        [App\Http\Controllers\NapBoxController::class, 'show'])->name('naps.show');

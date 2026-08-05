@@ -129,6 +129,43 @@
                                     disabled
                                     placeholder="Ninguno seleccionado">
                             </div>
+
+                            {{-- ============================================================
+                                 Dónde queda conectada físicamente
+
+                                 Solo se ofrecen las cajas que cuelgan del MISMO puerto
+                                 PON donde se está activando la ONT: son las únicas
+                                 donde puede estar conectada de verdad. Y dentro de la
+                                 caja, solo los puertos libres.
+
+                                 Es OPCIONAL: hay instalaciones que no pasan por una
+                                 caja documentada, y obligar aquí bloquearía la
+                                 activación de la ONT por un dato de inventario.
+
+                                 Va dentro del bloque de contrato porque el puerto de
+                                 la caja lo ocupa un CONTRATO, no un equipo: sin
+                                 contrato no hay a quién asignárselo.
+                                 ============================================================ --}}
+                            <div class="form-row">
+                                <div class="form-group col-md-7">
+                                    <label>
+                                        Caja NAP
+                                        <small class="text-muted">(opcional)</small>
+                                    </label>
+                                    <select class="form-control" id="ontNapBox">
+                                        <option value="">Sin registrar</option>
+                                    </select>
+                                    <small class="form-text text-muted" id="ontNapAyuda">
+                                        Se cargan al elegir la ONT.
+                                    </small>
+                                </div>
+                                <div class="form-group col-md-5">
+                                    <label>Puerto de la caja</label>
+                                    <select class="form-control" name="nap_port_id" id="ontNapPort" disabled>
+                                        <option value="">—</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="alert alert-info py-2 d-none" id="ontAvisoSinContrato">
@@ -433,6 +470,8 @@
                 document.getElementById('selectedContractId').value     = '';
                 document.getElementById('selectedDescription').value    = '';
 
+                cargarCajasDelPuerto(btn.getAttribute('data-location'));
+
                 $('#activarOntModal').modal('show');
             }
         });
@@ -473,6 +512,96 @@
             aplicarModoContratoOnt(this.checked);
         });
 
+        /* ============================================================
+           CAJA NAP Y PUERTO
+
+           Solo se ofrecen las cajas que cuelgan del MISMO puerto PON
+           donde se va a activar la ONT: son las únicas donde puede
+           estar conectada físicamente. Se piden al abrir el modal y no
+           al cargar la página porque el puerto libre de ahora puede
+           estar ocupado dentro de diez minutos.
+
+           Todo esto es opcional: si la OLT no tiene la red documentada
+           o el sitio no pasa por una caja registrada, se deja en "sin
+           registrar" y la ONT se activa igual.
+           ============================================================ */
+        let cajasDelPuerto = [];
+
+        function cargarCajasDelPuerto(ubicacion) {
+            const selCaja  = document.getElementById('ontNapBox');
+            const selPuerto = document.getElementById('ontNapPort');
+            const ayuda    = document.getElementById('ontNapAyuda');
+
+            cajasDelPuerto = [];
+            selCaja.innerHTML  = '<option value="">Sin registrar</option>';
+            selPuerto.innerHTML = '<option value="">—</option>';
+            selPuerto.disabled = true;
+
+            const oltId = document.getElementById('selectedOltId').value;
+            // La ubicación llega como "frame/slot/port"
+            const partes = String(ubicacion || '').split('/');
+
+            if (!oltId || partes.length < 3) {
+                ayuda.textContent = 'No se pudo determinar el puerto PON de esta ONT.';
+                return;
+            }
+
+            ayuda.textContent = 'Buscando cajas de este puerto…';
+
+            const url = '{{ route('naps.by_pon_port') }}'
+                + '?olt=' + encodeURIComponent(oltId)
+                + '&slot=' + encodeURIComponent(partes[1])
+                + '&port=' + encodeURIComponent(partes[2]);
+
+            fetch(url)
+                .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                .then(function (cajas) {
+                    cajasDelPuerto = cajas;
+
+                    if (cajas.length === 0) {
+                        ayuda.textContent = 'Este puerto PON no tiene cajas documentadas.';
+                        return;
+                    }
+
+                    cajas.forEach(function (c) {
+                        const opcion = document.createElement('option');
+                        opcion.value = c.id;
+                        opcion.textContent = c.codigo
+                            + (c.nombre ? ' — ' + c.nombre : '')
+                            + ' (' + c.disponibles + ' libres)';
+                        // Una caja llena no se puede elegir, pero se
+                        // muestra: saber que existe y está llena es
+                        // información, no ruido.
+                        opcion.disabled = c.puertos.length === 0;
+                        selCaja.appendChild(opcion);
+                    });
+
+                    ayuda.textContent = cajas.length + ' caja(s) en este puerto PON.';
+                })
+                .catch(function () {
+                    ayuda.textContent = 'No se pudieron cargar las cajas de este puerto.';
+                });
+        }
+
+        document.getElementById('ontNapBox').addEventListener('change', function () {
+            const selPuerto = document.getElementById('ontNapPort');
+            const caja = cajasDelPuerto.find(c => String(c.id) === this.value);
+
+            selPuerto.innerHTML = '<option value="">—</option>';
+            selPuerto.disabled = !caja;
+
+            if (!caja) {
+                return;
+            }
+
+            caja.puertos.forEach(function (p) {
+                const opcion = document.createElement('option');
+                opcion.value = p.id;
+                opcion.textContent = 'Puerto ' + p.numero;
+                selPuerto.appendChild(opcion);
+            });
+        });
+
         function aplicarModoContratoOnt(sinContrato) {
             const bloque      = document.getElementById('ontBloqueContrato');
             const aviso       = document.getElementById('ontAvisoSinContrato');
@@ -490,6 +619,13 @@
             document.getElementById('buscarContrato').value           = '';
             document.getElementById('resultadosContrato').style.display = 'none';
             descripcion.value = '';
+
+            // El bloque se OCULTA, no se quita del formulario: un
+            // puerto de caja que quedara elegido se enviaría igual y
+            // acabaría asignado a nadie. Se limpia a mano.
+            document.getElementById('ontNapBox').value = '';
+            document.getElementById('ontNapPort').innerHTML = '<option value="">—</option>';
+            document.getElementById('ontNapPort').disabled = true;
 
             descripcion.readOnly = !sinContrato;
 

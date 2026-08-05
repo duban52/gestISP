@@ -138,33 +138,42 @@ class OltStatistics
     {
         $conPotencia = $this->conPotencia($onts);
 
-        $bandas = [
-            'saturacion' => [
-                'etiqueta' => 'Saturación', 'color' => 'danger', 'rango' => 'mayor a −8 dBm',
-                'cantidad' => $conPotencia->filter(fn ($o) => (float) $o->rx_power > self::SATURACION)->count(),
-            ],
-            'optima' => [
-                'etiqueta' => 'Óptima', 'color' => 'success', 'rango' => '−8 a −22 dBm',
-                'cantidad' => $conPotencia->filter(fn ($o) => (float) $o->rx_power <= self::SATURACION
-                    && (float) $o->rx_power > self::OPTIMA_MIN)->count(),
-            ],
-            'aceptable' => [
-                'etiqueta' => 'Aceptable', 'color' => 'info', 'rango' => '−22 a −25 dBm',
-                'cantidad' => $conPotencia->filter(fn ($o) => (float) $o->rx_power <= self::OPTIMA_MIN
-                    && (float) $o->rx_power > self::ACEPTABLE_MIN)->count(),
-            ],
-            'debil' => [
-                'etiqueta' => 'Débil', 'color' => 'warning', 'rango' => '−25 a −27 dBm',
-                'cantidad' => $conPotencia->filter(fn ($o) => (float) $o->rx_power <= self::ACEPTABLE_MIN
-                    && (float) $o->rx_power > self::DEBIL_MIN)->count(),
-            ],
-            'critica' => [
-                'etiqueta' => 'Crítica', 'color' => 'danger', 'rango' => 'menor a −27 dBm',
-                'cantidad' => $conPotencia->filter(fn ($o) => (float) $o->rx_power <= self::DEBIL_MIN)->count(),
-            ],
-        ];
+        $bandas = [];
+
+        // Se cuenta con bandaDe(), la MISMA función que clasifica una
+        // potencia suelta en la ficha de la ONT y en el listado. Antes
+        // los rangos estaban escritos otra vez aquí con comparaciones a
+        // mano: dos sitios que tenían que decir lo mismo y que se
+        // separarían el día que alguien afinara un umbral.
+        foreach (self::bandas() as $clave => $definicion) {
+            $bandas[$clave] = $definicion + [
+                'cantidad' => $conPotencia
+                    ->filter(fn (Ont $o) => self::bandaDe((float) $o->rx_power) === $clave)
+                    ->count(),
+            ];
+        }
 
         return $bandas;
+    }
+
+    /**
+     * Catálogo de bandas de calidad óptica.
+     *
+     * Los umbrales son los de una ONT clase B+/C+: el receptor deja de
+     * funcionar cerca de −28 dBm, y por encima de −8 se satura. Lo usan
+     * la ficha de la OLT, el listado de ONTs y la ficha de cada ONT.
+     *
+     * @return array<string, array{etiqueta: string, color: string, rango: string}>
+     */
+    public static function bandas(): array
+    {
+        return [
+            'saturacion' => ['etiqueta' => 'Saturación', 'color' => 'danger', 'rango' => 'mayor a −8 dBm'],
+            'optima' => ['etiqueta' => 'Óptima', 'color' => 'success', 'rango' => '−8 a −22 dBm'],
+            'aceptable' => ['etiqueta' => 'Aceptable', 'color' => 'info', 'rango' => '−22 a −25 dBm'],
+            'debil' => ['etiqueta' => 'Débil', 'color' => 'warning', 'rango' => '−25 a −27 dBm'],
+            'critica' => ['etiqueta' => 'Crítica', 'color' => 'danger', 'rango' => 'menor a −27 dBm'],
+        ];
     }
 
     /**

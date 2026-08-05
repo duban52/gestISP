@@ -472,7 +472,7 @@
          un fallo de una ausencia. --}}
     <div class="card shadow-sm">
         <div class="card-header py-2">
-            <h3 class="card-title"><i class="fas fa-arrow-up mr-1"></i> Puertos de subida</h3>
+            <h3 class="card-title"><i class="fas fa-arrow-up mr-1"></i> Puertos UPLink</h3>
         </div>
 
         @if($uplinks->isEmpty())

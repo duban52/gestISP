@@ -208,6 +208,116 @@ class OntRebootAndFilterTest extends TestCase
         $respuesta->assertDontSee('HWTC-SECRETA1');
     }
 
+    // ============ Cifras y filtros del listado ============
+
+    /**
+     * Las cifras se calculan sobre lo FILTRADO.
+     *
+     * Si alguien está mirando una OLT concreta y la cabecera muestra
+     * los números de toda la sucursal, no significan nada: lo que se
+     * quiere saber es cómo está ESA OLT.
+     */
+    public function test_las_cifras_se_calculan_sobre_lo_filtrado(): void
+    {
+        $olt1 = $this->olt(['name' => 'OLT Norte', 'ip_address' => '10.0.0.1']);
+        $olt2 = $this->olt(['name' => 'OLT Sur', 'ip_address' => '10.0.0.2']);
+
+        $this->ont($olt1, ['sn' => 'HWTC-N1', 'onu_id' => 1, 'status' => '1', 'rx_power' => '-19.0']);
+        $this->ont($olt1, ['sn' => 'HWTC-N2', 'onu_id' => 2, 'status' => '0']);
+        $this->ont($olt2, ['sn' => 'HWTC-S1', 'onu_id' => 1, 'status' => '1', 'rx_power' => '-20.0']);
+
+        $resumen = $this->get(route('onts.authorized', ['olt' => $olt1->id]))
+            ->assertOk()
+            ->viewData('resumen');
+
+        $this->assertSame(2, $resumen['total']);
+        $this->assertSame(1, $resumen['en_linea']);
+        $this->assertSame(1, $resumen['caidas']);
+        $this->assertSame(50.0, $resumen['disponibilidad']);
+    }
+
+    /**
+     * Una ONT deshabilitada a propósito no hunde la disponibilidad.
+     *
+     * Cortar por facturación no es una falla de red. Si contara, un mes
+     * de muchos cortes haría parecer que la red se está cayendo.
+     */
+    public function test_las_deshabilitadas_no_cuentan_como_caidas(): void
+    {
+        $olt = $this->olt(['ip_address' => '10.0.0.1']);
+
+        $this->ont($olt, ['sn' => 'HWTC-VIVA', 'onu_id' => 1, 'status' => '1', 'admin_enabled' => true]);
+        $this->ont($olt, ['sn' => 'HWTC-CORTADA', 'onu_id' => 2, 'status' => '0', 'admin_enabled' => false]);
+
+        $resumen = $this->get(route('onts.authorized'))->assertOk()->viewData('resumen');
+
+        $this->assertSame(1, $resumen['deshabilitadas']);
+        $this->assertSame(0, $resumen['caidas']);
+        $this->assertSame(100.0, $resumen['disponibilidad']);
+    }
+
+    public function test_el_listado_filtra_por_estado(): void
+    {
+        $olt = $this->olt(['ip_address' => '10.0.0.1']);
+
+        $this->ont($olt, ['sn' => 'HWTC-ARRIBA', 'onu_id' => 1, 'status' => '1', 'admin_enabled' => true]);
+        $this->ont($olt, ['sn' => 'HWTC-ABAJO', 'onu_id' => 2, 'status' => '0', 'admin_enabled' => true]);
+        $this->ont($olt, ['sn' => 'HWTC-CORTADA', 'onu_id' => 2, 'status' => '0', 'admin_enabled' => false]);
+
+        $this->get(route('onts.authorized', ['estado' => 'caida']))
+            ->assertOk()
+            ->assertSee('HWTC-ABAJO')
+            ->assertDontSee('HWTC-ARRIBA')
+            // Una cortada a propósito NO es una caída
+            ->assertDontSee('HWTC-CORTADA');
+
+        $this->get(route('onts.authorized', ['estado' => 'deshabilitada']))
+            ->assertOk()
+            ->assertSee('HWTC-CORTADA')
+            ->assertDontSee('HWTC-ABAJO');
+    }
+
+    /**
+     * El filtro por banda de señal.
+     *
+     * Es el que convierte "hay 14 críticas" en poder ver cuáles son.
+     * Va en memoria y no en SQL porque rx_power es una columna de TEXTO
+     * y los rangos son negativos.
+     */
+    public function test_el_listado_filtra_por_banda_de_senal(): void
+    {
+        $olt = $this->olt(['ip_address' => '10.0.0.1']);
+
+        $this->ont($olt, ['sn' => 'HWTC-BUENA', 'onu_id' => 1, 'status' => '1', 'rx_power' => '-19.0']);
+        $this->ont($olt, ['sn' => 'HWTC-CRITICA', 'onu_id' => 2, 'status' => '1', 'rx_power' => '-28.4']);
+
+        $this->get(route('onts.authorized', ['banda' => 'critica']))
+            ->assertOk()
+            ->assertSee('HWTC-CRITICA')
+            ->assertDontSee('HWTC-BUENA');
+
+        $resumen = $this->get(route('onts.authorized'))->assertOk()->viewData('resumen');
+
+        $this->assertSame(1, $resumen['bandas']['critica']['cantidad']);
+        $this->assertSame(1, $resumen['bandas']['optima']['cantidad']);
+        $this->assertSame(1, $resumen['con_problema']);
+    }
+
+    public function test_el_listado_filtra_las_que_no_tienen_contrato(): void
+    {
+        $olt = $this->olt(['ip_address' => '10.0.0.1']);
+
+        $suelta = $this->ont($olt, ['sn' => 'HWTC-SUELTA']);
+        $suelta->update(['contract_id' => null]);
+
+        $resumen = $this->get(route('onts.authorized', ['contrato' => 'no']))
+            ->assertOk()
+            ->assertSee('HWTC-SUELTA')
+            ->viewData('resumen');
+
+        $this->assertSame(1, $resumen['sin_contrato']);
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();

@@ -241,6 +241,147 @@ class StandaloneProvisioningTest extends TestCase
         $this->assertLessThanOrEqual(64, mb_strlen($limpia));
     }
 
+    // ============ Caja NAP al autorizar la ONT ============
+
+    /**
+     * Prepara una caja NAP colgada de un puerto PON concreto.
+     *
+     * @return \App\Models\NapBox
+     */
+    private function cajaEnPuerto(int $slot, int $port, int $capacidad = 8)
+    {
+        $red = \App\Models\OpticalNetwork::create([
+            'branch_id' => $this->branch->id,
+            'name' => 'Red pruebas',
+            'nap_prefix' => 'NAP',
+            'nap_next_number' => 1,
+            'active' => true,
+            'user_id' => $this->admin->id,
+        ]);
+
+        $this->olt->update(['optical_network_id' => $red->id]);
+
+        $pon = \App\Models\PonPort::create([
+            'optical_network_id' => $red->id,
+            'olt_id' => $this->olt->id,
+            'frame' => 0,
+            'slot' => $slot,
+            'port' => $port,
+            'max_onts' => 64,
+            'active' => true,
+        ]);
+
+        return app(\App\Services\OdnManager::class)->crearCaja($red, [
+            'pon_port_id' => $pon->id,
+            'capacity' => $capacidad,
+            'address' => 'Calle 1 # 2-3',
+            'latitude' => 6.2,
+            'longitude' => -75.5,
+            'status' => \App\Models\NapBox::OPERATIVA,
+        ]);
+    }
+
+    public function test_al_autorizar_se_puede_anotar_la_caja_y_el_puerto(): void
+    {
+        $this->oltQueActiva();
+
+        $caja = $this->cajaEnPuerto(1, 9);
+        $puerto = $caja->ports->firstWhere('number', 3);
+
+        $this->post(route('onts.activate'), $this->datosOnt([
+            'contract_id' => $this->contrato->id,
+            'description' => 'Juan Perez CC 123',
+            'nap_port_id' => $puerto->id,
+        ]))->assertRedirect();
+
+        // El puerto queda ocupado por el CONTRATO: así lo modela el
+        // inventario, porque lo que importa al intervenir una caja es
+        // a qué clientes se deja sin servicio.
+        $this->assertSame($puerto->id, $this->contrato->fresh()->nap_port_id);
+        $this->assertSame('NAP001 / P3', $this->contrato->fresh()->nap_port);
+    }
+
+    /** La caja es opcional: sin ella la ONT se activa igual. */
+    public function test_la_caja_nap_no_es_obligatoria(): void
+    {
+        $this->oltQueActiva();
+
+        $this->post(route('onts.activate'), $this->datosOnt([
+            'contract_id' => $this->contrato->id,
+            'description' => 'Juan Perez CC 123',
+        ]))->assertRedirect()->assertSessionHas('success');
+
+        $this->assertSame(1, Ont::count());
+        $this->assertNull($this->contrato->fresh()->nap_port_id);
+    }
+
+    /**
+     * Una caja de OTRO puerto PON no se puede anotar.
+     *
+     * Sería una instalación físicamente imposible: la ONT cuelga del
+     * puerto 0/1/9 y la caja de otro. El formulario solo ofrece las
+     * correctas, pero el id llega del navegador.
+     */
+    public function test_no_admite_una_caja_de_otro_puerto_pon(): void
+    {
+        $this->oltQueActiva();
+
+        // La caja está en el puerto 1/5; la ONT se activa en el 1/9
+        $caja = $this->cajaEnPuerto(1, 5);
+
+        $respuesta = $this->post(route('onts.activate'), $this->datosOnt([
+            'contract_id' => $this->contrato->id,
+            'description' => 'Juan Perez CC 123',
+            'nap_port_id' => $caja->ports->first()->id,
+        ]))->assertRedirect();
+
+        // La ONT SÍ se activó —ya está escrita en la OLT— pero la caja
+        // no se anotó, y el mensaje lo dice.
+        $this->assertSame(1, Ont::count());
+        $this->assertNull($this->contrato->fresh()->nap_port_id);
+        $this->assertStringContainsString('no se anotó', session('success'));
+    }
+
+    /**
+     * Sin contrato no hay a quién asignarle el puerto.
+     *
+     * Se avisa en vez de fallar en silencio: la ONT ya quedó activa.
+     */
+    public function test_sin_contrato_avisa_que_no_pudo_anotar_la_caja(): void
+    {
+        $this->oltQueActiva();
+
+        $caja = $this->cajaEnPuerto(1, 9);
+
+        $this->post(route('onts.activate'), $this->datosOnt([
+            'sin_contrato' => 1,
+            'description' => 'ONT de laboratorio',
+            'nap_port_id' => $caja->ports->first()->id,
+        ]))->assertRedirect();
+
+        $this->assertSame(1, Ont::count());
+        $this->assertStringContainsString('sin contrato', session('success'));
+        $this->assertNull($caja->ports->first()->fresh()->contract);
+    }
+
+    /** El selector solo ofrece las cajas del puerto PON de la ONT. */
+    public function test_el_selector_solo_trae_las_cajas_de_ese_puerto_pon(): void
+    {
+        $deEstePuerto = $this->cajaEnPuerto(1, 9);
+        $deOtroPuerto = $this->cajaEnPuerto(1, 5);
+
+        $datos = $this->getJson(route('naps.by_pon_port', [
+            'olt' => $this->olt->id,
+            'slot' => 1,
+            'port' => 9,
+        ]))->assertOk()->json();
+
+        $this->assertCount(1, $datos);
+        $this->assertSame($deEstePuerto->code, $datos[0]['codigo']);
+        // Y trae sus puertos libres para elegir
+        $this->assertCount(8, $datos[0]['puertos']);
+    }
+
     // ==================== PPPoE con contrato (la norma) ====================
 
     /** El Mikrotik responde como si el secret se hubiera creado. */
