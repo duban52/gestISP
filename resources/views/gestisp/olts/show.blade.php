@@ -466,11 +466,25 @@
          que hay que mirar: un puerto de 1 G moviendo 950 Mbps explica
          de golpe la queja de todos los clientes de esta OLT.
          ============================================================ --}}
-    @if($uplinks->isNotEmpty())
-        <div class="card shadow-sm">
-            <div class="card-header py-2">
-                <h3 class="card-title"><i class="fas fa-arrow-up mr-1"></i> Puertos de subida</h3>
+    {{-- La tarjeta se muestra SIEMPRE, también vacía. Esconderla cuando
+         no hay uplinks hace que "no se detectó ninguno" se vea igual que
+         "esta versión no está desplegada", y no hay forma de distinguir
+         un fallo de una ausencia. --}}
+    <div class="card shadow-sm">
+        <div class="card-header py-2">
+            <h3 class="card-title"><i class="fas fa-arrow-up mr-1"></i> Puertos de subida</h3>
+        </div>
+
+        @if($uplinks->isEmpty())
+            <div class="card-body text-center py-4">
+                <p class="text-muted mb-1">No se ha detectado ningún puerto de subida.</p>
+                <p class="text-muted small mb-0">
+                    Se descubren junto con los puertos PON. Si la OLT sí los tiene,
+                    es que este equipo los nombra de una forma que el patrón no reconoce:
+                    compruébelo con <code>php artisan olt:probe-ports {{ $olt->id }} --interfaces</code>.
+                </p>
             </div>
+        @else
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm table-hover mb-0">
@@ -526,8 +540,8 @@
                     <span class="ml-2">Última medida {{ $uplinks->max('measured_at')->diffForHumans() }}.</span>
                 @endif
             </div>
-        </div>
-    @endif
+        @endif
+    </div>
 
     {{-- ---------- ONTs a revisar ---------- --}}
     @if($peores->isNotEmpty())

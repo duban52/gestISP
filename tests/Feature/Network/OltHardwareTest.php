@@ -613,6 +613,76 @@ class OltHardwareTest extends TestCase
         $this->assertSame('ALGO-RARO-PON 0/1/0', $resumen['ejemplos'][0]);
     }
 
+    /**
+     * @test
+     *
+     * Hay firmwares donde ifDescr NO trae la posición.
+     *
+     * La MA5600 V800R015 publica un ifDescr genérico por tipo —el mismo
+     * texto para los dieciséis puertos— y la posición solo está en
+     * ifName. Buscar únicamente en ifDescr dejaba ese equipo con cero
+     * puertos reconocidos, que es lo que pasó en la OLT de pruebas.
+     */
+    public function saca_la_posicion_de_ifname_cuando_ifdescr_es_generico(): void
+    {
+        $ifs = config('olt_snmp.brands.huawei.interfaces');
+
+        $this->simularSnmp(
+            [
+                101 => 'Huawei-MA5600-V800R015-GPON_UNI',
+                102 => 'Huawei-MA5600-V800R015-GPON_UNI',
+                201 => 'Huawei-MA5600-V800R015-ETHERNET',
+            ],
+            [
+                $ifs['if_name'] => [
+                    101 => 'GPON_UNI 0/2/0',
+                    102 => 'GPON_UNI 0/2/1',
+                    201 => 'GE 0/9/0',
+                ],
+            ],
+        );
+
+        $resumen = app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->assertSame(2, $resumen['pon']);
+        $this->assertSame(1, $resumen['uplinks']);
+
+        $this->assertNotNull(PonPort::where('slot', 2)->where('port', 1)->first());
+        // Y el uplink toma el nombre corto, que se lee mejor en la tabla
+        $this->assertSame('GE 0/9/0', OltUplink::first()->name);
+    }
+
+    /**
+     * @test
+     *
+     * Sin posición en ningún nombre, hay que ver el ifIndex.
+     *
+     * Es el único dato que queda para deducirla, así que la muestra de
+     * diagnóstico tiene que traerlo: sin él no hay forma de averiguar
+     * cómo numera los puertos ese firmware.
+     */
+    public function el_diagnostico_incluye_el_ifindex_de_lo_no_reconocido(): void
+    {
+        $this->simularSnmp([4194312192 => 'Huawei-MA5600-V800R015-GPON_UNI']);
+
+        $resumen = app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->assertSame(0, $resumen['pon']);
+        $this->assertStringContainsString('4194312192', $resumen['ejemplos'][0]);
+    }
+
+    /** @test */
+    public function la_ficha_dice_cuando_no_hay_uplinks_en_vez_de_esconder_la_tarjeta(): void
+    {
+        $this->simularSnmp([1 => 'GPON_UNI 0/1/0']);
+        app(OltHardwareDiscovery::class)->descubrir($this->olt);
+
+        $this->get(route('olts.show', $this->olt))
+            ->assertOk()
+            ->assertSee('Puertos de subida')
+            ->assertSee('No se ha detectado ningún puerto de subida.');
+    }
+
     /** @test */
     public function no_se_puede_abrir_un_puerto_de_otra_sucursal(): void
     {

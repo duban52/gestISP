@@ -84,6 +84,7 @@ class OltHardwareDiscovery
         // Un recorrido por tabla, no uno por puerto: una OLT con cientos
         // de interfaces se resuelve en cuatro consultas.
         $descripciones = $this->walkIndexado($cliente, $marca['if_descr'] ?? '.1.3.6.1.2.1.2.2.1.2');
+        $nombres = $this->walkIndexado($cliente, $ifs['if_name'] ?? null);
         $alias = $this->walkIndexado($cliente, $ifs['if_alias'] ?? null);
         $adminEstado = $this->walkIndexado($cliente, $ifs['admin_status'] ?? null);
         $operEstado = $this->walkIndexado($cliente, $ifs['oper_status'] ?? null);
@@ -110,37 +111,53 @@ class OltHardwareDiscovery
         $patronUplink = $marca['uplink_discovery_pattern'] ?? null;
 
         foreach ($descripciones as $ifIndex => $descripcion) {
-            if ($patronPon && preg_match($patronPon, $descripcion, $m)) {
-                $pon[] = [
+            // Se prueba con los TRES nombres que publica la interfaz, no
+            // solo con ifDescr. Hay firmwares —las MA5600 V800R015, por
+            // ejemplo— donde ifDescr es genérico por tipo
+            // ("Huawei-MA5600-V800R015-GPON_UNI", igual para los
+            // dieciséis puertos) y la posición solo aparece en ifName.
+            // Buscar únicamente en ifDescr deja esos equipos sin ningún
+            // puerto reconocido.
+            $candidatos = array_filter([
+                $descripcion,
+                $nombres[$ifIndex] ?? null,
+                $alias[$ifIndex] ?? null,
+            ]);
+
+            if ($posicion = $this->posicionEn($candidatos, $patronPon)) {
+                $pon[] = array_merge($posicion, [
                     'if_index' => $ifIndex,
-                    'frame' => (int) $m[1],
-                    'slot' => (int) $m[2],
-                    'port' => (int) $m[3],
                     'alias' => $alias[$ifIndex] ?? null,
                     'admin' => $this->estadoLegible($adminEstado[$ifIndex] ?? null),
                     'oper' => $this->estadoLegible($operEstado[$ifIndex] ?? null),
-                ];
+                ]);
 
                 continue;
             }
 
-            if ($patronUplink && preg_match($patronUplink, $descripcion, $m)) {
-                $uplinks[] = [
+            if ($posicion = $this->posicionEn($candidatos, $patronUplink)) {
+                $uplinks[] = array_merge($posicion, [
                     'if_index' => $ifIndex,
-                    'name' => $descripcion,
-                    'frame' => (int) $m[1],
-                    'slot' => (int) $m[2],
-                    'port' => (int) $m[3],
+                    // Se prefiere el nombre corto de ifName si lo hay:
+                    // "GE 0/8/0" se lee mejor en una tabla que
+                    // "Huawei-MA5800-V100R018-ETHERNET 0/8/0".
+                    'name' => ($nombres[$ifIndex] ?? null) ?: $descripcion,
                     'alias' => $alias[$ifIndex] ?? null,
                     'admin' => $this->estadoLegible($adminEstado[$ifIndex] ?? null),
                     'oper' => $this->estadoLegible($operEstado[$ifIndex] ?? null),
                     'speed' => isset($velocidad[$ifIndex]) ? (int) $velocidad[$ifIndex] : null,
-                ];
+                ]);
 
                 continue;
             }
 
-            $sinClasificar[] = $descripcion;
+            // Se anota CON su ifIndex: cuando ningún nombre trae la
+            // posición, el ifIndex es el único dato que queda para
+            // deducirla, y sin verlo no hay forma de saberlo.
+            $sinClasificar[] = '[' . $ifIndex . '] ' . $descripcion
+                . (($nombres[$ifIndex] ?? '') !== '' && ($nombres[$ifIndex] ?? null) !== $descripcion
+                    ? ' (ifName: ' . $nombres[$ifIndex] . ')'
+                    : '');
         }
 
         $resumen = DB::transaction(function () use ($olt, $pon, $uplinks) {
@@ -176,6 +193,34 @@ class OltHardwareDiscovery
         );
 
         return $resumen;
+    }
+
+    /**
+     * Busca la posición física en cualquiera de los nombres de la interfaz.
+     *
+     * Devuelve frame/slot/port del primero que encaje, o null si ninguno
+     * la lleva.
+     *
+     * @param  array<int, string>  $candidatos
+     * @return array{frame: int, slot: int, port: int}|null
+     */
+    private function posicionEn(array $candidatos, ?string $patron): ?array
+    {
+        if (!$patron) {
+            return null;
+        }
+
+        foreach ($candidatos as $texto) {
+            if (preg_match($patron, $texto, $m)) {
+                return [
+                    'frame' => (int) $m[1],
+                    'slot' => (int) $m[2],
+                    'port' => (int) $m[3],
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**
