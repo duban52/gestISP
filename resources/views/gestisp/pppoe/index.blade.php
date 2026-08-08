@@ -2,8 +2,18 @@
 @section('title', 'Cuentas PPPoE')
 
 @section('content_header')
-    <div class="card p-3">
-        <h2>CUENTAS PPPOE</h2>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <h1 class="mb-0"><i class="fas fa-user-lock mr-2"></i>Cuentas PPPoE</h1>
+        <div>
+            {{-- El enlace lleva los filtros actuales: el archivo tiene
+                 que contener lo mismo que se está viendo, no todo. --}}
+            <a href="{{ route('pppoe.export', request()->query()) }}" class="btn btn-outline-success">
+                <i class="fas fa-file-excel"></i> Exportar a Excel
+            </a>
+            <a href="{{ route('pppoe.cutoff') }}" class="btn btn-outline-danger">
+                <i class="fas fa-user-slash"></i> Cortes masivos
+            </a>
+        </div>
     </div>
 @endsection
 
@@ -17,6 +27,142 @@
     @elseif(session('error'))
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
+
+    {{-- ============================================================
+         Cifras de cabecera
+
+         La distinción que importa: HABILITADA es administrativo —si se
+         cortó o no—, CONECTADA es si el cliente tiene el equipo
+         encendido. Mezclarlas hace que un listado de "caídos" incluya
+         a los que están cortados a propósito.
+         ============================================================ --}}
+    <div class="row">
+        <div class="col-6 col-lg-3">
+            <div class="small-box bg-gradient-primary">
+                <div class="inner">
+                    <h3>{{ $resumen['total'] }}</h3>
+                    <p class="mb-0">Cuentas</p>
+                </div>
+                <div class="icon"><i class="fas fa-user-lock"></i></div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box bg-gradient-success">
+                <div class="inner">
+                    <h3>{{ $resumen['conectadas'] }}</h3>
+                    <p class="mb-0">Conectadas ahora</p>
+                </div>
+                <div class="icon"><i class="fas fa-plug"></i></div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box {{ $resumen['caidas'] > 0 ? 'bg-gradient-warning' : 'bg-gradient-secondary' }}">
+                <div class="inner">
+                    <h3>{{ $resumen['caidas'] }}</h3>
+                    <p class="mb-0">Habilitadas sin conexión</p>
+                </div>
+                <div class="icon"><i class="fas fa-exclamation-triangle"></i></div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="small-box bg-gradient-danger">
+                <div class="inner">
+                    <h3>{{ $resumen['suspendidas'] }}</h3>
+                    <p class="mb-0">Suspendidas</p>
+                </div>
+                <div class="icon"><i class="fas fa-user-slash"></i></div>
+            </div>
+        </div>
+    </div>
+
+    @if($resumen['sin_contrato'] > 0)
+        <div class="alert alert-light border py-2">
+            <i class="fas fa-info-circle text-muted"></i>
+            <strong>{{ $resumen['sin_contrato'] }}</strong> cuenta(s) sin contrato asociado.
+            <a href="{{ request()->fullUrlWithQuery(['contrato' => 'no']) }}">Verlas</a>
+            para vincularlas o confirmar que son de la empresa.
+        </div>
+    @endif
+
+    {{-- ---------- Filtros ---------- --}}
+    <div class="card shadow-sm">
+        <div class="card-header py-2">
+            <h3 class="card-title mb-0"><i class="fas fa-filter mr-1"></i> Filtros</h3>
+        </div>
+        <form method="GET" class="card-body py-3">
+            <div class="row align-items-end">
+                <div class="col-md-3 form-group mb-2">
+                    <label class="mb-1 small">Buscar</label>
+                    <input type="text" name="q" value="{{ $filtros['q'] ?? '' }}"
+                           class="form-control form-control-sm"
+                           placeholder="Usuario, contrato, cédula, nombre, IP…">
+                </div>
+                <div class="col-md-2 form-group mb-2">
+                    <label class="mb-1 small">Router</label>
+                    <select name="router_id" class="form-control form-control-sm">
+                        <option value="">Todos</option>
+                        @foreach($routers as $router)
+                            <option value="{{ $router->id }}"
+                                @selected((string) ($filtros['router_id'] ?? '') === (string) $router->id)>
+                                {{ $router->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2 form-group mb-2">
+                    <label class="mb-1 small">Estado</label>
+                    <select name="estado" class="form-control form-control-sm">
+                        <option value="">Todos</option>
+                        <option value="activa" @selected(($filtros['estado'] ?? '') === 'activa')>Habilitadas</option>
+                        <option value="suspendida" @selected(($filtros['estado'] ?? '') === 'suspendida')>Suspendidas</option>
+                    </select>
+                </div>
+                <div class="col-md-2 form-group mb-2">
+                    <label class="mb-1 small">Conexión</label>
+                    <select name="conexion" class="form-control form-control-sm">
+                        <option value="">Indiferente</option>
+                        <option value="conectada" @selected(($filtros['conexion'] ?? '') === 'conectada')>Conectadas</option>
+                        <option value="desconectada" @selected(($filtros['conexion'] ?? '') === 'desconectada')>Desconectadas</option>
+                        <option value="nunca" @selected(($filtros['conexion'] ?? '') === 'nunca')>Nunca conectadas</option>
+                    </select>
+                </div>
+                <div class="col-md-2 form-group mb-2">
+                    <label class="mb-1 small">Perfil</label>
+                    <select name="profile" class="form-control form-control-sm">
+                        <option value="">Todos</option>
+                        @foreach($perfiles as $perfil)
+                            <option value="{{ $perfil }}" @selected(($filtros['profile'] ?? '') === $perfil)>
+                                {{ $perfil }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-1 form-group mb-2">
+                    <button class="btn btn-primary btn-sm btn-block" title="Aplicar">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="row align-items-end">
+                <div class="col-md-3 form-group mb-0">
+                    <label class="mb-1 small">Contrato</label>
+                    <select name="contrato" class="form-control form-control-sm">
+                        <option value="">Indiferente</option>
+                        <option value="si" @selected(($filtros['contrato'] ?? '') === 'si')>Con contrato</option>
+                        <option value="no" @selected(($filtros['contrato'] ?? '') === 'no')>Sin contrato</option>
+                    </select>
+                </div>
+                <div class="col-md-9">
+                    @if(array_filter($filtros ?? []))
+                        <a href="{{ route('pppoe.index') }}" class="btn btn-link btn-sm pl-0">
+                            <i class="fas fa-times"></i> Quitar todos los filtros
+                        </a>
+                    @endif
+                </div>
+            </div>
+        </form>
+    </div>
 
     <div class="card p-3 d-flex flex-row justify-content-between align-items-center">
         <div>
@@ -55,10 +201,12 @@
                         <th>Usuario</th>
                         <th>Router</th>
                         <th>Perfil</th>
-                        <th>IP Remota</th>
+                        <th>IP</th>
                         <th>N.º contrato</th>
                         <th>Cliente</th>
                         <th>Estado</th>
+                        <th>Conexión</th>
+                        <th>Última conexión</th>
                         <th>Comentario</th>
                         <th>Acciones</th>
                     </tr>
@@ -69,7 +217,19 @@
                             <td>{{ $account->username }}</td>
                             <td>{{ $account->router->name ?? 'N/A' }}</td>
                             <td>{{ $account->profile }}</td>
-                            <td>{{ $account->remote_address ?? '—' }}</td>
+                            {{-- La IP que tiene AHORA, que es la que sirve para
+                                 entrar al equipo. Si no está conectada se
+                                 muestra la fija, si la tiene configurada. --}}
+                            <td>
+                                @if($account->latestMetric?->address)
+                                    <code>{{ $account->latestMetric->address }}</code>
+                                @elseif($account->remote_address)
+                                    <code class="text-muted">{{ $account->remote_address }}</code>
+                                    <small class="d-block text-muted">fija</small>
+                                @else
+                                    —
+                                @endif
+                            </td>
                             {{-- Número de contrato, no el id interno: es el
                                  que el cliente tiene impreso y el que se pega
                                  en la pantalla de cortes masivos. --}}
@@ -94,11 +254,39 @@
                                     —
                                 @endif
                             </td>
+                            {{-- Dos columnas y no una: "suspendida" es una
+                                 decisión de la empresa; "desconectada" es que
+                                 el cliente tiene el equipo apagado. Con una
+                                 sola columna no se distingue a quién hay que
+                                 llamar y a quién hay que cobrarle. --}}
                             <td>
                                 @if($account->disabled)
                                     <span class="badge badge-danger">Suspendida</span>
                                 @else
-                                    <span class="badge badge-success">Activa</span>
+                                    <span class="badge badge-success">Habilitada</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($account->estaConectada())
+                                    <span class="badge badge-success">Conectada</span>
+                                @elseif($account->latestMetric)
+                                    <span class="badge badge-secondary">Desconectada</span>
+                                @else
+                                    <span class="badge badge-light border">Sin datos</span>
+                                @endif
+                            </td>
+                            @php
+                                $ultima = $account->ultimaConexion();
+                            @endphp
+                            {{-- data-order con la marca de tiempo: sin él
+                                 DataTables ordenaría el texto "hace 3 días" y
+                                 saldría un orden que no significa nada. --}}
+                            <td data-order="{{ $ultima?->timestamp ?? 0 }}">
+                                @if($ultima)
+                                    {{ $ultima->diffForHumans() }}
+                                    <small class="d-block text-muted">{{ $ultima->format('d/m/Y H:i') }}</small>
+                                @else
+                                    <span class="text-muted">Nunca</span>
                                 @endif
                             </td>
                             <td>{{ $account->comment ?? '—' }}</td>
@@ -411,9 +599,12 @@
                 },
                 pageLength: 25,
                 columnDefs: [
-                    // Acciones: se corrió del 7 al 8 al agregar la
-                    // columna del número de contrato.
-                    { orderable: false, targets: [8] },
+                    // Acciones: la última columna. Se ha corrido dos
+                    // veces al añadir columnas (número de contrato,
+                    // y luego conexión y última conexión), así que se
+                    // referencia desde el final y deja de importar
+                    // cuántas haya delante.
+                    { orderable: false, targets: -1 },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

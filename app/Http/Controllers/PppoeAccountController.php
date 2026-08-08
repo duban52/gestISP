@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Controlador de cuentas PPPoE
@@ -34,6 +35,11 @@ class PppoeAccountController extends Controller
         $this->middleware('auth');
         $this->middleware('check.permission:pppoe.edit')->only('linkContract', 'unlinkContract');
         $this->middleware('check.permission:pppoe.index')->only('index', 'apiActiveSessions');
+        // La exportación tiene permiso PROPIO y no va con pppoe.index:
+        // el archivo se lleva las contraseñas de todos los clientes en
+        // un fichero que sale del sistema, y eso no es lo mismo que
+        // poder consultar el listado en pantalla.
+        $this->middleware('check.permission:pppoe.export')->only('export');
         $this->middleware('check.permission:pppoe.show')->only('show', 'realtimeSession', 'metricsHistory');
         $this->middleware('check.permission:pppoe.create')->only('store', 'suggestCredentials');
         $this->middleware('check.permission:pppoe.edit')->only('update', 'toggleState');
@@ -87,14 +93,77 @@ class PppoeAccountController extends Controller
         ], $routerId));
     }
 
-    public function index(): View
+    /**
+     * Listado de cuentas con filtros y cifras de cabecera.
+     *
+     * Los filtros van del lado del SERVIDOR: el buscador de DataTables
+     * solo ve lo que ya está en la página, y una sucursal puede tener
+     * miles de cuentas. Toda la lógica vive en PppoeQuery, que también
+     * usa la exportación, para que el Excel contenga exactamente lo
+     * que se está viendo.
+     */
+    public function index(Request $request, \App\Services\PppoeQuery $consulta): View
     {
-        $routers  = Router::byBranch(session('branch_id'))->active()->get();
-        $accounts = PppoeAccount::where('branch_id', session('branch_id'))
-            ->with(['router', 'contract.client'])
-            ->get();
+        $filtros = $request->all();
 
-        return view('gestisp.pppoe.index', compact('routers', 'accounts'));
+        $accounts = $consulta->filtrarEnMemoria(
+            $consulta->construir($filtros)->get(),
+            $filtros,
+        );
+
+        return view('gestisp.pppoe.index', [
+            'routers' => Router::byBranch(session('branch_id'))->active()->get(),
+            'accounts' => $accounts,
+            'filtros' => $filtros,
+            'resumen' => $consulta->resumen($accounts),
+            // Los perfiles que de verdad hay en uso, para el filtro: la
+            // lista de perfiles del router incluye muchos que nadie usa.
+            'perfiles' => PppoeAccount::where('branch_id', session('branch_id'))
+                ->whereNotNull('profile')
+                ->distinct()
+                ->orderBy('profile')
+                ->pluck('profile'),
+        ]);
+    }
+
+    /**
+     * Descarga en Excel las cuentas tal como están filtradas.
+     *
+     * El archivo LLEVA LAS CONTRASEÑAS: es lo que lo hace útil para
+     * migrar de router, reconfigurar equipos en campo o auditar contra
+     * el Mikrotik. El sistema ya las muestra en pantalla, así que el
+     * archivo no expone nada nuevo; lo que sí hace es volverlas
+     * portables, y por eso la descarga queda anotada en la trazabilidad
+     * con cuántos registros se llevó y con qué filtros.
+     */
+    public function export(Request $request, \App\Services\PppoeQuery $consulta)
+    {
+        $filtros = $request->except(['_token']);
+
+        $cuentas = $consulta->filtrarEnMemoria(
+            $consulta->construir($filtros)->get(),
+            $filtros,
+        );
+
+        app(\App\Services\Audit\AuditLogger::class)->action(
+            'pppoe.exported',
+            sprintf(
+                'Descargó un listado de %d cuenta(s) PPPoE con sus contraseñas',
+                $cuentas->count(),
+            ),
+            [
+                'registros' => $cuentas->count(),
+                'filtros' => array_filter($filtros),
+                'incluye_contrasenas' => true,
+            ],
+            null,
+            'red',
+        );
+
+        return Excel::download(
+            new \App\Exports\PppoeAccountsExport($cuentas),
+            'cuentas-pppoe-' . now()->format('Y-m-d') . '.xlsx',
+        );
     }
 
     /**

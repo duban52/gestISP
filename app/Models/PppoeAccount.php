@@ -54,4 +54,48 @@ class PppoeAccount extends Model
         return $this->hasOne(PppoeSessionMetric::class, 'pppoe_account_id')
             ->latestOfMany('measured_at');
     }
+
+    // ==================== Estado, para listados y export ====================
+
+    /**
+     * ¿Está conectada AHORA?
+     *
+     * Es distinto de estar habilitada: una cuenta activa cuyo cliente
+     * tiene el equipo apagado sale habilitada y desconectada. Confundir
+     * las dos cosas hace que un listado de "caídos" incluya a los que
+     * están cortados a propósito.
+     */
+    public function estaConectada(): bool
+    {
+        return (bool) $this->latestMetric?->connected;
+    }
+
+    public function getEstadoAdministrativoAttribute(): string
+    {
+        return $this->disabled ? 'Suspendida' : 'Habilitada';
+    }
+
+    public function getEstadoConexionAttribute(): string
+    {
+        if ($this->estaConectada()) {
+            return 'Conectada';
+        }
+
+        return $this->latestMetric ? 'Desconectada' : 'Sin datos';
+    }
+
+    /**
+     * Última vez que se la vio conectada.
+     *
+     * Llega como atributo de la consulta (withMax) cuando el listado la
+     * pide; si no, se resuelve aquí. El accesor está para que la ficha
+     * individual no tenga que armar la subconsulta.
+     */
+    public function ultimaConexion(): ?\Illuminate\Support\Carbon
+    {
+        $valor = $this->attributes['ultima_conexion']
+            ?? $this->metrics()->where('connected', true)->max('measured_at');
+
+        return $valor ? \Illuminate\Support\Carbon::parse($valor) : null;
+    }
 }

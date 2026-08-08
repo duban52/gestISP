@@ -468,6 +468,9 @@ Route::get('/api/cables/{cable}/impacto', [App\Http\Controllers\FiberCableContro
 
 // Cortes masivos de servicio. Van ANTES de /pppoe/{pppoe} o la ruta
 // del detalle se traga "cortes" como si fuera el id de una cuenta.
+// Va antes de /pppoe/{pppoe}: si no, Laravel buscaría una cuenta con
+// id "exportar".
+Route::get('/pppoe/exportar',        [App\Http\Controllers\PppoeAccountController::class, 'export'])->name('pppoe.export');
 Route::get('/pppoe/cortes',          [App\Http\Controllers\PppoeCutoffController::class, 'create'])->name('pppoe.cutoff');
 Route::post('/pppoe/cortes/revisar', [App\Http\Controllers\PppoeCutoffController::class, 'preview'])->name('pppoe.cutoff.preview');
 Route::post('/pppoe/cortes/ejecutar',[App\Http\Controllers\PppoeCutoffController::class, 'execute'])->name('pppoe.cutoff.execute');

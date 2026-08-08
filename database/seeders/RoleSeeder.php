@@ -180,6 +180,10 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'pppoe.destroy', 'description' => 'Eliminar cuentas PPPoE']);
         Permission::create(['name' => 'pppoe.import', 'description' => 'Importar cuentas PPPoE desde el router']);
         Permission::create(['name' => 'pppoe.restart', 'description' => 'Reiniciar sesiones PPPoE']);
+        // Permiso propio: el archivo se lleva las contrasenas de todos
+        // los clientes fuera del sistema, y eso no es lo mismo que
+        // poder consultar el listado en pantalla.
+        Permission::create(['name' => 'pppoe.export', 'description' => 'Exportar cuentas PPPoE con sus contrasenas']);
         // Permiso propio: dejar sin internet a media sucursal de
         // un clic no es lo mismo que consultar el listado.
         Permission::create(['name' => 'pppoe.cutoff', 'description' => 'Ejecutar cortes masivos de servicio']);
@@ -249,7 +253,7 @@ class RoleSeeder extends Seeder
             'routers.index', 'routers.create', 'routers.edit', 'routers.destroy',
             'olts.index', 'olts.create', 'olts.edit', 'olts.vlans',
             'onts.index', 'onts.show', 'onts.activate', 'onts.destroy', 'onts.relocate', 'onts.catv',
-            'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart', 'pppoe.cutoff',
+            'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart', 'pppoe.cutoff', 'pppoe.export',
             'networks.index', 'networks.create', 'networks.edit', 'networks.destroy',
             'naps.index', 'naps.create', 'naps.edit', 'naps.destroy',
             'closures.index', 'closures.create', 'closures.edit', 'closures.destroy',
