@@ -362,6 +362,14 @@ class OltHardwareTest extends TestCase
     /** @test */
     public function la_primera_muestra_no_calcula_velocidad_y_la_segunda_si(): void
     {
+        // El tiempo se CONGELA antes de empezar. Sin esto la prueba es
+        // inestable: el poller calcula los bps con los segundos reales
+        // entre las dos muestras, así que al viaje de 60 segundos se le
+        // suma lo que tarde de verdad la prueba. Corriendo sola sale
+        // 60 y pasa; dentro de la suite completa, con la máquina
+        // cargada, salen 65 y falla por diez mil bps.
+        $this->freezeTime();
+
         $this->simularSnmp([1 => 'GPON_UNI 0/1/0']);
         app(OltHardwareDiscovery::class)->descubrir($this->olt);
 
@@ -386,6 +394,12 @@ class OltHardwareTest extends TestCase
     /** @test */
     public function un_contador_reiniciado_no_dibuja_un_pico_falso(): void
     {
+        // Congelado por el mismo motivo que la prueba anterior: aquí no
+        // se comprueba una cifra, pero el intervalo entre muestras no
+        // puede pasar de una hora o el poller descarta la muestra por
+        // otra razón y la prueba dejaría de comprobar lo que dice.
+        $this->freezeTime();
+
         $this->simularSnmp([1 => 'GPON_UNI 0/1/0']);
         app(OltHardwareDiscovery::class)->descubrir($this->olt);
 
