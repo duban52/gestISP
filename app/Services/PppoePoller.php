@@ -70,6 +70,20 @@ class PppoePoller
                     'measured_at' => $measuredAt,
                 ]);
 
+                // El estado se copia a la propia cuenta. Es el unico
+                // sitio que lo escribe, y evita que el listado tenga
+                // que deducirlo con una subconsulta por cuenta sobre un
+                // historial de millones de filas (veinte segundos de
+                // espera en la pantalla).
+                //
+                // last_seen_at NO se toca: sigue apuntando a la ultima
+                // vez que SI estuvo conectada, que es el dato que se
+                // busca cuando alguien pregunta desde cuando esta caido.
+                $account->update([
+                    'connected' => false,
+                    'last_polled_at' => $measuredAt,
+                ]);
+
                 continue;
             }
 
@@ -83,6 +97,13 @@ class PppoePoller
                 'out_bps' => $rates['out_bps'],
                 'connected' => true,
                 'measured_at' => $measuredAt,
+            ]);
+
+            $account->update([
+                'connected' => true,
+                'last_address' => $counter['address'] ?? $account->last_address,
+                'last_seen_at' => $measuredAt,
+                'last_polled_at' => $measuredAt,
             ]);
 
             $connected++;

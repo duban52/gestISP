@@ -75,6 +75,32 @@
         </div>
     </div>
 
+    {{-- Hasta cuándo es fiable lo que se ve. Sin esto, "conectada" se
+         leería como si se acabara de preguntar al router, y no: es lo
+         que vio el muestreador en su última pasada. El día que el
+         muestreador se pare, la pantalla seguiría diciendo que todo el
+         mundo está arriba y nadie se enteraría. --}}
+    @if($ultimoSondeo)
+        <p class="text-muted small mb-2">
+            <i class="fas fa-clock"></i>
+            Estado de conexión según el último muestreo,
+            <strong>{{ $ultimoSondeo->diffForHumans() }}</strong>
+            ({{ $ultimoSondeo->format('d/m/Y H:i') }}).
+            @if($ultimoSondeo->lt(now()->subMinutes(20)))
+                <span class="text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Hace más de veinte minutos: revise que <code>pppoe:poll</code> siga corriendo.
+                </span>
+            @endif
+        </p>
+    @else
+        <div class="alert alert-light border py-2">
+            <i class="fas fa-info-circle text-muted"></i>
+            Todavía no hay ningún muestreo: el estado de conexión aparecerá
+            cuando corra <code>php artisan pppoe:poll</code> (cada cinco minutos por tarea programada).
+        </div>
+    @endif
+
     @if($resumen['sin_contrato'] > 0)
         <div class="alert alert-light border py-2">
             <i class="fas fa-info-circle text-muted"></i>
@@ -221,8 +247,8 @@
                                  entrar al equipo. Si no está conectada se
                                  muestra la fija, si la tiene configurada. --}}
                             <td>
-                                @if($account->latestMetric?->address)
-                                    <code>{{ $account->latestMetric->address }}</code>
+                                @if($account->last_address)
+                                    <code>{{ $account->last_address }}</code>
                                 @elseif($account->remote_address)
                                     <code class="text-muted">{{ $account->remote_address }}</code>
                                     <small class="d-block text-muted">fija</small>
@@ -269,7 +295,7 @@
                             <td>
                                 @if($account->estaConectada())
                                     <span class="badge badge-success">Conectada</span>
-                                @elseif($account->latestMetric)
+                                @elseif($account->last_polled_at)
                                     <span class="badge badge-secondary">Desconectada</span>
                                 @else
                                     <span class="badge badge-light border">Sin datos</span>

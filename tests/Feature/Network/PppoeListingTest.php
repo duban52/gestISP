@@ -111,15 +111,38 @@ class PppoeListingTest extends TestCase
         ], $extra));
     }
 
-    /** Deja una muestra del poller para esa cuenta. */
+    /**
+     * Simula una pasada del muestreador sobre esa cuenta.
+     *
+     * Escribe LAS DOS COSAS que escribe PppoePoller: la fila del
+     * historial y el estado en la propia cuenta. Si la prueba solo
+     * dejara la métrica, estaría comprobando un escenario que en
+     * producción no existe —el historial y la cuenta siempre se
+     * actualizan juntos— y pasaría por alto que el listado lee de la
+     * cuenta.
+     *
+     * Fíjese en que "last_seen_at" NO se toca cuando la muestra es de
+     * desconexión: tiene que seguir apuntando a la última vez que sí
+     * estuvo conectada.
+     */
     private function muestra(PppoeAccount $cuenta, bool $conectada, ?string $cuando = null): void
     {
+        $momento = $cuando ? now()->parse($cuando) : now();
+
         PppoeSessionMetric::create([
             'pppoe_account_id' => $cuenta->id,
             'connected' => $conectada,
             'address' => $conectada ? '10.20.30.40' : null,
-            'measured_at' => $cuando ? now()->parse($cuando) : now(),
+            'measured_at' => $momento,
         ]);
+
+        $cuenta->update(array_merge([
+            'connected' => $conectada,
+            'last_polled_at' => $momento,
+        ], $conectada ? [
+            'last_address' => '10.20.30.40',
+            'last_seen_at' => $momento,
+        ] : []));
     }
 
     // ==================== Cifras ====================
@@ -261,7 +284,7 @@ class PppoeListingTest extends TestCase
     // ==================== Última conexión ====================
 
     /** @test */
-    public function la_ultima_conexion_es_la_de_la_ultima_muestra_conectada(): void
+    public function la_ultima_conexion_no_la_pisa_una_muestra_de_desconexion(): void
     {
         $cuenta = $this->cuenta(['username' => 'intermitente']);
 
@@ -272,6 +295,7 @@ class PppoeListingTest extends TestCase
 
         $cuentas = app(PppoeQuery::class)->construir([])->get();
         $encontrada = $cuentas->firstWhere('username', 'intermitente');
+
 
         $this->assertNotNull($encontrada->ultimaConexion());
         $this->assertSame(

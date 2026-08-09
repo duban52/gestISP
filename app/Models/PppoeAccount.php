@@ -21,10 +21,20 @@ class PppoeAccount extends Model
         'remote_address',
         'disabled',
         'comment',
+        // Estado de la ultima pasada del muestreador. Se guarda aqui
+        // —y no se deduce del historial— porque deducirlo obligaba a
+        // una subconsulta por cuenta sobre millones de filas.
+        'connected',
+        'last_address',
+        'last_seen_at',
+        'last_polled_at',
     ];
 
     protected $casts = [
         'disabled' => 'boolean',
+        'connected' => 'boolean',
+        'last_seen_at' => 'datetime',
+        'last_polled_at' => 'datetime',
     ];
 
     public function branch()
@@ -67,7 +77,7 @@ class PppoeAccount extends Model
      */
     public function estaConectada(): bool
     {
-        return (bool) $this->latestMetric?->connected;
+        return (bool) $this->connected;
     }
 
     public function getEstadoAdministrativoAttribute(): string
@@ -81,21 +91,22 @@ class PppoeAccount extends Model
             return 'Conectada';
         }
 
-        return $this->latestMetric ? 'Desconectada' : 'Sin datos';
+        // Sin una pasada del muestreador no se puede decir que este
+        // desconectada: es que nadie ha mirado todavia. Confundir las
+        // dos cosas llenaria el listado de falsos caidos el dia que el
+        // muestreador se pare.
+        return $this->last_polled_at ? 'Desconectada' : 'Sin datos';
     }
 
     /**
      * Última vez que se la vio conectada.
      *
-     * Llega como atributo de la consulta (withMax) cuando el listado la
-     * pide; si no, se resuelve aquí. El accesor está para que la ficha
-     * individual no tenga que armar la subconsulta.
+     * Sale de la columna, que mantiene el muestreador. Puede ser muy
+     * anterior a la última pasada: es justo el dato que se busca cuando
+     * alguien pregunta desde cuándo lleva caído un cliente.
      */
     public function ultimaConexion(): ?\Illuminate\Support\Carbon
     {
-        $valor = $this->attributes['ultima_conexion']
-            ?? $this->metrics()->where('connected', true)->max('measured_at');
-
-        return $valor ? \Illuminate\Support\Carbon::parse($valor) : null;
+        return $this->last_seen_at;
     }
 }

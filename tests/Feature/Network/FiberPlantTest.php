@@ -790,6 +790,60 @@ class FiberPlantTest extends TestCase
         $this->assertSame('TRC-001', $ruta[0]['cable']);
     }
 
+    // ==================== Señal en la ficha de la caja ====================
+
+    /**
+     * @test
+     *
+     * La ficha de la caja muestra la señal de la ONT de cada cliente.
+     *
+     * Es lo que convierte esa pantalla en un diagnóstico: si todos los
+     * puertos de la caja están mal, el problema no es de un cliente,
+     * es de la caja o del hilo que la alimenta.
+     */
+    public function la_ficha_de_la_caja_muestra_la_potencia_de_cada_ont(): void
+    {
+        $caja = $this->caja();
+        $contrato = $this->contrato();
+
+        app(OdnManager::class)->asignarPuerto($contrato, $caja->ports->first());
+
+        \App\Models\Ont::create([
+            'branch_id' => $this->branch->id,
+            'olt_id' => $this->olt->id,
+            'contract_id' => $contrato->id,
+            'sn' => 'HWTC-SENAL01',
+            'slot' => 1, 'port' => 1, 'onu_id' => 7,
+            'status' => '1',
+            'rx_power' => '-26.40',
+        ]);
+
+        $respuesta = $this->get(route('naps.show', $caja->fresh()))->assertOk();
+
+        // En la tabla de clientes, con dos decimales
+        $respuesta->assertSee('-26.40 dBm');
+        // Y en la rejilla, debajo del contrato: con un decimal, que es
+        // lo que cabe en el cuadro. Es la que permite mirar la caja
+        // entera de un vistazo sin cruzar fila por fila.
+        $respuesta->assertSee('-26.4 dBm');
+        // Y el resumen de la caja, que es el dato que decide si se manda
+        // un técnico a un cliente o a la caja entera.
+        $respuesta->assertSee('Señal de la caja');
+    }
+
+    /** @test */
+    public function un_contrato_sin_ont_lo_dice_en_vez_de_dejar_el_hueco(): void
+    {
+        $caja = $this->caja();
+        $contrato = $this->contrato();
+
+        app(OdnManager::class)->asignarPuerto($contrato, $caja->ports->first());
+
+        $this->get(route('naps.show', $caja->fresh()))
+            ->assertOk()
+            ->assertSee('Sin ONT');
+    }
+
     // ==================== Trazabilidad ====================
 
     /** @test */

@@ -116,6 +116,9 @@ class PppoeAccountController extends Controller
             'accounts' => $accounts,
             'filtros' => $filtros,
             'resumen' => $consulta->resumen($accounts),
+            // Hasta cuándo es fiable el estado de conexión. Se saca de
+            // lo ya cargado, sin consulta extra.
+            'ultimoSondeo' => $accounts->max('last_polled_at'),
             // Los perfiles que de verdad hay en uso, para el filtro: la
             // lista de perfiles del router incluye muchos que nadie usa.
             'perfiles' => PppoeAccount::where('branch_id', session('branch_id'))

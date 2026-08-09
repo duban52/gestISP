@@ -82,7 +82,7 @@ class PppoeAccountsExport implements FromCollection, WithHeadings, WithTitle, Wi
                 // Fecha y hora: para decidir si un cliente lleva una
                 // hora caído o tres semanas hace falta la hora.
                 $ultima?->format('d/m/Y H:i') ?? 'Nunca',
-                $cuenta->latestMetric?->address ?? '—',
+                $cuenta->last_address ?? '—',
                 $cuenta->remote_address ?? '—',
                 $contrato?->numero_visible ?? 'Sin contrato',
                 $cliente?->identity_number ?? '—',

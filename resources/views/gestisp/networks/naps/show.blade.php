@@ -113,6 +113,37 @@
                                 <span class="numero">{{ $puerto->number }}</span>
                                 @if($puerto->estaOcupado())
                                     <span class="ocupante">{{ $puerto->contract->numero_visible }}</span>
+
+                                    {{-- La señal, debajo del contrato. Es lo que
+                                         permite mirar la caja entera de un vistazo
+                                         y ver si el problema es de un puerto o de
+                                         todos: con la potencia solo en la tabla de
+                                         abajo hay que ir cruzando fila por fila.
+
+                                         El fondo del cuadro ya está pintado por el
+                                         ESTADO del puerto, así que la banda de
+                                         señal se marca con el color del texto, no
+                                         con otro fondo que competiría con él. --}}
+                                    @php
+                                        $ontPuerto = $puerto->contract?->ont;
+                                        $rx = ($ontPuerto && $ontPuerto->rx_power !== null && $ontPuerto->rx_power !== '')
+                                            ? (float) $ontPuerto->rx_power
+                                            : null;
+                                        $bandaPuerto = $rx !== null
+                                            ? \App\Services\OltStatistics::bandaDe($rx)
+                                            : null;
+                                    @endphp
+
+                                    @if($rx !== null)
+                                        <span class="senal senal-{{ $bandaPuerto }}"
+                                              title="{{ \App\Services\OltStatistics::bandas()[$bandaPuerto]['etiqueta'] ?? '' }} — {{ $ontPuerto->sn }}">
+                                            {{ number_format($rx, 1) }} dBm
+                                        </span>
+                                    @elseif($ontPuerto)
+                                        <span class="senal senal-sin">sin lectura</span>
+                                    @else
+                                        <span class="senal senal-sin">sin ONT</span>
+                                    @endif
                                 @endif
                             </div>
                         @endforeach
@@ -130,8 +161,27 @@
 
             {{-- ---------- Quién está conectado ---------- --}}
             <div class="card shadow-sm">
-                <div class="card-header py-2">
-                    <h3 class="card-title"><i class="fas fa-users mr-1"></i> Clientes conectados</h3>
+                <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap">
+                    <h3 class="card-title mb-0"><i class="fas fa-users mr-1"></i> Clientes conectados</h3>
+                    @php
+                        // Resumen de señal de la caja. Es lo que responde la
+                        // pregunta que de verdad importa: si el promedio está
+                        // mal y TODOS están mal, no es un cliente, es la caja
+                        // o el hilo que la alimenta.
+                        $potencias = $nap->ports
+                            ->filter->estaOcupado()
+                            ->map(fn ($p) => $p->contract?->ont?->rx_power)
+                            ->filter(fn ($v) => $v !== null && $v !== '')
+                            ->map(fn ($v) => (float) $v);
+                    @endphp
+                    @if($potencias->isNotEmpty())
+                        <small class="text-muted">
+                            Señal de la caja:
+                            promedio <strong>{{ number_format($potencias->avg(), 2) }}</strong> dBm ·
+                            peor <strong class="text-warning">{{ number_format($potencias->min(), 2) }}</strong> dBm
+                            <span class="ml-1">({{ $potencias->count() }} con lectura)</span>
+                        </small>
+                    @endif
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-sm table-hover mb-0">
@@ -143,6 +193,12 @@
                             <th>Cliente</th>
                             <th>Dirección</th>
                             <th>Estado</th>
+                            {{-- La señal de la ONT del cliente. Es el dato que
+                                 convierte esta pantalla en un diagnóstico: si
+                                 TODOS los puertos de la caja están en rojo, el
+                                 problema es de la caja o del hilo que la
+                                 alimenta, no de un cliente suelto. --}}
+                            <th class="text-center">Señal ONT</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -165,10 +221,40 @@
                                         {{ $contrato->status }}
                                     </span>
                                 </td>
+                                <td class="text-center">
+                                    @php
+                                        $ont = $contrato->ont;
+                                        $potencia = ($ont && $ont->rx_power !== null && $ont->rx_power !== '')
+                                            ? (float) $ont->rx_power
+                                            : null;
+                                        $banda = $potencia !== null
+                                            ? \App\Services\OltStatistics::bandaDe($potencia)
+                                            : null;
+                                        $bandas = \App\Services\OltStatistics::bandas();
+                                    @endphp
+
+                                    @if(!$ont)
+                                        <span class="text-muted small">Sin ONT</span>
+                                    @elseif($potencia === null)
+                                        <span class="badge badge-light border" title="La ONT no tiene lectura de potencia">
+                                            Sin lectura
+                                        </span>
+                                        <a href="{{ route('onts.show', $ont) }}" class="small d-block">{{ $ont->sn }}</a>
+                                    @else
+                                        <a href="{{ route('onts.show', $ont) }}"
+                                           class="badge badge-{{ $bandas[$banda]['color'] ?? 'secondary' }}"
+                                           title="{{ $bandas[$banda]['etiqueta'] ?? '' }} — {{ $ont->sn }}">
+                                            {{ number_format($potencia, 2) }} dBm
+                                        </a>
+                                        @if((int) $ont->status !== 1)
+                                            <small class="d-block text-danger">ONT caída</small>
+                                        @endif
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">
+                                <td colspan="7" class="text-center text-muted py-4">
                                     Ningún cliente conectado todavía en esta caja.
                                 </td>
                             </tr>
@@ -437,6 +523,35 @@
         .puerto:hover { transform: translateY(-2px); }
         .puerto .numero { display: block; font-size: 1.25rem; font-weight: 700; line-height: 1; }
         .puerto .ocupante { display: block; font-size: .65rem; opacity: .9; margin-top: .2rem; }
+
+        /* La señal va debajo del contrato, en una franja propia sobre
+           fondo translúcido: así se despega del color del cuadro (que
+           indica el ESTADO del puerto) sin taparlo. */
+        .puerto .senal {
+            display: block;
+            font-size: .62rem;
+            font-weight: 700;
+            margin-top: .2rem;
+            padding: .05rem 0;
+            border-radius: .2rem;
+            background: rgba(255, 255, 255, .85);
+        }
+
+        /* Los mismos umbrales de siempre, pero en color de texto: sobre
+           el cuadro azul de "ocupado" un segundo fondo de color no se
+           distinguiría. */
+        .puerto .senal-optima     { color: #1e7e34; }
+        .puerto .senal-aceptable  { color: #117a8b; }
+        .puerto .senal-debil      { color: #b8860b; }
+        .puerto .senal-critica    { color: #bd2130; }
+        .puerto .senal-saturacion { color: #bd2130; }
+
+        .puerto .senal-sin {
+            background: rgba(255, 255, 255, .25);
+            color: #fff;
+            font-weight: 400;
+            font-style: italic;
+        }
 
         .puerto-success { background: #28a745; }
         .puerto-primary { background: #007bff; }

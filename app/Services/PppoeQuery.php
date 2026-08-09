@@ -28,16 +28,13 @@ class PppoeQuery
 
         $query = PppoeAccount::query()
             ->where('branch_id', $branchId)
-            // latestMetric da la última muestra del poller: de ahí sale
-            // si está conectada ahora y con qué IP.
-            ->with(['router', 'contract.client', 'latestMetric'])
-            // La ÚLTIMA VEZ QUE ESTUVO CONECTADA va como subconsulta y
-            // no como accesor: preguntarlo cuenta por cuenta sería un
-            // N+1 de miles de consultas en un listado grande.
-            ->withMax(
-                ['metrics as ultima_conexion' => fn ($q) => $q->where('connected', true)],
-                'measured_at',
-            );
+            // Nada de subconsultas contra el historial: el estado de
+            // conexión y la última vez conectada viven en la propia
+            // cuenta, mantenidos por el muestreador. Deducirlos de
+            // pppoe_session_metrics costaba una subconsulta
+            // correlacionada por fila sobre millones de registros, y la
+            // pantalla tardaba veinte segundos en abrir.
+            ->with(['router', 'contract.client']);
 
         $this->aplicarBusqueda($query, $filtros);
 
@@ -64,16 +61,29 @@ class PppoeQuery
             $query->where('profile', $filtros['profile']);
         }
 
+        // Ahora sí se puede filtrar en SQL, que es donde debe estar:
+        // antes había que traerse todo y filtrarlo en memoria porque el
+        // dato vivía en el historial.
+        $conexion = $filtros['conexion'] ?? '';
+
+        if ($conexion === 'conectada') {
+            $query->where('connected', true);
+        } elseif ($conexion === 'desconectada') {
+            $query->where('connected', false)->whereNotNull('last_polled_at');
+        } elseif ($conexion === 'nunca') {
+            $query->whereNull('last_seen_at');
+        }
+
         return $query->orderBy('username');
     }
 
     /**
-     * Filtros que no se pueden resolver en SQL.
+     * Se conserva por compatibilidad con quien la llame.
      *
-     * La conexión vive en la tabla de métricas y depende de la ÚLTIMA
-     * muestra de cada cuenta; filtrarlo en SQL exigiría una subconsulta
-     * correlacionada bastante fea para lo poco que aporta frente a
-     * hacerlo sobre lo que ya se trajo.
+     * Ya no filtra nada: el estado de conexión pasó a ser una columna
+     * de la cuenta y se resuelve en SQL dentro de construir(). Se deja
+     * como paso vacío en vez de borrarla para no obligar a tocar todos
+     * los llamadores de golpe.
      *
      * @param  Collection<int, PppoeAccount>  $cuentas
      * @param  array<string, mixed>  $filtros
@@ -81,20 +91,6 @@ class PppoeQuery
      */
     public function filtrarEnMemoria(Collection $cuentas, array $filtros): Collection
     {
-        $conexion = $filtros['conexion'] ?? '';
-
-        if ($conexion === 'conectada') {
-            return $cuentas->filter(fn (PppoeAccount $c) => (bool) $c->latestMetric?->connected)->values();
-        }
-
-        if ($conexion === 'desconectada') {
-            return $cuentas->reject(fn (PppoeAccount $c) => (bool) $c->latestMetric?->connected)->values();
-        }
-
-        if ($conexion === 'nunca') {
-            return $cuentas->filter(fn (PppoeAccount $c) => $c->ultima_conexion === null)->values();
-        }
-
         return $cuentas;
     }
 
@@ -136,7 +132,7 @@ class PppoeQuery
      */
     public function resumen(Collection $cuentas): array
     {
-        $conectadas = $cuentas->filter(fn (PppoeAccount $c) => (bool) $c->latestMetric?->connected);
+        $conectadas = $cuentas->where('connected', true);
 
         return [
             'total' => $cuentas->count(),
@@ -149,7 +145,7 @@ class PppoeQuery
             // tengo caídos ahora?".
             'caidas' => $cuentas
                 ->where('disabled', false)
-                ->reject(fn (PppoeAccount $c) => (bool) $c->latestMetric?->connected)
+                ->where('connected', false)
                 ->count(),
         ];
     }

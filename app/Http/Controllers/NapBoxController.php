@@ -92,6 +92,11 @@ class NapBoxController extends Controller
         $nap->load([
             'network', 'zone', 'ponPort.olt', 'user',
             'ports.contract.client',
+            // La ONT de cada contrato: es lo que permite ver la señal de
+            // todos los clientes de la caja en una sola pantalla. Va
+            // precargada porque pedirla puerto a puerto serían dieciséis
+            // consultas más en una caja de dieciséis.
+            'ports.contract.ont',
             'feedStrand.cable',
         ]);
 
