@@ -110,6 +110,39 @@ class TechnicalOrder extends Model
         return $this->hasMany(TechnicalOrderVerification::class, 'technical_order_id');
     }
 
+    // ==================== Devoluciones del supervisor ====================
+
+    /**
+     * La última revisión del supervisor, sea cierre o devolución.
+     *
+     * Se ordena por id y no por created_at porque una orden puede ir y
+     * volver varias veces el mismo minuto, y entonces las marcas de
+     * tiempo empatan.
+     */
+    public function lastVerification(): ?TechnicalOrderVerification
+    {
+        return $this->verifications->sortByDesc('id')->first();
+    }
+
+    /**
+     * Por qué le devolvieron la orden al técnico, o null si no viene
+     * de una devolución.
+     *
+     * Se mira SOLO la última revisión: una orden que se devolvió, se
+     * corrigió y se cerró no debe seguir mostrando aquel motivo como
+     * si estuviera pendiente.
+     */
+    public function returnReason(): ?string
+    {
+        $ultima = $this->lastVerification();
+
+        if (!$ultima || $ultima->status !== 'Pendiente') {
+            return null;
+        }
+
+        return $ultima->comments ?: 'Sin motivo anotado';
+    }
+
     // ==================== Ubicación del cierre ====================
 
     /** ¿El dispositivo del técnico llegó a dar un punto? */

@@ -12,6 +12,7 @@ use App\Models\Warehouse;
 use App\Notifications\TechnicalOrderAssignedTechnician;
 use App\Notifications\TechnicalOrderCreatedClient;
 use App\Notifications\TechnicalOrderFinishedClient;
+use App\Notifications\TechnicalOrderRejectedTechnician;
 use App\Reports\Support\OrderDetailMap;
 use App\Services\Audit\AuditLogger;
 use App\Services\NapFinder;
@@ -49,7 +50,9 @@ use Maatwebsite\Excel\Facades\Excel;
  *    rechazarla (orderReject).
  * 4. Un supervisor la verifica (orderVerification →
  *    verificationOrderProcess): la cierra (y actualiza el estado del
- *    contrato según el detalle de la orden) o la devuelve a Pendiente.
+ *    contrato según el detalle de la orden) o la DEVUELVE al técnico
+ *    que la ejecutó, que vuelve a verla en "Mis órdenes" con el motivo
+ *    y recibe aviso por correo y WhatsApp.
  */
 class TechnicalOrderController extends Controller
 {
@@ -180,8 +183,9 @@ class TechnicalOrderController extends Controller
      *   actualiza el estado del contrato según el detalle:
      *     · Instalación/Reconexión → contrato "Activo"
      *     · Corte/Suspensión temporal → contrato "Suspendido"
-     * - reject_order: devuelve la orden a "Pendiente" para corrección,
-     *   registrando el comentario del supervisor.
+     * - reject_order: devuelve la orden AL TÉCNICO que la ejecutó para
+     *   que la corrija, con el motivo y avisándole; ver
+     *   returnOrderToTechnician().
      */
     public function verificationOrderProcess(Request $request, TechnicalOrder $technicalOrder): RedirectResponse
     {
@@ -236,21 +240,82 @@ class TechnicalOrderController extends Controller
         }
 
         if ($request->has('reject_order')) {
-            // Devolver a Pendiente para que se corrija el trabajo
-            $technicalOrder->update(['status' => 'Pendiente']);
-
-            $technicalOrder->verifications()->create([
-                'verified_by' => $user->id,
-                'status'      => 'Pendiente',
-                'comments'    => $request->input('verification_comment'),
-            ]);
-
-            return redirect()->route('technicals_orders.verification')
-                ->with('warning', 'La orden ha sido rechazada y está pendiente de corrección.');
+            return $this->returnOrderToTechnician(
+                $technicalOrder,
+                $request->input('verification_comment'),
+            );
         }
 
         return redirect()->route('technicals_orders.verification')
             ->with('error', 'No se seleccionó ninguna acción.');
+    }
+
+    /**
+     * El supervisor devuelve la orden al técnico que la ejecutó.
+     *
+     * ANTES NO LLEGABA A NADIE
+     * ------------------------
+     * La orden pasaba a "Pendiente", y "Mis Órdenes" solo lista las
+     * que están "Asignada": desaparecía de la bandeja del técnico sin
+     * que nadie le dijera que su trabajo se había devuelto ni por qué.
+     * Se quedaba esperando a que alguien de oficina se acordara de
+     * reasignarla.
+     *
+     * Ahora vuelve a "Asignada" con el MISMO técnico, que es quien
+     * sabe qué hizo y quién puede corregirlo, y se le avisa por correo
+     * y WhatsApp con el motivo. Si la orden no tiene técnico —una
+     * reasignación a medias, o un cierre hecho desde oficina— cae a
+     * "Pendiente" como antes: mandarla a "Asignada" sin nadie asignado
+     * la escondería de todas las bandejas.
+     *
+     * La ubicación del primer cierre NO se toca: ver closingLocationData().
+     */
+    private function returnOrderToTechnician(TechnicalOrder $technicalOrder, string $reason): RedirectResponse
+    {
+        $tecnico = $technicalOrder->assignedUser;
+
+        $technicalOrder->update([
+            'status' => $tecnico ? 'Asignada' : 'Pendiente',
+        ]);
+
+        // El estado de la verificación sigue siendo "Pendiente": es lo
+        // que admite la columna y significa lo mismo, que el trabajo
+        // vuelve a estar por hacer.
+        $technicalOrder->verifications()->create([
+            'verified_by' => auth()->id(),
+            'status'      => 'Pendiente',
+            'comments'    => $reason,
+        ]);
+
+        if ($tecnico) {
+            $technicalOrder->loadMissing('contract.client', 'branch');
+            $tecnico->notify(new TechnicalOrderRejectedTechnician($technicalOrder, $reason));
+        }
+
+        app(AuditLogger::class)->action(
+            'technical_orders.returned',
+            sprintf(
+                'Devolvió la orden N.º %d a %s para corregir: %s',
+                $technicalOrder->id,
+                $tecnico ? trim($tecnico->name . ' ' . $tecnico->last_name) : 'la bandeja de oficina',
+                $reason,
+            ),
+            [
+                'orden' => $technicalOrder->id,
+                'contrato' => $technicalOrder->contract?->numero_visible,
+                'tecnico' => $tecnico?->id,
+                'motivo' => $reason,
+            ],
+            $technicalOrder,
+            'ordenes',
+        );
+
+        return redirect()->route('technicals_orders.verification')->with(
+            'warning',
+            $tecnico
+                ? 'La orden se devolvió a ' . trim($tecnico->name . ' ' . $tecnico->last_name) . ' para que la corrija. Ya se le avisó.'
+                : 'La orden quedó pendiente. No tenía técnico asignado, así que hay que asignarla de nuevo.',
+        );
     }
 
     /**
@@ -342,16 +407,24 @@ class TechnicalOrderController extends Controller
         $materials = $this->getTechnicianMaterials();
 
         // Abrir esta bandeja cuenta como "ver" las órdenes: se
-        // marcan leídas las notificaciones de asignación, con lo
-        // que el contador rojo del menú se pone en cero.
+        // marcan leídas las notificaciones de asignación y las de
+        // devolución, con lo que el contador rojo del menú se pone
+        // en cero. Las dos aparecen aquí, así que las dos se dan por
+        // vistas; si solo se marcara una, el contador se quedaría
+        // encendido para siempre.
         Auth::user()->unreadNotifications()
-            ->where('type', TechnicalOrderAssignedTechnician::class)
+            ->whereIn('type', [
+                TechnicalOrderAssignedTechnician::class,
+                TechnicalOrderRejectedTechnician::class,
+            ])
             ->update(['read_at' => now()]);
 
         $technical_orders = TechnicalOrder::where('branch_id', session('branch_id'))
             ->where('user_assigned', Auth::id())
             ->where('status', 'Asignada')
-            ->with('contract.client')
+            // Las verificaciones dicen si la orden viene devuelta y por
+            // qué; sin precargarlas serían dos consultas por fila.
+            ->with('contract.client', 'verifications')
             ->orderByDesc('created_at')
             ->get();
 
@@ -396,6 +469,10 @@ class TechnicalOrderController extends Controller
      */
     public function processOrder(Request $request, $id): RedirectResponse
     {
+        // La orden se busca ANTES de validar porque dos reglas dependen
+        // de lo que ya tenga guardado (la firma).
+        $technicalOrder = TechnicalOrder::findOrFail($id);
+
         // La validación va FUERA del try/catch: así los errores de
         // campo se muestran en el formulario (errors bag) en vez de
         // acabar convertidos en un mensaje genérico por el catch.
@@ -407,7 +484,12 @@ class TechnicalOrderController extends Controller
             'quantity'               => 'nullable|array',
             'serial_number'          => 'nullable|array',
             'images'                 => 'nullable|array',
-            'client_signature'       => 'required|string',
+            // Obligatoria la primera vez. En una orden devuelta ya está
+            // guardada la firma de cuando el cliente estaba delante:
+            // exigirla otra vez dejaría al técnico sin poder corregir un
+            // texto desde la oficina, o —peor— le empujaría a firmar él
+            // mismo, que es justo lo que la firma debía evitar.
+            'client_signature'       => [$technicalOrder->client_signature ? 'nullable' : 'required', 'string'],
             // Ubicación del cierre. NO es obligatoria: el navegador
             // puede denegar el permiso, el equipo puede no tener GPS o
             // el sitio puede no tener señal, y ninguna de esas cosas
@@ -421,8 +503,6 @@ class TechnicalOrderController extends Controller
         ], [
             'client_signature.required' => 'Falta la firma del cliente. Pídale que firme en pantalla antes de cerrar la orden.',
         ]);
-
-        $technicalOrder = TechnicalOrder::findOrFail($id);
 
         // Materiales realmente reportados (se descartan las filas
         // vacías que pueda mandar el formulario).
@@ -458,7 +538,7 @@ class TechnicalOrderController extends Controller
                 'client_observation'     => $request->input('client_observation'),
                 'solution'               => $request->input('solution'),
                 'status'                 => 'Prefinalizada',
-            ], $this->closingLocationData($request));
+            ], $this->closingLocationData($request, $technicalOrder));
 
             if ($request->hasFile('images')) {
                 $imagePaths = [];
@@ -584,7 +664,13 @@ class TechnicalOrderController extends Controller
         // antes de permitir procesar la orden.
         $requiresMaterial = $this->requiresMaterial($technicalOrder);
 
-        $technicalOrder->loadMissing('contract.client', 'contract.napPort.napBox');
+        $technicalOrder->loadMissing(
+            'contract.client',
+            'contract.napPort.napBox',
+            // Quién devolvió la orden y cuándo: la pantalla lo muestra
+            // para que el técnico sepa a quién preguntarle.
+            'verifications.verifiedByUser',
+        );
 
         // Dónde conectar al cliente. Solo tiene sentido cuando hay que
         // tender la acometida —instalación o traslado—: en una avería
@@ -609,7 +695,17 @@ class TechnicalOrderController extends Controller
      */
     private function requiresMaterial(TechnicalOrder $technicalOrder): bool
     {
-        return OrderDetailMap::clave($technicalOrder->detail) === 'instalacion de servicio';
+        if (OrderDetailMap::clave($technicalOrder->detail) !== 'instalacion de servicio') {
+            return false;
+        }
+
+        // Una orden DEVUELTA ya descontó su material la primera vez.
+        // Volver a exigirlo obligaría al técnico a registrarlo otra vez
+        // y sacaría del almacén unos equipos que ya están instalados en
+        // casa del cliente: el inventario quedaría con dos ONT menos por
+        // una sola instalación. Si de verdad usó material adicional al
+        // corregir, puede agregarlo; lo que no se hace es exigirlo.
+        return !$technicalOrder->materials()->exists();
     }
 
     /**
@@ -632,6 +728,15 @@ class TechnicalOrderController extends Controller
     /**
      * Campos de la ubicación del cierre, listos para guardar.
      *
+     * MANDA EL PRIMER CIERRE
+     * ----------------------
+     * Si la orden ya traía ubicación, no se toca. Una orden devuelta se
+     * corrige horas o días después, casi siempre desde la oficina o
+     * desde otra casa: sobrescribir el punto cambiaría "se hizo en el
+     * sitio del cliente" por "se cerró a nueve kilómetros" sin que
+     * nadie hiciera nada mal. El dato que prueba que el trabajo se hizo
+     * en sitio es el de la PRIMERA vez.
+     *
      * Un punto inservible —el (0, 0) del Atlántico que devuelven
      * algunos dispositivos cuando responden sin haber fijado posición—
      * se descarta y se anota como fallo. Guardarlo sería peor que no
@@ -641,8 +746,12 @@ class TechnicalOrderController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function closingLocationData(Request $request): array
+    private function closingLocationData(Request $request, TechnicalOrder $technicalOrder): array
     {
+        if ($technicalOrder->hasClosingLocation()) {
+            return [];
+        }
+
         $latitude = $request->filled('closing_latitude') ? (float) $request->input('closing_latitude') : null;
         $longitude = $request->filled('closing_longitude') ? (float) $request->input('closing_longitude') : null;
 

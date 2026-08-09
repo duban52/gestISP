@@ -40,8 +40,19 @@
                     </thead>
                     <tbody>
                     @foreach($technical_orders as $technical_order)
-                        <tr>
-                            <td>{{ $technical_order->id }}</td>
+                        @php
+                            // Órdenes que el supervisor devolvió: vuelven a esta
+                            // bandeja y el técnico tiene que saberlo de un vistazo,
+                            // sin abrirlas una por una.
+                            $motivoDevolucion = $technical_order->returnReason();
+                        @endphp
+                        <tr @class(['table-warning' => $motivoDevolucion])>
+                            <td>
+                                {{ $technical_order->id }}
+                                @if($motivoDevolucion)
+                                    <br><span class="badge badge-warning">Devuelta</span>
+                                @endif
+                            </td>
                             {{-- El consecutivo del contrato, no el id interno --}}
                             <td>{{ $technical_order->contract->numero_visible }}</td>
                             <td>
@@ -51,7 +62,15 @@
                             <td>{{ $technical_order->contract->address }}</td>
                             <td>{{ $technical_order->type }}</td>
                             <td>{{ $technical_order->detail }}</td>
-                            <td>{{ $technical_order->initial_comment ?? '—' }}</td>
+                            <td>
+                                {{ $technical_order->initial_comment ?? '—' }}
+                                @if($motivoDevolucion)
+                                    <div class="text-danger small mt-1">
+                                        <i class="fas fa-undo"></i>
+                                        <strong>Devuelta:</strong> {{ $motivoDevolucion }}
+                                    </div>
+                                @endif
+                            </td>
                             <td>{{ $technical_order->created_at->format('Y-m-d H:i') }}</td>
                             <td class="text-nowrap">
                                 {{-- Procesar la orden --}}

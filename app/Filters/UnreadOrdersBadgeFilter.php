@@ -3,6 +3,7 @@
 namespace App\Filters;
 
 use App\Notifications\TechnicalOrderAssignedTechnician;
+use App\Notifications\TechnicalOrderRejectedTechnician;
 use Illuminate\Support\Facades\Auth;
 use JeroenNoten\LaravelAdminLte\Menu\Filters\FilterInterface;
 
@@ -37,7 +38,12 @@ class UnreadOrdersBadgeFilter implements FilterInterface
     }
 
     /**
-     * Órdenes asignadas sin ver, cacheado por petición.
+     * Órdenes por atender sin ver, cacheado por petición.
+     *
+     * Cuenta las asignaciones Y las devoluciones del supervisor: las
+     * dos ponen trabajo en la bandeja del técnico, y una orden
+     * devuelta que no sumara al contador pasaría inadvertida, que es
+     * justo lo que se quiere evitar.
      */
     private function conteo(): int
     {
@@ -49,7 +55,10 @@ class UnreadOrdersBadgeFilter implements FilterInterface
 
         $this->conteo = $user
             ? (int) $user->unreadNotifications()
-                ->where('type', TechnicalOrderAssignedTechnician::class)
+                ->whereIn('type', [
+                    TechnicalOrderAssignedTechnician::class,
+                    TechnicalOrderRejectedTechnician::class,
+                ])
                 ->count()
             : 0;
 

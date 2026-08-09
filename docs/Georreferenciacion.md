@@ -109,6 +109,94 @@ anota como fallo. Guardarlo pondría todas las órdenes a diez mil kilómetros d
 cliente y dejaría el indicador en rojo permanente, que es la forma más rápida de
 que nadie vuelva a mirarlo.
 
+### 4.1 Si «se queda obteniendo la ubicación» — cómo se diagnostica
+
+Son **dos** familias de causa y se distinguen sin adivinar. Al abrir la pantalla
+de procesar una orden:
+
+**a) Sale una banda roja arriba: «No se cargó el script de esta pantalla».**
+El problema es el JavaScript, no el GPS. Casi siempre: `public/build` **no va en
+git** (está en `.gitignore`) y se compila al desplegar. Si ese paso se salta, el
+servidor sirve el paquete anterior: el HTML nuevo sí llegó por git, pero el JS
+que lo anima es viejo. La pantalla se ve bien y no da ningún error — es un fallo
+mudo. Se arregla en el servidor:
+
+```bash
+npm ci && npm run build
+```
+
+Comprobación rápida en el servidor:
+
+```bash
+grep -l isSecureContext public/build/assets/order_process-*.js
+```
+
+Si no devuelve nada, el paquete está desactualizado.
+
+**b) No sale la banda, pero el recuadro de ubicación da un aviso.**
+Entonces el script sí corre y el problema es del navegador o del servidor; el
+propio mensaje dice cuál: sin HTTPS, permiso denegado, sin señal, o sin
+respuesta. Revise también si el servidor o un proxy delante manda una cabecera
+`Permissions-Policy: geolocation=()`, que desactiva la API para todo el sitio.
+
+El vigilante que produce (a) vive **suelto en la vista**, no en el paquete: tiene
+que seguir funcionando justo cuando el paquete es lo que falla.
+
+### 4.2 REQUISITO: el sistema debe servirse por HTTPS
+
+**Ningún navegador entrega la ubicación en un sitio servido por `http://`** con
+nombre de dominio. La API existe, los permisos se ven bien en la configuración
+del navegador, no aparece ninguna ventana de permiso… y no pasa nada. Es la
+causa más desconcertante de «no me toma la ubicación», porque todo parece
+correcto.
+
+Solo son contextos seguros:
+
+- `https://` (cualquier host)
+- `http://localhost` y `http://127.0.0.1`
+
+Con `http://gestisp.test:8081` **no funciona**, ni en PC ni en celular. Y en
+campo el técnico entra desde el celular, así que HTTPS no es opcional para esta
+función.
+
+El código lo detecta con `window.isSecureContext` y **lo dice con esas
+palabras** en vez de quedarse girando. Además hay un temporizador propio de 20 s:
+el `timeout` de la API no sirve como red de seguridad porque, según la norma, su
+reloj arranca *después* de que el usuario concede el permiso — si la ventana de
+permiso nunca aparece o se ignora, no se llama a ningún callback y la pantalla se
+quedaría «obteniendo ubicación» para siempre.
+
+---
+
+### 4.3 Órdenes devueltas por el supervisor
+
+Cuando el supervisor rechaza una orden en la verificación:
+
+- Vuelve a **«Asignada» con el mismo técnico**, no a «Pendiente». «Mis Órdenes»
+  solo lista las asignadas: en «Pendiente» la orden desaparecía de la bandeja del
+  técnico y nadie le decía que su trabajo se había devuelto ni por qué.
+  (Si la orden no tiene técnico asignado sí cae a «Pendiente»: mandarla a
+  «Asignada» sin nadie asignado la escondería de todas las bandejas.)
+- Se le avisa por **correo y WhatsApp** con el motivo dentro del mensaje
+  (`TechnicalOrderRejectedTechnician`), y suma al contador rojo del menú. La
+  plantilla de Meta se llama `orden_rechazada_tecnico` y recibe cuatro variables:
+  nombre, número de orden, tipo de trabajo y motivo.
+- El motivo se ve en el listado («Devuelta», fila ámbar) y arriba del todo en la
+  pantalla de procesar.
+
+**Tres cosas se conservan del primer cierre** y no se vuelven a pedir, por la
+misma razón de fondo: la corrección ocurre horas o días después, casi siempre
+desde otro sitio y sin el cliente delante.
+
+| Qué | Por qué no se vuelve a pedir |
+|---|---|
+| Ubicación | Sobrescribirla cambiaría «se hizo en casa del cliente» por «se cerró a 9 km» sin que nadie hiciera nada mal |
+| Firma del cliente | El cliente ya no está; exigirla empujaría al técnico a firmar él, que es lo contrario de para lo que sirve |
+| Material | Ya se descontó del almacén; volver a exigirlo dejaría el inventario con dos ONT menos por una sola instalación |
+
+Si al corregir sí usó material adicional, puede agregarlo: lo que no se hace es
+**exigirlo**.
+
 ---
 
 ## 5. Sugerencia de caja NAP
@@ -185,6 +273,7 @@ quien revisa. Por eso se escriben además estas entradas legibles:
 | `contracts.located` | Al fijar o ajustar el punto | Cuánto se movió respecto de lo anterior |
 | `contracts.location_cleared` | Al quitarlo | Las coordenadas que tenía |
 | `technical_orders.closed` | Al procesar una orden | A cuántos metros del servicio se cerró |
+| `technical_orders.returned` | Al devolverla el supervisor | A qué técnico y con qué motivo |
 
 Un ajuste de veinte metros es afinar; uno de tres kilómetros es un error o un
 traslado sin documentar. Esa diferencia es la que hace útil la bitácora.

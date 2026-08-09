@@ -172,6 +172,20 @@
 
             if (locateButton) {
                 locateButton.addEventListener('click', function () {
+                    // El navegador SOLO entrega ubicación en contexto
+                    // seguro: HTTPS o localhost. Por HTTP con nombre de
+                    // dominio la API existe pero no responde nunca, y
+                    // sin este aviso el botón se queda "Ubicando…" para
+                    // siempre mientras los permisos se ven correctos.
+                    if (!window.isSecureContext) {
+                        alert(
+                            'El navegador bloquea la ubicación en sitios sin HTTPS.\n\n' +
+                            'Marque el punto a mano sobre el mapa, o entre al sistema por https:// ' +
+                            'o por localhost para poder usar el GPS.'
+                        );
+                        return;
+                    }
+
                     if (!navigator.geolocation) {
                         alert('Este navegador no permite obtener la ubicación.');
                         return;
@@ -181,8 +195,35 @@
                     locateButton.disabled = true;
                     locateButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ubicando…';
 
+                    // Una sola respuesta, y siempre alguna: el timeout
+                    // de la API no cubre el tiempo que la ventana de
+                    // permiso pasa esperando respuesta.
+                    let settled = false;
+
+                    function restoreButton() {
+                        locateButton.disabled = false;
+                        locateButton.innerHTML = original;
+                    }
+
+                    const watchdog = setTimeout(function () {
+                        if (settled) {
+                            return;
+                        }
+
+                        settled = true;
+                        restoreButton();
+                        alert('El navegador no respondió a la solicitud de ubicación. Marque el punto a mano sobre el mapa.');
+                    }, 20000);
+
                     navigator.geolocation.getCurrentPosition(
                         function (position) {
+                            if (settled) {
+                                return;
+                            }
+
+                            settled = true;
+                            clearTimeout(watchdog);
+
                             setPoint(position.coords.latitude, position.coords.longitude, true);
                             const sourceInput = document.getElementById(config.inputs.source);
 
@@ -193,15 +234,21 @@
                                 sourceInput.value = 'dispositivo';
                             }
 
-                            locateButton.disabled = false;
-                            locateButton.innerHTML = original;
+                            restoreButton();
                         },
-                        function () {
+                        function (error) {
+                            if (settled) {
+                                return;
+                            }
+
+                            settled = true;
+                            clearTimeout(watchdog);
+
+                            console.warn('GestISP · geolocalización:', error.code, error.message);
                             alert('No se pudo obtener la ubicación. Revise los permisos del navegador.');
-                            locateButton.disabled = false;
-                            locateButton.innerHTML = original;
+                            restoreButton();
                         },
-                        { enableHighAccuracy: true, timeout: 10000 },
+                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
                     );
                 });
             }

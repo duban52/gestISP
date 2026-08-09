@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Notifications\TechnicalOrderRejectedTechnician;
 use App\Support\OrderLocationCheck;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -281,6 +282,146 @@ class OrderLocationTest extends TestCase
 
         $this->assertSame(OrderLocationCheck::WITHOUT_LOCATION, $orden->locationCheck()->status);
         $this->assertSame('secondary', $orden->locationCheck()->color());
+    }
+
+    // ==================== Devolución del supervisor ====================
+
+    /**
+     * Deja la orden como la deja el técnico al procesarla, con su
+     * ubicación de cierre, y la devuelve el supervisor.
+     */
+    private function ordenDevuelta(string $motivo = 'Falta la foto del empalme'): TechnicalOrder
+    {
+        $orden = $this->orden();
+
+        $this->post(route('technicals_orders.process', $orden->id), $this->datosReporte([
+            'closing_latitude' => self::LATITUD,
+            'closing_longitude' => self::LONGITUD,
+            'closing_accuracy_m' => 8,
+        ]));
+
+        $this->put(route('technical_order.verification_process', $orden->id), [
+            'verification_comment' => $motivo,
+            'reject_order' => '1',
+        ]);
+
+        return $orden->fresh();
+    }
+
+    public function test_una_orden_devuelta_vuelve_a_la_bandeja_del_tecnico(): void
+    {
+        $orden = $this->ordenDevuelta();
+
+        // "Asignada" y no "Pendiente": Mis Órdenes solo lista las
+        // asignadas, y en Pendiente el técnico no se enteraba nunca.
+        $this->assertSame('Asignada', $orden->status);
+        $this->assertSame($this->tecnico->id, $orden->user_assigned);
+
+        $respuesta = $this->get(route('technicals_orders.my_technical_orders'));
+
+        $respuesta->assertOk();
+        $respuesta->assertSee('Devuelta');
+        $respuesta->assertSee('Falta la foto del empalme');
+    }
+
+    public function test_al_devolver_se_le_avisa_al_tecnico_con_el_motivo(): void
+    {
+        $orden = $this->ordenDevuelta('El material reportado no coincide');
+
+        Notification::assertSentTo(
+            $this->tecnico,
+            TechnicalOrderRejectedTechnician::class,
+        );
+
+        $this->assertSame('El material reportado no coincide', $orden->returnReason());
+    }
+
+    public function test_la_ubicacion_del_primer_cierre_no_se_pisa_al_corregir(): void
+    {
+        $orden = $this->ordenDevuelta();
+
+        $original = [
+            'lat' => (float) $orden->closing_latitude,
+            'lng' => (float) $orden->closing_longitude,
+            'precision' => $orden->closing_accuracy_m,
+        ];
+
+        // El técnico corrige la orden al día siguiente, desde la
+        // oficina: a 2 km del cliente.
+        $this->post(route('technicals_orders.process', $orden->id), $this->datosReporte([
+            'solution' => 'Corregido lo que pidió el supervisor',
+            'closing_latitude' => self::LATITUD + 0.02,
+            'closing_longitude' => self::LONGITUD,
+            'closing_accuracy_m' => 5,
+        ]));
+
+        $orden->refresh();
+
+        // Manda el primer cierre: es el que prueba que el trabajo se
+        // hizo en el sitio del cliente.
+        $this->assertEqualsWithDelta($original['lat'], (float) $orden->closing_latitude, 0.0000001);
+        $this->assertEqualsWithDelta($original['lng'], (float) $orden->closing_longitude, 0.0000001);
+        $this->assertSame($original['precision'], $orden->closing_accuracy_m);
+        $this->assertSame(OrderLocationCheck::MATCHES, $orden->locationCheck()->status);
+
+        // Y lo corregido sí se guardó
+        $this->assertSame('Corregido lo que pidió el supervisor', $orden->solution);
+        $this->assertSame('Prefinalizada', $orden->status);
+    }
+
+    public function test_al_corregir_no_se_vuelve_a_pedir_la_firma_del_cliente(): void
+    {
+        $orden = $this->ordenDevuelta();
+        $firmaOriginal = $orden->client_signature;
+
+        $this->assertNotNull($firmaOriginal);
+
+        // Sin client_signature en el envío: el cliente ya no está
+        // delante para volver a firmar.
+        $datos = $this->datosReporte(['solution' => 'Texto corregido']);
+        unset($datos['client_signature']);
+
+        $respuesta = $this->post(route('technicals_orders.process', $orden->id), $datos);
+
+        $respuesta->assertSessionHasNoErrors();
+        $respuesta->assertRedirect(route('technicals_orders.my_technical_orders'));
+
+        $orden->refresh();
+
+        $this->assertSame($firmaOriginal, $orden->client_signature);
+        $this->assertSame('Prefinalizada', $orden->status);
+    }
+
+    public function test_una_orden_sin_tecnico_asignado_queda_pendiente_en_oficina(): void
+    {
+        $orden = $this->orden();
+        $orden->update(['user_assigned' => null, 'status' => 'Prefinalizada']);
+
+        $this->put(route('technical_order.verification_process', $orden->id), [
+            'verification_comment' => 'Sin técnico asignado',
+            'reject_order' => '1',
+        ]);
+
+        // Mandarla a "Asignada" sin nadie asignado la escondería de
+        // todas las bandejas.
+        $this->assertSame('Pendiente', $orden->fresh()->status);
+    }
+
+    public function test_cerrar_la_orden_deja_de_marcarla_como_devuelta(): void
+    {
+        $orden = $this->ordenDevuelta();
+
+        $this->post(route('technicals_orders.process', $orden->id), $this->datosReporte());
+
+        $this->put(route('technical_order.verification_process', $orden->id), [
+            'verification_comment' => 'Ahora sí',
+            'close_order' => '1',
+        ]);
+
+        $orden = $orden->fresh()->load('verifications');
+
+        $this->assertSame('Cerrada', $orden->status);
+        $this->assertNull($orden->returnReason());
     }
 
     // ==================== Sugerencia en la pantalla del técnico ====================

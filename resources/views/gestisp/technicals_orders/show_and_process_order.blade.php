@@ -28,6 +28,32 @@
         </div>
     @endif
 
+    {{-- ============================================================
+         Orden devuelta por el supervisor
+
+         Va arriba del todo y no dentro del detalle: es lo primero que
+         el técnico tiene que leer, porque cambia lo que va a hacer.
+         ============================================================ --}}
+    @php
+        $motivoDevolucion = $technicalOrder->returnReason();
+    @endphp
+
+    @if($motivoDevolucion)
+        <div class="alert alert-warning">
+            <h5 class="mb-1"><i class="fas fa-undo mr-1"></i> Esta orden se le devolvió para corregir</h5>
+            <p class="mb-1"><strong>Motivo:</strong> {{ $motivoDevolucion }}</p>
+            <small class="text-muted">
+                Revisado por
+                {{ trim(($technicalOrder->lastVerification()?->verifiedByUser?->name ?? '')
+                    . ' ' . ($technicalOrder->lastVerification()?->verifiedByUser?->last_name ?? '')) ?: 'un supervisor' }}
+                el {{ $technicalOrder->lastVerification()?->created_at?->format('Y-m-d H:i') }}.
+                @if($technicalOrder->hasClosingLocation())
+                    Se conserva la ubicación del primer cierre; no hace falta que vuelva al sitio solo por eso.
+                @endif
+            </small>
+        </div>
+    @endif
+
     <div class="row">
         {{-- ============================================================
              Columna izquierda: información de la orden y el cliente
@@ -164,7 +190,8 @@
             <h3>Procesamiento de orden</h3>
             <form action="{{ route('technicals_orders.process', $technicalOrder->id) }}" method="post"
                   enctype="multipart/form-data" id="process-order-form"
-                  data-requires-material="{{ $requiresMaterial ? '1' : '0' }}">
+                  data-requires-material="{{ $requiresMaterial ? '1' : '0' }}"
+                  data-has-signature="{{ $technicalOrder->client_signature ? '1' : '0' }}">
                 @csrf
                 <div class="form-group">
                     <label for="observations_technical">Comentario del técnico</label>
@@ -240,32 +267,72 @@
                      quiso" cuando alguien revise.
                      ============================================================ --}}
                 <div class="form-group mt-3">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <label class="mb-0 font-weight-bold">Ubicación del cierre</label>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="retry-location-btn">
-                            <i class="fas fa-crosshairs mr-1"></i> Volver a intentar
-                        </button>
-                    </div>
-                    <div id="closing-location-status" class="alert alert-secondary py-2 px-3 small mb-0">
-                        <i class="fas fa-spinner fa-spin mr-1"></i> Obteniendo la ubicación del dispositivo…
-                    </div>
+                    @if($technicalOrder->hasClosingLocation())
+                        {{-- La orden ya se cerró una vez: se conserva AQUEL punto.
+                             Volver a tomarlo ahora diría dónde está el técnico
+                             mientras corrige un texto, no dónde hizo el trabajo. --}}
+                        <label class="mb-1 font-weight-bold">Ubicación del cierre</label>
+                        <div class="alert alert-info py-2 px-3 small mb-0">
+                            <i class="fas fa-map-marker-alt mr-1"></i>
+                            Ya quedó registrada la ubicación del primer cierre
+                            @if($technicalOrder->closing_located_at)
+                                ({{ $technicalOrder->closing_located_at->format('Y-m-d H:i') }})
+                            @endif
+                            y no se vuelve a tomar.
+                        </div>
+                    @else
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="mb-0 font-weight-bold">Ubicación del cierre</label>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="retry-location-btn">
+                                <i class="fas fa-crosshairs mr-1"></i> Tomar ubicación
+                            </button>
+                        </div>
+                        {{-- Estado inicial SIN spinner a propósito: si el JS no
+                             llegara a ejecutarse, un spinner eterno haría creer
+                             que se está buscando la posición. Así se ve que no
+                             ha empezado. --}}
+                        <div id="closing-location-status" class="alert alert-secondary py-2 px-3 small mb-0">
+                            <i class="fas fa-map-marker-alt mr-1"></i> Sin tomar todavía.
+                        </div>
 
-                    <input type="hidden" name="closing_latitude" id="closing-latitude">
-                    <input type="hidden" name="closing_longitude" id="closing-longitude">
-                    <input type="hidden" name="closing_accuracy_m" id="closing-accuracy">
-                    <input type="hidden" name="closing_location_error" id="closing-location-error">
+                        <input type="hidden" name="closing_latitude" id="closing-latitude">
+                        <input type="hidden" name="closing_longitude" id="closing-longitude">
+                        <input type="hidden" name="closing_accuracy_m" id="closing-accuracy">
+                        <input type="hidden" name="closing_location_error" id="closing-location-error">
+                    @endif
                 </div>
 
                 {{-- Firma del cliente -------------------------------------- --}}
                 <div class="form-group mt-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <label class="mb-0 font-weight-bold">
-                            Firma del cliente <span class="text-danger">*</span>
+                            Firma del cliente
+                            @unless($technicalOrder->client_signature)
+                                <span class="text-danger">*</span>
+                            @endunless
                         </label>
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="clear-signature-btn">
                             <i class="fas fa-eraser mr-1"></i> Borrar
                         </button>
                     </div>
+
+                    @if($technicalOrder->client_signature)
+                        {{-- Orden devuelta: la firma del cliente ya está tomada
+                             de cuando estaba delante. Volver a pedirla dejaría al
+                             técnico sin poder corregir desde la oficina, o le
+                             empujaría a firmar él, que es lo contrario de lo que
+                             la firma sirve. --}}
+                        <div class="alert alert-info py-2 px-3 small mb-2">
+                            <i class="fas fa-signature mr-1"></i>
+                            Ya está guardada la firma del primer cierre. Solo firme de nuevo
+                            si volvió al sitio y el cliente puede hacerlo.
+                        </div>
+                        <img src="{{ asset($technicalOrder->client_signature) }}"
+                             alt="Firma registrada"
+                             style="max-width: 260px; width: 100%; border: 1px solid #dee2e6; border-radius: 6px; background: #fff;"
+                             class="mb-2">
+                    @endif
+
                     <small class="form-text text-muted mb-2">
                         Pida al cliente que firme con el dedo o un lápiz táctil.
                     </small>
@@ -411,4 +478,51 @@
          no existe en el navegador (resources/ no es pública) y falla
          en producción. Con Vite el archivo se compila y versiona. --}}
     @vite('resources/js/technical_orders/order_process.js')
+
+    {{-- ============================================================
+         ¿Llegó el script de esta pantalla?
+
+         POR QUÉ HACE FALTA VIGILARLO
+         ----------------------------
+         `public/build` NO va en git (está en .gitignore): se compila
+         al desplegar. Si ese paso se olvida, el servidor sigue
+         sirviendo el paquete ANTERIOR. La página se ve perfecta —el
+         HTML sí viaja por git— pero el JS que la anima es viejo: no
+         toma la ubicación, no agrega material, y no aparece ningún
+         error. Es un fallo mudo, y encima solo lo sufre el técnico en
+         la calle, que no tiene cómo reportarlo más que diciendo "no me
+         funciona".
+
+         Este bloque va SUELTO en la vista, no en el paquete: tiene que
+         seguir funcionando justo cuando el paquete es el que falla.
+         ============================================================ --}}
+    <script>
+        setTimeout(function () {
+            if (window.gestispOrderScriptLoaded) {
+                return;
+            }
+
+            var aviso = document.createElement('div');
+            aviso.className = 'alert alert-danger';
+            aviso.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> ' +
+                '<strong>No se cargó el script de esta pantalla.</strong> ' +
+                'No se podrá tomar la ubicación ni agregar material. ' +
+                'Avise a soporte: hay que recompilar los recursos del sistema en el servidor.';
+
+            var contenedor = document.querySelector('.content-wrapper .content') || document.body;
+            contenedor.insertBefore(aviso, contenedor.firstChild);
+
+            // Y se corrige el mensaje de la ubicación, que si no se
+            // quedaría diciendo que está buscando algo que nadie busca.
+            var estado = document.getElementById('closing-location-status');
+
+            if (estado) {
+                estado.className = 'alert alert-danger py-2 px-3 small mb-0';
+                estado.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> ' +
+                    'No se cargó el script de la pantalla: no se puede tomar la ubicación.';
+            }
+
+            console.error('GestISP · no se ejecutó order_process.js (¿recursos sin recompilar en el servidor?)');
+        }, 5000);
+    </script>
 @endsection

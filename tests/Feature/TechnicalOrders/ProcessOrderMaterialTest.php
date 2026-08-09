@@ -183,6 +183,48 @@ class ProcessOrderMaterialTest extends TestCase
         $this->assertSame('Asignada', $orden->fresh()->status);
     }
 
+    /**
+     * Una instalación devuelta por el supervisor ya descontó su
+     * material la primera vez.
+     *
+     * Si al corregirla se volviera a exigir, el técnico tendría que
+     * registrarlo otra vez y el almacén quedaría con dos ONT menos por
+     * una sola instalación.
+     */
+    public function test_una_instalacion_devuelta_no_vuelve_a_exigir_material(): void
+    {
+        $orden = $this->orden('Instalacion de servicio');
+        $material = $this->equipoConSerial('SN-ONT-777');
+
+        // Primer cierre, con su equipo
+        $this->post(route('technicals_orders.process', $orden->id), $this->datosReporte([
+            'material_id' => [$material->id],
+            'quantity' => [1],
+            'serial_number' => ['SN-ONT-777'],
+        ]));
+
+        // El supervisor la devuelve
+        $this->put(route('technical_order.verification_process', $orden->id), [
+            'verification_comment' => 'Faltó la observación del cliente',
+            'reject_order' => '1',
+        ]);
+
+        $this->assertSame('Asignada', $orden->fresh()->status);
+
+        // El técnico corrige el texto, sin material
+        $respuesta = $this->post(route('technicals_orders.process', $orden->id), $this->datosReporte([
+            'client_observation' => 'Cliente conforme, se explicó el uso del equipo',
+        ]));
+
+        $respuesta->assertRedirect(route('technicals_orders.my_technical_orders'));
+        $respuesta->assertSessionHas('success');
+
+        $this->assertSame('Prefinalizada', $orden->fresh()->status);
+
+        // Y el equipo se descontó UNA sola vez
+        $this->assertSame(1, $orden->fresh()->materials()->count());
+    }
+
     public function test_una_orden_que_no_es_instalacion_no_exige_material(): void
     {
         $orden = $this->orden('Configuraciones');

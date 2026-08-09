@@ -111,8 +111,33 @@ $(document).ready(function () {
         3: 'Se agotó el tiempo de espera de la ubicación',
     };
 
+    /**
+     * Tope propio de espera.
+     *
+     * El `timeout` de la API NO sirve para esto: según la norma, el
+     * reloj arranca DESPUÉS de que el usuario concede el permiso. Si
+     * la ventanita de permiso no aparece —o aparece y se ignora— no se
+     * llama a ningún callback y la pantalla se queda "obteniendo
+     * ubicación" para siempre. Este temporizador es lo que garantiza
+     * que siempre haya una respuesta en pantalla.
+     */
+    const LOCATION_WATCHDOG_MS = 20000;
+
     function showLocationStatus(cssClass, html) {
         locationStatus.attr('class', 'alert py-2 px-3 small mb-0 ' + cssClass).html(html);
+    }
+
+    function locationFailed(reason, hint) {
+        locationInputs.latitude.val('');
+        locationInputs.longitude.val('');
+        locationInputs.accuracy.val('');
+        locationInputs.error.val(reason);
+
+        showLocationStatus(
+            'alert-warning',
+            '<i class="fas fa-exclamation-triangle mr-1"></i> <strong>' + reason + '.</strong><br>' +
+            (hint || 'Puede cerrar la orden igual: quedará anotado el motivo.')
+        );
     }
 
     function captureLocation() {
@@ -120,20 +145,55 @@ $(document).ready(function () {
             return;
         }
 
-        if (!navigator.geolocation) {
-            locationInputs.error.val('El navegador no permite obtener la ubicación');
-            showLocationStatus(
-                'alert-warning',
-                '<i class="fas fa-exclamation-triangle mr-1"></i> Este navegador no entrega ubicación. ' +
-                'La orden se cerrará sin registrar dónde se hizo.'
+        // El navegador SOLO entrega ubicación en un contexto seguro:
+        // HTTPS, o localhost. Servido por HTTP con un nombre de dominio
+        // (http://servidor:8081) la API existe pero no responde nunca,
+        // que es el fallo más desconcertante de todos porque los
+        // permisos del navegador se ven bien.
+        if (!window.isSecureContext) {
+            locationFailed(
+                'El navegador bloquea la ubicación en sitios sin HTTPS',
+                'El sistema se está abriendo por <code>http://</code>. La ubicación solo funciona ' +
+                'con <code>https://</code> o entrando por <code>localhost</code>. ' +
+                'Avise a quien administra el servidor: la orden se puede cerrar igual.'
             );
+            return;
+        }
+
+        if (!navigator.geolocation) {
+            locationFailed('Este navegador no entrega ubicación');
             return;
         }
 
         showLocationStatus('alert-secondary', '<i class="fas fa-spinner fa-spin mr-1"></i> Obteniendo la ubicación del dispositivo…');
 
+        // Una sola respuesta: la que llegue primero entre el GPS y el
+        // temporizador. Sin esto, una respuesta tardía sobrescribiría
+        // el aviso de fallo (o al revés) y la pantalla mentiría.
+        let settled = false;
+
+        const watchdog = setTimeout(function () {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            locationFailed(
+                'El navegador no respondió a la solicitud de ubicación',
+                'Puede que la ventana de permiso esté esperando respuesta o que el GPS no tenga señal. ' +
+                'Pulse «Tomar ubicación» para reintentar; la orden se puede cerrar igual.'
+            );
+        }, LOCATION_WATCHDOG_MS);
+
         navigator.geolocation.getCurrentPosition(
             function (position) {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                clearTimeout(watchdog);
+
                 const accuracy = Math.round(position.coords.accuracy || 0);
 
                 locationInputs.latitude.val(position.coords.latitude.toFixed(7));
@@ -148,18 +208,18 @@ $(document).ready(function () {
                 );
             },
             function (error) {
-                const reason = GEOLOCATION_ERRORS[error.code] || 'No se pudo obtener la ubicación';
+                if (settled) {
+                    return;
+                }
 
-                locationInputs.latitude.val('');
-                locationInputs.longitude.val('');
-                locationInputs.accuracy.val('');
-                locationInputs.error.val(reason);
+                settled = true;
+                clearTimeout(watchdog);
 
-                showLocationStatus(
-                    'alert-warning',
-                    '<i class="fas fa-exclamation-triangle mr-1"></i> ' + reason + '. ' +
-                    'Puede cerrar la orden igual: quedará anotado el motivo.'
-                );
+                // Al log del navegador: es por donde se diagnostica
+                // cuando el técnico dice "no me toma la ubicación".
+                console.warn('GestISP · geolocalización:', error.code, error.message);
+
+                locationFailed(GEOLOCATION_ERRORS[error.code] || 'No se pudo obtener la ubicación');
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
         );
@@ -338,8 +398,12 @@ $(document).ready(function () {
             return;
         }
 
-        // La firma del cliente es obligatoria para cerrar la orden
-        if (signaturePad && signaturePad.isEmpty()) {
+        // La firma del cliente es obligatoria para cerrar la orden,
+        // salvo que la orden venga devuelta y ya tenga la del primer
+        // cierre: entonces el cliente no está delante para firmar.
+        const hasSignature = $(form).data('has-signature') == 1;
+
+        if (!hasSignature && signaturePad && signaturePad.isEmpty()) {
             swalBootstrap.fire(
                 'Falta la firma',
                 'Pida al cliente que firme en pantalla antes de procesar la orden.',
@@ -416,4 +480,20 @@ $(document).ready(function () {
         $('#modal-quantity-group').show();
         $('#available-quantity-text').hide();
     }
+
+    /* ============================================================
+       Señal de vida para la pantalla
+
+       Va en la ÚLTIMA línea a propósito: si se pusiera arriba, diría
+       "cargué" aunque cualquier cosa de en medio reventara. Aquí
+       significa lo que tiene que significar: el script llegó entero y
+       sin errores.
+
+       La vigila un bloque suelto en la vista. Sin esto, un paquete de
+       recursos desactualizado en el servidor —public/build no va en
+       git y hay que compilarlo al desplegar— deja la pantalla mirando
+       un mensaje de "obteniendo ubicación" que nadie va a atender,
+       porque no hay ningún error a la vista.
+       ============================================================ */
+    window.gestispOrderScriptLoaded = true;
 });
