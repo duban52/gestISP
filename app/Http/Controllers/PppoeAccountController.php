@@ -360,7 +360,7 @@ class PppoeAccountController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', "Cuenta vinculada al contrato #{$contrato->id}.");
+        return back()->with('success', "Cuenta vinculada al contrato {$contrato->numero_visible}.");
     }
 
     public function unlinkContract(PppoeAccount $pppoe): RedirectResponse

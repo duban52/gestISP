@@ -379,7 +379,7 @@
                     @if($ont->contract_id)
                         @can('onts.activate')
                             <form method="POST" action="{{ route('onts.unlink_contract', $ont) }}"
-                                  onsubmit="return confirm('¿Desvincular esta ONT del contrato #{{ $ont->contract_id }}? El equipo seguirá funcionando igual: solo se quita la asociación en el sistema.');">
+                                  onsubmit="return confirm('¿Desvincular esta ONT del contrato {{ $ont->contract?->numero_visible }}? El equipo seguirá funcionando igual: solo se quita la asociación en el sistema.');">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-outline-light" title="Desvincular contrato">
@@ -409,8 +409,9 @@
                                 <td>{{ $ont->contract->client->number_phone ?? 'N/A' }}</td>
                             </tr>
                             <tr>
-                                <th>Contrato #</th>
-                                <td>{{ $ont->contract_id }}</td>
+                                <th>Contrato</th>
+                                {{-- El consecutivo visible, no el id interno --}}
+                                <td>{{ $ont->contract?->numero_visible ?? '—' }}</td>
                             </tr>
                             <tr>
                                 <th>Dirección</th>

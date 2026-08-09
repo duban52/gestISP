@@ -14,6 +14,7 @@ use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Notifications\ClientWelcome;
 use App\Services\ContractDiagnostics;
+use App\Services\ContractGeolocator;
 use App\Services\ContractNumberGenerator;
 use App\Services\ContractQuery;
 use App\Support\ColombiaLocations;
@@ -144,8 +145,19 @@ class ContractController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(Request $request, ContractGeolocator $geolocator)
     {
+        // La ubicación de la vivienda es OPCIONAL: se valida aparte
+        // para poder rechazar una coordenada imposible sin impedir dar
+        // de alta un contrato que todavía no se ha ido a ubicar.
+        $location = $request->validate([
+            'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
+            'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
+            'location_source' => 'nullable|string|in:mapa,dispositivo,orden',
+        ], [
+            'latitude.required_with' => 'Faltó la latitud: vuelva a marcar el punto sobre el mapa.',
+            'longitude.required_with' => 'Faltó la longitud: vuelva a marcar el punto sobre el mapa.',
+        ]);
 
         $request->merge([
             'user_id' => Auth::user()->id,
@@ -157,12 +169,33 @@ class ContractController extends Controller
         // Va en una transacción porque el generador bloquea la fila de
         // la sucursal para que dos altas simultáneas no repitan número.
         $contract = DB::transaction(function () use ($request) {
-            $nuevo = Contract::create($request->all());
+            // Las coordenadas se excluyen del alta masiva: entran
+            // después por ContractGeolocator, que es quien anota QUIÉN
+            // ubicó, CUÁNDO y CON QUÉ, y lo deja en la trazabilidad.
+            $nuevo = Contract::create($request->except(['latitude', 'longitude', 'location_source']));
 
             app(ContractNumberGenerator::class)->asignar($nuevo);
 
             return $nuevo;
         });
+
+        // Fuera de la transacción a propósito: una coordenada rara no
+        // puede tumbar el alta de un contrato que por lo demás está
+        // bien. Como mucho el contrato nace sin ubicar, y se avisa.
+        $locationWarning = null;
+
+        if (filled($location['latitude'] ?? null)) {
+            try {
+                $geolocator->locate(
+                    $contract,
+                    (float) $location['latitude'],
+                    (float) $location['longitude'],
+                    $location['location_source'] ?? Contract::LOCATION_SOURCE_MAP,
+                );
+            } catch (\RuntimeException $e) {
+                $locationWarning = ' ' . $e->getMessage();
+            }
+        }
 
         //Creación de orden automática al crear contrato
 
@@ -185,7 +218,8 @@ class ContractController extends Controller
         optional($contract->client)->notify(new ClientWelcome($contract));
 
         // Redirigir con un mensaje de éxito
-        return redirect()->route('contracts.index')->with('success', 'Contrato creado exitosamente.');
+        return redirect()->route('contracts.index')
+            ->with('success', 'Contrato creado exitosamente.' . $locationWarning);
     }
 
     /**
@@ -230,7 +264,9 @@ class ContractController extends Controller
 
         // La caja del puerto actual se precarga para poder enlazarla
         // desde los datos técnicos sin una consulta por cada visita.
-        $contract->loadMissing('napPort.napBox');
+        // locatedBy sale en la ficha de ubicación: quién marcó el punto
+        // es lo que permite preguntarle si algo no cuadra.
+        $contract->loadMissing('napPort.napBox', 'locatedBy');
 
         // Devolver la vista con los datos necesarios
         return view('gestisp.contracts.show', compact('branches', 'clients', 'plans', 'users', 'contract', 'invoices', 'additionalCharges', 'technicalOrders', 'comments', 'napBoxes'));

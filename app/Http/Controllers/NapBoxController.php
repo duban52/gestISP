@@ -7,7 +7,9 @@ use App\Models\NapBox;
 use App\Models\NapPort;
 use App\Models\OpticalNetwork;
 use App\Services\Audit\AuditLogger;
+use App\Services\NapFinder;
 use App\Services\OdnManager;
+use App\Support\NapSuggestion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -325,10 +327,16 @@ class NapBoxController extends Controller
      * Cajas con cupo cerca de un punto.
      *
      * Responde "¿este prospecto tiene cobertura?" sin que nadie mire
-     * el mapa a ojo. Se ordena por distancia y solo devuelve las que
-     * de verdad tienen dónde conectar.
+     * el mapa a ojo. Se ordena por distancia y dice además qué puerto
+     * concreto habría que usar, que es la siguiente pregunta que se
+     * hace siempre.
+     *
+     * El cálculo vive en NapFinder y no aquí: la ficha del contrato y
+     * la pantalla del técnico hacen la misma pregunta, y dos copias de
+     * "cuál es el siguiente puerto libre" acabarían respondiendo
+     * distinto.
      */
-    public function nearby(Request $request): JsonResponse
+    public function nearby(Request $request, NapFinder $buscador): JsonResponse
     {
         $validado = $request->validate([
             'lat' => 'required|numeric|between:-90,90',
@@ -336,26 +344,24 @@ class NapBoxController extends Controller
             'radio' => 'nullable|numeric|min:0.05|max:20',
         ]);
 
-        $cajas = NapBox::deSucursal()
-            ->cercanasA(
-                (float) $validado['lat'],
-                (float) $validado['lng'],
-                (float) ($validado['radio'] ?? 1.0),
-            )
-            ->where('status', NapBox::OPERATIVA)
-            ->with(['ports.contract', 'zone'])
-            ->limit(20)
-            ->get();
+        $sugerencias = $buscador->nearestTo(
+            (float) $validado['lat'],
+            (float) $validado['lng'],
+            (float) ($validado['radio'] ?? NapFinder::DEFAULT_RADIUS_KM),
+            20,
+        );
 
-        return response()->json($cajas->map(fn (NapBox $caja) => [
-            'id' => $caja->id,
-            'codigo' => $caja->code,
-            'direccion' => $caja->address,
-            'zona' => $caja->zone?->name,
-            'distancia_m' => round((float) $caja->distancia_km * 1000),
-            'disponibles' => $caja->puertosDisponibles(),
-            'capacidad' => $caja->capacity,
-            'url' => route('naps.show', $caja),
+        return response()->json($sugerencias->map(fn (NapSuggestion $sugerencia) => [
+            'id' => $sugerencia->napBox->id,
+            'codigo' => $sugerencia->napBox->code,
+            'direccion' => $sugerencia->napBox->address,
+            'zona' => $sugerencia->napBox->zone?->name,
+            'distancia_m' => round($sugerencia->distanceM),
+            'disponibles' => $sugerencia->freePorts,
+            'capacidad' => $sugerencia->napBox->capacity,
+            'puerto_sugerido' => $sugerencia->nextFreePort?->number,
+            'etiqueta_puerto' => $sugerencia->portLabel(),
+            'url' => route('naps.show', $sugerencia->napBox),
         ])->values());
     }
 

@@ -19,6 +19,13 @@ class Contract extends Model
         'plan_id',
         'neighborhood',
         'address',
+        // Punto exacto de la vivienda. Es opcional: hay contratos
+        // vivos desde antes de que existiera el mapa.
+        'latitude',
+        'longitude',
+        'located_at',
+        'located_by',
+        'location_source',
         'home_type',
         'nap_port',
         'nap_port_id',
@@ -45,9 +52,69 @@ class Contract extends Model
     protected $casts = [
         'activation_date' => 'date',
         'suspension_warning_date' => 'datetime',
+        // 7 decimales: ~1 cm, la misma escala con la que se guardan
+        // las cajas NAP, para que las distancias entre ambos cuadren.
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
+        'located_at' => 'datetime',
     ];
 
+    // ==================== Ubicación ====================
 
+    /** El punto se marcó sobre el mapa desde una pantalla. */
+    public const LOCATION_SOURCE_MAP = 'mapa';
+
+    /** El punto lo dio el GPS del dispositivo de quien lo registró. */
+    public const LOCATION_SOURCE_DEVICE = 'dispositivo';
+
+    /** El punto se heredó del cierre de una orden técnica en sitio. */
+    public const LOCATION_SOURCE_ORDER = 'orden';
+
+    /**
+     * Cómo se obtuvo el punto, en lenguaje llano.
+     *
+     * Importa al leer la ficha: un punto tomado con el GPS del técnico
+     * parado en la puerta merece más confianza que uno marcado a ojo
+     * sobre el mapa desde la oficina.
+     */
+    public static function locationSources(): array
+    {
+        return [
+            self::LOCATION_SOURCE_MAP => 'Marcada en el mapa',
+            self::LOCATION_SOURCE_DEVICE => 'Tomada con el GPS del dispositivo',
+            self::LOCATION_SOURCE_ORDER => 'Tomada al cerrar una orden en sitio',
+        ];
+    }
+
+    /** ¿Se sabe dónde queda físicamente este servicio? */
+    public function isGeolocated(): bool
+    {
+        return $this->latitude !== null && $this->longitude !== null;
+    }
+
+    public function getLocationSourceLabelAttribute(): ?string
+    {
+        return self::locationSources()[$this->location_source] ?? null;
+    }
+
+    /** Quién dejó marcada la ubicación. */
+    public function locatedBy()
+    {
+        return $this->belongsTo(User::class, 'located_by');
+    }
+
+    /**
+     * Contratos con o sin punto en el mapa.
+     *
+     * Lo usa el listado para sacar la lista de pendientes por ubicar,
+     * que es como se avanza en la georreferenciación de la base vieja.
+     */
+    public function scopeGeolocated($query, bool $geolocated = true)
+    {
+        return $geolocated
+            ? $query->whereNotNull('latitude')->whereNotNull('longitude')
+            : $query->where(fn ($q) => $q->whereNull('latitude')->orWhereNull('longitude'));
+    }
 
     /**
      * Número que se le muestra al cliente.

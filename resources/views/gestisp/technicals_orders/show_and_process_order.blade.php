@@ -34,7 +34,7 @@
              ============================================================ --}}
         <div class="card p-3 mt-1 col-md-6">
             <h3>Datos del cliente</h3>
-            <p><strong>Número de contrato:</strong> {{ $technicalOrder->contract->id }}</p>
+            <p><strong>Número de contrato:</strong> {{ $technicalOrder->contract->numero_visible }}</p>
             <p><strong>Identificación del cliente:</strong> {{ $technicalOrder->contract->client->identity_number }}</p>
             <p><strong>Nombre y apellido:</strong>
                 {{ $technicalOrder->contract->client->name }}
@@ -47,6 +47,98 @@
             <h3>Residencia</h3>
             <p><strong>Barrio:</strong> {{ $technicalOrder->contract->neighborhood }}</p>
             <p><strong>Dirección:</strong> {{ $technicalOrder->contract->address }}</p>
+
+            {{-- ============================================================
+                 Dónde queda el servicio
+
+                 En barrios sin nomenclatura y en zona rural la dirección
+                 escrita no lleva a ninguna parte: el punto en el mapa sí.
+                 ============================================================ --}}
+            @if($technicalOrder->contract->isGeolocated())
+                @php
+                    // Los parámetros se arman aquí y no dentro de la directiva
+                    // include: Blade corta su argumento en el primer paréntesis
+                    // que cree de cierre sin contar los corchetes.
+                    $parametrosMapaVivienda = [
+                        'mapId' => 'mapaViviendaOrden',
+                        'height' => '260px',
+                        'markers' => [[
+                            'lat' => $technicalOrder->contract->latitude,
+                            'lng' => $technicalOrder->contract->longitude,
+                            'title' => 'Vivienda del cliente',
+                            'icon' => 'fa-home',
+                            'color' => 'primary',
+                        ]],
+                    ];
+                @endphp
+
+                @include('gestisp.partials.location-map', $parametrosMapaVivienda)
+
+                <a class="btn btn-sm btn-outline-primary mt-2"
+                   target="_blank" rel="noopener"
+                   href="https://www.google.com/maps/dir/?api=1&destination={{ $technicalOrder->contract->latitude }},{{ $technicalOrder->contract->longitude }}">
+                    <i class="fas fa-directions"></i> Cómo llegar
+                </a>
+            @else
+                <div class="alert alert-warning py-2 small mb-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Este servicio no está ubicado en el mapa. Si va al sitio, pida que lo
+                    georreferencien desde la ficha del contrato.
+                </div>
+            @endif
+
+            {{-- ============================================================
+                 A qué caja conectar
+
+                 Solo aparece en instalaciones y traslados, que son las
+                 órdenes que estrenan acometida. Es una SUGERENCIA por
+                 distancia en línea recta: entre la casa y la caja puede
+                 haber una avenida sin cruce, así que decide el técnico.
+                 ============================================================ --}}
+            @if($napSuggestions->isNotEmpty())
+                <hr>
+                <h3>Cajas NAP cercanas</h3>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-1">
+                        <thead class="thead-light">
+                        <tr>
+                            <th>Caja</th>
+                            <th>Distancia</th>
+                            <th>Libres</th>
+                            <th>Puerto sugerido</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach($napSuggestions as $sugerencia)
+                            <tr @class(['table-success' => $loop->first && $sugerencia->hasRoom()])>
+                                <td>
+                                    <strong>{{ $sugerencia->napBox->code }}</strong>
+                                    @if($sugerencia->napBox->zone)
+                                        <br><small class="text-muted">{{ $sugerencia->napBox->zone->name }}</small>
+                                    @endif
+                                </td>
+                                <td>{{ $sugerencia->humanDistance() }}</td>
+                                <td>{{ $sugerencia->freePorts }} / {{ $sugerencia->napBox->capacity }}</td>
+                                <td>
+                                    @if($sugerencia->hasRoom())
+                                        <span class="badge badge-success">
+                                            Puerto {{ $sugerencia->nextFreePort->number }}
+                                        </span>
+                                    @else
+                                        <span class="badge badge-danger">Sin cupo</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">
+                    Distancia en línea recta. El puerto queda asignado cuando oficina lo
+                    registra en la ficha del contrato, no por aparecer aquí.
+                </small>
+            @endif
+
             <hr>
             <h3>Datos de la orden</h3>
             <p><strong>Tipo de orden:</strong> {{ $technicalOrder->type }}</p>
@@ -132,6 +224,36 @@
                         </tr>
                         </tbody>
                     </table>
+                </div>
+
+                {{-- ============================================================
+                     Ubicación del cierre
+
+                     Se toma sola al abrir la pantalla: pedirle al técnico
+                     que pulse un botón más garantizaría que la mitad de las
+                     órdenes llegaran sin punto.
+
+                     NO bloquea el cierre. Un permiso denegado, un equipo sin
+                     GPS o un sótano sin señal no pueden impedir cerrar un
+                     trabajo que ya está hecho; en su lugar se guarda el
+                     motivo, que es lo que distingue "no se pudo" de "no se
+                     quiso" cuando alguien revise.
+                     ============================================================ --}}
+                <div class="form-group mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="mb-0 font-weight-bold">Ubicación del cierre</label>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="retry-location-btn">
+                            <i class="fas fa-crosshairs mr-1"></i> Volver a intentar
+                        </button>
+                    </div>
+                    <div id="closing-location-status" class="alert alert-secondary py-2 px-3 small mb-0">
+                        <i class="fas fa-spinner fa-spin mr-1"></i> Obteniendo la ubicación del dispositivo…
+                    </div>
+
+                    <input type="hidden" name="closing_latitude" id="closing-latitude">
+                    <input type="hidden" name="closing_longitude" id="closing-longitude">
+                    <input type="hidden" name="closing_accuracy_m" id="closing-accuracy">
+                    <input type="hidden" name="closing_location_error" id="closing-location-error">
                 </div>
 
                 {{-- Firma del cliente -------------------------------------- --}}
@@ -243,6 +365,7 @@
 @endsection
 
 @section('css')
+    @include('gestisp.partials.leaflet-styles')
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
@@ -278,6 +401,7 @@
 @endsection
 
 @section('js')
+    @include('gestisp.partials.leaflet-script')
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>

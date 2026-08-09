@@ -220,6 +220,13 @@ Route::get('/contracts/export-filtrado', [ContractController::class, 'exportFilt
 // Diagnóstico de la conexión: va por AJAX porque consulta el Mikrotik
 Route::get('/contratos/{contract}/diagnostico', [ContractController::class, 'diagnostics'])->name('contracts.diagnostics');
 
+// Georreferenciación de la vivienda. Va por PUT (modifica el contrato)
+// y las cajas cercanas por GET, que se piden desde la propia ficha.
+Route::put('/contratos/{contract}/ubicacion', [App\Http\Controllers\ContractLocationController::class, 'update'])
+    ->name('contracts.location.update');
+Route::get('/contratos/{contract}/naps-cercanas', [App\Http\Controllers\ContractLocationController::class, 'nearbyNaps'])
+    ->name('contracts.nearby_naps');
+
 // Gestión de la caja
 Route::get('/cash-register/status', [CashRegisterController::class, 'status'])->name('cash_register.status');
 Route::post('/cash-register/open', [CashRegisterController::class, 'open'])->name('cash_register.open');

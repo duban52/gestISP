@@ -58,6 +58,7 @@ class ContractQuery
             'department' => ['titulo' => 'Departamento', 'grupo' => 'Ubicación', 'defecto' => false],
             'home_type' => ['titulo' => 'Tipo de vivienda', 'grupo' => 'Ubicación', 'defecto' => false],
             'social_stratum' => ['titulo' => 'Estrato', 'grupo' => 'Ubicación', 'defecto' => false],
+            'coordenadas' => ['titulo' => 'Coordenadas', 'grupo' => 'Ubicación', 'defecto' => false],
 
             // ---- Servicio ----
             'plan' => ['titulo' => 'Plan', 'grupo' => 'Servicio', 'defecto' => true],
@@ -269,6 +270,15 @@ class ContractQuery
         } elseif (($filtros['has_nap'] ?? '') === 'no') {
             $query->whereNull('contracts.nap_port_id');
         }
+
+        // Y los que no están en el mapa son la lista de trabajo de la
+        // georreferenciación: como es opcional, sin una forma de
+        // sacarlos nadie sabría por dónde va ni cuánto falta.
+        if (($filtros['has_location'] ?? '') === 'si') {
+            $query->geolocated();
+        } elseif (($filtros['has_location'] ?? '') === 'no') {
+            $query->geolocated(false);
+        }
     }
 
     /**
@@ -320,6 +330,11 @@ class ContractQuery
             'department' => (string) $contrato->department,
             'home_type' => (string) $contrato->home_type,
             'social_stratum' => (string) $contrato->social_stratum,
+            // Se dice "Sin ubicar" y no se deja vacío: en el Excel una
+            // celda en blanco se confunde con un error de exportación.
+            'coordenadas' => $contrato->isGeolocated()
+                ? $contrato->latitude . ', ' . $contrato->longitude
+                : 'Sin ubicar',
 
             'plan' => (string) ($contrato->plan?->name ?? ''),
             'status' => (string) $contrato->status,

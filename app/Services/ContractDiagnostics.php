@@ -141,7 +141,7 @@ class ContractDiagnostics
             $sesion = $this->mikrotik->getActiveSession($cuenta->router, $cuenta->username);
         } catch (\Throwable $e) {
             Log::warning('Diagnóstico de contrato: el router no respondió', [
-                'contrato' => $contrato->id,
+                'contrato' => $contrato->numero_visible,
                 'router' => $cuenta->router->name,
                 'error' => $e->getMessage(),
             ]);

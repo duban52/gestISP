@@ -199,6 +199,17 @@
                             <option value="no" @selected(($filtros['has_nap'] ?? '') === 'no')>No</option>
                         </select>
                     </div>
+
+                    {{-- La georreferenciación es opcional: este filtro es
+                         la lista de trabajo de lo que falta por ubicar. --}}
+                    <div class="col-md-2 form-group">
+                        <label>Ubicado en el mapa</label>
+                        <select name="has_location" class="form-control">
+                            <option value="">Indiferente</option>
+                            <option value="si" @selected(($filtros['has_location'] ?? '') === 'si')>Sí</option>
+                            <option value="no" @selected(($filtros['has_location'] ?? '') === 'no')>No</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 

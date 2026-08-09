@@ -22,6 +22,88 @@
     <div>Fecha de creación: {{ $technical_order->created_at->format('Y-m-d H:i') }}</div>
     <div>Última acción: {{ $technical_order->updated_at->format('Y-m-d H:i') }}</div>
 
+    {{-- ============================================================
+         ¿Se cerró donde está el servicio?
+
+         Es la pregunta que el supervisor no podía responder: una orden
+         cerrada en la acometida del cliente y otra cerrada desde la
+         casa del técnico se veían exactamente igual. Aquí se dibujan
+         los dos puntos —la vivienda y el sitio del cierre— unidos por
+         una línea, con la distancia entre ellos.
+
+         El semáforo descuenta el margen de error que reportó el propio
+         dispositivo: acusar a alguien por 200 m de desvío cuando su
+         GPS admitía 300 m de error sería injusto, y bastaría un par de
+         veces para que nadie volviera a mirar el indicador.
+         ============================================================ --}}
+    @php
+        $ubicacion = $technical_order->locationCheck();
+    @endphp
+
+    <p class="mt-3 mb-1"><strong>Ubicación del cierre</strong></p>
+
+    <div class="alert alert-{{ $ubicacion->color() }} py-2 px-3 mb-2">
+        <i class="fas {{ $ubicacion->icon() }} mr-1"></i>
+        <strong>{{ $ubicacion->label() }}</strong>
+        @if($ubicacion->isComparable())
+            <br>
+            <small>
+                A {{ $ubicacion->humanDistance() }} de la vivienda del cliente
+                @if($ubicacion->accuracyM)
+                    · margen de error del dispositivo: {{ $ubicacion->accuracyM }} m
+                @endif
+            </small>
+        @elseif($technical_order->closing_location_error)
+            <br><small>Motivo: {{ $technical_order->closing_location_error }}</small>
+        @endif
+    </div>
+
+    @if($technical_order->hasClosingLocation())
+        @php
+            // Los parámetros se arman aquí y no dentro de la directiva
+            // include: Blade corta su argumento en el primer paréntesis
+            // que cree de cierre sin contar los corchetes, y una
+            // expresión con arrays anidados compila partida.
+            $marcadoresOrden = [];
+
+            if ($technical_order->contract?->isGeolocated()) {
+                $marcadoresOrden[] = [
+                    'lat' => $technical_order->contract->latitude,
+                    'lng' => $technical_order->contract->longitude,
+                    'title' => 'Vivienda del cliente',
+                    'icon' => 'fa-home',
+                    'color' => 'primary',
+                ];
+            }
+
+            $marcadoresOrden[] = [
+                'lat' => $technical_order->closing_latitude,
+                'lng' => $technical_order->closing_longitude,
+                'title' => 'Aquí cerró el técnico',
+                'icon' => 'fa-hard-hat',
+                'color' => 'danger',
+                'accuracy' => $technical_order->closing_accuracy_m,
+            ];
+
+            $parametrosMapaOrden = [
+                'mapId' => 'mapaCierreOrden' . $technical_order->id,
+                'height' => '280px',
+                'line' => count($marcadoresOrden) === 2,
+                'markers' => $marcadoresOrden,
+            ];
+        @endphp
+
+        @include('gestisp.partials.location-map', $parametrosMapaOrden)
+
+        <small class="text-muted d-block mt-1">
+            <i class="fas fa-home text-primary"></i> vivienda ·
+            <i class="fas fa-hard-hat text-danger"></i> cierre del técnico
+            @if($technical_order->closing_located_at)
+                · tomada el {{ $technical_order->closing_located_at->format('Y-m-d H:i') }}
+            @endif
+        </small>
+    @endif
+
     {{-- Evidencia fotográfica del trabajo --}}
     @php
         $images = is_string($technical_order->images) ? json_decode($technical_order->images) : [];

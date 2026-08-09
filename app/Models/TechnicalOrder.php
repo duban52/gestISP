@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\Geolocation;
+use App\Support\OrderLocationCheck;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -29,6 +31,11 @@ use Illuminate\Database\Eloquent\Model;
  * - solution:               solución aplicada al cierre
  * - rejection_reason:       motivo si la orden fue rechazada
  * - images:                 evidencia fotográfica del trabajo
+ *
+ * Dónde se cerró (closing_*): el punto que reportó el dispositivo del
+ * técnico al procesar la orden. Se compara contra la ubicación de la
+ * vivienda para saber si el trabajo se hizo donde debía; ver
+ * distanceToService().
  */
 class TechnicalOrder extends Model
 {
@@ -49,6 +56,19 @@ class TechnicalOrder extends Model
         'images',
         'client_signature',
         'created_by',
+        // Dónde estaba el técnico al cerrar la orden
+        'closing_latitude',
+        'closing_longitude',
+        'closing_accuracy_m',
+        'closing_located_at',
+        'closing_location_error',
+    ];
+
+    protected $casts = [
+        'closing_latitude' => 'decimal:7',
+        'closing_longitude' => 'decimal:7',
+        'closing_accuracy_m' => 'integer',
+        'closing_located_at' => 'datetime',
     ];
 
     /** Contrato (cliente) al que pertenece el trabajo */
@@ -88,5 +108,43 @@ class TechnicalOrder extends Model
     public function verifications()
     {
         return $this->hasMany(TechnicalOrderVerification::class, 'technical_order_id');
+    }
+
+    // ==================== Ubicación del cierre ====================
+
+    /** ¿El dispositivo del técnico llegó a dar un punto? */
+    public function hasClosingLocation(): bool
+    {
+        return $this->closing_latitude !== null && $this->closing_longitude !== null;
+    }
+
+    /**
+     * Metros entre donde se cerró la orden y donde está el servicio.
+     *
+     * Devuelve null cuando falta cualquiera de los dos puntos: no es lo
+     * mismo "el técnico estaba lejos" que "no hay con qué comparar", y
+     * confundirlos llevaría a marcar como sospechosas las órdenes de
+     * todos los contratos que aún no se han ubicado.
+     */
+    public function distanceToService(): ?float
+    {
+        $contract = $this->contract;
+
+        if (!$this->hasClosingLocation() || !$contract?->isGeolocated()) {
+            return null;
+        }
+
+        return Geolocation::distanceInMeters(
+            (float) $contract->latitude,
+            (float) $contract->longitude,
+            (float) $this->closing_latitude,
+            (float) $this->closing_longitude,
+        );
+    }
+
+    /** Contraste entre el punto de cierre y el del servicio. */
+    public function locationCheck(): OrderLocationCheck
+    {
+        return OrderLocationCheck::for($this);
     }
 }

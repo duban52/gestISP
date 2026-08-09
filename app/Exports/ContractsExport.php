@@ -24,7 +24,7 @@ class ContractsExport implements FromQuery, WithHeadings, WithMapping
     public function headings(): array
     {
         return [
-            'Número de contrato',          // $contract->id
+            'Número de contrato',          // $contract->numero_visible
             'Número de documento',         // $contract->client->identity_number
             'Estado',                      // $contract->status
             'Fecha de activación',         // $contract->activation_date
@@ -53,7 +53,10 @@ class ContractsExport implements FromQuery, WithHeadings, WithMapping
     public function map($contract): array
     {
         return [
-            $contract->id,
+            // El consecutivo por sucursal, no el id interno: es el
+            // número por el que pregunta el cliente y con el que se
+            // cruzan estos archivos contra los del contador.
+            $contract->numero_visible,
             $contract->client->identity_number ?? '',
             $contract->status,
             $contract->activation_date ? $contract->activation_date : 'N/A',

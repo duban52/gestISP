@@ -122,7 +122,8 @@
                                             <tbody>
                                             @foreach($client->contracts as $contract)
                                                 <tr>
-                                                    <td class="pl-4">#{{ $contract->id }}</td>
+                                                    {{-- El consecutivo del contrato, no el id interno --}}
+                                                    <td class="pl-4">{{ $contract->numero_visible }}</td>
                                                     <td>{{ $contract->neighborhood ?: '—' }}</td>
                                                     <td>{{ $contract->address ?: '—' }}</td>
                                                     <td><span class="badge badge-secondary">{{ $contract->status }}</span></td>

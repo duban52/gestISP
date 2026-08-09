@@ -248,7 +248,7 @@ class OntController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', "ONT vinculada al contrato #{$contrato->id}.");
+        return back()->with('success', "ONT vinculada al contrato {$contrato->numero_visible}.");
     }
 
     /**

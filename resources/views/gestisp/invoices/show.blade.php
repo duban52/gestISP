@@ -61,7 +61,7 @@
                 <p class="col-6"><strong>DIRECCIÓN:</strong> {{ $invoice->contract->address }}</p>
                 <p class="col-6"><strong>BARRIO:</strong> {{ $invoice->contract->neighborhood }}</p>
                 <p class="col-6"><strong>MUNICIPIO:</strong> {{ $invoice->contract->neighborhood }}</p>
-                <p class="col-6"><strong>CODIGO:</strong> {{ $invoice->contract->id}}</p>
+                <p class="col-6"><strong>CODIGO:</strong> {{ $invoice->contract->numero_visible }}</p>
                 <p class="col-6"><strong>CORREO:</strong> {{ $invoice->contract->client->email }}</p>
                 <p class="col-6"><strong>TELÉFONO:</strong> {{ $invoice->contract->client->number_phone}}</p>
             </div>

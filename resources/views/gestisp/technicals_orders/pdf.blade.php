@@ -80,7 +80,9 @@
                 {{ $order->contract?->client?->number_phone ?? '—' }}{{ $order->contract?->client?->aditional_phone ? ', ' . $order->contract->client->aditional_phone : '' }}
             </td>
             <td class="label">N.º de contrato</td>
-            <td>{{ $order->contract?->id ?? '—' }}</td>
+            {{-- El consecutivo visible del contrato, NUNCA el id interno:
+                 es el número por el que pregunta el cliente. --}}
+            <td>{{ $order->contract?->numero_visible ?? '—' }}</td>
         </tr>
         <tr>
             <td class="label">Plan</td>
@@ -91,6 +93,41 @@
         <tr>
             <td class="label">Dirección</td>
             <td colspan="3">{{ $order->contract?->address ?? '—' }}</td>
+        </tr>
+    </table>
+
+    {{-- ---------- Dónde se cerró ---------- ----------------------
+         En el comprobante NO se dibuja mapa: un PDF que dependiera de
+         descargar teselas de OpenStreetMap tardaría en generarse y
+         saldría en blanco cuando el servidor no tenga salida a
+         internet. Se imprime el dato que sostiene el soporte: a qué
+         distancia del servicio se cerró el trabajo. --}}
+    @php
+        $ubicacion = $order->locationCheck();
+    @endphp
+
+    <div class="section-title">Ubicación del cierre</div>
+    <table class="detail">
+        <tr>
+            <td class="label">Resultado</td>
+            <td colspan="3">
+                {{ $ubicacion->label() }}
+                @if($ubicacion->isComparable())
+                    — a {{ $ubicacion->humanDistance() }} de la vivienda
+                @endif
+            </td>
+        </tr>
+        <tr>
+            <td class="label">Coordenadas del cierre</td>
+            <td>
+                @if($order->hasClosingLocation())
+                    {{ $order->closing_latitude }}, {{ $order->closing_longitude }}
+                @else
+                    {{ $order->closing_location_error ?: '—' }}
+                @endif
+            </td>
+            <td class="label">Margen de error</td>
+            <td>{{ $order->closing_accuracy_m ? $order->closing_accuracy_m . ' m' : '—' }}</td>
         </tr>
     </table>
 

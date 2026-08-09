@@ -248,7 +248,7 @@
                     @if($pppoe->contract_id)
                         @can('pppoe.edit')
                             <form method="POST" action="{{ route('pppoe.unlink_contract', $pppoe) }}"
-                                  onsubmit="return confirm('¿Desvincular esta cuenta del contrato #{{ $pppoe->contract_id }}? La cuenta seguirá funcionando en el router: solo se quita la asociación en el sistema.');">
+                                  onsubmit="return confirm('¿Desvincular esta cuenta del contrato {{ $pppoe->contract?->numero_visible }}? La cuenta seguirá funcionando en el router: solo se quita la asociación en el sistema.');">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-outline-light" title="Desvincular contrato">
@@ -278,8 +278,9 @@
                                 <td>{{ $pppoe->contract->client->number_phone ?? '—' }}</td>
                             </tr>
                             <tr>
-                                <th>Contrato #</th>
-                                <td>{{ $pppoe->contract_id }}</td>
+                                <th>Contrato</th>
+                                {{-- El consecutivo visible, no el id interno --}}
+                                <td>{{ $pppoe->contract?->numero_visible ?? '—' }}</td>
                             </tr>
                             <tr>
                                 <th>Dirección</th>

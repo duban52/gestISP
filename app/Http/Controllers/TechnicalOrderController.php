@@ -13,6 +13,9 @@ use App\Notifications\TechnicalOrderAssignedTechnician;
 use App\Notifications\TechnicalOrderCreatedClient;
 use App\Notifications\TechnicalOrderFinishedClient;
 use App\Reports\Support\OrderDetailMap;
+use App\Services\Audit\AuditLogger;
+use App\Services\NapFinder;
+use App\Support\Geolocation;
 use App\Support\PdfBranding;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -405,6 +408,16 @@ class TechnicalOrderController extends Controller
             'serial_number'          => 'nullable|array',
             'images'                 => 'nullable|array',
             'client_signature'       => 'required|string',
+            // Ubicación del cierre. NO es obligatoria: el navegador
+            // puede denegar el permiso, el equipo puede no tener GPS o
+            // el sitio puede no tener señal, y ninguna de esas cosas
+            // puede impedirle al técnico cerrar un trabajo ya hecho.
+            // Cuando falta se guarda el motivo, que es lo que permite
+            // distinguir "no se pudo" de "no se quiso".
+            'closing_latitude'       => 'nullable|numeric|between:-90,90|required_with:closing_longitude',
+            'closing_longitude'      => 'nullable|numeric|between:-180,180|required_with:closing_latitude',
+            'closing_accuracy_m'     => 'nullable|integer|min:0|max:100000',
+            'closing_location_error' => 'nullable|string|max:150',
         ], [
             'client_signature.required' => 'Falta la firma del cliente. Pídale que firme en pantalla antes de cerrar la orden.',
         ]);
@@ -440,12 +453,12 @@ class TechnicalOrderController extends Controller
             }
 
             // ---- Reporte del técnico + evidencia fotográfica ----
-            $orderData = [
+            $orderData = array_merge([
                 'observations_technical' => $request->input('observations_technical'),
                 'client_observation'     => $request->input('client_observation'),
                 'solution'               => $request->input('solution'),
                 'status'                 => 'Prefinalizada',
-            ];
+            ], $this->closingLocationData($request));
 
             if ($request->hasFile('images')) {
                 $imagePaths = [];
@@ -539,6 +552,8 @@ class TechnicalOrderController extends Controller
 
             DB::commit();
 
+            $this->auditClosingLocation($technicalOrder->refresh());
+
             return redirect()->route('technicals_orders.my_technical_orders')
                 ->with('success', 'Orden procesada correctamente.');
 
@@ -560,7 +575,7 @@ class TechnicalOrderController extends Controller
      * Detalle de una orden para su procesamiento por el técnico.
      * Incluye los materiales disponibles en su almacén personal.
      */
-    public function show(TechnicalOrder $technicalOrder): View
+    public function show(TechnicalOrder $technicalOrder, NapFinder $napFinder): View
     {
         $materials = $this->getTechnicianMaterials();
         $warehouse = Warehouse::where('user_id', Auth::id())->first();
@@ -569,8 +584,18 @@ class TechnicalOrderController extends Controller
         // antes de permitir procesar la orden.
         $requiresMaterial = $this->requiresMaterial($technicalOrder);
 
+        $technicalOrder->loadMissing('contract.client', 'contract.napPort.napBox');
+
+        // Dónde conectar al cliente. Solo tiene sentido cuando hay que
+        // tender la acometida —instalación o traslado—: en una avería
+        // el cliente ya está conectado a una caja concreta y sugerirle
+        // otra al técnico sería invitarlo a moverlo sin motivo.
+        $napSuggestions = $this->needsNapSuggestion($technicalOrder)
+            ? $napFinder->forContract($technicalOrder->contract)
+            : collect();
+
         return view('gestisp.technicals_orders.show_and_process_order', compact(
-            'technicalOrder', 'materials', 'warehouse', 'requiresMaterial'
+            'technicalOrder', 'materials', 'warehouse', 'requiresMaterial', 'napSuggestions'
         ));
     }
 
@@ -585,6 +610,101 @@ class TechnicalOrderController extends Controller
     private function requiresMaterial(TechnicalOrder $technicalOrder): bool
     {
         return OrderDetailMap::clave($technicalOrder->detail) === 'instalacion de servicio';
+    }
+
+    /**
+     * ¿A esta orden le sirve que le propongamos una caja NAP?
+     *
+     * Solo a las que estrenan acometida: instalación y traslado. Se usa
+     * OrderDetailMap por lo mismo que arriba —el detalle llega con y
+     * sin tilde y con sufijos— para no dejar fuera la orden automática
+     * que genera el alta del contrato.
+     */
+    private function needsNapSuggestion(TechnicalOrder $technicalOrder): bool
+    {
+        return in_array(
+            OrderDetailMap::clave($technicalOrder->detail),
+            ['instalacion de servicio', 'traslado de servicio'],
+            true,
+        ) && (bool) $technicalOrder->contract?->isGeolocated();
+    }
+
+    /**
+     * Campos de la ubicación del cierre, listos para guardar.
+     *
+     * Un punto inservible —el (0, 0) del Atlántico que devuelven
+     * algunos dispositivos cuando responden sin haber fijado posición—
+     * se descarta y se anota como fallo. Guardarlo sería peor que no
+     * tener nada: pondría todas las órdenes a diez mil kilómetros del
+     * cliente y dejaría el indicador en rojo permanente, que es la
+     * forma más rápida de que nadie vuelva a mirarlo.
+     *
+     * @return array<string, mixed>
+     */
+    private function closingLocationData(Request $request): array
+    {
+        $latitude = $request->filled('closing_latitude') ? (float) $request->input('closing_latitude') : null;
+        $longitude = $request->filled('closing_longitude') ? (float) $request->input('closing_longitude') : null;
+
+        if (!Geolocation::isUsable($latitude, $longitude)) {
+            return [
+                'closing_latitude' => null,
+                'closing_longitude' => null,
+                'closing_accuracy_m' => null,
+                'closing_located_at' => null,
+                'closing_location_error' => $request->input('closing_location_error')
+                    ?: 'El dispositivo no entregó una ubicación válida',
+            ];
+        }
+
+        return [
+            'closing_latitude' => $latitude,
+            'closing_longitude' => $longitude,
+            'closing_accuracy_m' => $request->filled('closing_accuracy_m')
+                ? (int) $request->input('closing_accuracy_m')
+                : null,
+            'closing_located_at' => now(),
+            'closing_location_error' => null,
+        ];
+    }
+
+    /**
+     * Deja en la bitácora dónde se cerró la orden.
+     *
+     * El cambio de columnas ya lo audita el sistema por su cuenta, pero
+     * en crudo: dos números decimales no le dicen nada a quien revisa.
+     * Esta entrada dice lo que importa —a cuántos metros del servicio
+     * se cerró— para que se pueda buscar por ello meses después.
+     */
+    private function auditClosingLocation(TechnicalOrder $technicalOrder): void
+    {
+        $technicalOrder->loadMissing('contract');
+        $check = $technicalOrder->locationCheck();
+
+        app(AuditLogger::class)->action(
+            'technical_orders.closed',
+            sprintf(
+                'Procesó la orden N.º %d del contrato %s. %s',
+                $technicalOrder->id,
+                $technicalOrder->contract?->numero_visible ?? 'sin contrato',
+                $check->isComparable()
+                    ? 'Cerrada a ' . $check->humanDistance() . ' de la vivienda'
+                    : $check->label(),
+            ),
+            [
+                'orden' => $technicalOrder->id,
+                'contrato' => $technicalOrder->contract?->numero_visible,
+                'estado_ubicacion' => $check->status,
+                'distancia_m' => $check->distanceM,
+                'precision_m' => $check->accuracyM,
+                'coordenadas' => $technicalOrder->hasClosingLocation()
+                    ? $technicalOrder->closing_latitude . ', ' . $technicalOrder->closing_longitude
+                    : null,
+                'motivo_sin_ubicacion' => $technicalOrder->closing_location_error,
+            ],
+            $technicalOrder,
+            'ordenes',
+        );
     }
 
     /**

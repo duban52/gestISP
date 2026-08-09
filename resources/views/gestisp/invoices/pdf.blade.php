@@ -123,7 +123,7 @@
             <tr>
                 <td colspan="2">C.C/NIT {{ $invoice->contract->client->identity_number}}</td>
                 <td colspan="3">SUSCRIPTOR {{ $invoice->contract->client->name }} {{ $invoice->contract->client->last_name }}</td>
-                <td>CODIGO {{ $invoice->contract->id }}</td>
+                <td>CODIGO {{ $invoice->contract->numero_visible }}</td>
                 <td colspan="2">CORREO {{ $invoice->contract->client->email }}</td>
             </tr>
             <tr>
@@ -264,7 +264,7 @@
                                 <tr>
                                     <td colspan="3" style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>DIRECCIÓN <strong>{{ $invoice->contract->address }} Barrio {{ $invoice->contract->neighborhood }}</strong></p></td>
                                     <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>TELÉFONO <strong>{{ $invoice->contract->client->number_phone}}</strong></p></td>
-                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>CÓDIGO {{ $invoice->contract->id }}</p></td>
+                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>CÓDIGO {{ $invoice->contract->numero_visible }}</p></td>
                                     <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>FECHA CORTE <strong>{{ $invoice->suspension_date }}</strong></p></td>
                                 </tr>
                             </tbody>

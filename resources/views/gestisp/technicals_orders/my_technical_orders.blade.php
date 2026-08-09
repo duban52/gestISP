@@ -42,7 +42,8 @@
                     @foreach($technical_orders as $technical_order)
                         <tr>
                             <td>{{ $technical_order->id }}</td>
-                            <td>{{ $technical_order->contract->id }}</td>
+                            {{-- El consecutivo del contrato, no el id interno --}}
+                            <td>{{ $technical_order->contract->numero_visible }}</td>
                             <td>
                                 {{ $technical_order->contract->client->name }}
                                 {{ $technical_order->contract->client->last_name }}

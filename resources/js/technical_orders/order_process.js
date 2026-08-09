@@ -83,6 +83,92 @@ $(document).ready(function () {
         });
     }
 
+    /* ============================================================
+       Ubicación del cierre
+
+       Se pide sola al abrir la pantalla y no con un botón: si el
+       técnico tuviera que acordarse de pulsarlo, la mitad de las
+       órdenes llegarían sin punto y el dato dejaría de servir para
+       comprobar nada.
+
+       Nunca bloquea el cierre. Si el navegador deniega el permiso o el
+       sitio no tiene señal se guarda el MOTIVO, que es lo que después
+       distingue un fallo del equipo de una orden que conviene mirar.
+       ============================================================ */
+    const locationStatus = $('#closing-location-status');
+    const locationInputs = {
+        latitude: $('#closing-latitude'),
+        longitude: $('#closing-longitude'),
+        accuracy: $('#closing-accuracy'),
+        error: $('#closing-location-error'),
+    };
+
+    // El navegador solo dice "PERMISSION_DENIED"; el técnico necesita
+    // saber qué hacer al respecto.
+    const GEOLOCATION_ERRORS = {
+        1: 'Permiso de ubicación denegado en el navegador',
+        2: 'El dispositivo no pudo determinar la ubicación',
+        3: 'Se agotó el tiempo de espera de la ubicación',
+    };
+
+    function showLocationStatus(cssClass, html) {
+        locationStatus.attr('class', 'alert py-2 px-3 small mb-0 ' + cssClass).html(html);
+    }
+
+    function captureLocation() {
+        if (locationStatus.length === 0) {
+            return;
+        }
+
+        if (!navigator.geolocation) {
+            locationInputs.error.val('El navegador no permite obtener la ubicación');
+            showLocationStatus(
+                'alert-warning',
+                '<i class="fas fa-exclamation-triangle mr-1"></i> Este navegador no entrega ubicación. ' +
+                'La orden se cerrará sin registrar dónde se hizo.'
+            );
+            return;
+        }
+
+        showLocationStatus('alert-secondary', '<i class="fas fa-spinner fa-spin mr-1"></i> Obteniendo la ubicación del dispositivo…');
+
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                const accuracy = Math.round(position.coords.accuracy || 0);
+
+                locationInputs.latitude.val(position.coords.latitude.toFixed(7));
+                locationInputs.longitude.val(position.coords.longitude.toFixed(7));
+                locationInputs.accuracy.val(accuracy);
+                locationInputs.error.val('');
+
+                showLocationStatus(
+                    'alert-success',
+                    '<i class="fas fa-map-marker-alt mr-1"></i> Ubicación tomada ' +
+                    '<span class="text-muted">(margen de error: ' + accuracy + ' m)</span>'
+                );
+            },
+            function (error) {
+                const reason = GEOLOCATION_ERRORS[error.code] || 'No se pudo obtener la ubicación';
+
+                locationInputs.latitude.val('');
+                locationInputs.longitude.val('');
+                locationInputs.accuracy.val('');
+                locationInputs.error.val(reason);
+
+                showLocationStatus(
+                    'alert-warning',
+                    '<i class="fas fa-exclamation-triangle mr-1"></i> ' + reason + '. ' +
+                    'Puede cerrar la orden igual: quedará anotado el motivo.'
+                );
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+        );
+    }
+
+    $('#retry-location-btn').on('click', captureLocation);
+
+    captureLocation();
+
     // Materiales agregados a la orden
     let selectedMaterials = [];
 
@@ -262,10 +348,16 @@ $(document).ready(function () {
             return;
         }
 
+        // Cerrar sin ubicación se puede, pero se avisa: quien revise la
+        // orden no podrá comprobar que se hizo en el sitio del cliente.
+        const withoutLocation = locationInputs.latitude.length > 0 && !locationInputs.latitude.val();
+
         swalBootstrap.fire({
             title: '¿Procesar la orden?',
-            text: 'Se descontará el material de tu almacén y la orden pasará a verificación.',
-            icon: 'question',
+            text: withoutLocation
+                ? 'No se pudo tomar tu ubicación: la orden quedará sin registrar dónde se hizo. Se descontará el material de tu almacén y pasará a verificación.'
+                : 'Se descontará el material de tu almacén y la orden pasará a verificación.',
+            icon: withoutLocation ? 'warning' : 'question',
             showCancelButton: true,
             confirmButtonText: 'Sí, procesar',
             cancelButtonText: 'Cancelar',

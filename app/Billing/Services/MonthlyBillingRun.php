@@ -91,7 +91,7 @@ class MonthlyBillingRun
                     $skipped++;
                 }
             } catch (\Exception $e) {
-                Log::error("Error generando factura para contrato {$contract->id}: " . $e->getMessage());
+                Log::error("Error generando factura para contrato {$contract->numero_visible}: " . $e->getMessage());
                 $skipped++;
             }
         }

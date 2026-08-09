@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\Contract;
 use App\Models\Olt;
 use App\Models\Ont;
 use App\Services\Snmp\SnmpClient;
@@ -200,6 +201,14 @@ class OltOntDiscovery
 
         $muestra = $nuevas->take($limit)->map(function ($ont) use ($olt) {
             $ont['contract_id'] = $this->matchContract($ont['description'], $olt->branch_id);
+
+            // El id es lo que necesita la importación para vincular; el
+            // número es lo ÚNICO que se le puede enseñar a una persona:
+            // "Contrato #37" no significa nada para quien revisa la
+            // pantalla, "ENG000037" sí.
+            $ont['contract_number'] = $ont['contract_id']
+                ? Contract::find($ont['contract_id'])?->numero_visible
+                : null;
 
             return $ont;
         })->values()->all();

@@ -306,8 +306,8 @@
                                     <td>${o.online
                                         ? '<span class="badge badge-success">En línea</span>'
                                         : '<span class="badge badge-secondary">Fuera de línea</span>'}</td>
-                                    <td>${o.contract_id
-                                        ? '<span class="badge badge-info">Contrato #' + o.contract_id + '</span>'
+                                    <td>${o.contract_number
+                                        ? '<span class="badge badge-info">Contrato ' + o.contract_number + '</span>'
                                         : '<span class="text-muted">sin asignar</span>'}</td>
                                 </tr>`);
                         });

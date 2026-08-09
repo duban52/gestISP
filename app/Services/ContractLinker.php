@@ -57,7 +57,7 @@ class ContractLinker
 
         if ($ontExistente) {
             throw new RuntimeException(
-                "El contrato #{$contrato->id} ya tiene la ONT {$ontExistente->sn} asignada. " .
+                "El contrato {$contrato->numero_visible} ya tiene la ONT {$ontExistente->sn} asignada. " .
                 'Un contrato solo admite una ONT.'
             );
         }

@@ -67,10 +67,14 @@ class AuditLabels
     /**
      * Cómo identificar el registro concreto: se busca el campo más
      * reconocible (nombre, serial, número) y si no hay, el id.
+     *
+     * contract_number abre la lista para que un contrato aparezca en
+     * la bitácora como «ENG000123» y no como «N.º 45», que es su id
+     * interno y no le dice nada a quien revisa.
      */
     public static function identificar(Model $model): string
     {
-        foreach (['name', 'sn', 'full_number', 'description', 'user_pppoe', 'email'] as $campo) {
+        foreach (['contract_number', 'name', 'sn', 'full_number', 'description', 'user_pppoe', 'email'] as $campo) {
             $valor = $model->getAttribute($campo);
 
             if (is_string($valor) && $valor !== '') {

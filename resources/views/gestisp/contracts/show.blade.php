@@ -187,6 +187,65 @@
                         </div>
                     </div>
 
+                    {{-- ============================================================
+                         Ubicación de la vivienda
+
+                         Va junto a la dirección y no en una pantalla aparte
+                         porque son el mismo dato dicho de dos maneras: la
+                         dirección es como se llega preguntando, el punto es
+                         dónde queda de verdad. En zona rural y en barrios sin
+                         nomenclatura, el punto es lo único que sirve.
+                         ============================================================ --}}
+                    <div class="modal fade" id="editLocationData" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        {{ $contract->isGeolocated() ? 'Ajustar la ubicación de la vivienda' : 'Ubicar la vivienda en el mapa' }}
+                                    </h5>
+                                    <button type="button" class="btn-danger" data-bs-dismiss="modal" aria-label="Cerrar">
+                                        <i class="far fa-window-close"></i>
+                                    </button>
+                                </div>
+                                <div class="modal-body">
+                                    <form action="{{ route('contracts.location.update', $contract->id) }}" method="post">
+                                        @csrf
+                                        @method('put')
+
+                                        @php
+                                            // Los parámetros se arman aquí y no dentro de la
+                                            // directiva include: Blade corta su argumento en el
+                                            // primer paréntesis que cree de cierre sin contar los
+                                            // corchetes, y una expresión con arrays anidados en
+                                            // varias líneas compila partida.
+                                            $parametrosSelector = [
+                                                'mapId' => 'mapaSelectorContrato',
+                                                'latitude' => $contract->latitude,
+                                                'longitude' => $contract->longitude,
+                                                'height' => '380px',
+                                                'allowClear' => $contract->isGeolocated(),
+                                                'help' => 'Marque la puerta de la vivienda. Si está en sitio, "Estoy aquí" toma la posición del dispositivo, que es la más fiable.',
+                                            ];
+                                        @endphp
+
+                                        @include('gestisp.partials.location-picker', $parametrosSelector)
+
+                                        <div class="text-center mt-3">
+                                            <hr>
+                                            <input type="submit" class="btn btn-success" value="Guardar ubicación">
+                                            <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Cancelar</button>
+                                        </div>
+                                        @if($contract->isGeolocated())
+                                            <small class="form-text text-muted text-center">
+                                                Para dejar el contrato sin ubicación, pulse «Quitar» y guarde.
+                                            </small>
+                                        @endif
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
                 <div class="card-body row">
                     <p class="col-6"><strong>Departamento:</strong> {{ $contract->department ?? 'N/A' }}</p>
@@ -195,6 +254,65 @@
                     <p class="col-6"><strong>Dirección:</strong> {{ $contract->address }}</p>
                     <p class="col-6"><strong>Tipo de vivienda:</strong> {{ $contract->home_type }}</p>
                     <p class="col-6"><strong>Estrato social:</strong> {{ $contract->social_stratum }}</p>
+
+                    <div class="col-12">
+                        <hr class="mt-0 mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong><i class="fas fa-map-pin text-danger mr-1"></i> Ubicación de la vivienda</strong>
+                            <button type="button" class="btn btn-sm btn-outline-info"
+                                    data-bs-toggle="modal" data-bs-target="#editLocationData">
+                                <i class="fas fa-map-marked-alt"></i>
+                                {{ $contract->isGeolocated() ? 'Ajustar' : 'Agregar ubicación' }}
+                            </button>
+                        </div>
+
+                        @if($contract->isGeolocated())
+                            @php
+                                $parametrosMapa = [
+                                    'mapId' => 'mapaContrato',
+                                    'height' => '240px',
+                                    'markers' => [[
+                                        'lat' => $contract->latitude,
+                                        'lng' => $contract->longitude,
+                                        'title' => 'Vivienda del cliente',
+                                        'icon' => 'fa-home',
+                                        'color' => 'primary',
+                                    ]],
+                                ];
+                            @endphp
+
+                            @include('gestisp.partials.location-map', $parametrosMapa)
+
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-info-circle"></i>
+                                {{ $contract->location_source_label ?? 'Origen no registrado' }}
+                                @if($contract->located_at)
+                                    · {{ $contract->located_at->format('Y-m-d H:i') }}
+                                @endif
+                                @if($contract->locatedBy)
+                                    · {{ trim($contract->locatedBy->name . ' ' . $contract->locatedBy->last_name) }}
+                                @endif
+                                <br>
+                                <span class="text-monospace">{{ $contract->latitude }}, {{ $contract->longitude }}</span>
+                            </small>
+
+                            {{-- Cajas cercanas: se piden al pulsar y no al abrir la
+                                 ficha porque la ocupación se calcula en el momento
+                                 y el puerto libre de hace un rato puede estar
+                                 ocupado ahora. --}}
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="btnCajasCercanas">
+                                <i class="fas fa-box"></i> Ver cajas NAP cercanas
+                            </button>
+                            <div id="cajasCercanas" class="mt-2"></div>
+                        @else
+                            <div class="alert alert-warning py-2 mb-0 small">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Este servicio todavía no está ubicado en el mapa. Sin el punto no se
+                                puede sugerir la caja NAP más cercana ni comprobar que las órdenes se
+                                cierren en el sitio del cliente.
+                            </div>
+                        @endif
+                    </div>
                 </div>
             </div>
             <div class="card col-md-5 ml-md-1 mr-md-1">
@@ -865,12 +983,14 @@
 
 @section('css')
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+    @include('gestisp.partials.leaflet-styles')
 @endsection
 
 @section('js')
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
+    @include('gestisp.partials.leaflet-script')
     <script>
         // Mostrar automáticamente el modal si existe un mensaje de éxito o error
         @if(session('success'))
@@ -954,6 +1074,81 @@
             selCaja.addEventListener('change', llenarPuertos);
             llenarPuertos();
         })();
+
+        /* ============================================================
+           Cajas NAP cercanas a la vivienda
+
+           Responde "¿a qué caja conecto a este cliente?" sin salir de
+           la ficha. Se pide bajo demanda: la ocupación se calcula en el
+           momento y no tiene sentido pagarla en cada visita a la ficha
+           cuando solo interesa mientras hay una instalación en curso.
+           ============================================================ */
+        $(function () {
+            const $boton = $('#btnCajasCercanas');
+
+            if ($boton.length === 0) {
+                return;
+            }
+
+            const $destino = $('#cajasCercanas');
+
+            function escapar(valor) {
+                return $('<div>').text(valor == null ? '' : valor).html();
+            }
+
+            $boton.on('click', function () {
+                $boton.prop('disabled', true)
+                    .html('<span class="spinner-border spinner-border-sm"></span> Buscando…');
+
+                fetch("{{ route('contracts.nearby_naps', $contract->id) }}")
+                    .then(function (respuesta) {
+                        return respuesta.ok ? respuesta.json() : Promise.reject(respuesta.status);
+                    })
+                    .then(function (datos) {
+                        if (!datos.sugerencias.length) {
+                            $destino.html(
+                                '<div class="alert alert-warning py-2 mb-0 small">' +
+                                'No hay cajas NAP documentadas a menos de 1 km de esta vivienda. ' +
+                                'Puede que la zona no esté cargada en el módulo de redes.' +
+                                '</div>'
+                            );
+                            return;
+                        }
+
+                        let filas = '';
+
+                        datos.sugerencias.forEach(function (caja) {
+                            const puerto = caja.puerto_sugerido
+                                ? '<span class="badge badge-success">Puerto ' + caja.puerto_sugerido + '</span>'
+                                : '<span class="badge badge-danger">Sin cupo</span>';
+
+                            filas += '<tr>' +
+                                '<td><a href="' + caja.url + '">' + escapar(caja.caja) + '</a>' +
+                                (caja.zona ? '<br><small class="text-muted">' + escapar(caja.zona) + '</small>' : '') +
+                                '</td>' +
+                                '<td>' + escapar(caja.distancia) + '</td>' +
+                                '<td>' + caja.libres + ' / ' + caja.capacidad + '</td>' +
+                                '<td>' + puerto + '</td>' +
+                                '</tr>';
+                        });
+
+                        $destino.html(
+                            '<div class="table-responsive">' +
+                            '<table class="table table-sm table-bordered mb-0">' +
+                            '<thead class="thead-light"><tr>' +
+                            '<th>Caja</th><th>Distancia</th><th>Libres</th><th>Sugerido</th>' +
+                            '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
+                            '<small class="text-muted">La distancia es en línea recta: confírmela con el recorrido real de la fibra.</small>'
+                        );
+                    })
+                    .catch(function () {
+                        $destino.html('<div class="alert alert-danger py-2 mb-0 small">No se pudieron consultar las cajas cercanas.</div>');
+                    })
+                    .finally(function () {
+                        $boton.prop('disabled', false).html('<i class="fas fa-box"></i> Ver cajas NAP cercanas');
+                    });
+            });
+        });
 
         // DataTables de las pestañas del contrato
         $(function () {
