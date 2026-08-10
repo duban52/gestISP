@@ -33,6 +33,13 @@
 
 set -Eeuo pipefail
 
+# Idioma neutro para todo lo que se ejecute desde aquí. No es cosmético:
+# en un servidor en español, rsync escribe los tamaños como
+# "80.005.464" y la comprobación de que el archivo llegó completo
+# comparaba ese texto contra el número a secas. La copia estaba bien y
+# el script la daba por fallida.
+export LC_ALL=C
+
 CONFIG_FILE="${GESTISP_BACKUP_CONF:-/etc/gestisp/backup.conf}"
 LOG_FILE="/var/log/gestisp-backup.log"
 LOCK_FILE="/var/lock/gestisp-backup.lock"
@@ -319,8 +326,8 @@ enviar_por_ssh() {
         # Comprobación de que llegó completo. Se compara el tamaño
         # porque `wc -c` existe hasta en la NAS más pelada; rsync ya
         # verifica el contenido durante la transferencia.
-        local_bytes="$(wc -c < "$archivo")"
-        remoto_bytes="$(ssh "${SSH_OPCIONES[@]}" "${NAS_USER}@${NAS_HOST}" "wc -c < '${DESTINO_DIA}/$(basename "$archivo")'" | tr -d '[:space:]')"
+        local_bytes="$(wc -c < "$archivo" | tr -cd '0-9')"
+        remoto_bytes="$(ssh "${SSH_OPCIONES[@]}" "${NAS_USER}@${NAS_HOST}" "wc -c < '${DESTINO_DIA}/$(basename "$archivo")'" | tr -cd '0-9')"
 
         if [[ "$local_bytes" != "$remoto_bytes" ]]; then
             log "ERROR: $(basename "$archivo") llegó incompleto a la NAS (${remoto_bytes} de ${local_bytes} bytes)."
@@ -396,11 +403,13 @@ enviar_por_rsyncd() {
     for archivo in "${ARCHIVOS_A_ENVIAR[@]}"; do
         rsync "${opciones[@]}" "$archivo" "${destino}/"
 
-        # El listado devuelve el tamaño con separadores de millar
-        # ("76,543,210"), de ahí el tr
-        local_bytes="$(wc -c < "$archivo")"
+        # El listado devuelve el tamaño con separadores de millar, y
+        # cuáles son depende del idioma del sistema ("76,543,210" o
+        # "76.543.210"). Se quita todo lo que no sea un dígito en vez
+        # de intentar adivinar el separador.
+        local_bytes="$(wc -c < "$archivo" | tr -cd '0-9')"
         remoto_bytes="$(rsync --list-only --password-file="$NAS_PASSWORD_FILE" \
-            "${destino}/$(basename "$archivo")" 2>/dev/null | awk 'NR==1 {print $2}' | tr -d ',')"
+            "${destino}/$(basename "$archivo")" 2>/dev/null | awk 'NR==1 {print $2}' | tr -cd '0-9')"
 
         if [[ -z "$remoto_bytes" ]]; then
             log "ERROR: $(basename "$archivo") no aparece en la NAS después de enviarlo."
