@@ -45,7 +45,17 @@ mkdir -p /var/backups/gestisp
 chmod 700 /var/backups/gestisp
 
 echo "==> Programando las dos copias diarias..."
-install -m 644 -o root -g root "$ORIGEN/gestisp-backup.cron" /etc/cron.d/gestisp-backup
+
+# Se respeta igual que backup.conf: las horas suelen ajustarse a la
+# zona horaria real del servidor (muchos están en UTC), y volver a
+# pisarlas en cada actualización devolvería las copias a una hora que
+# nadie eligió, sin avisar.
+if [[ -f /etc/cron.d/gestisp-backup ]]; then
+    echo "    Ya existe /etc/cron.d/gestisp-backup: se respeta."
+    echo "    (si quiere los horarios de fábrica: cp $ORIGEN/gestisp-backup.cron /etc/cron.d/gestisp-backup)"
+else
+    install -m 644 -o root -g root "$ORIGEN/gestisp-backup.cron" /etc/cron.d/gestisp-backup
+fi
 
 echo "==> Configurando la rotación del registro..."
 cat > /etc/logrotate.d/gestisp-backup <<'EOF'

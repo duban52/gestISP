@@ -31,8 +31,19 @@ MAILTO=""
 #         trabajo: si la base se rompe a las 18:00, se recupera todo
 #         lo hecho hasta las 14:30 en vez de perder el día entero.
 #
-# Las horas están en la zona horaria del servidor: compruébelo con
-# `timedatectl` y ajústelo con `sudo timedatectl set-timezone America/Bogota`.
+# CUIDADO: las horas son las del SERVIDOR, no las suyas. Compruébelo
+# con `timedatectl` antes de dar nada por bueno.
+#
+# Muchos servidores vienen en UTC, que va cinco horas por delante de
+# Colombia: ahí un "30 2" se ejecuta a las 21:30 del día anterior, que
+# es justo lo contrario de lo que se busca. En un servidor en UTC, las
+# 02:30 y 14:30 de Colombia son:
+#
+#     30 7  * * *   (02:30 en Colombia)
+#     30 19 * * *   (14:30 en Colombia)
+#
+# El instalador respeta este archivo si ya existe, así que puede
+# ajustarlo sin miedo a que una actualización se lo devuelva atrás.
 
 30 2  * * * root /usr/local/bin/gestisp-backup.sh >> /var/log/gestisp-backup-cron.log 2>&1
 30 14 * * * root /usr/local/bin/gestisp-backup.sh >> /var/log/gestisp-backup-cron.log 2>&1
