@@ -476,7 +476,19 @@ cd /root/recuperacion && sha256sum -c gestisp-huellas-*.sha256
 ### Paso 3 — Programas base
 
 ```bash
-sudo apt update && sudo apt install -y nginx mysql-server php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-gd php8.3-bcmath php8.3-snmp composer unzip
+sudo apt update && sudo apt install -y mysql-server php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-gd php8.3-bcmath php8.3-snmp composer unzip
+```
+
+Y el servidor web que tuviera, **el mismo de antes** — lo dice
+`inventario-del-servidor.txt` y también se ve en el paquete de configuración
+(si dentro hay `./etc/apache2/` era Apache; si hay `./etc/nginx/`, nginx):
+
+```bash
+sudo apt install -y apache2 libapache2-mod-php8.3    # si era Apache
+```
+
+```bash
+sudo apt install -y nginx php8.3-fpm                 # si era nginx
 ```
 
 > Ajuste la versión de PHP y la lista de extensiones a lo que diga
@@ -489,8 +501,20 @@ sudo apt update && sudo apt install -y nginx mysql-server php8.3-fpm php8.3-mysq
 sudo tar xzf gestisp-servidor-FECHA.tar.gz -C /
 ```
 
+Compruebe que la configuración es válida y reinicie:
+
 ```bash
-sudo nginx -t && sudo systemctl restart nginx php8.3-fpm
+sudo apache2ctl configtest && sudo systemctl restart apache2       # Apache
+```
+
+```bash
+sudo nginx -t && sudo systemctl restart nginx php8.3-fpm           # nginx
+```
+
+En Apache, recuerde habilitar los módulos y el sitio si no arrancan solos:
+
+```bash
+sudo a2enmod rewrite ssl && sudo a2ensite gestisp && sudo systemctl reload apache2
 ```
 
 ### Paso 5 — Restaurar el código
@@ -591,8 +615,10 @@ perderá en el siguiente despliegue.
 
 ### El botón de generar copia da un error de tiempo agotado
 
-El volcado tarda más de lo que espera el servidor web. En
-`/etc/nginx/sites-available/gestisp`, dentro del bloque `location ~ \.php$`:
+El volcado tarda más de lo que espera el servidor web.
+
+En **nginx**, en `/etc/nginx/sites-available/gestisp`, dentro del bloque
+`location ~ \.php$`:
 
 ```
 fastcgi_read_timeout 600;
@@ -600,6 +626,17 @@ fastcgi_read_timeout 600;
 
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
+```
+
+En **Apache con mod_php**, basta con subir el límite de PHP en
+`/etc/php/8.3/apache2/php.ini`:
+
+```
+max_execution_time = 600
+```
+
+```bash
+sudo systemctl reload apache2
 ```
 
 ### `mysqldump: command not found`
