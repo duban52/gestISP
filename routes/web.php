@@ -163,6 +163,19 @@ Route::get('/user/branches', [LoginController::class, 'getBranches'])->name('use
 Route::get('/auditoria', [App\Http\Controllers\AuditController::class, 'index'])->name('audits.index');
 Route::get('/auditoria/{audit}', [App\Http\Controllers\AuditController::class, 'show'])->name('audits.show');
 
+// Copias de seguridad de la base de datos. También reservadas al
+// superadministrador: el archivo que se descarga es la base de datos
+// entera (clientes, documentos, contraseñas PPPoE e histórico de
+// pagos), así que no puede depender de un permiso marcable en el
+// módulo de roles.
+//
+// El nombre del archivo viaja en la URL; la validación de que es
+// realmente una de nuestras copias está en BackupRepository::buscar().
+Route::get('/copias-de-seguridad', [App\Http\Controllers\BackupController::class, 'index'])->name('backups.index');
+Route::post('/copias-de-seguridad', [App\Http\Controllers\BackupController::class, 'store'])->name('backups.store');
+Route::get('/copias-de-seguridad/{archivo}/descargar', [App\Http\Controllers\BackupController::class, 'download'])->name('backups.download');
+Route::delete('/copias-de-seguridad/{archivo}', [App\Http\Controllers\BackupController::class, 'destroy'])->name('backups.destroy');
+
 // Perfil del usuario autenticado (cada quien edita el suyo: no lleva
 // permisos, siempre opera sobre el usuario de la sesión)
 Route::get('/perfil', [ProfileController::class, 'edit'])->name('profile.edit');

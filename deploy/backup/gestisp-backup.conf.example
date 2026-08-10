@@ -1,0 +1,95 @@
+# ============================================================
+#  Configuración de las copias de seguridad de gestISP
+# ============================================================
+#
+#  Copiar a /etc/gestisp/backup.conf y ajustar.
+#
+#      sudo mkdir -p /etc/gestisp
+#      sudo cp gestisp-backup.conf.example /etc/gestisp/backup.conf
+#      sudo chown root:root /etc/gestisp/backup.conf
+#      sudo chmod 600 /etc/gestisp/backup.conf
+#
+#  Los permisos 600 no son un adorno: este archivo dice dónde está la
+#  NAS y con qué llave se entra. No contiene la contraseña de la base
+#  de datos —esa la lee el propio Laravel de su .env— y así no hay dos
+#  sitios donde mantenerla.
+#
+# ============================================================
+
+
+# ---------- La aplicación ----------
+
+# Raíz del proyecto en el servidor (donde está artisan)
+APP_DIR="/var/www/gestisp"
+
+# Usuario del sistema propietario de los archivos de la aplicación.
+# El script se ejecuta como root desde cron y baja a este usuario para
+# lanzar artisan; si no, los archivos que genere PHP quedarían con
+# dueño root y la aplicación no podría escribir en storage/ después.
+APP_USER="www-data"
+
+# Intérprete de PHP
+PHP_BIN="/usr/bin/php"
+
+
+# ---------- Dónde se preparan las copias en el servidor ----------
+
+# Carpeta de trabajo para los paquetes de código y configuración.
+# El volcado de la base lo deja Laravel en storage/app/backups.
+WORK_DIR="/var/backups/gestisp"
+
+# Días que se conservan las copias EN EL SERVIDOR. Corto a propósito:
+# el histórico vive en la NAS, aquí solo hacen falta las recientes.
+KEEP_LOCAL_DAYS=7
+
+
+# ---------- La NAS ----------
+
+NAS_USER="gestisp"
+NAS_HOST="192.168.1.50"
+NAS_PORT=22
+
+# Carpeta de destino EN LA NAS. Debe existir y pertenecer a NAS_USER.
+NAS_PATH="/volume1/respaldos/gestisp"
+
+# Clave SSH sin contraseña, exclusiva para esta tarea.
+# Se crea con:  ssh-keygen -t ed25519 -f /root/.ssh/gestisp-nas -N ""
+SSH_KEY="/root/.ssh/gestisp-nas"
+
+# Días que se conservan las copias diarias en la NAS.
+KEEP_NAS_DAYS=30
+
+# Copias mensuales: el día 1 de cada mes, el volcado se guarda además
+# en NAS_PATH/mensuales y se conserva este número de días (730 = dos
+# años). Pesan poco y son las que salvan cuando el error se descubre
+# tarde: un dato borrado en marzo del que nadie se dio cuenta hasta
+# junio ya no está en las copias de los últimos 30 días.
+KEEP_NAS_MONTHLY_DAYS=730
+
+
+# ---------- Avisos ----------
+
+# Correo al que avisar si una copia falla. Requiere que el servidor
+# pueda enviar correo (mailutils / msmtp). Vacío = sin aviso.
+ALERT_EMAIL=""
+
+# URL que se visita cuando la copia termina BIEN (healthchecks.io,
+# Uptime Kuma o similar). Es el único aviso que funciona cuando el
+# servidor entero se apaga: el vigilante externo deja de recibir la
+# señal y avisa. Vacío = desactivado.
+PING_URL=""
+
+
+# ---------- Qué se incluye en el paquete de código ----------
+
+# Rutas de configuración del servidor que se copian. Se ignoran las
+# que no existan, así que la lista puede ser generosa.
+SYSTEM_CONFIG_PATHS=(
+    "/etc/nginx"
+    "/etc/php"
+    "/etc/mysql"
+    "/etc/gestisp"
+    "/etc/cron.d"
+    "/etc/letsencrypt"
+    "/etc/supervisor"
+)

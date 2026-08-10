@@ -726,6 +726,18 @@ return [
                     'active' => ['auditoria*'],
                     'solo_superadmin' => true,
                 ],
+                // Copias de seguridad: mismo criterio que la
+                // trazabilidad. El archivo que se descarga es la base
+                // de datos completa, así que la entrada no puede
+                // depender de un permiso marcable en el módulo de
+                // roles.
+                [
+                    'text' => 'Copias de seguridad',
+                    'route' => 'backups.index',
+                    'icon' => 'fas  fa-database',
+                    'active' => ['copias-de-seguridad*'],
+                    'solo_superadmin' => true,
+                ],
 
             ],
 

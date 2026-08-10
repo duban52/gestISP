@@ -112,6 +112,13 @@ class AuditRequests
         $ruta = $request->route()?->getName() ?? $request->path();
 
         $texto = match (true) {
+            // Las copias de seguridad se describen aparte porque el
+            // nombre de la ruta no dice lo importante: cuál de las
+            // copias se llevó la persona. El archivo va en la URL, no
+            // en los parámetros, así que no lo recoge parametros().
+            $ruta === 'backups.download' => 'Descargó la copia de seguridad de la base de datos ' . $request->route('archivo'),
+            $ruta === 'backups.store' => 'Generó una copia de seguridad de la base de datos desde el panel',
+            $ruta === 'backups.destroy' => 'Eliminó del servidor la copia de seguridad ' . $request->route('archivo'),
             Str::contains($ruta, 'export') => 'Exportó información: ' . $ruta,
             Str::contains($ruta, 'pdf') => 'Generó o descargó un PDF: ' . $ruta,
             $request->isMethod('DELETE') => 'Ejecutó una eliminación: ' . $ruta,

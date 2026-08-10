@@ -96,6 +96,23 @@ class Kernel extends ConsoleKernel
             ->dailyAt('08:00')
             ->withoutOverlapping();
 
+        // ---- Copias de seguridad ----
+        // NO van aquí, y es a propósito. Las lanza el cron del sistema
+        // llamando a deploy/backup/gestisp-backup.sh dos veces al día
+        // (02:30 y 14:30), porque:
+        //
+        //  - Una copia debe seguir haciéndose el día en que la
+        //    aplicación está rota. Si dependiera de este scheduler, un
+        //    despliegue fallido o un composer a medias dejaría al
+        //    sistema sin copias justo cuando más falta hacen, y sin
+        //    que nadie se entere.
+        //  - Además del volcado (que sí hace `php artisan backup:run`)
+        //    hay que empaquetar el código, la configuración del
+        //    servidor y enviarlo todo a la NAS: trabajo de sistema
+        //    operativo, no de PHP.
+        //
+        // Ver docs/Manual_Copias_Seguridad_GestISP.md
+
         // Los logs de muestreo crecen unos pocos cientos de KB al
         // día; se recortan solos para no llenar el disco.
         $schedule->call(function () {

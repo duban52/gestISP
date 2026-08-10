@@ -129,6 +129,13 @@ class AuditLabels
             'auth.login' => 'Inicio de sesión',
             'auth.logout' => 'Cierre de sesión',
             'auth.failed' => 'Intento fallido',
+            // Copias de seguridad. La descarga se registra aparte de
+            // la generación a propósito: un volcado contiene los datos
+            // de todos los clientes, así que importa saber quién se lo
+            // llevó y cuándo, no solo que la copia se hizo.
+            'backup.created' => 'Copia de seguridad',
+            'backup.download' => 'Descarga de copia',
+            'backup.deleted' => 'Eliminación de copia',
         ];
 
         return $conocidas[$action] ?? $action;

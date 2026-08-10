@@ -1,0 +1,46 @@
+# ============================================================
+#  Copias de seguridad de gestISP
+# ============================================================
+#
+#  Instalar en /etc/cron.d/gestisp-backup
+#
+#      sudo cp gestisp-backup.cron /etc/cron.d/gestisp-backup
+#      sudo chown root:root /etc/cron.d/gestisp-backup
+#      sudo chmod 644 /etc/cron.d/gestisp-backup
+#
+#  OJO: los archivos de /etc/cron.d NO pueden terminar en .conf ni
+#  llevar puntos en el nombre; cron los ignora en silencio. Y el
+#  archivo tiene que acabar con un salto de línea o la última tarea no
+#  se ejecuta.
+#
+#  Se usa /etc/cron.d en vez del crontab de root porque así la
+#  programación viaja con el repositorio y se ve en un despliegue:
+#  un `crontab -e` no deja rastro en ninguna parte.
+#
+# ============================================================
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
+
+# Dos copias al día.
+#
+#  02:30  De madrugada, con el sistema en calma: es la copia completa
+#         del día y la que se lleva la carga del volcado.
+#  14:30  A mitad de jornada. Acota la pérdida a media jornada de
+#         trabajo: si la base se rompe a las 18:00, se recupera todo
+#         lo hecho hasta las 14:30 en vez de perder el día entero.
+#
+# Las horas están en la zona horaria del servidor: compruébelo con
+# `timedatectl` y ajústelo con `sudo timedatectl set-timezone America/Bogota`.
+
+30 2  * * * root /usr/local/bin/gestisp-backup.sh >> /var/log/gestisp-backup-cron.log 2>&1
+30 14 * * * root /usr/local/bin/gestisp-backup.sh >> /var/log/gestisp-backup-cron.log 2>&1
+
+# Recordatorio de la prueba mensual de restauración. Una copia que
+# nunca se ha restaurado no es una copia, es una suposición.
+#
+# Descomente la línea y ponga el correo del responsable. Requiere
+# `mailutils` instalado en el servidor.
+#
+# 0 9 1 * * root echo "Toca la prueba mensual de restauracion de gestISP. Procedimiento en Manual_Copias_Seguridad_GestISP.pdf" | mail -s "[gestISP] Prueba mensual de restauracion" responsable@suempresa.com
