@@ -74,7 +74,19 @@ for argumento in "$@"; do
             ls -lht "$BACKUP_DIR"/gestisp-db-*.sql.gz 2>/dev/null || echo "  (ninguna)"
             echo
             echo "Para traer una copia desde la NAS:"
-            echo "  scp -i ${SSH_KEY:-<clave>} -P ${NAS_PORT:-22} ${NAS_USER:-usuario}@${NAS_HOST:-nas}:${NAS_PATH:-/ruta}/AAAA-MM/gestisp-db-*.sql.gz ${BACKUP_DIR}/"
+
+            if [[ "${NAS_TRANSPORTE:-ssh}" == "rsyncd" ]]; then
+                echo "  # Ver qué hay en la NAS:"
+                echo "  rsync --list-only --password-file=${NAS_PASSWORD_FILE:-/etc/gestisp/rsyncd.pass} \\"
+                echo "        rsync://${NAS_USER:-usuario}@${NAS_HOST:-nas}:${NAS_PORT:-873}/${NAS_MODULO:-modulo}/${NAS_SUBCARPETA:+${NAS_SUBCARPETA}/}"
+                echo
+                echo "  # Traerse una:"
+                echo "  rsync -a --password-file=${NAS_PASSWORD_FILE:-/etc/gestisp/rsyncd.pass} \\"
+                echo "        rsync://${NAS_USER:-usuario}@${NAS_HOST:-nas}:${NAS_PORT:-873}/${NAS_MODULO:-modulo}/${NAS_SUBCARPETA:+${NAS_SUBCARPETA}/}gestisp-db-FECHA-auto.sql.gz \\"
+                echo "        ${BACKUP_DIR}/"
+            else
+                echo "  scp -i ${SSH_KEY:-<clave>} -P ${NAS_PORT:-22} ${NAS_USER:-usuario}@${NAS_HOST:-nas}:${NAS_PATH:-/ruta}/AAAA-MM/gestisp-db-*.sql.gz ${BACKUP_DIR}/"
+            fi
             exit 0
             ;;
         --recrear) RECREAR=1 ;;

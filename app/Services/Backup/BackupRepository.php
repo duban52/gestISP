@@ -23,10 +23,23 @@ class BackupRepository
      */
     public function directorio(): string
     {
-        $ruta = config('backup.path');
+        // El valor por defecto no sobra: si config/backup.php no se
+        // desplegó, o si la configuración quedó cacheada de antes de
+        // que ese archivo existiera, config() devuelve null y mkdir()
+        // falla con un «Invalid path» que no dice nada de la causa
+        // real. Con el respaldo aquí, el volcado se hace igual.
+        $ruta = (string) (config('backup.path') ?: storage_path('app/backups'));
 
         if (!is_dir($ruta)) {
             File::ensureDirectoryExists($ruta, 0750);
+        }
+
+        if (!is_writable($ruta)) {
+            throw new BackupException(
+                "La carpeta de copias {$ruta} no se puede escribir. "
+                . 'Compruebe que pertenece al usuario del servidor web '
+                . '(chown -R www-data:www-data storage/).'
+            );
         }
 
         return $ruta;

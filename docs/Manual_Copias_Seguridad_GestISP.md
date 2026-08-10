@@ -142,10 +142,16 @@ Los valores que hay que revisar sí o sí:
 | `ALERT_EMAIL` | Correo al que avisar si una copia falla |
 | `PING_URL` | Vigilante externo (ver 7.3). Muy recomendable |
 
-### 4.4 Dar acceso a la NAS sin contraseña
+### 4.4 Conectar con la NAS
 
-El script corre de madrugada sin nadie delante, así que la entrada a la NAS tiene
-que ser por **clave SSH**, no por contraseña:
+El script corre de madrugada sin nadie delante, así que la conexión tiene que
+funcionar sola. Hay dos formas, y la elección se indica en `NAS_TRANSPORTE`.
+
+#### Opción A — rsync sobre SSH (recomendada)
+
+Es la que conviene siempre que la NAS admita SSH: el contenido viaja **cifrado**,
+se autentica con clave (no hay contraseñas guardadas en el servidor) y permite
+que el script rote lo antiguo en la propia NAS.
 
 ```bash
 sudo ssh-keygen -t ed25519 -f /root/.ssh/gestisp-nas -N ""
@@ -161,11 +167,79 @@ Y se comprueba que entra sola:
 sudo ssh -i /root/.ssh/gestisp-nas -p 22 gestisp@192.168.1.50 "echo Conexion correcta"
 ```
 
-> **Importante:** el usuario de la NAS debe poder escribir en `NAS_PATH` y
-> **nada más**. Si esa cuenta puede además borrar el resto de la NAS, un intruso
-> que entre en el servidor se lleva por delante las copias — que es exactamente
-> lo que hacen los ataques de secuestro de datos. Si la NAS lo permite, active
-> además las **instantáneas** (*snapshots*) sobre esa carpeta.
+En una QNAP, el SSH se habilita en **Panel de control → Telnet/SSH**. Tenga en
+cuenta que QNAP solo permite entrar por SSH a las cuentas del grupo de
+administradores.
+
+#### Opción B — Servidor Rsync (rsyncd)
+
+En QNAP se activa en **HBS 3 → Servicios → Servidor Rsync**, con una cuenta
+compartida y el puerto 873. Es más fácil de poner en marcha, pero tiene tres
+consecuencias que hay que asumir:
+
+1. **El contenido viaja sin cifrar.** La contraseña no se manda en claro, pero
+   los archivos sí. Y esos archivos son la base de datos completa de los clientes
+   y el `.env` con la contraseña de MySQL. Solo es razonable dentro de la red
+   local o a través de una VPN.
+2. **No se pueden crear carpetas remotas.** El destino (`NAS_MODULO` y, si se
+   usa, `NAS_SUBCARPETA`, más `mensuales`) tiene que existir ya en la NAS.
+3. **La rotación hay que configurarla en la NAS.** El script no puede ejecutar
+   nada al otro lado, así que la carpeta crecerá sin límite hasta que alguien le
+   ponga una tarea de limpieza.
+
+Configuración:
+
+```bash
+sudo nano /etc/gestisp/backup.conf
+```
+
+```
+NAS_TRANSPORTE="rsyncd"
+NAS_USER="duban_restrepo"
+NAS_HOST="192.168.1.100"
+NAS_PORT=873
+NAS_MODULO="respaldos"
+NAS_SUBCARPETA="gestisp"
+NAS_PASSWORD_FILE="/etc/gestisp/rsyncd.pass"
+```
+
+Para saber qué recursos publica la NAS y así acertar con `NAS_MODULO`:
+
+```bash
+rsync --list-only rsync://duban_restrepo@192.168.1.100:873/
+```
+
+La contraseña va en su propio archivo, sin salto de línea final y sin el nombre
+de usuario:
+
+```bash
+printf '%s' 'LA-CONTRASENA' | sudo tee /etc/gestisp/rsyncd.pass > /dev/null && sudo chmod 600 /etc/gestisp/rsyncd.pass
+```
+
+Y se comprueba que entra:
+
+```bash
+rsync --list-only --password-file=/etc/gestisp/rsyncd.pass rsync://duban_restrepo@192.168.1.100:873/respaldos/
+```
+
+> **Importante, sea cual sea la opción:** la cuenta de la NAS debe poder escribir
+> en su carpeta y **nada más**. Si además puede borrar el resto de la NAS, un
+> intruso que entre en el servidor se lleva por delante las copias — que es
+> exactamente lo que hacen los ataques de secuestro de datos. Si la NAS lo
+> permite, active también las **instantáneas** (*snapshots*) sobre esa carpeta.
+
+#### Si la NAS se alcanza desde fuera de la red local
+
+Cuando el servidor entra a la NAS por una IP pública redirigida en el router
+(NAT), hay dos medidas que cuestan cinco minutos y evitan disgustos:
+
+- **Limite la regla del router a la IP del servidor.** En Mikrotik, añada
+  `src-address=<IP pública del servidor>` a la regla `dst-nat`. Sin eso, el
+  puerto queda abierto a internet entero y cualquiera puede intentar entrar.
+- **Si usa rsyncd, monte una VPN.** WireGuard entre el servidor y el Mikrotik
+  deja el 873 escuchando solo en la red interna y cifra todo el tráfico. Con
+  rsyncd expuesto a internet, cualquiera que observe la conexión ve pasar los
+  datos de sus clientes.
 
 ### 4.5 Probar
 
@@ -199,6 +273,12 @@ eso están las mensuales.
 
 Los periodos se cambian en `/etc/gestisp/backup.conf` (`KEEP_LOCAL_DAYS`,
 `KEEP_NAS_DAYS`, `KEEP_NAS_MONTHLY_DAYS`).
+
+> **Con `NAS_TRANSPORTE="rsyncd"`, la retención en la NAS no la aplica el
+> script**, porque el demonio rsync no permite ejecutar nada al otro lado. Hay
+> que crear una tarea programada en la propia NAS que borre lo anterior a 30
+> días. Si se olvida, la carpeta crece hasta llenar el disco y las copias
+> empiezan a fallar — normalmente un domingo.
 
 ---
 
@@ -493,9 +573,21 @@ Causas, de la más común a la menos:
 |---|---|---|
 | `Permission denied (publickey)` | La clave SSH ya no la acepta la NAS | Repita el paso 4.4 |
 | `No route to host` / `Connection timed out` | La NAS está apagada o cambió de IP | Compruebe `NAS_HOST` |
+| `kex_exchange_identification: Connection closed` | Está hablando SSH contra un puerto que no es SSH (el 873 es rsyncd) | Use `NAS_TRANSPORTE="rsyncd"` o corrija `NAS_PORT` |
+| `@ERROR: auth failed on module` | Usuario o contraseña del servidor rsync incorrectos | Revise `NAS_PASSWORD_FILE` (sin salto de línea final) |
+| `@ERROR: Unknown module` | `NAS_MODULO` no coincide con lo que publica la NAS | Lístelos con `rsync --list-only rsync://usuario@ip:873/` |
+| `mkdir failed: No such file or directory` (rsyncd) | La subcarpeta no existe en la NAS | Créela a mano: el demonio rsync no puede crear carpetas |
 | `No space left on device` | Disco lleno | Baje `KEEP_LOCAL_DAYS` o amplíe el disco |
 | `Access denied for user` | Cambió la contraseña de la base de datos | Actualice el `.env` |
+| `mkdir(): Invalid path` | Falta `config/backup.php` o la configuración está cacheada de antes | `php artisan config:clear && php artisan config:cache` |
 | El registro no tiene nada de hoy | El cron no se está ejecutando | `systemctl status cron` y revise `/etc/cron.d/gestisp-backup` |
+
+### Edité la configuración y el script sigue usando los valores viejos
+
+Comprobado que no editó `deploy/backup/gestisp-backup.conf.example`, que es solo
+la plantilla. El archivo que el script lee es **`/etc/gestisp/backup.conf`**.
+Además, lo que se escriba en el `.example` viaja dentro del repositorio y se
+perderá en el siguiente despliegue.
 
 ### El botón de generar copia da un error de tiempo agotado
 
@@ -551,13 +643,16 @@ gzip -d gestisp-db-2026-08-10_143000-manual.sql.gz
 | Restaurar | `sudo /usr/local/bin/gestisp-restore.sh <archivo>` |
 | Ver el registro | `sudo tail -50 /var/log/gestisp-backup.log` |
 | Comprobar que un archivo no está corrupto | `gzip -t <archivo>` |
-| Ver qué hay en la NAS | `ssh -i /root/.ssh/gestisp-nas <usuario>@<nas> "ls -lh <ruta>"` |
+| Ver qué hay en la NAS (SSH) | `ssh -i /root/.ssh/gestisp-nas <usuario>@<nas> "ls -lh <ruta>"` |
+| Ver qué hay en la NAS (rsyncd) | `rsync --list-only --password-file=/etc/gestisp/rsyncd.pass rsync://<usuario>@<nas>:873/<modulo>/` |
+| Ver qué recursos publica el servidor rsync | `rsync --list-only rsync://<usuario>@<nas>:873/` |
 
 ### Dónde está cada cosa
 
 | Ruta | Qué es |
 |---|---|
-| `/etc/gestisp/backup.conf` | Configuración de las copias |
+| `/etc/gestisp/backup.conf` | Configuración de las copias (**este** es el que se edita) |
+| `/etc/gestisp/rsyncd.pass` | Contraseña del servidor rsync, si se usa ese modo |
 | `/etc/cron.d/gestisp-backup` | Los dos horarios diarios |
 | `/var/log/gestisp-backup.log` | Registro de las copias |
 | `/var/backups/gestisp/` | Paquetes de código y configuración |

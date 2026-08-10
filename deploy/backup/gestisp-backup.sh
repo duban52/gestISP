@@ -301,16 +301,10 @@ log "Huellas escritas en $(basename "$HUELLAS")"
 #  5. Envío a la NAS
 # ============================================================
 
-if [[ "$SIN_ENVIO" -eq 1 ]]; then
-    log "[5/6] Omitido (--sin-envio)."
-else
-    : "${NAS_USER:?Falta NAS_USER}"
-    : "${NAS_HOST:?Falta NAS_HOST}"
+enviar_por_ssh() {
     : "${NAS_PATH:?Falta NAS_PATH}"
     : "${SSH_KEY:?Falta SSH_KEY}"
     : "${NAS_PORT:=22}"
-
-    log "[5/6] Enviando a la NAS (${NAS_HOST})..."
 
     SSH_OPCIONES=(-i "$SSH_KEY" -p "$NAS_PORT" -o BatchMode=yes -o ConnectTimeout=20)
     DESTINO_DIA="${NAS_PATH}/$(date '+%Y-%m')"
@@ -356,6 +350,105 @@ else
         find '${NAS_PATH}' -type d -empty -delete 2>/dev/null ;
         true
     "
+}
+
+# ------------------------------------------------------------
+#  Envío al demonio rsync (QNAP: «Servidor Rsync» de HBS 3)
+# ------------------------------------------------------------
+#
+#  Aquí NO hay intérprete de órdenes al otro lado: el demonio rsync
+#  solo sabe recibir archivos. Eso cambia tres cosas respecto al modo
+#  SSH, y conviene tenerlas presentes:
+#
+#   1. No se pueden crear carpetas remotas. La carpeta de destino
+#      (NAS_MODULO y, si se usa, NAS_SUBCARPETA) tiene que existir ya
+#      en la NAS.
+#   2. La rotación de lo antiguo no se puede hacer desde aquí. Hay que
+#      configurarla EN LA NAS; si no, la carpeta crece sin límite
+#      hasta llenar el disco.
+#   3. La verificación se hace pidiendo el listado del archivo recién
+#      subido (`--list-only`), que sí funciona sin intérprete.
+#
+enviar_por_rsyncd() {
+    : "${NAS_MODULO:?Falta NAS_MODULO (el nombre del recurso publicado por el servidor rsync)}"
+    : "${NAS_PASSWORD_FILE:=/etc/gestisp/rsyncd.pass}"
+    : "${NAS_PORT:=873}"
+
+    if [[ ! -r "$NAS_PASSWORD_FILE" ]]; then
+        log "ERROR: no se puede leer el archivo de contraseña ${NAS_PASSWORD_FILE}."
+        log "       Créelo con la contraseña del servidor rsync de la NAS:"
+        log "       printf '%s' 'LA-CONTRASENA' > ${NAS_PASSWORD_FILE} && chmod 600 ${NAS_PASSWORD_FILE}"
+        exit 1
+    fi
+
+    # rsync se niega a usar el archivo si otros pueden leerlo, y hace
+    # bien: dentro está la contraseña de la NAS en claro
+    chmod 600 "$NAS_PASSWORD_FILE" 2>/dev/null || true
+
+    local destino="rsync://${NAS_USER}@${NAS_HOST}:${NAS_PORT}/${NAS_MODULO}"
+
+    if [[ -n "${NAS_SUBCARPETA:-}" ]]; then
+        destino="${destino}/${NAS_SUBCARPETA}"
+    fi
+
+    local opciones=(-a --partial --timeout=120 --contimeout=30 --password-file="$NAS_PASSWORD_FILE")
+
+    for archivo in "${ARCHIVOS_A_ENVIAR[@]}"; do
+        rsync "${opciones[@]}" "$archivo" "${destino}/"
+
+        # El listado devuelve el tamaño con separadores de millar
+        # ("76,543,210"), de ahí el tr
+        local_bytes="$(wc -c < "$archivo")"
+        remoto_bytes="$(rsync --list-only --password-file="$NAS_PASSWORD_FILE" \
+            "${destino}/$(basename "$archivo")" 2>/dev/null | awk 'NR==1 {print $2}' | tr -d ',')"
+
+        if [[ -z "$remoto_bytes" ]]; then
+            log "ERROR: $(basename "$archivo") no aparece en la NAS después de enviarlo."
+            exit 1
+        fi
+
+        if [[ "$local_bytes" != "$remoto_bytes" ]]; then
+            log "ERROR: $(basename "$archivo") llegó incompleto a la NAS (${remoto_bytes} de ${local_bytes} bytes)."
+            exit 1
+        fi
+
+        log "Enviado y verificado: $(basename "$archivo")"
+    done
+
+    # ---- Copia mensual ----
+    # Sin intérprete remoto no se puede copiar allí de un sitio a
+    # otro, así que el día 1 el volcado se sube dos veces. Cuesta unos
+    # megas al mes y evita depender de la NAS para conservarla.
+    if [[ "$DIA_DEL_MES" == "01" ]]; then
+        log "Guardando la copia mensual..."
+
+        if ! rsync "${opciones[@]}" "$VOLCADO" "${destino}/mensuales/"; then
+            log "AVISO: no se pudo guardar la copia mensual."
+            log "       Cree la carpeta 'mensuales' dentro de ${NAS_MODULO}${NAS_SUBCARPETA:+/$NAS_SUBCARPETA} en la NAS."
+        fi
+    fi
+
+    log "NOTA: con el servidor rsync la retención se configura EN LA NAS."
+    log "      Revise que hay una tarea que borre lo anterior a ${KEEP_NAS_DAYS} días."
+}
+
+if [[ "$SIN_ENVIO" -eq 1 ]]; then
+    log "[5/6] Omitido (--sin-envio)."
+else
+    : "${NAS_USER:?Falta NAS_USER}"
+    : "${NAS_HOST:?Falta NAS_HOST}"
+    : "${NAS_TRANSPORTE:=ssh}"
+
+    log "[5/6] Enviando a la NAS ${NAS_HOST} (transporte: ${NAS_TRANSPORTE})..."
+
+    case "$NAS_TRANSPORTE" in
+        ssh)    enviar_por_ssh ;;
+        rsyncd) enviar_por_rsyncd ;;
+        *)
+            log "ERROR: NAS_TRANSPORTE debe ser 'ssh' o 'rsyncd', no '${NAS_TRANSPORTE}'."
+            exit 1
+            ;;
+    esac
 fi
 
 # ============================================================

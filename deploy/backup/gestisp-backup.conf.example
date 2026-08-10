@@ -45,8 +45,26 @@ KEEP_LOCAL_DAYS=7
 
 # ---------- La NAS ----------
 
+# Cómo se envían las copias:
+#
+#   ssh     rsync sobre SSH. Es el modo recomendado: va cifrado, se
+#           autentica con clave (sin contraseñas guardadas) y permite
+#           rotar lo antiguo en la propia NAS.
+#
+#   rsyncd  Demonio rsync (en QNAP: HBS 3 → Servicios → Servidor
+#           Rsync). Más fácil de activar, pero OJO: el contenido viaja
+#           SIN CIFRAR y la rotación hay que configurarla en la NAS,
+#           porque el script no puede ejecutar nada al otro lado.
+#           Solo es razonable dentro de la red local o por VPN.
+#
+NAS_TRANSPORTE="ssh"
+
 NAS_USER="gestisp"
 NAS_HOST="192.168.1.50"
+
+
+# ---------- Solo para NAS_TRANSPORTE="ssh" ----------
+
 NAS_PORT=22
 
 # Carpeta de destino EN LA NAS. Debe existir y pertenecer a NAS_USER.
@@ -55,6 +73,29 @@ NAS_PATH="/volume1/respaldos/gestisp"
 # Clave SSH sin contraseña, exclusiva para esta tarea.
 # Se crea con:  ssh-keygen -t ed25519 -f /root/.ssh/gestisp-nas -N ""
 SSH_KEY="/root/.ssh/gestisp-nas"
+
+
+# ---------- Solo para NAS_TRANSPORTE="rsyncd" ----------
+
+# Descomente este bloque y ponga NAS_PORT=873 arriba.
+#
+# NAS_PORT=873
+#
+# Nombre del recurso que publica el servidor rsync. En QNAP es el
+# nombre de la carpeta compartida, tal cual (p. ej. "respaldos").
+# Compruebe cuáles hay con:
+#     rsync --list-only rsync://USUARIO@IP:873/
+# NAS_MODULO="respaldos"
+#
+# Subcarpeta dentro del recurso. TIENE QUE EXISTIR YA en la NAS: el
+# demonio rsync no puede crear carpetas.
+# NAS_SUBCARPETA="gestisp"
+#
+# Archivo con la contraseña del servidor rsync, y nada más (sin salto
+# de línea final, sin el nombre de usuario). Se crea con:
+#     printf '%s' 'LA-CONTRASENA' > /etc/gestisp/rsyncd.pass
+#     chmod 600 /etc/gestisp/rsyncd.pass
+# NAS_PASSWORD_FILE="/etc/gestisp/rsyncd.pass"
 
 # Días que se conservan las copias diarias en la NAS.
 KEEP_NAS_DAYS=30
