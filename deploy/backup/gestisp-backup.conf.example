@@ -127,6 +127,7 @@ PING_URL=""
 # que no existan, así que la lista puede ser generosa.
 SYSTEM_CONFIG_PATHS=(
     "/etc/nginx"
+    "/etc/apache2"
     "/etc/php"
     "/etc/mysql"
     "/etc/gestisp"
