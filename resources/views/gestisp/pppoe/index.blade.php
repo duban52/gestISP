@@ -2,19 +2,10 @@
 @section('title', 'Cuentas PPPoE')
 
 @section('content_header')
-    <div class="d-flex justify-content-between align-items-center flex-wrap">
-        <h1 class="mb-0"><i class="fas fa-user-lock mr-2"></i>Cuentas PPPoE</h1>
-        <div class="acciones-movil">
-            {{-- El enlace lleva los filtros actuales: el archivo tiene
-                 que contener lo mismo que se está viendo, no todo. --}}
-            <a href="{{ route('pppoe.export', request()->query()) }}" class="btn btn-outline-success">
-                <i class="fas fa-file-excel"></i> Exportar a Excel
-            </a>
-            <a href="{{ route('pppoe.cutoff') }}" class="btn btn-outline-danger">
-                <i class="fas fa-user-slash"></i> Cortes masivos
-            </a>
-        </div>
-    </div>
+    {{-- Solo el título: las acciones van todas en la barra que hay
+         debajo de los filtros. Tenerlas en dos sitios hacía que
+         "Cortes masivos" saliera dos veces en la misma pantalla. --}}
+    <h1 class="mb-0"><i class="fas fa-user-lock mr-2"></i>Cuentas PPPoE</h1>
 @endsection
 
 @section('content')
@@ -199,13 +190,44 @@
         </form>
     </div>
 
-    <div class="card p-3 d-flex flex-row justify-content-between align-items-center">
-        <div>
-            {{-- Importar cuentas existentes de un router --}}
-            <form method="POST" id="formImportar" class="form-inline d-inline-flex" action="">
+    {{-- ============================================================
+         Barra de acciones
+
+         La versión anterior forzaba una sola fila (d-flex flex-row sin
+         más) y en un teléfono los cuatro controles se pisaban unos a
+         otros y se salían de la tarjeta.
+
+         Ahora se apilan a lo ancho por debajo de 768 px y vuelven a la
+         fila de siempre por encima, con el orden invertido: en el
+         teléfono manda lo que se usa a diario —crear la cuenta— y la
+         importación queda al final, porque es tarea de puesta en
+         marcha y se hace una vez.
+         ============================================================ --}}
+    <div class="card">
+        <div class="card-body py-2 toque d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+
+            <div class="acciones-movil order-md-2 mb-2 mb-md-0">
+                <button class="btn btn-primary" id="btnNuevaCuenta">
+                    <i class="fas fa-plus"></i> Nueva cuenta PPPoE
+                </button>
+                {{-- El enlace lleva los filtros actuales: el archivo
+                     tiene que contener lo mismo que se está viendo. --}}
+                <a href="{{ route('pppoe.export', request()->query()) }}" class="btn btn-outline-success">
+                    <i class="fas fa-file-excel"></i> Exportar a Excel
+                </a>
+                @can('pppoe.cutoff')
+                    <a href="{{ route('pppoe.cutoff') }}" class="btn btn-outline-danger">
+                        <i class="fas fa-user-slash"></i> Cortes masivos
+                    </a>
+                @endcan
+            </div>
+
+            {{-- Importar cuentas que ya existen en un router --}}
+            <form method="POST" id="formImportar" action=""
+                  class="form-inline form-linea-movil order-md-1">
                 @csrf
                 <select id="importRouterSelect" class="form-control form-control-sm mr-2">
-                    <option value="">Importar desde router...</option>
+                    <option value="">Importar desde un router…</option>
                     @foreach($routers as $router)
                         <option value="{{ $router->id }}">{{ $router->name }}</option>
                     @endforeach
@@ -214,16 +236,6 @@
                     <i class="fas fa-download"></i> Importar
                 </button>
             </form>
-        </div>
-        <div>
-            @can('pppoe.cutoff')
-                <a href="{{ route('pppoe.cutoff') }}" class="btn btn-outline-danger mr-1">
-                    <i class="fas fa-user-slash"></i> Cortes masivos
-                </a>
-            @endcan
-            <button class="btn btn-primary" id="btnNuevaCuenta">
-                <i class="fas fa-plus"></i> Nueva Cuenta PPPoE
-            </button>
         </div>
     </div>
 
@@ -333,9 +345,15 @@
                                 @endif
                             </td>
                             <td data-label="Comentario">{{ $account->comment ?? '—' }}</td>
+                            {{-- En el teléfono cada botón lleva su texto: un
+                                 icono suelto no dice qué hace, y ahí no hay
+                                 ratón que muestre el title. Cuatro iconos
+                                 iguales en fila, además, invitan a pulsar el
+                                 que no era —y uno de ellos borra la cuenta. --}}
                             <td class="celda-acciones" data-label="">
                                 <a href="{{ route('pppoe.show', $account) }}" class="btn btn-sm btn-info" title="Ver detalle">
                                     <i class="fas fa-eye"></i>
+                                    <span class="d-md-none ml-1">Ver</span>
                                 </a>
                                 <button
                                     class="btn btn-sm btn-primary btn-editar-pppoe"
@@ -347,6 +365,7 @@
                                     data-router="{{ $account->router_id }}"
                                     title="Editar">
                                     <i class="fas fa-edit"></i>
+                                    <span class="d-md-none ml-1">Editar</span>
                                 </button>
 
                                 <form method="POST" action="{{ route('pppoe.toggle', $account) }}" class="d-inline">
@@ -354,10 +373,12 @@
                                     @if($account->disabled)
                                         <button type="submit" class="btn btn-sm btn-success" title="Reactivar">
                                             <i class="fas fa-play"></i>
+                                            <span class="d-md-none ml-1">Reactivar</span>
                                         </button>
                                     @else
                                         <button type="submit" class="btn btn-sm btn-warning" title="Suspender">
                                             <i class="fas fa-pause"></i>
+                                            <span class="d-md-none ml-1">Suspender</span>
                                         </button>
                                     @endif
                                 </form>
@@ -368,6 +389,7 @@
                                     data-username="{{ $account->username }}"
                                     title="Eliminar">
                                     <i class="fas fa-trash"></i>
+                                    <span class="d-md-none ml-1">Eliminar</span>
                                 </button>
                             </td>
                         </tr>

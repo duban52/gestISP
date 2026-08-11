@@ -49,12 +49,36 @@
         white-space: nowrap;
     }
 
+    /* El !important no es pereza: DataTables mide la tabla al
+       arrancar y le ESCRIBE el ancho en un atributo style —
+       style="width: 1284px"— sobre el propio <table>. Un estilo en
+       línea gana siempre a la hoja, así que sin esto las fichas
+       heredan el ancho de la tabla de escritorio, se salen de la
+       pantalla y el último botón de cada fila queda cortado. */
     .tabla-movil,
     .tabla-movil tbody,
     .tabla-movil tr,
     .tabla-movil td {
         display: block;
-        width: 100%;
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    /* DataTables trae en su hoja «table.dataTable td { box-sizing:
+       content-box }» —lo necesita para medir las columnas—. Con eso,
+       el width:100% de arriba NO incluye el relleno de la celda, así
+       que cada celda sobresale los 22 px de sus dos rellenos: la
+       ficha queda más ancha que la tarjeta y aparece un
+       desplazamiento lateral de unos 20 px dentro de
+       .table-responsive. Se ve al arrastrar de izquierda a derecha:
+       el texto se corta por el lado izquierdo.
+
+       El !important tampoco es pereza: el selector de DataTables es
+       «table.dataTable td» —una clase y dos elementos— y pesa más que
+       «.tabla-movil td». Sin él, la regla de DataTables gana. */
+    .tabla-movil td,
+    .tabla-movil th {
+        box-sizing: border-box !important;
     }
 
     .tabla-movil tr {
@@ -116,12 +140,35 @@
         padding-top: .6rem !important;
     }
 
-    .tabla-movil td.celda-acciones .btn {
-        flex: 1 1 auto;
+    /* Dos por fila, no "los que quepan".
+       Con reparto libre las acciones salen de anchos distintos y la
+       última cae sola a la línea siguiente ocupando todo: con cuatro
+       acciones eso deja un "Eliminar" rojo a pantalla completa justo
+       donde cae el pulgar. Fijando la base al 50 % quedan en rejilla
+       —2×2 con cuatro, una fila con dos— y todas del mismo tamaño. */
+    .tabla-movil td.celda-acciones .btn,
+    .tabla-movil td.celda-acciones form {
+        flex: 1 1 calc(50% - .2rem);
         min-height: 40px;
+    }
+
+    .tabla-movil td.celda-acciones .btn {
         display: flex;
         align-items: center;
         justify-content: center;
+    }
+
+    /* Las acciones que cambian datos van dentro de un <form> (hace
+       falta el token CSRF). Ese form es el hijo directo del flex, no
+       el botón, así que sin esto el botón envuelto sale estrecho y
+       los de al lado anchos: la fila queda desigual. */
+    .tabla-movil td.celda-acciones form {
+        display: flex;
+        margin: 0;
+    }
+
+    .tabla-movil td.celda-acciones form .btn {
+        width: 100%;
     }
 
     /* El mensaje de "no hay nada" no debe convertirse en ficha.
@@ -178,6 +225,31 @@
     .acciones-movil .btn {
         width: 100%;
         min-height: 44px;
+    }
+
+    /* Un formulario de una sola línea (el desplegable más su botón)
+       dentro de una barra de acciones. .form-inline de Bootstrap 4
+       deja los campos al 100 % por debajo de 576 px, con lo que el
+       botón cae a la línea siguiente y queda descolgado; aquí se
+       reparte el ancho: el desplegable ocupa lo que sobre y el botón,
+       lo justo para su texto.
+
+       min-width: 0 es imprescindible: sin él un elemento flexible no
+       se encoge por debajo del ancho de su contenido y el conjunto
+       vuelve a desbordar. */
+    .form-linea-movil {
+        flex-wrap: nowrap;
+        width: 100%;
+    }
+
+    .form-linea-movil .form-control {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .form-linea-movil .btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     /* ------------------------------------------------------------
