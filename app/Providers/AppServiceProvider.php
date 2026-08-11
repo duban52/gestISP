@@ -9,6 +9,7 @@ use App\Notifications\WhatsApp\WhatsAppGateway;
 use App\Services\OltSshService;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -38,6 +39,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Laravel 10 pagina con marcado de Tailwind por defecto, y todo
+        // el panel es AdminLTE sobre Bootstrap 4: sin esta línea los
+        // enlaces de página salen sueltos y desalineados en las siete
+        // pantallas paginadas del sistema (trazabilidad, clientes,
+        // pagos, movimientos de caja, categorías y sesiones).
+        Paginator::useBootstrapFour();
+
         $this->personalizarCorreoDeContrasena();
     }
 

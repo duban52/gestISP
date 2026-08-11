@@ -24,7 +24,10 @@
                 <small class="text-muted">— {{ $oltFiltrada->name }}</small>
             @endif
         </h1>
-        <div>
+        {{-- En el telefono los botones se apilan a lo ancho (ver
+             .acciones-movil en gestisp-movil.css): en una sola fila
+             junto al titulo se salen de la pantalla. --}}
+        <div class="acciones-movil">
             {{-- Sin @can a proposito: este proyecto no define un
                  Gate::before, asi que @can mira los roles GLOBALES del
                  usuario y no el rol de la sucursal activa, que es con
@@ -168,11 +171,27 @@
     </div>
 
     {{-- ---------- Filtros ---------- --}}
+    @php
+        // Si se llega con filtros puestos, el panel arranca abierto: si
+        // no, en el telefono no habria forma de ver por que la lista
+        // esta recortada.
+        $hayFiltrosOnt = (bool) array_filter($filtros);
+    @endphp
     <div class="card shadow-sm">
         <div class="card-header py-2">
             <h3 class="card-title mb-0"><i class="fas fa-filter mr-1"></i> Filtros</h3>
+            {{-- El desplegable solo existe en el telefono: en escritorio
+                 el panel esta siempre visible por la clase d-md-block. --}}
+            <div class="card-tools d-md-none">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-toggle="collapse" data-target="#filtrosOnt">
+                    <i class="fas fa-sliders-h"></i>
+                    {{ $hayFiltrosOnt ? 'Filtros activos' : 'Filtrar' }}
+                </button>
+            </div>
         </div>
-        <form method="GET" class="card-body py-3">
+        <form method="GET" class="card-body py-3 collapse d-md-block filtros-movil toque {{ $hayFiltrosOnt ? 'show' : '' }}"
+              id="filtrosOnt">
             <div class="row align-items-end">
                 <div class="col-md-3 form-group mb-2">
                     <label class="mb-1 small">OLT</label>
@@ -238,7 +257,7 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table id="ontsTable" class="table table-hover table-sm">
+                <table id="ontsTable" class="table table-hover table-sm tabla-movil">
                     <thead class="thead-light">
                     <tr>
                         <th>ONT</th>
@@ -262,22 +281,38 @@
                         <tr>
                             {{-- El serial es lo que identifica la ONT en campo;
                                  el resto de datos técnicos van debajo, pequeños. --}}
-                            <td>
+                            {{-- Celda principal: encabeza la ficha en el
+                                 telefono, asi que carga el serial (que es
+                                 lo que se lee en la etiqueta del equipo) y
+                                 el estado, que ahi no se ve de otra forma. --}}
+                            <td class="celda-principal" data-label="">
                                 <a href="{{ route('onts.show', $ont) }}" class="font-weight-bold">
                                     <code>{{ $ont->sn }}</code>
                                 </a>
                                 @if($ont->model)
                                     <small class="d-block text-muted">{{ $ont->model }}</small>
                                 @endif
+                                <span class="d-md-none d-block mt-1">
+                                    @if($deshabilitada)
+                                        <span class="badge badge-secondary">Deshabilitada</span>
+                                    @elseif($ont->status)
+                                        <span class="badge badge-success">En línea</span>
+                                    @else
+                                        <span class="badge badge-danger">Caída</span>
+                                    @endif
+                                    <span class="badge badge-{{ $colorBanda }} ml-1">
+                                        {{ ($ont->rx_power !== null && $ont->rx_power !== '') ? $ont->rx_power . ' dBm' : 'sin lectura' }}
+                                    </span>
+                                </span>
                             </td>
-                            <td>
+                            <td data-label="Ubicación">
                                 <span class="text-muted small">{{ $ont->olt->name ?? '—' }}</span>
                                 <span class="d-block">
                                     <code>{{ $ont->slot }}/{{ $ont->port }}</code>
                                     <span class="badge badge-light border">ONU {{ $ont->onu_id }}</span>
                                 </span>
                             </td>
-                            <td>
+                            <td data-label="Cliente">
                                 @if($ont->contract)
                                     <a href="{{ route('contracts.show', $ont->contract) }}">
                                         {{ $ont->contract->numero_visible }}
@@ -288,7 +323,7 @@
                                     <small class="d-block text-muted">{{ $ont->description }}</small>
                                 @endif
                             </td>
-                            <td class="text-center">
+                            <td class="text-center solo-escritorio" data-label="Estado">
                                 @if($deshabilitada)
                                     <span class="badge badge-secondary" title="Cortada a propósito">Deshabilitada</span>
                                 @elseif($ont->status)
@@ -300,7 +335,7 @@
                             {{-- data-order deja que DataTables ordene por el
                                  NÚMERO. Sin él ordenaría el texto, y "-15.0"
                                  quedaría antes que "-28.5", justo al revés. --}}
-                            <td class="text-center" data-order="{{ $ont->rx_power !== null && $ont->rx_power !== '' ? (float) $ont->rx_power : 99 }}">
+                            <td class="text-center" data-label="Señal" data-order="{{ $ont->rx_power !== null && $ont->rx_power !== '' ? (float) $ont->rx_power : 99 }}">
                                 <span id="rx-power-{{ $ont->id }}"
                                       class="badge badge-{{ $colorBanda }}"
                                       title="{{ $banda ? $resumen['bandas'][$banda]['etiqueta'] : 'Sin lectura' }}">
@@ -311,10 +346,14 @@
                                     <i class="fas fa-sync"></i>
                                 </button>
                             </td>
-                            <td class="text-center">{{ $ont->vlan ?: '—' }}</td>
-                            <td class="text-center">
+                            <td class="text-center" data-label="VLAN">{{ $ont->vlan ?: '—' }}</td>
+                            {{-- En el telefono los botones llevan texto: un
+                                 icono suelto no dice que hace y ahi no hay
+                                 raton que muestre el tooltip. --}}
+                            <td class="text-center celda-acciones" data-label="">
                                 <a href="{{ route('onts.show', $ont) }}" class="btn btn-outline-info btn-sm" title="Ver detalle">
                                     <i class="fas fa-eye"></i>
+                                    <span class="d-md-none ml-1">Ver detalle</span>
                                 </a>
                                 <button class="btn btn-outline-danger btn-sm btn-eliminar"
                                         data-id="{{ $ont->id }}"
@@ -322,6 +361,7 @@
                                         data-desc="{{ $ont->description }}"
                                         title="Eliminar ONT">
                                     <i class="fas fa-trash"></i>
+                                    <span class="d-md-none ml-1">Eliminar</span>
                                 </button>
                             </td>
                         </tr>
@@ -333,7 +373,7 @@
     </div>
 
     {{-- Modal de confirmación de borrado --}}
-    <div class="modal fade" id="modalEliminarOnt" tabindex="-1" role="dialog">
+    <div class="modal fade modal-movil" id="modalEliminarOnt" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
@@ -386,6 +426,7 @@
 
 @section('css')
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
     <style>
         /* Las tarjetas de banda son enlaces: se comportan como botones
            sin parecer botones, para no competir con las cifras. */
@@ -401,13 +442,20 @@
 
     <script>
         $(function () {
+            const enMovil = window.matchMedia('(max-width: 767.98px)').matches;
+
             $('#ontsTable').DataTable({
                 language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json' },
-                pageLength: 25,
+                // En el telefono cada ONT ocupa una ficha entera: 25 por
+                // pagina son un desplazamiento interminable.
+                pageLength: enMovil ? 10 : 25,
                 order: [[0, 'asc']],
                 // Estado y acciones no se ordenan; la señal sí, por el
                 // data-order numérico de cada celda.
                 columnDefs: [{ orderable: false, targets: [3, 6] }],
+                // El selector "mostrar N" ocupa una linea entera y no
+                // aporta en un telefono: se esconde.
+                dom: enMovil ? 'ftip' : 'lfrtip',
             });
         });
 

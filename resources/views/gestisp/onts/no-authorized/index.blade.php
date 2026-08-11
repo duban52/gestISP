@@ -1,10 +1,23 @@
+{{-- ============================================================
+     ONT pendientes de activación (autofind)
+
+     Se usa en la calle: el técnico deja el equipo puesto, entra desde
+     el teléfono y lo activa. Por eso la tabla se convierte en fichas
+     por debajo de 768 px (public/css/gestisp-movil.css) y los dos
+     modales ocupan la pantalla completa.
+
+     Las filas las pinta DataTables desde la consulta a la OLT, no
+     Blade, así que las etiquetas de cada celda (data-label) se ponen
+     en createdRow leyendo el encabezado: así no hay dos sitios donde
+     mantener los mismos nombres de columna.
+     ============================================================ --}}
 @extends('adminlte::page')
 @section('title', 'ONTs Pendientes')
 
 @section('content_header')
-    <div class="card p-3">
-        <h2>ONT´s Pendientes por activación</h2>
-    </div>
+    <h1 class="mb-0">
+        <i class="fas fa-search mr-2"></i>ONT pendientes por activación
+    </h1>
 @endsection
 
 @section('content')
@@ -18,9 +31,10 @@
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
 
-    <div class="card">
+    <div class="card toque">
         <div class="card-body">
             <div class="form-group">
+                <label for="olt" class="mb-1">OLT a consultar</label>
                 <select class="form-control" name="olt" id="olt">
                     <option value="">Seleccione una OLT</option>
                     @foreach($olts as $olt)
@@ -36,7 +50,7 @@
             </div>
 
             <div class="table-responsive">
-                <table id="autofindTable" class="table table-hover table-bordered" style="width:100%">
+                <table id="autofindTable" class="table table-hover table-bordered tabla-movil" style="width:100%">
                     <thead>
                     <tr>
                         <th>SN</th>
@@ -54,7 +68,7 @@
     </div>
 
     {{-- Modal Activar ONT --}}
-    <div class="modal fade" id="activarOntModal" tabindex="-1" role="dialog">
+    <div class="modal fade modal-movil" id="activarOntModal" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <form id="formActivarOnt" method="POST" action="{{ route('onts.activate') }}">
                 @csrf
@@ -65,7 +79,7 @@
                             <span>&times;</span>
                         </button>
                     </div>
-                    <div class="modal-body" id="activarCampos">
+                    <div class="modal-body toque" id="activarCampos">
                         <input type="hidden" name="ont_sn" id="modalOntSn">
 
                         <div class="form-group">
@@ -245,7 +259,7 @@
     </div>
 
     {{-- Modal Mover ONT --}}
-    <div class="modal fade" id="moverOntModal" tabindex="-1" role="dialog">
+    <div class="modal fade modal-movil" id="moverOntModal" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <form id="formMoverOnt" method="POST" action="">
                 @csrf
@@ -256,7 +270,7 @@
                             <span>&times;</span>
                         </button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body toque">
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle"></i>
                             Esta acción eliminará la ONT del puerto actual y la activará en el nuevo puerto.
@@ -306,6 +320,7 @@
 
 @section('css')
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
 @endsection
 
 @section('js')
@@ -315,17 +330,45 @@
     <script>
         let autofindDT = null;
 
+        const enMovil = window.matchMedia('(max-width: 767.98px)').matches;
+
         $(document).ready(function () {
+            // Rótulos para el modo ficha: se leen del propio encabezado
+            // para no repetirlos aquí y que no se desincronicen.
+            const rotulos = $('#autofindTable thead th').map(function () {
+                return $(this).text().trim();
+            }).get();
+
             autofindDT = $('#autofindTable').DataTable({
                 language: {
                     url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
                     emptyTable: 'Seleccione una OLT para ver las ONTs pendientes.'
                 },
-                pageLength: 25,
+                // Cada ONT ocupa una ficha entera en el teléfono.
+                pageLength: enMovil ? 10 : 25,
                 columnDefs: [
                     { orderable: false, targets: [5] },
                     { defaultContent: '—', targets: '_all' }
-                ]
+                ],
+                // El selector "mostrar N" ocupa una línea entera y no
+                // aporta nada en un teléfono.
+                dom: enMovil ? 'ftip' : 'lfrtip',
+                // Las filas las añade JavaScript, no Blade: aquí es donde
+                // se les pone la etiqueta que el CSS usa como rótulo.
+                createdRow: function (fila) {
+                    $(fila).find('td').each(function (i) {
+                        // El serial encabeza la ficha y la acción va al
+                        // pie, a lo ancho: ninguno de los dos lleva
+                        // rótulo (quedaría redundante).
+                        if (i === 0) {
+                            $(this).addClass('celda-principal').attr('data-label', '');
+                        } else if (i === rotulos.length - 1) {
+                            $(this).addClass('celda-acciones').attr('data-label', '');
+                        } else {
+                            $(this).attr('data-label', rotulos[i] || '');
+                        }
+                    });
+                }
             });
         });
 

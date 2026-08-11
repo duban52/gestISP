@@ -3,11 +3,17 @@
 @section('title', 'Importar ONTs')
 
 @section('content_header')
-    <div class="card p-3 d-flex flex-row justify-content-between align-items-center">
-        <h2>Importar ONTs desde una OLT</h2>
-        <a href="{{ route('onts.authorized') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Volver
-        </a>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <h1 class="mb-0">
+            <i class="fas fa-file-import mr-2"></i>Importar ONT desde una OLT
+        </h1>
+        {{-- En el teléfono el botón baja y ocupa el ancho completo
+             (.acciones-movil en public/css/gestisp-movil.css). --}}
+        <div class="acciones-movil">
+            <a href="{{ route('onts.authorized') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
     </div>
 @endsection
 
@@ -144,7 +150,7 @@
 
                 {{-- Paso 2: confirmar --}}
                 <div class="card border-success mt-3">
-                    <div class="card-body d-flex justify-content-between align-items-center">
+                    <div class="card-body d-flex justify-content-between align-items-center flex-wrap toque">
                         <div>
                             <strong>Paso 2 — Confirmar la importación</strong>
                             <small class="d-block text-muted">
@@ -174,7 +180,7 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover mb-0 tabla-movil">
                     <thead>
                     <tr>
                         <th>Fecha</th>
@@ -187,10 +193,18 @@
                     <tbody>
                     @forelse($runs as $run)
                         <tr data-run-id="{{ $run->id }}" @class(['run-activa' => $run->enCurso()])>
-                            <td class="text-nowrap">{{ $run->created_at->format('d/m/Y h:i a') }}</td>
-                            <td>{{ $run->olt->name ?? '—' }}</td>
-                            <td>{{ $run->user->name ?? '—' }} {{ $run->user->last_name ?? '' }}</td>
-                            <td>
+                            {{-- Encabeza la ficha en el teléfono: la OLT es
+                                 lo que distingue una importación de otra,
+                                 con la fecha justo debajo. --}}
+                            <td class="celda-principal text-nowrap" data-label="">
+                                <strong>{{ $run->olt->name ?? '—' }}</strong>
+                                <small class="d-block text-muted">
+                                    {{ $run->created_at->format('d/m/Y h:i a') }}
+                                </small>
+                            </td>
+                            <td class="solo-escritorio" data-label="OLT">{{ $run->olt->name ?? '—' }}</td>
+                            <td data-label="Usuario">{{ $run->user->name ?? '—' }} {{ $run->user->last_name ?? '' }}</td>
+                            <td data-label="Avance">
                                 <div class="progress" style="height:20px;">
                                     <div class="progress-bar progress-bar-striped run-barra
                                         @if($run->status === 'failed') bg-danger
@@ -202,7 +216,7 @@
                                 </div>
                                 <small class="run-estado text-muted">{{ $run->estadoLegible() }}</small>
                             </td>
-                            <td class="run-mensaje">
+                            <td class="run-mensaje romper-texto" data-label="Resultado">
                                 @if($run->status === 'failed')
                                     <span class="text-danger">{{ $run->message }}</span>
                                 @else
@@ -222,6 +236,10 @@
             </div>
         </div>
     </div>
+@endsection
+
+@section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
 @endsection
 
 @section('js')

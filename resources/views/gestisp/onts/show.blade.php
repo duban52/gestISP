@@ -1,16 +1,33 @@
+{{-- ============================================================
+     Ficha de una ONT
+
+     Es la pantalla que se consulta en campo mientras se diagnostica,
+     así que está preparada para el teléfono: el título y el botón de
+     volver se apilan, las cinco tablas de datos van dentro de
+     .table-responsive (sin eso se salen del ancho y arrastran la
+     página entera) y el modal de acciones sobre la OLT ocupa la
+     pantalla completa. Ver public/css/gestisp-movil.css.
+     ============================================================ --}}
 @extends('adminlte::page')
 @section('title', 'Detalle ONT')
 
 @section('content_header')
-    <div class="card p-3 d-flex flex-row justify-content-between align-items-center">
-        <h2>Detalle de ONT — {{ $ont->sn }}</h2>
-        <a href="{{ route('onts.authorized') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Volver
-        </a>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <h1 class="mb-0 romper-texto">
+            <i class="fas fa-hdd mr-2"></i><code>{{ $ont->sn }}</code>
+        </h1>
+        {{-- En el teléfono el botón baja y ocupa el ancho: el serial ya
+             consume por sí solo casi toda la línea. --}}
+        <div class="acciones-movil">
+            <a href="{{ route('onts.authorized') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
     </div>
 @endsection
 
 @section('content')
+    <div class="toque">
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @elseif(session('success-update'))
@@ -52,7 +69,7 @@
                     </div>
 
                     {{-- Tabla (oculta hasta que lleguen los datos) --}}
-                    <table id="realtimeTable" class="table table-striped mb-0" style="display:none;">
+                    <div class="table-responsive"><table id="realtimeTable" class="table table-striped mb-0" style="display:none;">
                         <tr>
                             <th style="width:40%">Estado operativo</th>
                             <td id="rt-run-state">—</td>
@@ -85,7 +102,7 @@
                             <th>Distancia</th>
                             <td id="rt-distance">—</td>
                         </tr>
-                    </table>
+                    </table></div>
                 </div>
             </div>
         </div>
@@ -206,7 +223,7 @@
                         </div>
                     </div>
 
-                    <table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped mb-0">
                         <tr>
                             <th style="width:45%">Estado del puerto</th>
                             <td id="rt-catv-state">—</td>
@@ -215,7 +232,7 @@
                             <th>Potencia Rx CATV</th>
                             <td id="rt-catv-power">—</td>
                         </tr>
-                    </table>
+                    </table></div>
                 </div>
             </div>
         </div>
@@ -227,7 +244,7 @@
                     <i class="fas fa-history"></i> Historial de Conexión
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped mb-0">
                         <tr>
                             <th style="width:40%">Última conexión</th>
                             <td id="rt-last-up">—</td>
@@ -244,7 +261,7 @@
                             <th>Tiempo en línea</th>
                             <td id="rt-online-duration">—</td>
                         </tr>
-                    </table>
+                    </table></div>
                 </div>
             </div>
         </div>
@@ -317,7 +334,7 @@
                     <i class="fas fa-info-circle"></i> Información General
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped mb-0">
                         <tr>
                             <th style="width:40%">Serial</th>
                             <td>{{ $ont->sn }}</td>
@@ -367,7 +384,7 @@
                                 @endif
                             </td>
                         </tr>
-                    </table>
+                    </table></div>
                 </div>
             </div>
         </div>
@@ -392,7 +409,7 @@
 
                 @if($ont->contract_id)
                     <div class="card-body p-0">
-                        <table class="table table-striped mb-0">
+                        <div class="table-responsive"><table class="table table-striped mb-0">
                             <tr>
                                 <th style="width:40%">Cliente</th>
                                 <td>
@@ -421,7 +438,7 @@
                                 <th>Barrio</th>
                                 <td>{{ $ont->contract->neighborhood ?? 'N/A' }}</td>
                             </tr>
-                        </table>
+                        </table></div>
                     </div>
                 @else
                     {{-- Las ONTs importadas desde la OLT llegan sin
@@ -466,7 +483,7 @@
          y se bloquea el cierre — la orden viaja por consola hasta el
          equipo y puede tardar un minuto.
          ============================================================ --}}
-    <div class="modal fade" id="modalAccionOlt" tabindex="-1" role="dialog" data-backdrop="static">
+    <div class="modal fade modal-movil" id="modalAccionOlt" tabindex="-1" role="dialog" data-backdrop="static">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
                 <div class="modal-header" id="accionOltCabecera">
@@ -510,6 +527,11 @@
             </div>
         </div>
     </div>
+    </div>
+@endsection
+
+@section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
 @endsection
 
 @section('js')

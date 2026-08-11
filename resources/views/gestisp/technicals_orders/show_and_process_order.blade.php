@@ -3,11 +3,17 @@
 @section('title', 'Procesar Orden Técnica')
 
 @section('content_header')
-    <div class="card p-3 d-flex flex-row justify-content-between align-items-center mb-0">
-        <h2 class="mb-0">VER Y PROCESAR ORDEN {{ $technicalOrder->id }}</h2>
-        <a href="{{ route('technicals_orders.my_technical_orders') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Volver
-        </a>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <h1 class="mb-0">
+            <i class="fas fa-cogs mr-2"></i>Orden {{ $technicalOrder->id }}
+        </h1>
+        {{-- En el telefono el boton pasa a ocupar el ancho completo,
+             debajo del titulo: en una fila los dos no caben. --}}
+        <div class="acciones-movil">
+            <a href="{{ route('technicals_orders.my_technical_orders') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
     </div>
 @endsection
 
@@ -58,7 +64,7 @@
         {{-- ============================================================
              Columna izquierda: información de la orden y el cliente
              ============================================================ --}}
-        <div class="card p-3 mt-1 col-md-6">
+        <div class="card p-3 mt-1 col-12 col-md-6 toque">
             <h3>Datos del cliente</h3>
             <p><strong>Número de contrato:</strong> {{ $technicalOrder->contract->numero_visible }}</p>
             <p><strong>Identificación del cliente:</strong> {{ $technicalOrder->contract->client->identity_number }}</p>
@@ -186,7 +192,7 @@
         {{-- ============================================================
              Columna derecha: formulario de procesamiento
              ============================================================ --}}
-        <div class="card mt-1 p-3 col-md-6">
+        <div class="card mt-1 p-3 col-12 col-md-6 toque">
             <h3>Procesamiento de orden</h3>
             <form action="{{ route('technicals_orders.process', $technicalOrder->id) }}" method="post"
                   enctype="multipart/form-data" id="process-order-form"
@@ -356,7 +362,7 @@
          Cada opción trae la disponibilidad y los seriales incrustados
          (data-*), así el modal no depende de ninguna llamada AJAX.
          ============================================================ --}}
-    <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel"
+    <div class="modal fade modal-movil" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel"
          aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -432,6 +438,7 @@
 @endsection
 
 @section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
     @include('gestisp.partials.leaflet-styles')
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css" rel="stylesheet" />

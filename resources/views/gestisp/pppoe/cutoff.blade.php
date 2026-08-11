@@ -31,7 +31,7 @@
     {{-- ============================================================
          Paso 1: la lista
          ============================================================ --}}
-    <div class="card card-outline card-primary shadow-sm" id="cardEntrada">
+    <div class="card card-outline card-primary shadow-sm toque" id="cardEntrada">
         <div class="card-header">
             <h3 class="card-title"><i class="fas fa-list-ol mr-1"></i> 1. Indique a quién cortar</h3>
         </div>
@@ -92,7 +92,7 @@
             </div>
         </div>
 
-        <div class="card-footer text-right">
+        <div class="card-footer text-right acciones-movil">
             <button type="button" class="btn btn-primary" id="btnRevisar">
                 <i class="fas fa-search"></i> Revisar la lista
             </button>
@@ -104,7 +104,7 @@
     {{-- ============================================================
          Paso 2: la revisión
          ============================================================ --}}
-    <div class="card card-outline card-warning shadow-sm d-none" id="cardRevision">
+    <div class="card card-outline card-warning shadow-sm d-none toque" id="cardRevision">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h3 class="card-title mb-0"><i class="fas fa-clipboard-check mr-1"></i> 2. Revise antes de cortar</h3>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnVolver">
@@ -117,7 +117,7 @@
             <div class="row text-center mb-3" id="resumen"></div>
 
             <div class="table-responsive">
-                <table class="table table-sm table-hover" id="tablaRevision">
+                <table class="table table-sm table-hover tabla-movil" id="tablaRevision">
                     <thead class="thead-light">
                     <tr>
                         <th style="width: 160px;">Se buscó</th>
@@ -144,14 +144,14 @@
     </div>
 
     {{-- ---------- Confirmación ---------- --}}
-    <div class="modal fade" id="modalConfirmar" tabindex="-1" role="dialog">
+    <div class="modal fade modal-movil" id="modalConfirmar" tabindex="-1" role="dialog">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
                     <h5 class="modal-title"><i class="fas fa-exclamation-triangle mr-1"></i> Confirmar el corte</h5>
                     <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body toque">
                     <p id="textoConfirmar" class="mb-2"></p>
                     <p class="text-muted mb-0">
                         Se deshabilitará la cuenta en el router y se tumbará la conexión activa.
@@ -171,6 +171,7 @@
 @endsection
 
 @section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
     <style>
         #lista { font-size: .95rem; line-height: 1.5; }
 
@@ -295,9 +296,9 @@
                         // Sin cuentas que mostrar: una sola fila con el motivo
                         $cuerpo.append(
                             '<tr class="sin-accion">' +
-                            '  <td><code>' + escapar(fila.identificador) + '</code></td>' +
-                            '  <td><span class="badge badge-' + estado.color + ' estado-badge">' + estado.texto + '</span></td>' +
-                            '  <td colspan="4" class="text-muted">' + escapar(fila.mensaje) + '</td>' +
+                            '  <td class="celda-principal" data-label=""><code>' + escapar(fila.identificador) + '</code></td>' +
+                            '  <td data-label="Estado"><span class="badge badge-' + estado.color + ' estado-badge">' + estado.texto + '</span></td>' +
+                            '  <td colspan="4" class="text-muted" data-label="Motivo">' + escapar(fila.mensaje) + '</td>' +
                             '</tr>'
                         );
                         return;
@@ -311,14 +312,20 @@
 
                         $cuerpo.append(
                             '<tr class="' + (suEstado.accion || cuenta.resultado === 'cortada' ? '' : 'sin-accion') + '">' +
-                            '  <td>' + (i === 0 ? '<code>' + escapar(fila.identificador) + '</code>' : '') + '</td>' +
-                            '  <td><span class="badge badge-' + suEstado.color + ' estado-badge">' + suEstado.texto + '</span>' +
+                            // En el telefono cada fila es una ficha: la
+                            // cuenta PPPoE la encabeza (es el dato que se
+                            // reconoce) y el identificador buscado, que en
+                            // escritorio agrupa varias cuentas, pasa a ser
+                            // una linea mas.
+                            '  <td class="solo-escritorio" data-label="Se buscó">' + (i === 0 ? '<code>' + escapar(fila.identificador) + '</code>' : '') + '</td>' +
+                            '  <td data-label="Estado"><span class="badge badge-' + suEstado.color + ' estado-badge">' + suEstado.texto + '</span>' +
                             (cuenta.error ? '<small class="d-block text-danger">' + escapar(cuenta.error) + '</small>' : '') +
                             '  </td>' +
-                            '  <td><strong>' + escapar(cuenta.username) + '</strong></td>' +
-                            '  <td>' + escapar(cuenta.contrato || '—') + '</td>' +
-                            '  <td>' + escapar(cuenta.cliente || '—') + '</td>' +
-                            '  <td>' + escapar(cuenta.router || '—') + '</td>' +
+                            '  <td class="celda-principal" data-label=""><strong>' + escapar(cuenta.username) + '</strong>' +
+                            '    <small class="d-md-none d-block text-muted">' + escapar(fila.identificador) + '</small></td>' +
+                            '  <td data-label="Contrato">' + escapar(cuenta.contrato || '—') + '</td>' +
+                            '  <td data-label="Cliente">' + escapar(cuenta.cliente || '—') + '</td>' +
+                            '  <td data-label="Router">' + escapar(cuenta.router || '—') + '</td>' +
                             '</tr>'
                         );
                     });

@@ -3,9 +3,7 @@
 @section('title', 'Órdenes Técnicas')
 
 @section('content_header')
-    <div class="card p-3">
-        <h2>ADMINISTRAR ÓRDENES TÉCNICAS</h2>
-    </div>
+    <h1 class="mb-0"><i class="fas fa-clipboard-list mr-2"></i>Órdenes técnicas</h1>
 @endsection
 
 @section('content')
@@ -21,9 +19,9 @@
          select con opciones fijas para estado/tipo/detalle/técnico,
          texto libre para cliente.
          ============================================================ --}}
-    <div class="card">
+    <div class="card toque">
         <div class="card-header">
-            <form method="GET" action="{{ route('technicals_orders.index') }}">
+            <form method="GET" action="{{ route('technicals_orders.index') }}" class="filtros-movil">
                 <div class="row align-items-end">
                     <div class="col-md-2">
                         <label for="filterField" class="form-label">Criterio</label>
@@ -83,10 +81,10 @@
     {{-- ============================================================
          Tabla de órdenes (DataTables)
          ============================================================ --}}
-    <div class="card">
+    <div class="card toque">
         <div class="card-body">
             <div class="table-responsive">
-                <table id="ordersTable" class="table table-hover table-bordered" style="width:100%">
+                <table id="ordersTable" class="table table-hover tabla-movil" style="width:100%">
                     <thead>
                     <tr>
                         <th># Orden</th>
@@ -103,22 +101,31 @@
                     <tbody>
                     @foreach($technical_orders as $technical_order)
                         <tr>
-                            <td>{{ $technical_order->id }}</td>
+                            {{-- Celda principal: encabeza la ficha en el telefono
+                                 con lo que identifica la orden de un vistazo. --}}
+                            <td class="celda-principal" data-label="">
+                                <strong>Orden {{ $technical_order->id }}</strong>
+                                <span class="badge badge-light border ml-1">{{ $technical_order->type }}</span>
+                                <span class="d-block d-md-none text-muted small mt-1">
+                                    {{ $technical_order->contract->client->name }}
+                                    {{ $technical_order->contract->client->last_name }}
+                                </span>
+                            </td>
                             {{-- El consecutivo del contrato, no el id interno --}}
-                            <td>{{ $technical_order->contract->numero_visible }}</td>
-                            <td>
+                            <td data-label="Contrato">{{ $technical_order->contract->numero_visible }}</td>
+                            <td data-label="Cliente">
                                 {{ $technical_order->contract->client->name }}
                                 {{ $technical_order->contract->client->last_name }}
                             </td>
-                            <td>{{ $technical_order->type }}</td>
-                            <td>{{ $technical_order->detail }}</td>
-                            <td>@include('gestisp.technicals_orders.partials.status_badge', ['status' => $technical_order->status])</td>
-                            <td>{{ $technical_order->created_at->format('Y-m-d H:i') }}</td>
-                            <td>
+                            <td data-label="Tipo" class="solo-escritorio">{{ $technical_order->type }}</td>
+                            <td data-label="Detalle">{{ $technical_order->detail }}</td>
+                            <td data-label="Estado">@include('gestisp.technicals_orders.partials.status_badge', ['status' => $technical_order->status])</td>
+                            <td data-label="Creada">{{ $technical_order->created_at->format('Y-m-d H:i') }}</td>
+                            <td data-label="Técnico">
                                 {{ $technical_order->assignedUser->name ?? '—' }}
                                 {{ $technical_order->assignedUser->last_name ?? '' }}
                             </td>
-                            <td>
+                            <td class="celda-acciones" data-label="">
                                 {{-- Asignar/reasignar según el estado --}}
                                 @if($technical_order->status === 'Pendiente')
                                     <button class="btn btn-sm btn-info" data-toggle="modal"
@@ -162,7 +169,7 @@
          ============================================================ --}}
     @foreach($technical_orders as $technical_order)
         {{-- Modal de detalles --}}
-        <div class="modal fade" id="detailModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
+        <div class="modal fade modal-movil" id="detailModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
             <div class="modal-dialog modal-lg" role="document">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
@@ -182,7 +189,7 @@
         </div>
 
         {{-- Modal de asignación/reasignación --}}
-        <div class="modal fade" id="assignOrderModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
+        <div class="modal fade modal-movil" id="assignOrderModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -225,6 +232,7 @@
 @endsection
 
 @section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
     @include('gestisp.partials.leaflet-styles')
 @endsection
@@ -236,14 +244,19 @@
 
     <script>
         $(document).ready(function () {
+            const enMovil = window.matchMedia('(max-width: 767.98px)').matches;
+
             $('#ordersTable').DataTable({
                 language: {
                     url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
                     emptyTable: 'No hay órdenes técnicas para mostrar.'
                 },
-                pageLength: 25,
                 // Orden inicial: por fecha de creación descendente
                 order: [[6, 'desc']],
+                // En el teléfono cada orden ocupa una ficha entera:
+                // veinticinco fichas son un desplazamiento larguísimo.
+                pageLength: enMovil ? 10 : 25,
+                dom: enMovil ? 'ftip' : 'lfrtip',
                 columnDefs: [
                     { orderable: false, targets: [8] },
                     { defaultContent: '—', targets: '_all' }

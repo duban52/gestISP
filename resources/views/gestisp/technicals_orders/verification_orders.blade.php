@@ -3,9 +3,7 @@
 @section('title', 'Verificar Órdenes Técnicas')
 
 @section('content_header')
-    <div class="card p-3">
-        <h2>VERIFICAR ÓRDENES TÉCNICAS</h2>
-    </div>
+    <h1 class="mb-0"><i class="fas fa-clipboard-check mr-2"></i>Verificar órdenes</h1>
 @endsection
 
 @section('content')
@@ -23,10 +21,10 @@
          reportado (solución, fotos, materiales) y la cierra o la
          devuelve a Pendiente con su comentario.
          ============================================================ --}}
-    <div class="card">
+    <div class="card toque">
         <div class="card-body">
             <div class="table-responsive">
-                <table id="verificationTable" class="table table-hover table-bordered" style="width:100%">
+                <table id="verificationTable" class="table table-hover tabla-movil" style="width:100%">
                     <thead>
                     <tr>
                         <th># Orden</th>
@@ -42,21 +40,29 @@
                     <tbody>
                     @foreach($technical_orders as $technical_order)
                         <tr>
-                            <td>{{ $technical_order->id }}</td>
+                            {{-- Celda principal: encabeza la ficha en el teléfono. --}}
+                            <td class="celda-principal" data-label="">
+                                <strong>Orden {{ $technical_order->id }}</strong>
+                                <span class="badge badge-light border ml-1">{{ $technical_order->type }}</span>
+                                <span class="d-block d-md-none text-muted small mt-1">
+                                    {{ $technical_order->contract->client->name }}
+                                    {{ $technical_order->contract->client->last_name }}
+                                </span>
+                            </td>
                             {{-- El consecutivo del contrato, no el id interno --}}
-                            <td>{{ $technical_order->contract->numero_visible }}</td>
-                            <td>
+                            <td data-label="Contrato">{{ $technical_order->contract->numero_visible }}</td>
+                            <td data-label="Cliente">
                                 {{ $technical_order->contract->client->name }}
                                 {{ $technical_order->contract->client->last_name }}
                             </td>
-                            <td>{{ $technical_order->type }}</td>
-                            <td>{{ $technical_order->detail }}</td>
-                            <td>{{ $technical_order->created_at->format('Y-m-d H:i') }}</td>
-                            <td>
+                            <td data-label="Tipo" class="solo-escritorio">{{ $technical_order->type }}</td>
+                            <td data-label="Detalle">{{ $technical_order->detail }}</td>
+                            <td data-label="Creada">{{ $technical_order->created_at->format('Y-m-d H:i') }}</td>
+                            <td data-label="Técnico">
                                 {{ $technical_order->assignedUser->name ?? '—' }}
                                 {{ $technical_order->assignedUser->last_name ?? '' }}
                             </td>
-                            <td>
+                            <td class="celda-acciones" data-label="">
                                 <button type="button" class="btn btn-sm btn-primary" data-toggle="modal"
                                         data-target="#detailModal{{ $technical_order->id }}">
                                     <i class="fas fa-clipboard-check"></i> Verificar
@@ -72,7 +78,7 @@
 
     {{-- Modales de verificación (fuera de la tabla por DataTables) --}}
     @foreach($technical_orders as $technical_order)
-        <div class="modal fade" id="detailModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
+        <div class="modal fade modal-movil" id="detailModal{{ $technical_order->id }}" tabindex="-1" role="dialog">
             <div class="modal-dialog modal-lg" role="document">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
@@ -115,6 +121,7 @@
 @endsection
 
 @section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
     @include('gestisp.partials.leaflet-styles')
 @endsection
@@ -126,12 +133,15 @@
 
     <script>
         $(document).ready(function () {
+            const enMovil = window.matchMedia('(max-width: 767.98px)').matches;
+
             $('#verificationTable').DataTable({
                 language: {
                     url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
                     emptyTable: 'No hay órdenes pendientes de verificación.'
                 },
-                pageLength: 25,
+                pageLength: enMovil ? 10 : 25,
+                dom: enMovil ? 'ftip' : 'lfrtip',
                 order: [[5, 'desc']],
                 columnDefs: [
                     { orderable: false, targets: [7] },

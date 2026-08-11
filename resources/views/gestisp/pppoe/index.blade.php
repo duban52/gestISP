@@ -4,7 +4,7 @@
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
         <h1 class="mb-0"><i class="fas fa-user-lock mr-2"></i>Cuentas PPPoE</h1>
-        <div>
+        <div class="acciones-movil">
             {{-- El enlace lleva los filtros actuales: el archivo tiene
                  que contener lo mismo que se está viendo, no todo. --}}
             <a href="{{ route('pppoe.export', request()->query()) }}" class="btn btn-outline-success">
@@ -111,11 +111,20 @@
     @endif
 
     {{-- ---------- Filtros ---------- --}}
-    <div class="card shadow-sm">
+    {{-- Los filtros se pliegan en el teléfono: seis campos ocupan media
+         pantalla antes de llegar a los datos. En escritorio siguen
+         desplegados (la clase "show" solo se quita en pantalla pequeña
+         mediante el atributo de abajo). --}}
+    <div class="card shadow-sm toque">
         <div class="card-header py-2">
-            <h3 class="card-title mb-0"><i class="fas fa-filter mr-1"></i> Filtros</h3>
+            <h3 class="card-title mb-0">
+                <a class="text-dark d-block" data-toggle="collapse" href="#filtrosPppoe" role="button">
+                    <i class="fas fa-filter mr-1"></i> Filtros
+                    <i class="fas fa-caret-down float-right d-md-none"></i>
+                </a>
+            </h3>
         </div>
-        <form method="GET" class="card-body py-3">
+        <form method="GET" class="card-body py-3 collapse filtros-movil {{ request()->hasAny(['q','router_id','estado','conexion','profile','contrato']) ? 'show' : '' }} d-md-block" id="filtrosPppoe">
             <div class="row align-items-end">
                 <div class="col-md-3 form-group mb-2">
                     <label class="mb-1 small">Buscar</label>
@@ -221,7 +230,7 @@
     <div class="card mt-3">
         <div class="card-body">
             <div class="table-responsive">
-                <table id="pppoeTable" class="table table-striped table-bordered" style="width:100%">
+                <table id="pppoeTable" class="table table-hover tabla-movil" style="width:100%">
                     <thead>
                     <tr>
                         <th>Usuario</th>
@@ -240,13 +249,21 @@
                     <tbody>
                     @foreach($accounts as $account)
                         <tr>
-                            <td>{{ $account->username }}</td>
-                            <td>{{ $account->router->name ?? 'N/A' }}</td>
-                            <td>{{ $account->profile }}</td>
+                            {{-- Celda principal: encabeza la ficha en el teléfono
+                                 con el usuario, que es por lo que se reconoce
+                                 la cuenta, y el router debajo. --}}
+                            <td class="celda-principal" data-label="">
+                                <strong class="romper-texto">{{ $account->username }}</strong>
+                                <span class="d-block d-md-none text-muted small">
+                                    {{ $account->router->name ?? 'N/A' }} · {{ $account->profile }}
+                                </span>
+                            </td>
+                            <td data-label="Router" class="solo-escritorio">{{ $account->router->name ?? 'N/A' }}</td>
+                            <td data-label="Perfil" class="solo-escritorio">{{ $account->profile }}</td>
                             {{-- La IP que tiene AHORA, que es la que sirve para
                                  entrar al equipo. Si no está conectada se
                                  muestra la fija, si la tiene configurada. --}}
-                            <td>
+                            <td data-label="IP">
                                 @if($account->last_address)
                                     <code>{{ $account->last_address }}</code>
                                 @elseif($account->remote_address)
@@ -259,7 +276,7 @@
                             {{-- Número de contrato, no el id interno: es el
                                  que el cliente tiene impreso y el que se pega
                                  en la pantalla de cortes masivos. --}}
-                            <td>
+                            <td data-label="N.º contrato">
                                 @if($account->contract_id)
                                     <strong>{{ $account->contract->numero_visible }}</strong>
                                 @else
@@ -272,7 +289,7 @@
                                     </a>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Cliente">
                                 @if($account->contract_id)
                                     {{ $account->contract->client->name ?? '—' }}
                                     {{ $account->contract->client->last_name ?? '' }}
@@ -285,14 +302,14 @@
                                  el cliente tiene el equipo apagado. Con una
                                  sola columna no se distingue a quién hay que
                                  llamar y a quién hay que cobrarle. --}}
-                            <td>
+                            <td data-label="Estado">
                                 @if($account->disabled)
                                     <span class="badge badge-danger">Suspendida</span>
                                 @else
                                     <span class="badge badge-success">Habilitada</span>
                                 @endif
                             </td>
-                            <td>
+                            <td data-label="Conexión">
                                 @if($account->estaConectada())
                                     <span class="badge badge-success">Conectada</span>
                                 @elseif($account->last_polled_at)
@@ -307,7 +324,7 @@
                             {{-- data-order con la marca de tiempo: sin él
                                  DataTables ordenaría el texto "hace 3 días" y
                                  saldría un orden que no significa nada. --}}
-                            <td data-order="{{ $ultima?->timestamp ?? 0 }}">
+                            <td data-label="Última conexión" data-order="{{ $ultima?->timestamp ?? 0 }}">
                                 @if($ultima)
                                     {{ $ultima->diffForHumans() }}
                                     <small class="d-block text-muted">{{ $ultima->format('d/m/Y H:i') }}</small>
@@ -315,8 +332,8 @@
                                     <span class="text-muted">Nunca</span>
                                 @endif
                             </td>
-                            <td>{{ $account->comment ?? '—' }}</td>
-                            <td>
+                            <td data-label="Comentario">{{ $account->comment ?? '—' }}</td>
+                            <td class="celda-acciones" data-label="">
                                 <a href="{{ route('pppoe.show', $account) }}" class="btn btn-sm btn-info" title="Ver detalle">
                                     <i class="fas fa-eye"></i>
                                 </a>
@@ -362,7 +379,7 @@
     </div>
 
     {{-- Modal Crear Cuenta --}}
-    <div class="modal fade" id="modalCrearPppoe" tabindex="-1" role="dialog">
+    <div class="modal fade modal-movil" id="modalCrearPppoe" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <form method="POST" action="{{ route('pppoe.store') }}">
                 @csrf
@@ -527,7 +544,7 @@
     </div>
 
     {{-- Modal Editar Cuenta --}}
-    <div class="modal fade" id="modalEditarPppoe" tabindex="-1" role="dialog">
+    <div class="modal fade modal-movil" id="modalEditarPppoe" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <form method="POST" id="formEditarPppoe" action="">
                 @csrf
@@ -579,7 +596,7 @@
     </div>
 
     {{-- Modal Eliminar Cuenta --}}
-    <div class="modal fade" id="modalEliminarPppoe" tabindex="-1" role="dialog">
+    <div class="modal fade modal-movil" id="modalEliminarPppoe" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
@@ -610,6 +627,7 @@
 
 @section('css')
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
 @endsection
 
 @section('js')
@@ -618,12 +636,16 @@
 
     <script>
         $(document).ready(function () {
+            const enMovil = window.matchMedia('(max-width: 767.98px)').matches;
+
             $('#pppoeTable').DataTable({
                 language: {
                     url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json',
                     emptyTable: 'No hay cuentas PPPoE registradas.'
                 },
-                pageLength: 25,
+                // En el teléfono cada cuenta ocupa una ficha entera.
+                pageLength: enMovil ? 10 : 25,
+                dom: enMovil ? 'ftip' : 'lfrtip',
                 columnDefs: [
                     // Acciones: la última columna. Se ha corrido dos
                     // veces al añadir columnas (número de contrato,

@@ -1,0 +1,331 @@
+/* ============================================================
+   GestISP — Adaptación a pantallas pequeñas
+   ============================================================
+
+   PARA QUÉ ES
+   -----------
+   Tres módulos se usan de verdad desde el teléfono: las cuentas
+   PPPoE y las ONT, que se consultan en la calle mientras se
+   diagnostica, y las órdenes técnicas, que el técnico abre, procesa y
+   cierra desde el móvil con una sola mano.
+
+   AdminLTE es responsive en su estructura —el menú se pliega, las
+   columnas se apilan— pero sus TABLAS no: se salen de la pantalla y
+   obligan a un desplazamiento horizontal que en un teléfono es
+   inmanejable. Eso es lo que resuelve esta hoja.
+
+   CÓMO SE APLICA
+   --------------
+   Se incluye solo en las vistas de esos tres módulos, no en el layout
+   general: acotar el alcance es lo que garantiza que no se altere
+   ninguna pantalla que hoy funciona bien.
+
+   El punto de corte es 768 px, el mismo que usa Bootstrap 4 para "md".
+   Por debajo de ahí estamos en un teléfono; por encima, en una tableta
+   apaisada o en un escritorio, donde la tabla clásica se lee mejor.
+   ============================================================ */
+
+@media (max-width: 767.98px) {
+
+    /* ------------------------------------------------------------
+       1. Tablas que se convierten en fichas
+
+       Cada fila pasa a ser una tarjeta y cada celda una línea
+       "Etiqueta: valor". La etiqueta sale del atributo data-label de
+       la celda, así que no hay que duplicar los encabezados en el
+       HTML ni depender de JavaScript.
+
+       Solo se aplica a las tablas marcadas con .tabla-movil, para no
+       tocar las que ya se ven bien o las que son de maquetación.
+       ------------------------------------------------------------ */
+    .tabla-movil thead {
+        /* Se oculta con position y no con display:none para que los
+           lectores de pantalla sigan anunciando los encabezados. */
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+
+    .tabla-movil,
+    .tabla-movil tbody,
+    .tabla-movil tr,
+    .tabla-movil td {
+        display: block;
+        width: 100%;
+    }
+
+    .tabla-movil tr {
+        border: 1px solid #dee2e6;
+        border-radius: .35rem;
+        margin-bottom: .6rem;
+        padding: .35rem .1rem;
+        background: #fff;
+    }
+
+    .tabla-movil td {
+        border: 0 !important;
+        border-bottom: 1px solid #f1f3f5 !important;
+        padding: .45rem .7rem !important;
+        text-align: left !important;
+        min-height: 2.1rem;
+    }
+
+    .tabla-movil tr td:last-child {
+        border-bottom: 0 !important;
+    }
+
+    .tabla-movil td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .3px;
+        color: #8a94a6;
+        margin-bottom: .1rem;
+    }
+
+    /* Celdas sin etiqueta (la de acciones, por ejemplo): sin hueco
+       para el rótulo y con los botones repartidos a lo ancho. */
+    .tabla-movil td[data-label=""]::before,
+    .tabla-movil td:not([data-label])::before {
+        display: none;
+    }
+
+    /* La celda marcada como principal encabeza la ficha: es el dato
+       por el que se reconoce la fila (el usuario PPPoE, el serial de
+       la ONT, el número de orden). */
+    .tabla-movil td.celda-principal {
+        background: #f6f8fb;
+        border-bottom: 1px solid #dee2e6 !important;
+        font-size: 1.02rem;
+    }
+
+    .tabla-movil td.celda-principal::before {
+        display: none;
+    }
+
+    /* Fila de acciones: botones grandes y repartidos. */
+    .tabla-movil td.celda-acciones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        padding-top: .6rem !important;
+    }
+
+    .tabla-movil td.celda-acciones .btn {
+        flex: 1 1 auto;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* El mensaje de "no hay nada" no debe convertirse en ficha.
+       Se exceptúan las celdas que SÍ traen rótulo: una celda con
+       colspan no siempre es un vacío —en la revisión de cortes es el
+       motivo por el que no se encontró la cuenta— y ahí el rótulo
+       hace falta y el texto se lee mejor alineado a la izquierda. */
+    .tabla-movil td[colspan]:not([data-label]),
+    .tabla-movil td[colspan][data-label=""] {
+        text-align: center !important;
+    }
+
+    .tabla-movil td[colspan]:not([data-label])::before,
+    .tabla-movil td[colspan][data-label=""]::before {
+        display: none;
+    }
+
+    /* ------------------------------------------------------------
+       2. Objetivos táctiles
+
+       Cuarenta y cuatro píxeles es el mínimo con el que un dedo
+       acierta sin ampliar. Los botones pequeños de escritorio, en un
+       teléfono, obligan a hacer zoom para pulsarlos.
+       ------------------------------------------------------------ */
+    .toque .btn,
+    .toque .custom-select,
+    .toque .form-control {
+        min-height: 44px;
+    }
+
+    /* 16 px en los campos evita que iOS haga zoom automático al
+       enfocarlos, que descoloca toda la pantalla. */
+    .toque input,
+    .toque select,
+    .toque textarea {
+        font-size: 16px !important;
+    }
+
+    /* ------------------------------------------------------------
+       3. Barra de acciones de la cabecera
+
+       En escritorio los botones van en fila a la derecha del título.
+       En el teléfono se apilan a lo ancho, que es donde el pulgar
+       llega sin estirarse.
+       ------------------------------------------------------------ */
+    .acciones-movil {
+        display: flex;
+        flex-direction: column;
+        gap: .4rem;
+        width: 100%;
+        margin-top: .6rem;
+    }
+
+    .acciones-movil .btn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    /* ------------------------------------------------------------
+       4. Filtros plegables
+
+       Un formulario de seis filtros ocupa media pantalla de teléfono
+       antes de llegar a los datos. Se pliega por defecto y se abre a
+       demanda; en escritorio sigue desplegado.
+       ------------------------------------------------------------ */
+    .filtros-movil .form-group {
+        margin-bottom: .55rem;
+    }
+
+    .filtros-movil label {
+        margin-bottom: .15rem;
+        font-size: .78rem;
+    }
+
+    /* ------------------------------------------------------------
+       5. Cifras de cabecera
+
+       Las cuatro tarjetas de resumen pasan a dos por fila y más
+       compactas: siguen siendo lo primero que se lee, pero sin
+       empujar la tabla fuera de la primera pantalla.
+       ------------------------------------------------------------ */
+    .small-box .inner h3 {
+        font-size: 1.55rem;
+    }
+
+    .small-box .inner p {
+        font-size: .8rem;
+    }
+
+    .small-box .icon {
+        display: none;
+    }
+
+    .small-box {
+        margin-bottom: .6rem;
+    }
+
+    /* ------------------------------------------------------------
+       6. Controles de DataTables
+
+       Por defecto se colocan en dos columnas que en un teléfono se
+       pisan. Se apilan y se centra la paginación.
+       ------------------------------------------------------------ */
+    .dataTables_wrapper .row > div {
+        width: 100%;
+        max-width: 100%;
+        flex: 0 0 100%;
+        text-align: center !important;
+    }
+
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_length {
+        text-align: left !important;
+        margin-bottom: .5rem;
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        width: 100%;
+        margin-left: 0;
+        margin-top: .2rem;
+    }
+
+    .dataTables_wrapper .dataTables_filter label,
+    .dataTables_wrapper .dataTables_length label {
+        width: 100%;
+    }
+
+    .dataTables_wrapper .dataTables_paginate {
+        padding-top: .5rem;
+    }
+
+    .dataTables_wrapper .pagination {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .dataTables_wrapper .paginate_button .page-link {
+        min-width: 40px;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* ------------------------------------------------------------
+       7. Paginación de Laravel
+
+       Con muchas páginas, la lista de números se sale del ancho.
+       Se envuelve y se agrandan los objetivos.
+       ------------------------------------------------------------ */
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .pagination .page-link {
+        min-width: 40px;
+        min-height: 40px;
+        padding: .4rem .55rem;
+    }
+
+    /* ------------------------------------------------------------
+       8. Modales a pantalla completa
+
+       Un modal centrado con márgenes desperdicia el poco espacio que
+       hay. En el teléfono ocupa toda la pantalla, como una vista más.
+       ------------------------------------------------------------ */
+    .modal-movil .modal-dialog {
+        margin: 0;
+        max-width: 100%;
+        min-height: 100%;
+    }
+
+    .modal-movil .modal-content {
+        min-height: 100vh;
+        border-radius: 0;
+        border: 0;
+    }
+
+    .modal-movil .modal-footer .btn {
+        flex: 1 1 auto;
+        min-height: 44px;
+    }
+
+    /* ------------------------------------------------------------
+       9. Utilidades
+       ------------------------------------------------------------ */
+    .solo-escritorio { display: none !important; }
+
+    /* Los códigos largos (seriales, usuarios PPPoE) rompen el ancho.
+       Se permite el corte para que la ficha no se ensanche. */
+    .tabla-movil code,
+    .romper-texto {
+        word-break: break-all;
+        white-space: normal;
+    }
+
+    /* Cabecera de página: el título y los botones, uno debajo de otro. */
+    .content-header h1 {
+        font-size: 1.35rem;
+    }
+}
+
+/* Solo en pantallas grandes: lo contrario de .solo-escritorio */
+@media (min-width: 768px) {
+    .solo-movil { display: none !important; }
+}

@@ -2,15 +2,23 @@
 @section('title', 'Detalle Cuenta PPPoE')
 
 @section('content_header')
-    <div class="card p-3 d-flex flex-row justify-content-between align-items-center">
-        <h2>Cuenta PPPoE — {{ $pppoe->username }}</h2>
-        <a href="{{ route('pppoe.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Volver
-        </a>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <h1 class="mb-0 romper-texto">
+            <i class="fas fa-user-lock mr-2"></i>{{ $pppoe->username }}
+        </h1>
+        {{-- En el teléfono el botón ocupa el ancho completo, debajo del
+             título: el usuario PPPoE puede ser largo y en una sola fila
+             empuja el botón fuera de la pantalla. --}}
+        <div class="acciones-movil">
+            <a href="{{ route('pppoe.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Volver
+            </a>
+        </div>
     </div>
 @endsection
 
 @section('content')
+    <div class="toque">
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @elseif(session('success-update'))
@@ -48,7 +56,7 @@
                     </div>
 
                     {{-- Tabla de sesión (oculta hasta que lleguen datos) --}}
-                    <table id="sessionTable" class="table table-striped mb-0" style="display:none;">
+                    <div class="table-responsive"><table id="sessionTable" class="table table-striped mb-0" style="display:none;">
                         <tr>
                             <th style="width:40%">Estado</th>
                             <td id="st-connected">—</td>
@@ -78,7 +86,7 @@
                             <th>Velocidad actual</th>
                             <td id="st-speed">—</td>
                         </tr>
-                    </table>
+                    </table></div>
                 </div>
             </div>
         </div>
@@ -190,7 +198,7 @@
                     <i class="fas fa-id-card"></i> Datos de la Cuenta
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped mb-0">
                         <tr>
                             <th style="width:40%">Usuario</th>
                             <td>{{ $pppoe->username }}</td>
@@ -235,7 +243,7 @@
                             <th>Creada</th>
                             <td>{{ $pppoe->created_at->format('Y-m-d H:i') }}</td>
                         </tr>
-                    </table>
+                    </table></div>
                 </div>
             </div>
         </div>
@@ -261,7 +269,7 @@
 
                 @if($pppoe->contract_id)
                     <div class="card-body p-0">
-                        <table class="table table-striped mb-0">
+                        <div class="table-responsive"><table class="table table-striped mb-0">
                             <tr>
                                 <th style="width:40%">Cliente</th>
                                 <td>
@@ -290,7 +298,7 @@
                                 <th>Barrio</th>
                                 <td>{{ $pppoe->contract->neighborhood ?? '—' }}</td>
                             </tr>
-                        </table>
+                        </table></div>
                     </div>
                 @else
                     {{-- Las cuentas importadas del router llegan sin
@@ -324,6 +332,11 @@
             </div>
         </div>
     </div>
+    </div>
+@endsection
+
+@section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
 @endsection
 
 @section('js')
