@@ -507,4 +507,205 @@ class PppoeMassCutoffTest extends TestCase
         $this->postJson(route('pppoe.cutoff.execute'), ['identificadores' => ['ENG000001']])
             ->assertStatus(403);
     }
+
+    // ==================== Documento de identidad ====================
+
+    /**
+     * Extracción de documentos de un comentario.
+     *
+     * Es la parte con más trampa de todo el corte por documento: el
+     * comentario lo escribe una persona y trae de todo —teléfonos,
+     * direcciones, IPs, fechas—. Estos casos son los que separan
+     * "encuentra al cliente" de "corta al que no era".
+     *
+     * @dataProvider comentariosDeEjemplo
+     */
+    public function test_extrae_los_documentos_de_un_comentario(string $comentario, array $esperado): void
+    {
+        $this->assertSame($esperado, PppoeMassCutoff::documentosEnComentario($comentario));
+    }
+
+    public static function comentariosDeEjemplo(): array
+    {
+        return [
+            'documento y nombre' => ['71825597 Juan Perez', ['71825597']],
+            'con separadores de miles' => ['CC 71.825.597 - Juan Perez', ['71825597']],
+            'cedula nueva de diez digitos' => ['1.042.772.330 Maria Lopez', ['1042772330']],
+            'documento y telefono' => ['1042772330, cel 3116417754', ['1042772330', '3116417754']],
+            // Una direccion son numeros cortos: no puede producir un
+            // documento inventado como 182059.
+            'direccion' => ['Juan Perez CL 18 # 20-59 piso 2', []],
+            // Sin esto, quitarle los puntos a una IP daria 192168150.
+            'ip fija' => ['IP fija 192.168.1.50', []],
+            'sin numeros' => ['cliente antiguo', []],
+            'vacio' => ['', []],
+        ];
+    }
+
+    public function test_encuentra_la_cuenta_por_el_documento_del_comentario(): void
+    {
+        $cuenta = $this->contratoConCuenta('ENG000700', ['comment' => '71825597 Juan Perez']);
+
+        $filas = app(PppoeMassCutoff::class)->resolver(['71825597'], $this->branch->id);
+
+        $this->assertSame('lista', $filas[0]['estado']);
+        $this->assertSame('documento', $filas[0]['origen']);
+        $this->assertSame($cuenta->username, $filas[0]['cuentas'][0]['username']);
+    }
+
+    public function test_el_documento_se_acepta_con_puntos_y_sin_ellos(): void
+    {
+        $this->contratoConCuenta('ENG000701', ['comment' => 'CC 71.825.597 Juan Perez']);
+
+        foreach (['71825597', '71.825.597', '71-825-597'] as $escrito) {
+            $filas = app(PppoeMassCutoff::class)->resolver([$escrito], $this->branch->id);
+
+            $this->assertSame('lista', $filas[0]['estado'], "Falló escrito como {$escrito}");
+        }
+    }
+
+    /**
+     * El caso que obliga a no usar LIKE.
+     *
+     * La cédula 1164173 está contenida dentro del teléfono
+     * 3116417754. Con una búsqueda por subcadena esta cuenta saldría
+     * como coincidencia y se cortaría a quien no era.
+     */
+    public function test_no_confunde_un_documento_contenido_dentro_de_otro_numero(): void
+    {
+        $this->contratoConCuenta('ENG000702', ['comment' => 'Juan Perez cel 3116417754']);
+
+        $filas = app(PppoeMassCutoff::class)->resolver(['1164173'], $this->branch->id);
+
+        $this->assertSame('no_encontrado', $filas[0]['estado']);
+    }
+
+    public function test_el_numero_de_contrato_manda_sobre_el_documento(): void
+    {
+        // Una sucursal puede numerar contratos con solo dígitos, y
+        // entonces un identificador vale para las dos búsquedas. Gana
+        // la exacta.
+        $porContrato = $this->contratoConCuenta('88001122');
+        $this->contratoConCuenta('ENG000703', ['comment' => 'documento 88001122']);
+
+        $filas = app(PppoeMassCutoff::class)->resolver(['88001122'], $this->branch->id);
+
+        $this->assertSame('contrato', $filas[0]['origen']);
+        $this->assertCount(1, $filas[0]['cuentas']);
+        $this->assertSame($porContrato->username, $filas[0]['cuentas'][0]['username']);
+    }
+
+    public function test_un_documento_en_dos_clientes_distintos_se_marca_como_ambiguo(): void
+    {
+        // El mismo número anotado en cuentas de dos personas: o está
+        // mal escrito en un comentario, o son dos. Cortar a la
+        // equivocada no se deshace.
+        $this->contratoConCuenta('ENG000704', ['comment' => '71825597 Juan Perez']);
+        $this->contratoConCuenta('ENG000705', ['comment' => 'hermano 71825597']);
+
+        $servicio = app(PppoeMassCutoff::class);
+        $filas = $servicio->resolver(['71825597'], $this->branch->id);
+
+        $this->assertTrue($filas[0]['ambiguo']);
+        $this->assertStringContainsString('clientes distintos', $filas[0]['mensaje']);
+        $this->assertSame(1, $servicio->resumen($filas)['ambiguos']);
+    }
+
+    public function test_un_mismo_cliente_con_dos_cuentas_no_es_ambiguo(): void
+    {
+        // Lo corriente: una persona con dos contratos. No hay nada que
+        // advertir, se cortan las dos.
+        $cuenta = $this->contratoConCuenta('ENG000706', ['comment' => '71825597 Juan Perez']);
+
+        PppoeAccount::create([
+            'branch_id' => $this->branch->id,
+            'router_id' => $this->router->id,
+            'contract_id' => $cuenta->contract_id,
+            'mikrotik_id' => '*AA01',
+            'username' => 'segunda.cuenta',
+            'password' => 'clave',
+            'profile' => 'default',
+            'service' => 'pppoe',
+            'disabled' => false,
+            'comment' => '71825597 Juan Perez segunda casa',
+        ]);
+
+        $filas = app(PppoeMassCutoff::class)->resolver(['71825597'], $this->branch->id);
+
+        $this->assertFalse($filas[0]['ambiguo']);
+        $this->assertCount(2, $filas[0]['cuentas']);
+    }
+
+    public function test_un_documento_de_otra_sucursal_lo_dice(): void
+    {
+        // Sin esto diría "no corresponde a nada" y el operador
+        // acabaría creando un duplicado.
+        $this->contratoConCuenta('OTR000001', [
+            'branch_id' => $this->otraBranch->id,
+            'comment' => '99887766 Cliente de otra sede',
+        ]);
+
+        $filas = app(PppoeMassCutoff::class)->resolver(['99887766'], $this->branch->id);
+
+        $this->assertSame('otra_sucursal', $filas[0]['estado']);
+    }
+
+    public function test_no_corta_por_documento_a_cuentas_de_otra_sucursal(): void
+    {
+        $ajena = $this->contratoConCuenta('OTR000002', [
+            'branch_id' => $this->otraBranch->id,
+            'comment' => '55443322 Cliente de otra sede',
+        ]);
+
+        $this->mikrotikQueCorta();
+
+        app(PppoeMassCutoff::class)->ejecutar(['55443322'], $this->branch->id, $this->admin->id);
+
+        $this->assertFalse($ajena->fresh()->disabled);
+    }
+
+    public function test_el_corte_por_documento_deshabilita_la_cuenta(): void
+    {
+        $cuenta = $this->contratoConCuenta('ENG000707', ['comment' => '71825597 Juan Perez']);
+
+        $this->mikrotikQueCorta();
+
+        $resultado = app(PppoeMassCutoff::class)
+            ->ejecutar(['71825597'], $this->branch->id, $this->admin->id);
+
+        $this->assertSame(1, $resultado['cortadas']);
+        $this->assertTrue($cuenta->fresh()->disabled);
+    }
+
+    public function test_lee_un_csv_con_encabezado_de_cedula(): void
+    {
+        $this->contratoConCuenta('ENG000708', ['comment' => '71825597 Juan Perez']);
+
+        $archivo = UploadedFile::fake()->createWithContent(
+            'cartera.csv',
+            "Cedula;Nombre\n71825597;Juan Perez\n",
+        );
+
+        $identificadores = app(PppoeMassCutoff::class)->identificadoresDesdeArchivo($archivo);
+
+        $this->assertSame(['71825597'], $identificadores);
+    }
+
+    public function test_una_lista_sin_documentos_no_consulta_los_comentarios(): void
+    {
+        // Guarda de coste: buscar un documento obliga a barrer los
+        // comentarios de la sucursal. Una tanda normal de números de
+        // contrato no debe pagar ese barrido.
+        $this->contratoConCuenta('ENG000709', ['comment' => '71825597 Juan Perez']);
+
+        \DB::enableQueryLog();
+        app(PppoeMassCutoff::class)->resolver(['ENG000709'], $this->branch->id);
+        $consultas = collect(\DB::getQueryLog())->pluck('query');
+        \DB::disableQueryLog();
+
+        $this->assertTrue(
+            $consultas->filter(fn ($q) => str_contains($q, 'comment'))->isEmpty(),
+            'No debería consultar comentarios cuando la lista no trae documentos.',
+        );
+    }
 }

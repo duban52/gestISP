@@ -22,9 +22,16 @@
             Cortar significa <strong>deshabilitar la cuenta PPPoE y tumbar la conexión activa</strong>:
             el cliente deja de navegar de inmediato.
         </p>
-        <p class="mb-0">
-            Puede indicar <strong>números de contrato</strong> (ENG000123) o <strong>usuarios PPPoE</strong>,
+        <p class="mb-1">
+            Puede indicar <strong>números de contrato</strong> (ENG000123),
+            <strong>usuarios PPPoE</strong> o <strong>documentos de identidad</strong>,
             mezclados. Máximo {{ number_format($maximo, 0, ',', '.') }} por tanda.
+        </p>
+        <p class="mb-0 small">
+            El documento no es un campo de la cuenta: se busca dentro de su
+            <strong>comentario</strong>, que es donde se viene anotando. Se admite con puntos
+            o sin ellos. Por eso se prueba de último —primero el contrato, luego el usuario— y
+            por eso conviene mirar la columna «Se encontró por» antes de ejecutar.
         </p>
     </div>
 
@@ -55,9 +62,10 @@
                     <div class="form-group mb-2">
                         <label for="lista">Uno por línea</label>
                         <textarea id="lista" class="form-control text-monospace" rows="10"
-                                  placeholder="ENG000001&#10;ENG000058&#10;pepito.perez&#10;..."></textarea>
+                                  placeholder="ENG000001&#10;pepito.perez&#10;71825597&#10;1.042.772.330&#10;..."></textarea>
                         <small class="form-text text-muted">
                             También se aceptan separados por comas o punto y coma. Los repetidos se descartan solos.
+                            Mezcle contratos, usuarios y documentos: cada línea se resuelve por su cuenta.
                         </small>
                     </div>
                     <div id="contadorLista" class="text-muted small"></div>
@@ -79,7 +87,8 @@
                         <ul class="mb-0 mt-1 pl-3" style="font-size: .9rem;">
                             <li>
                                 Si la primera fila trae un encabezado reconocible
-                                (<code>contrato</code>, <code>usuario</code>, <code>pppoe</code>…),
+                                (<code>contrato</code>, <code>usuario</code>, <code>pppoe</code>,
+                                <code>cedula</code>, <code>documento</code>, <code>nit</code>…),
                                 se usa esa columna.
                             </li>
                             <li>
@@ -116,12 +125,16 @@
             {{-- Resumen por estado --}}
             <div class="row text-center mb-3" id="resumen"></div>
 
+            {{-- Documentos que coinciden con más de un cliente --}}
+            <div class="alert alert-danger d-none" id="avisoAmbiguos"></div>
+
             <div class="table-responsive">
                 <table class="table table-sm table-hover tabla-movil" id="tablaRevision">
                     <thead class="thead-light">
                     <tr>
                         <th style="width: 160px;">Se buscó</th>
                         <th style="width: 150px;">Estado</th>
+                        <th style="width: 120px;">Se encontró por</th>
                         <th>Cuenta PPPoE</th>
                         <th>Contrato</th>
                         <th>Cliente</th>
@@ -180,6 +193,10 @@
         /* Fila atenuada: nada que hacer con ella */
         tr.sin-accion { opacity: .62; }
 
+        /* Documento que coincide con clientes distintos: se ve de lejos. */
+        tr.fila-ambigua > td { background: #fff5f5; }
+        tr.fila-ambigua > td:first-child { box-shadow: inset 3px 0 0 #dc3545; }
+
         .resumen-caja {
             border-radius: .35rem;
             padding: .6rem .3rem;
@@ -222,6 +239,34 @@
                 cortada:       { color: 'success',   texto: 'Cortada',         accion: false },
                 error:         { color: 'danger',    texto: 'Error',           accion: false },
             };
+
+            /*
+             * Como se encontro cada fila. Importa mostrarlo: contrato y
+             * usuario son coincidencias exactas contra un campo propio,
+             * pero "documento" sale de buscar dentro de un comentario
+             * escrito a mano. El operador tiene que poder distinguirlas
+             * de un vistazo antes de dejar a alguien sin internet.
+             */
+            const ORIGENES = {
+                contrato:  { color: 'info',    texto: 'Contrato'  },
+                usuario:   { color: 'primary', texto: 'Usuario'   },
+                documento: { color: 'warning', texto: 'Documento' },
+            };
+
+            function celdaOrigen(fila) {
+                const o = ORIGENES[fila.origen];
+
+                if (!o) {
+                    return '<td data-label="Se encontró por"><span class="text-muted">—</span></td>';
+                }
+
+                return '<td data-label="Se encontró por">' +
+                       '<span class="badge badge-' + o.color + '">' + o.texto + '</span>' +
+                       (fila.ambiguo
+                           ? ' <i class="fas fa-exclamation-triangle text-danger" title="Coincide con varios clientes"></i>'
+                           : '') +
+                       '</td>';
+            }
 
             /* ---------------- Contador en vivo ---------------- */
 
@@ -298,6 +343,7 @@
                             '<tr class="sin-accion">' +
                             '  <td class="celda-principal" data-label=""><code>' + escapar(fila.identificador) + '</code></td>' +
                             '  <td data-label="Estado"><span class="badge badge-' + estado.color + ' estado-badge">' + estado.texto + '</span></td>' +
+                            celdaOrigen(fila) +
                             '  <td colspan="4" class="text-muted" data-label="Motivo">' + escapar(fila.mensaje) + '</td>' +
                             '</tr>'
                         );
@@ -311,7 +357,8 @@
                             : estado;
 
                         $cuerpo.append(
-                            '<tr class="' + (suEstado.accion || cuenta.resultado === 'cortada' ? '' : 'sin-accion') + '">' +
+                            '<tr class="' + (suEstado.accion || cuenta.resultado === 'cortada' ? '' : 'sin-accion') +
+                                          (fila.ambiguo ? ' fila-ambigua' : '') + '">' +
                             // En el telefono cada fila es una ficha: la
                             // cuenta PPPoE la encabeza (es el dato que se
                             // reconoce) y el identificador buscado, que en
@@ -321,8 +368,14 @@
                             '  <td data-label="Estado"><span class="badge badge-' + suEstado.color + ' estado-badge">' + suEstado.texto + '</span>' +
                             (cuenta.error ? '<small class="d-block text-danger">' + escapar(cuenta.error) + '</small>' : '') +
                             '  </td>' +
+                            celdaOrigen(fila) +
                             '  <td class="celda-principal" data-label=""><strong>' + escapar(cuenta.username) + '</strong>' +
-                            '    <small class="d-md-none d-block text-muted">' + escapar(fila.identificador) + '</small></td>' +
+                            '    <small class="d-md-none d-block text-muted">' + escapar(fila.identificador) + '</small>' +
+                            (fila.ambiguo
+                                ? '<small class="d-block text-danger"><i class="fas fa-exclamation-triangle"></i> ' +
+                                  escapar(fila.mensaje) + '</small>'
+                                : '') +
+                            '  </td>' +
                             '  <td data-label="Contrato">' + escapar(cuenta.contrato || '—') + '</td>' +
                             '  <td data-label="Cliente">' + escapar(cuenta.cliente || '—') + '</td>' +
                             '  <td data-label="Router">' + escapar(cuenta.router || '—') + '</td>' +
@@ -345,6 +398,19 @@
                         { n: resumen.otra_sucursal, t: 'Otra sucursal', c: 'warning' },
                         { n: resumen.no_encontrado, t: 'No encontrados', c: 'danger' },
                       ];
+
+                /*
+                 * Un documento que apunta a clientes distintos no se
+                 * puede dejar en un color de fila: en una tanda de
+                 * cientos, nadie lo ve. Se levanta un aviso arriba.
+                 */
+                $('#avisoAmbiguos').toggleClass('d-none', ejecutado || !resumen.ambiguos)
+                    .html(resumen.ambiguos
+                        ? '<i class="fas fa-exclamation-triangle"></i> <strong>' + resumen.ambiguos +
+                          ' documento(s)</strong> aparecen en cuentas de clientes distintos. ' +
+                          'Están marcados en la tabla: revíselos uno por uno antes de ejecutar, ' +
+                          'porque cortar al cliente equivocado no se deshace.'
+                        : '');
 
                 const $fila = $('#resumen').empty();
 

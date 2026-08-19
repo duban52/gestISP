@@ -16,6 +16,9 @@ use RuntimeException;
  *
  *   1. REVISAR — se resuelve la lista contra la base de datos y se
  *      muestra a quién se va a cortar. No se toca nada.
+ *      Cada línea puede ser un número de contrato, un usuario PPPoE
+ *      o un documento de identidad (que se busca dentro del
+ *      comentario de la cuenta).
  *   2. EJECUTAR — recién ahí se deshabilita el secret y se tumba la
  *      sesión.
  *
@@ -56,7 +59,7 @@ class PppoeCutoffController extends Controller
             if (empty($identificadores)) {
                 return response()->json([
                     'ok' => false,
-                    'error' => 'No se encontró ningún número de contrato ni usuario en lo que envió.',
+                    'error' => 'No se encontró ningún número de contrato, usuario PPPoE ni documento en lo que envió.',
                 ], 422);
             }
 

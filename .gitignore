@@ -18,3 +18,8 @@ yarn-error.log
 /.idea
 /.vscode
 gestISP.zip
+
+# Paquete oficial del anexo tecnico de la DIAN (~54 MB de XSD, XSL y
+# ejemplos). Es material de consulta descargable de la DIAN, no codigo
+# del proyecto: versionarlo infla el repositorio sin aportar historia.
+/ayuda facturacion dian
