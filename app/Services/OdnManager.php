@@ -250,7 +250,15 @@ class OdnManager
 
         $puerto->loadMissing('napBox');
 
-        $contrato->update(['nap_port_id' => null]);
+        // Se limpian LOS DOS campos. asignarPuerto() mantiene en
+        // sintonia el id y el texto legible (contracts.nap_port), pero
+        // aqui solo se borraba el id: la ficha del contrato seguia
+        // mostrando "NAP-001 / P3" para un contrato que ya no ocupa
+        // ningun puerto. Se notaba justo despues de un traslado.
+        $contrato->update([
+            'nap_port_id' => null,
+            'nap_port' => null,
+        ]);
 
         $this->auditLogger->action(
             'naps.port_released',

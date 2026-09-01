@@ -39,6 +39,52 @@
     @endif
 
     {{-- ============================================================
+         Traslado: hay que ir a desconectar el puerto viejo
+
+         En el sistema ese puerto ya figura libre —la ocupación se
+         deduce del contrato que lo apunta—, pero en la caja sigue
+         puesta la acometida. Si nadie la quita, el próximo cliente se
+         encuentra el puerto con un pigtail ajeno y hay que volver.
+
+         NO se cierra con la X: es lo único que puede evitar un
+         segundo viaje al sector, y en un teléfono un aviso pequeño
+         entre otros dos se pierde.
+         ============================================================ --}}
+    @if(session('nap_liberar'))
+        @php
+            // Bloque completo, NUNCA la forma en linea @ php(...): el
+            // compilador de Blade la empareja con el siguiente
+            // @ endphp del archivo —el del bucle de abajo— y se traga
+            // todo el HTML de en medio como si fuera PHP. La vista
+            // compila sin quejarse y revienta al renderizar.
+            $liberar = session('nap_liberar');
+        @endphp
+        <div class="alert alert-warning border-warning shadow-sm">
+            <h5 class="mb-2">
+                <i class="fas fa-unlink mr-1"></i>
+                Falta liberar el puerto donde estaba el cliente
+            </h5>
+            <p class="mb-1">
+                Antes de irse del sector, desconecte la acometida de
+                <strong>{{ $liberar['caja'] ?? 'la caja anterior' }}</strong>,
+                <strong>puerto {{ $liberar['puerto'] }}</strong>.
+            </p>
+            @if(!empty($liberar['direccion']))
+                <p class="mb-1 small">
+                    <i class="fas fa-map-marker-alt"></i> {{ $liberar['direccion'] }}
+                    <a class="d-md-none d-inline-block ml-1"
+                       href="https://www.google.com/maps/search/?api=1&query={{ urlencode($liberar['direccion']) }}"
+                       target="_blank" rel="noopener">Cómo llegar</a>
+                </p>
+            @endif
+            <p class="mb-0 small text-muted">
+                En el sistema ya figura libre. Si la acometida se queda puesta,
+                el próximo cliente no podrá usar ese puerto.
+            </p>
+        </div>
+    @endif
+
+    {{-- ============================================================
          Órdenes asignadas al técnico autenticado.
          Desde aquí puede procesarlas (ir al detalle) o rechazarlas
          indicando el motivo.

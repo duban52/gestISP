@@ -305,6 +305,40 @@
                                 <option value="">Seleccione un Srv Profile</option>
                             </select>
                         </div>
+
+                        {{-- ============================================================
+                             Caja NAP del nuevo puerto
+
+                             Mover la ONT de puerto PON casi siempre significa
+                             que el cliente se mudó, y entonces también cambia
+                             la caja. Se ofrece aquí para no tener que
+                             registrarlo después en otra pantalla —que es donde
+                             se perdía— y se limita a las cajas de ESE puerto
+                             PON, que son las únicas por las que puede llegar
+                             la señal.
+
+                             Es opcional: mover una ONT también puede ser un
+                             rebalanceo de la red sin que el cliente se haya
+                             movido de sitio.
+                             ============================================================ --}}
+                        <hr>
+                        <div class="form-row">
+                            <div class="form-group col-md-7 mb-2">
+                                <label>
+                                    Caja NAP <small class="text-muted">(opcional)</small>
+                                </label>
+                                <select class="form-control" id="moverNapBox">
+                                    <option value="">Sin cambiar</option>
+                                </select>
+                                <small class="form-text text-muted" id="moverNapAyuda"></small>
+                            </div>
+                            <div class="form-group col-md-5 mb-2">
+                                <label>Puerto de la caja</label>
+                                <select class="form-control" name="nap_port_id" id="moverNapPort" disabled>
+                                    <option value="">—</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="submit" class="btn btn-warning">
@@ -538,8 +572,83 @@
                 document.getElementById('formMoverOnt').action =
                     `/onts/${btn.getAttribute('data-ont-id')}/relocate`;
 
+                cargarCajasMover(btn.getAttribute('data-location'));
+
                 $('#moverOntModal').modal('show');
             }
+        });
+
+        /* ============================================================
+           Cajas NAP del puerto PON de destino
+           ============================================================ */
+        let cajasDelPuertoMover = [];
+
+        function cargarCajasMover(ubicacion) {
+            const selCaja = document.getElementById('moverNapBox');
+            const selPuerto = document.getElementById('moverNapPort');
+            const ayuda = document.getElementById('moverNapAyuda');
+            const oltId = document.getElementById('olt').value;
+            const partes = String(ubicacion || '').split('/');
+
+            selCaja.innerHTML = '<option value="">Sin cambiar</option>';
+            selPuerto.innerHTML = '<option value="">—</option>';
+            selPuerto.disabled = true;
+            cajasDelPuertoMover = [];
+
+            if (!oltId || partes.length < 3) {
+                ayuda.textContent = 'No se pudo determinar el puerto PON de destino.';
+                return;
+            }
+
+            ayuda.textContent = 'Buscando cajas de este puerto…';
+
+            fetch('{{ route('naps.by_pon_port') }}'
+                + '?olt=' + encodeURIComponent(oltId)
+                + '&slot=' + encodeURIComponent(partes[1])
+                + '&port=' + encodeURIComponent(partes[2]))
+                .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                .then(function (cajas) {
+                    cajasDelPuertoMover = cajas;
+
+                    if (cajas.length === 0) {
+                        ayuda.textContent = 'Este puerto PON no tiene cajas documentadas.';
+                        return;
+                    }
+
+                    cajas.forEach(function (c) {
+                        const opcion = document.createElement('option');
+                        opcion.value = c.id;
+                        opcion.textContent = c.codigo
+                            + (c.nombre ? ' — ' + c.nombre : '')
+                            + ' (' + c.disponibles + ' libres)';
+                        opcion.disabled = c.puertos.length === 0;
+                        selCaja.appendChild(opcion);
+                    });
+
+                    ayuda.textContent = cajas.length + ' caja(s) en el puerto PON de destino.';
+                })
+                .catch(function () {
+                    ayuda.textContent = 'No se pudieron cargar las cajas de este puerto.';
+                });
+        }
+
+        document.getElementById('moverNapBox').addEventListener('change', function () {
+            const selPuerto = document.getElementById('moverNapPort');
+            const caja = cajasDelPuertoMover.find(c => String(c.id) === this.value);
+
+            selPuerto.innerHTML = '<option value="">—</option>';
+            selPuerto.disabled = !caja;
+
+            if (!caja) {
+                return;
+            }
+
+            caja.puertos.forEach(function (p) {
+                const opcion = document.createElement('option');
+                opcion.value = p.id;
+                opcion.textContent = 'Puerto ' + p.numero;
+                selPuerto.appendChild(opcion);
+            });
         });
 
         /* ============================================================

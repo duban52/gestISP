@@ -166,8 +166,14 @@
                     </table>
                 </div>
                 <small class="text-muted">
-                    Distancia en línea recta. El puerto queda asignado cuando oficina lo
-                    registra en la ficha del contrato, no por aparecer aquí.
+                    Distancia en línea recta.
+                    @if($technicalOrder->esTraslado())
+                        Es solo una pista: la caja donde queda el servicio se elige abajo,
+                        al cerrar la orden.
+                    @else
+                        El puerto queda asignado cuando oficina lo registra en la ficha
+                        del contrato, no por aparecer aquí.
+                    @endif
                 </small>
             @endif
 
@@ -214,6 +220,110 @@
                     <textarea class="form-control" name="solution"
                               id="solution" required>{{ old('solution') }}</textarea>
                 </div>
+                {{-- ============================================================
+                 Traslado: a qué caja queda conectado ahora
+
+                 Es la única clase de orden que mueve el servicio de una
+                 caja a otra, y el único que sabe a cuál es quien está
+                 allí. Antes esto se registraba después en la oficina y
+                 se perdía por el camino: la ocupación de las cajas
+                 dejaba de coincidir con la realidad justo en las
+                 órdenes que la cambian.
+                 ============================================================ --}}
+                @if($technicalOrder->esTraslado())
+                    @php
+                        // Solo puertos libres, más el que ya ocupa este
+                        // contrato: al reabrir una orden devuelta su propio
+                        // puerto ya figura ocupado y desaparecería de la
+                        // lista, dejando al técnico sin poder confirmarlo.
+                        $puertoActual = $technicalOrder->contract?->nap_port_id;
+
+                        $cajasParaSelect = $napBoxes->map(fn ($caja) => [
+                            'id' => $caja->id,
+                            'texto' => $caja->code
+                                . ($caja->zone ? ' — ' . $caja->zone->name : '')
+                                . ' (' . $caja->puertosDisponibles() . ' libres)',
+                            'puertos' => $caja->ports
+                                ->filter(fn ($p) => $p->estaDisponible() || $p->id === $puertoActual)
+                                ->map(fn ($p) => ['id' => $p->id, 'numero' => $p->number])
+                                ->values(),
+                        ])->values();
+                    @endphp
+
+                    <script>
+                        // Las cajas con sus puertos libres. Va aqui y no en
+                        // una llamada aparte porque el tecnico puede estar
+                        // en la calle con mala senal: si el listado
+                        // dependiera de una peticion, no podria cerrar.
+                        window.cajasTraslado = {!! $cajasParaSelect->toJson() !!};
+                        window.napPuertoActual = {{ $puertoActual ? (int) $puertoActual : 'null' }};
+                    </script>
+
+                    <div class="card border-primary mb-3">
+                        <div class="card-header bg-primary text-white py-2">
+                            <i class="fas fa-project-diagram mr-1"></i>
+                            Caja NAP donde queda el servicio
+                        </div>
+                        <div class="card-body">
+                            @if($technicalOrder->contract?->napPort)
+                                <p class="mb-2 small text-muted">
+                                    Antes estaba en
+                                    <strong>{{ $technicalOrder->contract->napPort->napBox->code }}</strong>,
+                                    puerto {{ $technicalOrder->contract->napPort->number }}.
+                                </p>
+                            @endif
+
+                            @if($cajasParaSelect->isEmpty())
+                                <div class="alert alert-warning py-2 mb-0">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    No hay cajas NAP registradas en esta sucursal. Marque abajo
+                                    que no se pudo registrar y explique por qué.
+                                </div>
+                            @endif
+
+                            <div class="form-row" id="bloqueNapTraslado">
+                                <div class="form-group col-md-7">
+                                    <label>Caja <span class="text-danger">*</span></label>
+                                    <select class="form-control" id="trasladoNapBox">
+                                        <option value="">Seleccione la caja</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-5">
+                                    <label>Puerto <span class="text-danger">*</span></label>
+                                    <select class="form-control" name="nap_port_id" id="trasladoNapPort" disabled>
+                                        <option value="">—</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="custom-control custom-checkbox mb-2">
+                                <input type="checkbox" class="custom-control-input"
+                                       id="napNoRegistrada" name="nap_no_registrada" value="1">
+                                <label class="custom-control-label" for="napNoRegistrada">
+                                    La caja no está registrada en el sistema
+                                </label>
+                            </div>
+
+                            <div class="form-group mb-0 d-none" id="bloqueNapMotivo">
+                                <label>¿Por qué? <span class="text-danger">*</span></label>
+                                <input type="text" name="nap_motivo" class="form-control"
+                                       maxlength="200"
+                                       placeholder="Ej.: caja nueva sin documentar en la esquina de la 20 con 15">
+                                <small class="form-text text-muted">
+                                    Queda en la trazabilidad para que oficina la registre.
+                                </small>
+                            </div>
+
+                            @error('nap_port_id')
+                                <div class="text-danger small mt-2">{{ $message }}</div>
+                            @enderror
+                            @error('nap_motivo')
+                                <div class="text-danger small mt-2">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
+                @endif
+
                 <div class="form-group">
                     <label for="images">Selecciona imágenes (evidencia):</label>
                     <input class="form-control-file" type="file" name="images[]" id="images"
@@ -532,4 +642,87 @@
             console.error('GestISP · no se ejecutó order_process.js (¿recursos sin recompilar en el servidor?)');
         }, 5000);
     </script>
+
+    {{-- ============================================================
+         Traslado: caja y puerto donde queda el servicio
+         ============================================================ --}}
+    <script>
+        (function () {
+            const selCaja = document.getElementById('trasladoNapBox');
+
+            // Solo existe en las ordenes de traslado
+            if (!selCaja) {
+                return;
+            }
+
+            const selPuerto = document.getElementById('trasladoNapPort');
+            const casilla = document.getElementById('napNoRegistrada');
+            const bloqueMotivo = document.getElementById('bloqueNapMotivo');
+            const cajas = window.cajasTraslado || [];
+
+            cajas.forEach(function (caja) {
+                const opcion = document.createElement('option');
+                opcion.value = caja.id;
+                opcion.textContent = caja.texto;
+                // Una caja sin puertos libres se muestra pero no se
+                // elige: saber que existe y esta llena es informacion.
+                opcion.disabled = caja.puertos.length === 0;
+                selCaja.appendChild(opcion);
+            });
+
+            function pintarPuertos(idCaja, seleccionar) {
+                const caja = cajas.find(c => String(c.id) === String(idCaja));
+
+                selPuerto.innerHTML = '<option value="">—</option>';
+                selPuerto.disabled = !caja;
+
+                if (!caja) {
+                    return;
+                }
+
+                caja.puertos.forEach(function (p) {
+                    const opcion = document.createElement('option');
+                    opcion.value = p.id;
+                    opcion.textContent = 'Puerto ' + p.numero;
+                    opcion.selected = String(p.id) === String(seleccionar);
+                    selPuerto.appendChild(opcion);
+                });
+            }
+
+            selCaja.addEventListener('change', function () {
+                pintarPuertos(this.value, null);
+            });
+
+            // Si el contrato ya tenia puerto, se deja preseleccionado:
+            // en una orden devuelta el tecnico solo tiene que
+            // confirmarlo, no volver a buscarlo.
+            if (window.napPuertoActual) {
+                const suya = cajas.find(c =>
+                    c.puertos.some(p => String(p.id) === String(window.napPuertoActual)));
+
+                if (suya) {
+                    selCaja.value = suya.id;
+                    pintarPuertos(suya.id, window.napPuertoActual);
+                }
+            }
+
+            // "La caja no esta registrada": se apagan los selects y se
+            // pide el motivo. Los selects se DESHABILITAN para que el
+            // navegador no mande un nap_port_id a medio elegir junto
+            // con la casilla, que es una contradiccion.
+            casilla.addEventListener('change', function () {
+                const sinCaja = this.checked;
+
+                bloqueMotivo.classList.toggle('d-none', !sinCaja);
+                selCaja.disabled = sinCaja;
+                selPuerto.disabled = sinCaja || !selCaja.value;
+
+                if (sinCaja) {
+                    selCaja.value = '';
+                    selPuerto.innerHTML = '<option value="">—</option>';
+                }
+            });
+        })();
+    </script>
+
 @endsection

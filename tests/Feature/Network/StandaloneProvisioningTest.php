@@ -144,6 +144,43 @@ class StandaloneProvisioningTest extends TestCase
         $this->assertSame('HWTC-DD5BB00A', $this->contrato->fresh()->cpe_sn);
     }
 
+    /**
+     * Activar es el principio del trabajo, no el final.
+     *
+     * Despues de autorizar hay que comprobar la potencia y el estado,
+     * y eso solo se ve en la ficha. Antes se volvia al listado de
+     * pendientes, donde la ONT ya no aparecia —acaba de dejar de
+     * estarlo— y habia que ir a buscarla por el serial.
+     */
+    public function test_al_activar_lleva_a_la_ficha_de_la_ont(): void
+    {
+        $this->oltQueActiva();
+
+        $respuesta = $this->post(route('onts.activate'), $this->datosOnt([
+            'contract_id' => $this->contrato->id,
+            'description' => 'Juan Perez CC 123',
+        ]));
+
+        $ont = Ont::where('sn', 'HWTC-DD5BB00A')->firstOrFail();
+
+        $respuesta->assertRedirect(route('onts.show', $ont));
+        $respuesta->assertSessionHas('success');
+    }
+
+    public function test_al_activar_sin_contrato_tambien_lleva_a_la_ficha(): void
+    {
+        $this->oltQueActiva();
+
+        $respuesta = $this->post(route('onts.activate'), $this->datosOnt([
+            'sin_contrato' => '1',
+            'description' => 'Repetidor parque principal',
+        ]));
+
+        $respuesta->assertRedirect(
+            route('onts.show', Ont::where('sn', 'HWTC-DD5BB00A')->firstOrFail())
+        );
+    }
+
     public function test_sin_contrato_ni_casilla_no_se_autoriza(): void
     {
         $this->mock(OltSshService::class, function ($mock) {

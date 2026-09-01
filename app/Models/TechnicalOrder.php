@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Reports\Support\OrderDetailMap;
 use App\Support\Geolocation;
 use App\Support\OrderLocationCheck;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -146,6 +147,23 @@ class TechnicalOrder extends Model
     // ==================== Ubicación del cierre ====================
 
     /** ¿El dispositivo del técnico llegó a dar un punto? */
+    /**
+     * ¿Es una orden de traslado de servicio?
+     *
+     * Un traslado significa que el cliente se mudó: el servicio sale de
+     * una caja NAP y entra en otra. Es la única clase de orden que
+     * OBLIGA a reasignar el puerto, y por eso hace falta distinguirla.
+     *
+     * Se resuelve con OrderDetailMap y no comparando el texto, porque
+     * el detalle llega con y sin tilde y con sufijos ("Traslado de
+     * servicio", "Traslado de Servicio"): comparar cadenas dejaría
+     * fuera media docena de variantes reales.
+     */
+    public function esTraslado(): bool
+    {
+        return OrderDetailMap::clave($this->detail) === 'traslado de servicio';
+    }
+
     public function hasClosingLocation(): bool
     {
         return $this->closing_latitude !== null && $this->closing_longitude !== null;

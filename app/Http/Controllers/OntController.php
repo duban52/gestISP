@@ -367,7 +367,16 @@ class OntController extends Controller
         // La ONT YA quedó activa en la OLT: si algo falla al anotar la
         // caja, no se puede devolver un error a secas o parecerá que la
         // activación no se hizo. Se confirma el éxito y se avisa aparte.
-        return back()->with('success', $mensaje . $avisoNap);
+        //
+        // Se va a la FICHA de la ONT recién activada, no de vuelta al
+        // listado de pendientes. Activar es el principio del trabajo,
+        // no el final: lo que sigue es comprobar la potencia, mirar el
+        // estado y, si algo salió torcido, corregirlo. Con back() esa
+        // ONT desaparecía de la lista de pendientes —ya no lo está— y
+        // había que ir a buscarla por el serial a las autorizadas.
+        return redirect()
+            ->route('onts.show', $ont)
+            ->with('success', $mensaje . $avisoNap);
     }
 
     /**
@@ -620,6 +629,10 @@ class OntController extends Controller
             'vlan'            => 'required|integer',
             'ont_lineprofile' => 'required|integer',
             'ont_srvprofile'  => 'required|integer',
+            // Opcional: mover una ONT de puerto PON suele significar
+            // que el cliente se mudo y cambia de caja, pero tambien
+            // puede ser un rebalanceo sin que se mueva de sitio.
+            'nap_port_id'     => 'nullable|exists:nap_ports,id',
         ]);
 
         $olt = Olt::findOrFail($ont->olt_id);
@@ -649,7 +662,17 @@ class OntController extends Controller
             'status'       => 1,
         ]);
 
-        return back()->with('success', 'ONT movida y actualizada correctamente.');
+        // La caja se anota DESPUES de actualizar la ONT: ocuparPuertoNap
+        // comprueba que la caja cuelgue del puerto PON donde la ONT
+        // acaba de quedar, y para eso necesita el puerto nuevo, no el
+        // viejo.
+        $avisoNap = $this->ocuparPuertoNap(
+            $validated['nap_port_id'] ?? null,
+            $ont->contract_id,
+            $ont->refresh(),
+        );
+
+        return back()->with('success', 'ONT movida y actualizada correctamente.' . $avisoNap);
     }
     public function show(Ont $ont)
     {

@@ -243,7 +243,13 @@ class PppoeMassCutoff
             }
         }
 
-        return array_keys($documentos);
+        // El array se usa como conjunto para no repetir, pero PHP
+        // convierte a ENTERO toda clave que parezca un numero: sin el
+        // strval, "71825597" sale de aqui como int y rompe el
+        // contrato de string que declara la firma. Un documento con
+        // ceros a la izquierda, en cambio, seguiria siendo string, y
+        // el array acabaria con los dos tipos mezclados.
+        return array_map('strval', array_keys($documentos));
     }
 
     /**

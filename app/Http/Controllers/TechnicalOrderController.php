@@ -6,6 +6,8 @@ use App\Exports\TechnicalOrdersExport;
 use App\Models\Contract;
 use App\Models\Inventory;
 use App\Models\Material;
+use App\Models\NapBox;
+use App\Models\NapPort;
 use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -16,6 +18,7 @@ use App\Notifications\TechnicalOrderRejectedTechnician;
 use App\Reports\Support\OrderDetailMap;
 use App\Services\Audit\AuditLogger;
 use App\Services\NapFinder;
+use App\Services\OdnManager;
 use App\Support\Geolocation;
 use App\Support\PdfBranding;
 use Illuminate\Database\Eloquent\Collection;
@@ -26,6 +29,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -500,8 +504,23 @@ class TechnicalOrderController extends Controller
             'closing_longitude'      => 'nullable|numeric|between:-180,180|required_with:closing_latitude',
             'closing_accuracy_m'     => 'nullable|integer|min:0|max:100000',
             'closing_location_error' => 'nullable|string|max:150',
+            // Traslado: la caja y el puerto donde queda el servicio.
+            // Obligatorio salvo que se marque que la caja no esta
+            // registrada, y entonces hay que explicar por que.
+            'nap_port_id' => [
+                Rule::requiredIf(fn () => $technicalOrder->esTraslado() && !$request->boolean('nap_no_registrada')),
+                'nullable',
+                'exists:nap_ports,id',
+            ],
+            'nap_no_registrada' => 'nullable|boolean',
+            'nap_motivo' => [
+                Rule::requiredIf(fn () => $technicalOrder->esTraslado() && $request->boolean('nap_no_registrada')),
+                'nullable', 'string', 'max:200',
+            ],
         ], [
             'client_signature.required' => 'Falta la firma del cliente. Pídale que firme en pantalla antes de cerrar la orden.',
+            'nap_port_id.required' => 'Indique en qué caja NAP y en qué puerto quedó el servicio trasladado.',
+            'nap_motivo.required' => 'Explique por qué no se pudo registrar la caja NAP.',
         ]);
 
         // Materiales realmente reportados (se descartan las filas
@@ -561,6 +580,9 @@ class TechnicalOrderController extends Controller
             }
 
             $technicalOrder->update($orderData);
+
+            // ---- Traslado: el servicio cambia de caja NAP ----
+            $puertoLiberado = $this->reasignarPuertoNap($request, $technicalOrder);
 
             // ---- Materiales usados ----
             // Rastrear el serial del equipo instalado (si lo hay)
@@ -634,8 +656,19 @@ class TechnicalOrderController extends Controller
 
             $this->auditClosingLocation($technicalOrder->refresh());
 
-            return redirect()->route('technicals_orders.my_technical_orders')
+            $respuesta = redirect()->route('technicals_orders.my_technical_orders')
                 ->with('success', 'Orden procesada correctamente.');
+
+            // El puerto viejo ya figura libre en el sistema, pero en la
+            // caja sigue la acometida puesta. Si nadie va a quitarla,
+            // el proximo cliente se encuentra el puerto con un pigtail
+            // ajeno y hay que volver. El aviso sale al cerrar, que es
+            // cuando el tecnico todavia esta en el sector.
+            if ($puertoLiberado) {
+                $respuesta->with('nap_liberar', $puertoLiberado);
+            }
+
+            return $respuesta;
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -680,9 +713,149 @@ class TechnicalOrderController extends Controller
             ? $napFinder->forContract($technicalOrder->contract)
             : collect();
 
+        // En un TRASLADO el tecnico no elige entre las cajas cercanas
+        // al domicilio viejo: el cliente se mudo. Se le dan todas las
+        // de la sucursal y las sugerencias quedan solo como pista.
+        $napBoxes = $technicalOrder->esTraslado()
+            ? NapBox::deSucursal()->with(['ports.contract', 'zone'])->orderBy('code')->get()
+            : collect();
+
         return view('gestisp.technicals_orders.show_and_process_order', compact(
-            'technicalOrder', 'materials', 'warehouse', 'requiresMaterial', 'napSuggestions'
+            'technicalOrder', 'materials', 'warehouse', 'requiresMaterial',
+            'napSuggestions', 'napBoxes'
         ));
+    }
+
+    /**
+     * Mueve el servicio a su nueva caja NAP al cerrar un traslado.
+     *
+     * POR QUE AQUI Y NO EN LA OFICINA
+     * -------------------------------
+     * El unico que sabe en que caja y en que puerto quedo el cliente
+     * es quien estuvo alli. Antes esta pantalla mostraba las cajas
+     * cercanas como simple sugerencia y el puerto se registraba
+     * despues, a mano, en la ficha del contrato: entre una cosa y otra
+     * se perdia, y la ocupacion de las cajas dejaba de coincidir con
+     * la realidad justo en las ordenes que la cambian.
+     *
+     * SE PERMITE CERRAR SIN CAJA, PERO NO EN SILENCIO
+     * -----------------------------------------------
+     * Si la caja no esta documentada en el sistema, el tecnico no
+     * puede inventarsela y tampoco puede quedarse con la orden abierta
+     * en mitad de la calle. Marca la casilla, explica por que, y eso
+     * queda en la trazabilidad para que alguien la registre. Es el
+     * mismo criterio que la ubicacion del cierre: distinguir "no se
+     * pudo" de "no se hizo".
+     *
+     * EL PUERTO VIEJO SE LIBERA SOLO, PERO HAY QUE IR A DESCONECTARLO
+     * ---------------------------------------------------------------
+     * En el sistema la ocupacion no se guarda: se deduce de que
+     * contrato apunta a cada puerto, asi que al mover el contrato el
+     * puerto de origen queda libre sin que nadie lo libere. Lo que NO
+     * se entera es la caja fisica: la acometida vieja sigue puesta y
+     * el siguiente cliente se encuentra el puerto con un pigtail
+     * ajeno. Por eso se devuelve cual era, para recordarselo al
+     * tecnico antes de que se vaya del sector.
+     *
+     * @return array<string, mixed>|null  Datos del puerto que queda libre
+     */
+    private function reasignarPuertoNap(Request $request, TechnicalOrder $technicalOrder): ?array
+    {
+        if (!$technicalOrder->esTraslado()) {
+            return null;
+        }
+
+        $contrato = $technicalOrder->contract;
+
+        if (!$contrato) {
+            return null;
+        }
+
+        // Se toma ANTES de tocar nada: despues de reasignar, el
+        // contrato ya apunta al puerto nuevo y el viejo es
+        // irrecuperable desde aqui.
+        $anterior = $this->datosDelPuerto($contrato->napPort);
+
+        if ($request->boolean('nap_no_registrada')) {
+            app(AuditLogger::class)->action(
+                'naps.port_pending',
+                sprintf(
+                    'Cerro el traslado del contrato %s SIN registrar la caja NAP: %s',
+                    $contrato->numero_visible,
+                    $request->input('nap_motivo'),
+                ),
+                [
+                    'orden' => $technicalOrder->id,
+                    'contrato' => $contrato->numero_visible,
+                    'motivo' => $request->input('nap_motivo'),
+                    'caja_anterior' => $contrato->napPort
+                        ? $contrato->napPort->napBox->code . '/P' . $contrato->napPort->number
+                        : null,
+                ],
+                $technicalOrder,
+                'red',
+            );
+
+            // El cliente ya no esta en ese puerto aunque no sepamos
+            // donde quedo. Dejarlo apuntando al viejo bloquearia ese
+            // puerto para siempre: la caja diria que esta ocupado por
+            // alguien que se mudo. Se suelta y se anota por que.
+            if ($anterior) {
+                app(OdnManager::class)->liberarPuerto($contrato);
+            }
+
+            return $anterior;
+        }
+
+        if (!$request->filled('nap_port_id')) {
+            return null;
+        }
+
+        $puerto = NapPort::with('napBox.network')->findOrFail($request->input('nap_port_id'));
+
+        // El puerto tiene que ser de la sucursal activa: un id que
+        // llegue manipulado no puede mover un contrato a la caja de
+        // otra sede.
+        //
+        // La sucursal de una caja NO esta en nap_boxes: cuelga de su
+        // red optica (ver NapBox::scopeDeSucursal). Comprobarla contra
+        // $napBox->branch_id daria null y rechazaria todo.
+        if ((int) $puerto->napBox?->network?->branch_id !== (int) session('branch_id')) {
+            throw new \RuntimeException('El puerto elegido no pertenece a esta sucursal.');
+        }
+
+        // asignarPuerto ya libera el anterior y lo deja anotado en la
+        // trazabilidad, con el puerto de origen y el de destino.
+        app(OdnManager::class)->asignarPuerto($contrato, $puerto);
+
+        // Si el destino es el MISMO puerto no hay nada que desconectar:
+        // pasa al confirmar una orden devuelta.
+        return ($anterior && $anterior['id'] === $puerto->id) ? null : $anterior;
+    }
+
+    /**
+     * Datos de un puerto para el aviso al tecnico.
+     *
+     * Se lleva la direccion de la caja: el aviso sale cuando el tecnico
+     * ya cerro la orden y puede estar a varias cuadras, asi que decirle
+     * solo "NAP-001 / P3" no le sirve de mucho.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function datosDelPuerto(?NapPort $puerto): ?array
+    {
+        if (!$puerto) {
+            return null;
+        }
+
+        $puerto->loadMissing('napBox');
+
+        return [
+            'id' => $puerto->id,
+            'caja' => $puerto->napBox?->code,
+            'puerto' => $puerto->number,
+            'direccion' => $puerto->napBox?->address,
+        ];
     }
 
     /**
