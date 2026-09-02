@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use App\Billing\Concerns\Auditable;
 use App\Billing\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,6 +26,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Invoice extends Model
 {
+    use BelongsToCompany;
+
     use HasFactory, Auditable;
 
     protected $fillable = [

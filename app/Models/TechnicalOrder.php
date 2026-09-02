@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use App\Reports\Support\OrderDetailMap;
 use App\Support\Geolocation;
 use App\Support\OrderLocationCheck;
@@ -40,6 +41,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class TechnicalOrder extends Model
 {
+    use BelongsToCompany;
+
     use HasFactory;
 
     protected $fillable = [

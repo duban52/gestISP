@@ -156,7 +156,8 @@ class OltConfigTest extends TestCase
      */
     public function test_bloquea_olts_de_otra_sucursal(): void
     {
-        $otraSucursal = Branch::factory()->create();
+        // Misma empresa, otra sede: es el aislamiento que prueba este test
+        $otraSucursal = Branch::factory()->create(['company_id' => $this->branch->company_id]);
         $oltAjena = $this->crearOlt($otraSucursal, 'OLT ajena', '10.9.9.9');
 
         $this->post(route('olt.srvprofiles.store'), [
@@ -297,7 +298,11 @@ class OltConfigTest extends TestCase
 
     public function test_no_edita_ni_elimina_registros_de_otra_sucursal(): void
     {
-        $oltAjena = $this->crearOlt(Branch::factory()->create(), 'OLT ajena', '10.9.9.9');
+        $oltAjena = $this->crearOlt(
+            Branch::factory()->create(['company_id' => $this->branch->company_id]),
+            'OLT ajena',
+            '10.9.9.9',
+        );
         $vlanAjena = VlanOlt::create(['olt_id' => $oltAjena->id, 'id_vlan' => 100, 'name' => 'AJENA']);
 
         $this->put(route('olt.vlans.update', $vlanAjena), [
@@ -398,7 +403,11 @@ class OltConfigTest extends TestCase
 
     public function test_no_actualiza_olts_de_otra_sucursal(): void
     {
-        $oltAjena = $this->crearOlt(Branch::factory()->create(), 'OLT ajena', '10.9.9.9');
+        $oltAjena = $this->crearOlt(
+            Branch::factory()->create(['company_id' => $this->branch->company_id]),
+            'OLT ajena',
+            '10.9.9.9',
+        );
 
         $this->put(route('olts.update', $oltAjena), $this->datosValidos())
             ->assertForbidden();

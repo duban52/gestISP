@@ -2,6 +2,7 @@
 
 namespace App\Reports;
 
+use App\Reports\Support\BranchFilter;
 use App\Models\Contract;
 use App\Models\Ont;
 use App\Models\PppoeAccount;
@@ -40,10 +41,23 @@ class ProvisioningReport
         ['etiqueta' => 'Saturada (> -8 dBm)', 'min' => -8.0, 'max' => 10.0, 'color' => '#6f42c1'],
     ];
 
+    /**
+     * Sucursales que entran en el informe. Lista vacia = sin filtro.
+     *
+     * @var array<int, int>
+     */
+    private readonly array $branchIds;
+
+    /**
+     * @param  int|array<int, mixed>|null  $sucursales  Una, varias o
+     *         ninguna. Se admite el entero suelto porque es como
+     *         llamaba a este informe todo lo que ya existia.
+     */
     public function __construct(
         private readonly ReportPeriod $period,
-        private readonly ?int $branchId = null,
+        int|array|null $sucursales = null,
     ) {
+        $this->branchIds = BranchFilter::normalizar($sucursales);
     }
 
     /**
@@ -92,7 +106,7 @@ class ProvisioningReport
     public function cobertura(): array
     {
         $base = Contract::query()
-            ->when($this->branchId, fn ($q) => $q->where('contracts.branch_id', $this->branchId))
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('contracts.branch_id', $this->branchIds))
             ->whereIn('contracts.status', ContractStatusMap::vigentes());
 
         $tieneOnt = fn ($q) => $q->select(DB::raw(1))->from('onts')
@@ -294,12 +308,12 @@ class ProvisioningReport
     private function ontsQuery()
     {
         return Ont::query()
-            ->when($this->branchId, fn ($q) => $q->where('onts.branch_id', $this->branchId));
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('onts.branch_id', $this->branchIds));
     }
 
     private function pppoeQuery()
     {
         return PppoeAccount::query()
-            ->when($this->branchId, fn ($q) => $q->where('pppoe_accounts.branch_id', $this->branchId));
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('pppoe_accounts.branch_id', $this->branchIds));
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\SessionTracker;
+use App\Tenancy\ContextResolver;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -35,32 +36,14 @@ class LoginController extends Controller
      */
     protected $redirectTo = '/';
 
-    public function __construct(private readonly SessionTracker $tracker)
-    {
+    public function __construct(
+        private readonly SessionTracker $tracker,
+        private readonly ContextResolver $contextos,
+    ) {
         $this->middleware('guest')->except('logout');
         $this->middleware('auth')->only('logout');
     }
-    //Obtener las sucursales para el login
-    public function getBranches(Request $request)
-    {
-        $email = $request->query('email');
-        $user = User::where('email', $email)->first();
 
-        if (!$user) {
-            return response()->json(['branches' => []]);
-        }
-
-        // Especificamos la tabla para cada columna
-        $branches = $user->branches()
-            ->select('branches.id', 'branches.name')  // Especificamos la tabla 'branches'
-            ->get()
-            ->pluck('name', 'id')
-            ->toArray();
-
-        return response()->json([
-            'branches' => $branches
-        ]);
-    }
     /**
      * Credenciales con las que se intenta autenticar.
      *
@@ -99,34 +82,40 @@ class LoginController extends Controller
         ]);
     }
 
+    /**
+     * Que pasa justo despues de comprobar las credenciales.
+     *
+     * EL ORDEN CAMBIO, Y ESE ES EL PUNTO
+     * ----------------------------------
+     * Antes la sucursal se elegia EN el formulario de acceso. Para
+     * poder ofrecerla habia que consultarla ANTES de autenticar, con
+     * una ruta publica que respondia, dado un correo, si existia un
+     * usuario con el y a que sucursales pertenecia. Eso es enumeracion
+     * de usuarios servida en bandeja, y ademas impedia el multiempresa:
+     * un desplegable de sucursales sueltas no distingue de que empresa
+     * es cada una.
+     *
+     * Ahora primero se comprueba quien eres y despues desde donde vas
+     * a trabajar. Si no hay nada que elegir —una empresa con una sede,
+     * o una empresa consolidada— se entra directo y el usuario no ve
+     * ninguna pantalla de mas.
+     */
     protected function authenticated(Request $request, $user)
     {
-        $branchId = $request->input('branch_id');
+        $unico = $this->contextos->unicoPara($user);
 
-        if (!$branchId) {
-            return redirect()->back()->withErrors(['branch_id' => trans('auth.branch_required')]);
+        if (!$unico) {
+            // La pantalla de eleccion se encarga tambien del caso de un
+            // usuario sin ninguna sucursal asignada.
+            return redirect()->route('context.select');
         }
 
-        // Verificar si el usuario tiene acceso a esta sucursal
-        $branchRole = $user->branches()->where('branch_id', $branchId)->first();
+        $this->contextos->aplicar($user, $unico['company_id'], $unico['branch_id']);
 
-        if (!$branchRole) {
-            return redirect()->back()->withErrors(['branch_id' => trans('auth.branch_forbidden')]);
-        }
-
-        // Guardar la sucursal y el rol en la sesión
-        session([
-            'branch_id' => $branchId,
-            'current_role_id' => $branchRole->pivot->role_id, // Guardar el role_id
-        ]);
-
-        // Actualizar la sucursal seleccionada en el usuario
-        $user->update(['selected_branch_id' => $branchId]);
-
-        // Trazabilidad: registrar el inicio de sesión con la
-        // sucursal elegida. Va aquí y no en el evento Login porque
-        // este es el punto donde ya se conoce la sucursal.
-        $this->tracker->start($user, $request, (int) $branchId);
+        // Trazabilidad: el inicio de sesion se registra AQUI y no en el
+        // evento Login porque este es el punto donde ya se conoce la
+        // sucursal.
+        $this->tracker->start($user, $request, $unico['branch_id']);
 
         return redirect()->intended($this->redirectPath());
     }

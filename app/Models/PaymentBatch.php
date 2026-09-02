@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use App\Billing\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class PaymentBatch extends Model
 {
+    use BelongsToCompany;
+
     use Auditable;
 
     protected $fillable = [

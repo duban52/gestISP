@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class BillingRun extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'branch_id',
         'user_id',

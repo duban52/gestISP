@@ -155,8 +155,47 @@ Route::get('/orders/export', [TechnicalOrderController::class, 'export'])->name(
 // Ruta para crear contrato a cliente
 Route::get('contracts/create/{client}', [ContractController::class, 'create'])->name('contracts.create');
 
-// Ruta para obtener las sucursales en el login
-Route::get('/user/branches', [LoginController::class, 'getBranches'])->name('user.branches');
+// Administracion de empresas. La empresa es el contribuyente: un NIT.
+// No hay destroy a proposito — de una empresa cuelgan sucursales, y de
+// ellas clientes, contratos y facturas. Se desactiva, no se borra.
+Route::resource('empresas', App\Http\Controllers\CompanyController::class)
+    ->names('companies')
+    ->parameters(['empresas' => 'company'])
+    ->except(['destroy']);
+
+// Grupos de afinidad. Clasifican los contratos de la empresa y
+// deciden por que camino sale su factura: electronico o interno.
+// Cuelgan de la EMPRESA, no de la sucursal, porque son una
+// clasificacion del contribuyente.
+Route::resource('grupos-de-afinidad', App\Http\Controllers\AffinityGroupController::class)
+    ->names('affinity_groups')
+    ->parameters(['grupos-de-afinidad' => 'affinity_group'])
+    ->except(['show']);
+
+// Marcar el predeterminado desde el listado, sin entrar a editar: es
+// la operacion mas frecuente del modulo.
+Route::patch(
+    'grupos-de-afinidad/{affinity_group}/predeterminado',
+    [App\Http\Controllers\AffinityGroupController::class, 'marcarPorDefecto'],
+)->name('affinity_groups.default');
+
+// Elección y cambio del contexto de trabajo (empresa + sucursal).
+// Va autenticada: primero se comprueba quién eres y solo después se
+// pregunta desde dónde vas a trabajar.
+Route::middleware('auth')->group(function () {
+    Route::get('/contexto', [App\Http\Controllers\ContextController::class, 'create'])->name('context.select');
+    Route::post('/contexto', [App\Http\Controllers\ContextController::class, 'store'])->name('context.store');
+});
+
+// AQUI ESTABA /user/branches, y se retiro a proposito.
+//
+// Era una ruta PUBLICA que, dado un correo, respondia si existia un
+// usuario con el y a que sucursales pertenecia. Servia para rellenar
+// el desplegable de sucursales del formulario de acceso, pero de paso
+// permitia enumerar usuarios sin autenticarse.
+//
+// Con el prelogin ya no hace falta: la sucursal se elige DESPUES de
+// comprobar las credenciales, en /contexto.
 
 // Trazabilidad del sistema: reservada al superadministrador (el
 // middleware exige el rol, no un permiso que pueda concederse por error)

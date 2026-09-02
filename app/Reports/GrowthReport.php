@@ -2,6 +2,7 @@
 
 namespace App\Reports;
 
+use App\Reports\Support\BranchFilter;
 use App\Models\Contract;
 use App\Reports\Support\ContractStatusMap;
 use App\Reports\Support\ReportPeriod;
@@ -34,10 +35,23 @@ class GrowthReport
     /** Fecha de alta: activación real o, en su defecto, creación */
     private const FECHA_ALTA = 'COALESCE(contracts.activation_date, contracts.created_at)';
 
+    /**
+     * Sucursales que entran en el informe. Lista vacia = sin filtro.
+     *
+     * @var array<int, int>
+     */
+    private readonly array $branchIds;
+
+    /**
+     * @param  int|array<int, mixed>|null  $sucursales  Una, varias o
+     *         ninguna. Se admite el entero suelto porque es como
+     *         llamaba a este informe todo lo que ya existia.
+     */
     public function __construct(
         private readonly ReportPeriod $period,
-        private readonly ?int $branchId = null,
+        int|array|null $sucursales = null,
     ) {
+        $this->branchIds = BranchFilter::normalizar($sucursales);
     }
 
     /**
@@ -255,6 +269,6 @@ class GrowthReport
     private function baseQuery()
     {
         return Contract::query()
-            ->when($this->branchId, fn ($q) => $q->where('contracts.branch_id', $this->branchId));
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('contracts.branch_id', $this->branchIds));
     }
 }

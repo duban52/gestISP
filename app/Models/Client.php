@@ -2,15 +2,22 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notifiable;
 
 class Client extends Model
 {
+    use BelongsToCompany;
+
     use HasFactory, Notifiable;
 
     protected $fillable = [
+        'company_id',
+        // Sucursal de ORIGEN: donde se dio de alta. Opcional, porque
+        // en panel consolidado no hay una activa. NO acota quien lo
+        // ve: eso lo hace company_id.
         'branch_id',
         'type_document',
         'identity_number',

@@ -45,6 +45,7 @@
                 <table id="oltsTable" class="table table-hover" style="width:100%">
                     <thead class="thead-light">
                     <tr>
+                        <th>Sucursal</th>
                         <th>Nombre</th>
                         <th>Dirección IP</th>
                         <th>Modelo</th>
@@ -59,6 +60,10 @@
                     @forelse($olts as $olt)
                         <tr data-olt-id="{{ $olt->id }}"
                             data-status-url="{{ route('api.olts.status', $olt) }}">
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos. Se pinta siempre
+                                 para que los indices de columna no cambien. --}}
+                            <td>{{ $olt->branch?->name ?: '—' }}</td>
                             <td>
                                 <a href="{{ route('olts.show', $olt) }}"><strong>{{ $olt->name }}</strong></a>
                                 <small class="d-block text-muted">{{ $olt->brand ?? '—' }}</small>
@@ -108,7 +113,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">
+                            <td colspan="{{ $mostrarSucursal ? 9 : 8 }}" class="text-center text-muted py-4">
                                 No hay OLTs registradas en esta sucursal.
                                 <a href="{{ route('olts.create') }}">Agregar la primera</a>.
                             </td>
@@ -143,9 +148,12 @@
                     emptyTable: 'No hay OLTs registradas en esta sucursal.'
                 },
                 pageLength: 25,
-                order: [[0, 'asc']],
+                order: [[1, 'asc']],
                 columnDefs: [
-                    { orderable: false, targets: [7] },
+                    // Se pinta siempre para no mover los indices de columna;
+                    // DataTables la esconde cuando no hay varias sedes.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
+                    { orderable: false, targets: [8] },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

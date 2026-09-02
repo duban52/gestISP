@@ -105,6 +105,7 @@
                 <table class="table table-hover mb-0">
                     <thead class="thead-light">
                     <tr>
+                        @if($mostrarSucursal)<th>Sucursal</th>@endif
                         <th>Cable</th>
                         <th>Recorrido</th>
                         <th>Capacidad</th>
@@ -118,6 +119,11 @@
                             $oc = $cable->ocupacion();
                         @endphp
                         <tr>
+                            {{-- Esta tabla no es un DataTable, asi que la columna se
+                                 condiciona aqui en vez de esconderla con JS. --}}
+                            @if($mostrarSucursal)
+                            <td>{{ $cable->network?->branch?->name ?: '—' }}</td>
+                            @endif
                             <td>
                                 <a href="{{ route('cables.show', $cable) }}" class="font-weight-bold">{{ $cable->code }}</a>
                                 <span class="badge badge-light border ml-1">{{ $cable->tipo_legible }}</span>
@@ -144,7 +150,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-4">
+                            <td colspan="{{ $mostrarSucursal ? 6 : 5 }}" class="text-center text-muted py-4">
                                 Todavía no hay cables registrados.
                                 <a href="{{ route('cables.create') }}">Registre el primero</a>.
                             </td>

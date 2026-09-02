@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Billing\Enums\ProrationMode;
 use App\Models\Branch;
+use App\Models\Company;
 use App\Models\BranchBillingSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\File;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Controlador de Sucursales (Branches)
@@ -52,9 +54,13 @@ class BranchController extends Controller
     /**
      * Muestra el formulario de creación de sucursal.
      */
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('gestisp.branches.create');
+        return view('gestisp.branches.create', [
+            // Al venir desde la ficha de una empresa llega elegida.
+            'empresaElegida' => $request->integer('company') ?: null,
+            'empresas' => Company::orderBy('legal_name')->get(),
+        ]);
     }
 
     /**
@@ -72,10 +78,30 @@ class BranchController extends Controller
             $validated['image'] = $request->file('image')->store('branches', 'public');
         }
 
-        Branch::create($validated);
+        $sucursal = Branch::create($validated);
 
+        // ACCESO A LA SUCURSAL RECIEN CREADA
+        //
+        // El acceso se concede POR SUCURSAL (user_branch), no por
+        // empresa. Una sucursal sin usuarios es invisible: no sale en
+        // los listados, no se puede elegir como contexto y no se puede
+        // ni editar. Quien la crea suele necesitarla, asi que se le
+        // ofrece marcado; pero es una casilla y no un automatismo,
+        // porque conceder acceso es conceder acceso.
+        if ($request->boolean('darme_acceso', true)) {
+            $usuario = Auth::user();
+
+            $usuario->branches()->syncWithoutDetaching([
+                $sucursal->id => ['role_id' => session('current_role_id')],
+            ]);
+        }
+
+        // Se vuelve a la ficha de la EMPRESA: es donde se ve la sucursal
+        // nueva junto a sus hermanas. El listado de sucursales esta
+        // acotado al contexto activo y, si la sucursal es de otra
+        // empresa, ahi no aparecería.
         return redirect()
-            ->route('branches.index')
+            ->route('companies.show', $sucursal->company_id)
             ->with('success', 'Sucursal creada exitosamente.');
     }
 
@@ -92,12 +118,14 @@ class BranchController extends Controller
      */
     public function edit(Branch $branch): View
     {
+        $empresas = Company::orderBy('legal_name')->get();
+
         // Configuración de facturación (se crea con los defaults
         // históricos si la sucursal aún no tiene)
         $billingSettings = BranchBillingSetting::forBranch($branch->id);
         $prorationModes = ProrationMode::cases();
 
-        return view('gestisp.branches.edit', compact('branch', 'billingSettings', 'prorationModes'));
+        return view('gestisp.branches.edit', compact('branch', 'billingSettings', 'prorationModes', 'empresas'));
     }
 
     /**
@@ -169,8 +197,14 @@ class BranchController extends Controller
      */
     private function validateBranch(Request $request, ?int $ignoreId = null): array
     {
-        // La regla unique excluye el registro actual cuando se está editando
-        $uniqueName = 'unique:branches,name' . ($ignoreId ? ',' . $ignoreId : '');
+        // El nombre es unico POR EMPRESA, no en todo el sistema: dos
+        // empresas distintas pueden tener cada una su "Sucursal
+        // Principal". La restriccion de la base ya es compuesta
+        // (branches_company_name_unique); esta regla tiene que decir lo
+        // mismo o rechazaria nombres perfectamente validos.
+        $nombreUnico = Rule::unique('branches', 'name')
+            ->where('company_id', $request->input('company_id'))
+            ->ignore($ignoreId);
 
         // El prefijo se guarda en mayúsculas: da igual cómo lo escriba
         // quien edita la sucursal, los contratos quedan uniformes.
@@ -181,8 +215,15 @@ class BranchController extends Controller
         }
 
         return $request->validate([
-            'nit'                    => 'required|string|max:20',
-            'name'                   => "required|string|max:40|{$uniqueName}",
+            // La sucursal SIEMPRE pertenece a una empresa: es de donde
+            // sale su identidad fiscal. El NIT ya no se escribe aqui.
+            //
+            // Al EDITAR es opcional: por esta misma ruta pasa la
+            // configuracion de facturacion de la sucursal, que no manda
+            // el campo. Exigirlo alli rompia esa pantalla sin que
+            // tuviera nada que ver.
+            'company_id'             => ($ignoreId ? 'sometimes|' : 'required|') . 'exists:companies,id',
+            'name'                   => ['required', 'string', 'max:40', $nombreUnico],
             // Letras del número de contrato (ENG → ENG000001). Se
             // guardan siempre en mayúsculas y sin símbolos para que el
             // consecutivo quede uniforme.

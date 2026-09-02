@@ -47,6 +47,7 @@
                 <table id="warehousesTable" class="table table-hover table-bordered" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>Descripción</th>
                         <th>Materiales en inventario</th>
                         <th>Creado por</th>
@@ -57,6 +58,11 @@
                     <tbody>
                     @foreach($warehouses as $warehouse)
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $warehouse->branch?->name ?: '—' }}</td>
                             <td>{{ $warehouse->description }}</td>
 
                             {{-- Cantidad de materiales distintos con stock registrado --}}
@@ -173,11 +179,15 @@
                 pageLength: 25,
 
                 // Orden inicial: por descripción (columna 0) ascendente
-                order: [[0, 'asc']],
+                order: [[1, 'asc']],
 
                 columnDefs: [
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     // La columna de acciones (índice 4) no es ordenable
-                    { orderable: false, targets: [4] },
+                    { orderable: false, targets: [5] },
 
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }

@@ -21,11 +21,17 @@
                         <label class="form-label">Sucursal</label>
                         <select class="form-control branch-select" name="branches[{{ $index }}][branch_id]" required>
                             <option value="">Seleccione</option>
-                            @foreach($branches as $branch)
-                                <option value="{{ $branch->id }}"
-                                    {{ (string) $branch->id === (string) ($pair['branch_id'] ?? '') ? 'selected' : '' }}>
-                                    {{ $branch->name }}
-                                </option>
+                            {{-- Agrupadas por empresa: ver la nota del
+                                 selector de la plantilla, mas abajo. --}}
+                            @foreach($branches->groupBy(fn ($b) => $b->company?->nombreVisible() ?? 'Sin empresa') as $empresa => $delGrupo)
+                                <optgroup label="{{ $empresa }}">
+                                    @foreach($delGrupo as $branch)
+                                        <option value="{{ $branch->id }}"
+                                            {{ (string) $branch->id === (string) ($pair['branch_id'] ?? '') ? 'selected' : '' }}>
+                                            {{ $branch->name }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
                             @endforeach
                         </select>
                     </div>
@@ -67,8 +73,15 @@
                     <label class="form-label">Sucursal</label>
                     <select class="form-control branch-select" name="branches[__INDEX__][branch_id]" required>
                         <option value="">Seleccione</option>
-                        @foreach($branches as $branch)
-                            <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                        {{-- Agrupadas por empresa: con multiempresa dos
+                             sedes pueden llamarse igual ("Principal") y
+                             una lista plana no dejaria distinguirlas. --}}
+                        @foreach($branches->groupBy(fn ($b) => $b->company?->nombreVisible() ?? 'Sin empresa') as $empresa => $delGrupo)
+                            <optgroup label="{{ $empresa }}">
+                                @foreach($delGrupo as $branch)
+                                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                @endforeach
+                            </optgroup>
                         @endforeach
                     </select>
                 </div>

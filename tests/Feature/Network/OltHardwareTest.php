@@ -702,7 +702,8 @@ class OltHardwareTest extends TestCase
     /** @test */
     public function no_se_puede_abrir_un_puerto_de_otra_sucursal(): void
     {
-        $otra = Branch::factory()->create();
+        // Misma empresa, otra sede
+        $otra = Branch::factory()->create(['company_id' => $this->branch->company_id]);
 
         $redAjena = OpticalNetwork::create([
             'branch_id' => $otra->id,

@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Órdenes Técnicas
@@ -95,14 +96,14 @@ class TechnicalOrderController extends Controller
      */
     public function index(Request $request): View
     {
-        $branchId = session('branch_id');
+        $branchIds = app(CurrentContext::class)->branchIds();
 
-        // Técnicos de la sucursal (para el modal de asignación)
-        $users = User::whereHas('branches', function ($query) use ($branchId) {
-            $query->where('branch_id', $branchId);
+        // Técnicos del alcance (para el modal de asignación)
+        $users = User::whereHas('branches', function ($query) use ($branchIds) {
+            $query->whereIn('branch_id', $branchIds);
         })->get();
 
-        $query = TechnicalOrder::where('branch_id', $branchId);
+        $query = TechnicalOrder::whereIn('branch_id', $branchIds);
 
         // Búsqueda por campo (lista blanca — evita usar columnas
         // arbitrarias del request como nombre de columna SQL)
@@ -149,7 +150,7 @@ class TechnicalOrderController extends Controller
         }
 
         $technical_orders = $query
-            ->with(['contract.client', 'assignedUser', 'createdBy'])
+            ->with(['contract.client', 'assignedUser', 'createdBy', 'branch'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -164,13 +165,13 @@ class TechnicalOrderController extends Controller
      */
     public function orderVerification(): View
     {
-        $branchId = session('branch_id');
+        $branchIds = app(CurrentContext::class)->branchIds();
 
-        $users = User::whereHas('branches', function ($query) use ($branchId) {
-            $query->where('branch_id', $branchId);
+        $users = User::whereHas('branches', function ($query) use ($branchIds) {
+            $query->whereIn('branch_id', $branchIds);
         })->get();
 
-        $technical_orders = TechnicalOrder::where('branch_id', $branchId)
+        $technical_orders = TechnicalOrder::whereIn('branch_id', $branchIds)
             ->where('status', 'Prefinalizada')
             ->with(['contract.client', 'assignedUser', 'materials.material'])
             ->orderByDesc('created_at')
@@ -376,9 +377,14 @@ class TechnicalOrderController extends Controller
                     ->with('error', 'Ya existe una orden técnica en curso para este contrato.');
             }
 
+            // La orden hereda la sucursal DEL CONTRATO: es para ese
+            // servicio y no puede estar en otra sede. Se carga aqui
+            // porque este metodo solo recibe el id, no el modelo.
+            $contrato = Contract::findOrFail($validated['contract_id']);
+
             $order = TechnicalOrder::create([
                 'contract_id'     => $validated['contract_id'],
-                'branch_id'       => session('branch_id'),
+                'branch_id'       => $contrato->branch_id,
                 'created_by'      => Auth::id(),
                 'type'            => $validated['order_type'],
                 'detail'          => $validated['order_detail'],
@@ -423,7 +429,7 @@ class TechnicalOrderController extends Controller
             ])
             ->update(['read_at' => now()]);
 
-        $technical_orders = TechnicalOrder::where('branch_id', session('branch_id'))
+        $technical_orders = TechnicalOrder::whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->where('user_assigned', Auth::id())
             ->where('status', 'Asignada')
             // Las verificaciones dicen si la orden viene devuelta y por
@@ -820,7 +826,7 @@ class TechnicalOrderController extends Controller
         // La sucursal de una caja NO esta en nap_boxes: cuelga de su
         // red optica (ver NapBox::scopeDeSucursal). Comprobarla contra
         // $napBox->branch_id daria null y rechazaria todo.
-        if ((int) $puerto->napBox?->network?->branch_id !== (int) session('branch_id')) {
+        if (! app(CurrentContext::class)->permiteSucursal($puerto->napBox?->network?->branch_id)) {
             throw new \RuntimeException('El puerto elegido no pertenece a esta sucursal.');
         }
 

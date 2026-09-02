@@ -351,6 +351,24 @@
                                             </select>
                                         </div>
                                         <div class="form-group">
+                                            <label for="">Grupo de afinidad:</label>
+                                            <select name="affinity_group_id" id="grupoDelAfinidad" class="form-control">
+                                                <option value="">Sin grupo</option>
+                                                @foreach($gruposAfinidad as $grupoAfinidad)
+                                                    <option value="{{ $grupoAfinidad->id }}"
+                                                            data-electronica="{{ $grupoAfinidad->requires_electronic_invoicing ? '1' : '0' }}"
+                                                            @selected($contract->affinity_group_id == $grupoAfinidad->id)>
+                                                        {{ $grupoAfinidad->etiqueta() }}@unless($grupoAfinidad->active) (inactivo)@endunless
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <small class="form-text text-muted">
+                                                Cambiarlo afecta a los documentos futuros de este
+                                                contrato. Los ya emitidos no se tocan.
+                                            </small>
+                                        </div>
+
+                                        <div class="form-group">
                                             <label for="">Cláusula de permanencia:</label>
                                             <input type="number" name="permanence_clause" class="form-control" value="{{ $contract->permanence_clause }}">
                                         </div>
@@ -368,8 +386,28 @@
                 </div>
 
                 <div class="card-body row">
-                    <p class="col-6"><strong>Plan de servicio:</strong> {{ $contract->plan->name }}</p>
+                    <p class="col-6"><strong>Plan de servicio:</strong> {{ $contract->plan?->name ?? '—' }}</p>
                     <p class="col-6"><strong>Clausula de permanencia:</strong> {{ $contract->permanence_clause }} Meses</p>
+
+                    {{-- El grupo y, sobre todo, SU CONSECUENCIA. Se pone el
+                         nombre del grupo porque hace falta para cambiarlo,
+                         pero lo que se lee de un vistazo es que tipo de
+                         documento emite. --}}
+                    {{-- Solo el grupo. Que documento emite es una propiedad
+                         DEL GRUPO y se consulta en su propio modulo, no aqui:
+                         esta pantalla la abre a diario quien atiende al
+                         cliente, y no necesita esa clasificacion para nada
+                         de lo que hace. --}}
+                    <p class="col-12 mb-0">
+                        <strong>Grupo de afinidad:</strong>
+                        @if($contract->affinityGroup)
+                            {{ $contract->affinityGroup->etiqueta() }}
+                        @else
+                            <span class="badge badge-warning">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>Sin grupo asignado
+                            </span>
+                        @endif
+                    </p>
                 </div>
             </div>
             <div class="card col-md-5 ml-md-1 mr-md-1">
@@ -987,6 +1025,7 @@
 @endsection
 
 @section('js')
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>

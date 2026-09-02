@@ -277,7 +277,12 @@ class PaymentRegistrar
             // Ya cortado: requiere visita técnica de reconexión
             TechnicalOrder::create([
                 'contract_id' => $contract->id,
-                'branch_id' => $branchId,
+                // La sede del CONTRATO, no la de quien cobra: es el
+                // tecnico de esa zona el que tiene que ir a reconectar.
+                // Coinciden salvo en panel consolidado, donde antes se
+                // pasaba null y la orden quedaba sin sucursal —
+                // invisible en el listado de ordenes de toda sede.
+                'branch_id' => $contract->branch_id ?? $branchId,
                 'type' => 'Servicio',
                 'detail' => 'Reconexión',
                 'initial_comment' => 'Orden de reconexión automática por pago',

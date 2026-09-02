@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Importación de ONTs existentes en una OLT.
@@ -40,30 +41,35 @@ class OntImportController extends Controller
      * corridas realizadas.
      */
     /**
-     * Sucursal activa como entero.
+     * Sucursales que el usuario alcanza.
      *
-     * En la sesión queda como TEXTO, porque se guarda desde el
-     * campo del formulario de ingreso. Compararla en PHP sin
-     * convertirla ('1' !== 1) rechazaba operaciones sobre la
-     * sucursal correcta, así que toda comparación pasa por aquí.
+     * Antes esto devolvía UNA sucursal, la de la sesión, y servía
+     * para dos cosas distintas: filtrar el listado de OLTs y
+     * autorizar operaciones. En panel consolidado no hay una activa,
+     * así que el listado salía vacío y toda operación daba 403.
+     *
+     * Ahora el listado usa este alcance y la autorización pasa por
+     * CurrentContext::permiteSucursal(), que además resuelve el
+     * problema de origen —la sesión guarda la sucursal como TEXTO y
+     * compararla sin convertir ('1' !== 1) rechazaba la correcta.
+     *
+     * @return array<int, int>
      */
-    private function branchId(): int
+    private function branchIds(): array
     {
-        return (int) session('branch_id');
+        return app(CurrentContext::class)->branchIds();
     }
 
     public function index(): View
     {
-        $branchId = $this->branchId();
-
-        $olts = Olt::where('branch_id', $branchId)
+        $olts = Olt::whereIn('branch_id', $this->branchIds())
             ->where('active', true)
             ->withCount('onts')
             ->orderBy('name')
             ->get();
 
         $runs = OntImportRun::with(['olt', 'user'])
-            ->where('branch_id', $branchId)
+            ->whereIn('branch_id', $this->branchIds())
             ->latest('id')
             ->limit(10)
             ->get();
@@ -83,7 +89,7 @@ class OntImportController extends Controller
 
         $olt = Olt::findOrFail($validated['olt_id']);
 
-        if ((int) $olt->branch_id !== $this->branchId()) {
+        if (! app(CurrentContext::class)->permiteSucursal($olt->branch_id)) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Esa OLT pertenece a otra sucursal.',
@@ -112,11 +118,13 @@ class OntImportController extends Controller
         ]);
 
         $olt = Olt::findOrFail($validated['olt_id']);
-        $branchId = $this->branchId();
-
-        if ((int) $olt->branch_id !== $branchId) {
+        if (! app(CurrentContext::class)->permiteSucursal($olt->branch_id)) {
             return back()->with('error', 'Esa OLT pertenece a otra sucursal.');
         }
+
+        // La corrida se registra en la sucursal DE LA OLT, no en la de
+        // la sesión: es su inventario el que se está leyendo.
+        $branchId = (int) $olt->branch_id;
 
         // Evitar dos importaciones simultáneas sobre la misma OLT:
         // duplicarían trabajo y podrían competir por los mismos
@@ -149,7 +157,7 @@ class OntImportController extends Controller
      */
     public function status(OntImportRun $run): JsonResponse
     {
-        if ((int) $run->branch_id !== $this->branchId()) {
+        if (! app(CurrentContext::class)->permiteSucursal($run->branch_id)) {
             abort(403);
         }
 

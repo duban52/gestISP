@@ -14,6 +14,12 @@
         <div>
             <form class="" action="{{route('warehouses.store')}}" method="post">
                 @csrf
+                {{-- En panel consolidado no hay una sucursal activa: hay que
+                     decir en cual se guarda. Con una sola alcanzable no se
+                     pinta nada y el controlador la asume. --}}
+                <x-selector-sucursal titulo="Sucursal del almacen"
+                                     ayuda="El almacen y sus existencias quedan en esta sucursal." />
+
                 <div>
                     <label for="" class="form-label">Nombre del almacén</label>
                     <input type="text" class="form-control" id="description" name="description" required>

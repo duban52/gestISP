@@ -18,11 +18,13 @@ class PermissionLabels
      */
     public const MODULES = [
         'gestisp' => 'Dashboard',
+        'companies' => 'Empresas',
         'branches' => 'Sucursales',
         'services' => 'Servicios',
         'plans' => 'Planes',
         'clients' => 'Clientes',
         'contracts' => 'Contratos',
+        'affinity_groups' => 'Grupos de afinidad',
         'invoices' => 'Facturas',
         'notes' => 'Notas crédito/débito',
         'billing_runs' => 'Reportes de facturación',

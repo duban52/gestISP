@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use RuntimeException;
+use App\Tenancy\CurrentContext;
 
 /**
  * Cortes masivos de servicio sobre cuentas PPPoE.
@@ -63,7 +64,13 @@ class PppoeCutoffController extends Controller
                 ], 422);
             }
 
-            $filas = $this->cortes->resolver($identificadores, (int) session('branch_id'));
+            // El corte es DE UNA SUCURSAL: la revisión avisa cuando un
+            // identificador pertenece a otra. En consolidado hay que
+            // decir en cuál se está trabajando.
+            $filas = $this->cortes->resolver(
+                $identificadores,
+                app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+            );
 
             return response()->json([
                 'ok' => true,
@@ -98,7 +105,7 @@ class PppoeCutoffController extends Controller
         try {
             $resultado = $this->cortes->ejecutar(
                 $validado['identificadores'],
-                (int) session('branch_id'),
+                app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
                 auth()->id(),
             );
 

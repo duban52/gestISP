@@ -411,4 +411,50 @@ class ContractNumberingAndImportTest extends TestCase
 
         return app(ContractNumberGenerator::class)->asignar($contrato);
     }
+
+    // ==================== Grupo de afinidad ====================
+
+    public function test_los_contratos_importados_reciben_el_grupo_predeterminado(): void
+    {
+        // Sin esto, una migracion de mil clientes dejaria mil contratos
+        // sin clasificar — la situacion que el modulo de grupos evita, y
+        // la mas cara de arreglar despues.
+        $grupo = \App\Models\AffinityGroup::factory()->porDefecto()->create([
+            'company_id' => $this->branch->company_id,
+        ]);
+
+        $ruta = $this->archivo([
+            ['', '5555555', 'Marta', 'Cano', '3155551111', 'marta@ejemplo.com', 'Internet 100 Megas', 'Calle 5', '0'],
+        ]);
+
+        app(ClientContractImporter::class)->importar($ruta, $this->branch->id);
+
+        $contrato = Contract::whereHas(
+            'client',
+            fn ($q) => $q->where('identity_number', '5555555'),
+        )->firstOrFail();
+
+        $this->assertSame($grupo->id, (int) $contrato->affinity_group_id);
+    }
+
+    public function test_sin_grupo_predeterminado_la_importacion_no_falla(): void
+    {
+        // La empresa puede no tener ninguno configurado. El contrato
+        // entra sin clasificar y se encuentra despues con el filtro
+        // "sin grupo asignado" del listado.
+        $ruta = $this->archivo([
+            ['', '6666666', 'Pedro', 'Lopez', '3155552222', 'pedro@ejemplo.com', 'Internet 100 Megas', 'Calle 6', '0'],
+        ]);
+
+        $resultado = app(ClientContractImporter::class)->importar($ruta, $this->branch->id);
+
+        $this->assertSame(1, $resultado['creados']);
+
+        $contrato = Contract::whereHas(
+            'client',
+            fn ($q) => $q->where('identity_number', '6666666'),
+        )->firstOrFail();
+
+        $this->assertNull($contrato->affinity_group_id);
+    }
 }

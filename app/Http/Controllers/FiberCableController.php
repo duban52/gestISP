@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
+use App\Tenancy\CurrentContext;
 
 /**
  * Cables de fibra y sus hilos.
@@ -121,7 +122,7 @@ class FiberCableController extends Controller
         $datos = $this->validar($request);
         $red = OpticalNetwork::findOrFail($datos['optical_network_id']);
 
-        abort_if((int) $red->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($red->branch_id), 403);
 
         $datos = array_merge($datos, $this->resolverExtremos($request, $red));
 
@@ -295,10 +296,8 @@ class FiberCableController extends Controller
      */
     private function extremosDisponibles(): array
     {
-        $branchId = session('branch_id');
-
         return [
-            'olts' => Olt::where('branch_id', $branchId)->orderBy('name')->get()
+            'olts' => Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())->orderBy('name')->get()
                 ->map(fn (Olt $o) => ['id' => $o->id, 'texto' => 'OLT ' . $o->name])->all(),
             'muflas' => SpliceClosure::deSucursal()->orderBy('code')->get()
                 ->map(fn (SpliceClosure $m) => [
@@ -339,7 +338,7 @@ class FiberCableController extends Controller
             [$tipo, $id] = array_pad(explode(':', $valor, 2), 2, null);
 
             $modelo = match ($tipo) {
-                'olt' => Olt::where('branch_id', session('branch_id'))->find($id),
+                'olt' => Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())->find($id),
                 'mufla' => SpliceClosure::deSucursal()->find($id),
                 'caja' => NapBox::deSucursal()->find($id),
                 default => null,
@@ -357,12 +356,15 @@ class FiberCableController extends Controller
     /** @return array<string, mixed> */
     private function validar(Request $request, ?FiberCable $cable = null): array
     {
-        $branchId = session('branch_id');
+        // Cualquier red del alcance vale; la sucursal la fija la
+        // red elegida, no la sesion.
+        $branchIds = app(CurrentContext::class)->branchIds();
 
         return $request->validate([
             'optical_network_id' => [
                 'required',
-                Rule::exists('optical_networks', 'id')->where('branch_id', $branchId),
+                Rule::exists('optical_networks', 'id')
+                    ->whereIn('branch_id', $branchIds),
             ],
             'network_zone_id' => [
                 'nullable',
@@ -393,7 +395,7 @@ class FiberCableController extends Controller
     private function exigirSucursal(?FiberCable $cable): void
     {
         abort_if(
-            !$cable || (int) $cable->network?->branch_id !== (int) session('branch_id'),
+            !$cable || ! app(CurrentContext::class)->permiteSucursal($cable->network?->branch_id),
             403,
             'Ese cable pertenece a otra sucursal.',
         );

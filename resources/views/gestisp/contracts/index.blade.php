@@ -68,6 +68,60 @@
                         </select>
                     </div>
 
+                    {{-- SUCURSAL: solo en panel consolidado.
+                         Ahi el listado mezcla sedes y la columna ya dice de
+                         cual es cada fila; esto permite ademas quedarse con
+                         una. En modo independiente no se pinta porque solo
+                         hay una y filtrar por ella no quita nada.
+
+                         Se ofrecen unicamente las del alcance del usuario, y
+                         el servicio vuelve a cruzarlas con ese alcance: lo
+                         que llega de un formulario no es de fiar. --}}
+                    @if($mostrarSucursal)
+                        <div class="col-md-3 form-group">
+                            <label>Sucursal</label>
+                            <select name="branch_id[]" class="form-control select-multiple" multiple>
+                                @foreach(app(\App\Tenancy\CurrentContext::class)->sucursalesElegibles() as $sucursalFiltro)
+                                    <option value="{{ $sucursalFiltro->id }}"
+                                        @selected(in_array((string) $sucursalFiltro->id, (array) ($filtros['branch_id'] ?? [])))>
+                                        {{ $sucursalFiltro->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+
+                    {{-- Grupo de afinidad. Es el que decide como se factura
+                         cada contrato, asi que no hace falta un filtro
+                         aparte por modalidad: seria la misma pregunta por
+                         otro camino, y dos filtros que dicen lo mismo se
+                         acaban contradiciendo. --}}
+                    <div class="col-md-3 form-group">
+                        <label>Grupo de afinidad</label>
+                        <select name="affinity_group_id[]" class="form-control select-multiple" multiple>
+                            @foreach($gruposAfinidad as $grupoAfinidad)
+                                <option value="{{ $grupoAfinidad->id }}"
+                                    @selected(in_array((string) $grupoAfinidad->id, (array) ($filtros['affinity_group_id'] ?? [])))>
+                                    {{ $grupoAfinidad->etiqueta() }}@unless($grupoAfinidad->active) (inactivo)@endunless
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    {{-- Lo unico que el filtro de grupo no puede responder:
+                         cuales se quedaron SIN grupo. No hay opcion que
+                         marcar para eso, y sin esta casilla no se
+                         descubririan. --}}
+                    <div class="col-md-3 form-group">
+                        <label>Clasificación</label>
+                        <select name="sin_grupo" class="form-control">
+                            <option value="">Todos</option>
+                            <option value="si" @selected(($filtros['sin_grupo'] ?? '') === 'si')>
+                                Solo los que no tienen grupo
+                            </option>
+                        </select>
+                    </div>
+
                     <div class="col-md-3 form-group">
                         <label>Plan</label>
                         <select name="plan_id[]" class="form-control select-multiple" multiple>

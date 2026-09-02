@@ -10,6 +10,7 @@ use Illuminate\View\View;
 use Maatwebsite\Excel\Excel as FormatoExcel;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use App\Tenancy\CurrentContext;
 
 /**
  * Detalle de una corrida de facturación.
@@ -119,7 +120,7 @@ class BillingRunController extends Controller
     private function verificarSucursal(BillingRun $billingRun): void
     {
         abort_unless(
-            (int) $billingRun->branch_id === (int) session('branch_id'),
+            app(CurrentContext::class)->permiteSucursal($billingRun->branch_id),
             403,
             'Esta corrida de facturación pertenece a otra sucursal.',
         );

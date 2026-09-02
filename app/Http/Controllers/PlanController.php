@@ -7,6 +7,8 @@ use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
+use Illuminate\Validation\Rule;
 
 /**
  * Controlador de Planes
@@ -43,8 +45,8 @@ class PlanController extends Controller
      */
     public function index(): View
     {
-        $plans = Plan::where('branch_id', session('branch_id'))
-            ->with('services')
+        $plans = Plan::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->with(['services', 'branch'])
             ->get();
 
         return view('gestisp.plans.index', compact('plans'));
@@ -56,7 +58,7 @@ class PlanController extends Controller
      */
     public function create(): View
     {
-        $services = Service::where('branch_id', session('branch_id'))->get();
+        $services = Service::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
 
         return view('gestisp.plans.create', compact('services'));
     }
@@ -73,7 +75,7 @@ class PlanController extends Controller
 
         $plan = Plan::create([
             'name'      => $validated['name'],
-            'branch_id' => session('branch_id'),
+            'branch_id' => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
         ]);
 
         // Asociar los servicios seleccionados al plan (tabla pivote)
@@ -93,7 +95,7 @@ class PlanController extends Controller
      */
     public function edit(Plan $plan): View
     {
-        $services = Service::where('branch_id', session('branch_id'))->get();
+        $services = Service::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
 
         return view('gestisp.plans.edit', compact('plan', 'services'));
     }
@@ -154,10 +156,31 @@ class PlanController extends Controller
      */
     private function validatePlan(Request $request): array
     {
+        // La tabla tiene UNIQUE (branch_id, name): dos sucursales
+        // pueden tener cada una su "Plan 100M", pero no la misma dos
+        // veces. Sin esta regla el duplicado no se avisaba en el
+        // formulario — lo rechazaba la base y salia un error 500.
+        //
+        // La sucursal se resuelve igual que en store(), pero SIN
+        // lanzar: si en consolidado no se eligio, es branchParaEscritura
+        // quien lo dira con su mensaje, y aqui no toca reventar.
+        $branchId = rescue(
+            fn () => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+            null,
+            report: false,
+        );
+
         return $request->validate([
-            'name'       => 'required|string|max:255',
+            'name'       => [
+                'required', 'string', 'max:255',
+                Rule::unique('plans', 'name')
+                    ->where(fn ($q) => $q->where('branch_id', $branchId))
+                    ->ignore($request->route('plan')?->id),
+            ],
             'services'   => 'nullable|array',
             'services.*' => 'exists:services,id',
+        ], [
+            'name.unique' => 'Ya existe un plan con ese nombre en esta sucursal.',
         ]);
     }
 }

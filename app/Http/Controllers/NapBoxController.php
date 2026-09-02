@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
+use App\Tenancy\CurrentContext;
 
 /**
  * Cajas NAP / CTO: el punto donde se conecta el cliente.
@@ -52,7 +53,7 @@ class NapBoxController extends Controller
     public function index(Request $request): View
     {
         $cajas = NapBox::deSucursal()
-            ->with(['network', 'zone', 'ponPort.olt', 'ports.contract'])
+            ->with(['network.branch', 'zone', 'ponPort.olt', 'ports.contract'])
             ->when($request->filled('network_id'), fn ($q) => $q->where('optical_network_id', $request->network_id))
             ->when($request->filled('zone_id'), fn ($q) => $q->where('network_zone_id', $request->zone_id))
             ->when($request->filled('q'), function ($q) use ($request) {
@@ -381,7 +382,7 @@ class NapBoxController extends Controller
     public function byPonPort(Request $request): JsonResponse
     {
         $validado = $request->validate([
-            'olt' => ['required', Rule::exists('olts', 'id')->where('branch_id', session('branch_id'))],
+            'olt' => ['required', Rule::exists('olts', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds())],
             'slot' => 'required|integer|min:0',
             'port' => 'required|integer|min:0',
         ]);
@@ -465,12 +466,15 @@ class NapBoxController extends Controller
     /** @return array<string, mixed> */
     private function validar(Request $request, ?NapBox $caja = null): array
     {
-        $branchId = session('branch_id');
+        // Cualquier red del alcance vale; la sucursal la fija la
+        // red elegida, no la sesion.
+        $branchIds = app(CurrentContext::class)->branchIds();
 
         return $request->validate([
             'optical_network_id' => [
                 'required',
-                Rule::exists('optical_networks', 'id')->where('branch_id', $branchId),
+                Rule::exists('optical_networks', 'id')
+                    ->whereIn('branch_id', $branchIds),
             ],
             // El puerto PON debe ser de la MISMA red: sin esta regla se
             // podría colgar una caja de un troncal de otra red con solo
@@ -516,7 +520,7 @@ class NapBoxController extends Controller
     private function exigirSucursal(?NapBox $caja): void
     {
         abort_if(
-            !$caja || (int) $caja->network?->branch_id !== (int) session('branch_id'),
+            !$caja || ! app(CurrentContext::class)->permiteSucursal($caja->network?->branch_id),
             403,
             'Esa caja pertenece a otra sucursal.',
         );

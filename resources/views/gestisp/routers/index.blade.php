@@ -30,6 +30,7 @@
                 <table id="routersTable" class="table table-striped table-bordered" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>Nombre</th>
                         <th>Dirección IP</th>
                         <th>Estado</th>
@@ -93,7 +94,10 @@
                 },
                 pageLength: 25,
                 columnDefs: [
-                    { orderable: false, targets: [7] },
+                    // Se pinta siempre para no mover los indices; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
+                    { orderable: false, targets: [8] },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });
@@ -113,6 +117,9 @@
                             : '—';
 
                         dt.row.add([
+                            // Las filas las construye este JS, no Blade: la
+                            // sucursal tiene que venir en el JSON de la API.
+                            router.branch,
                             router.name,
                             router.ip_address,
                             statusBadge,
@@ -145,7 +152,7 @@
                     dt.clear();
                     dt.row.add([
                         '<span class="text-danger">Error al cargar los routers</span>',
-                        '—', '—', '—', '—', '—', '—', '—'
+                        '—', '—', '—', '—', '—', '—', '—', '—'
                     ]).draw();
                 });
         });

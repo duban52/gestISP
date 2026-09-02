@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PppoeAccount;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use App\Tenancy\CurrentContext;
 
 /**
  * Filtros y columnas del listado de cuentas PPPoE.
@@ -24,10 +25,14 @@ class PppoeQuery
      */
     public function construir(array $filtros, ?int $branchId = null): Builder
     {
-        $branchId ??= session('branch_id');
-
         $query = PppoeAccount::query()
-            ->where('branch_id', $branchId)
+            // El listado muestra la sucursal en panel consolidado.
+            ->with('branch')
+            ->when(
+                $branchId !== null,
+                fn ($q) => $q->where('branch_id', $branchId),
+                fn ($q) => app(CurrentContext::class)->limitarSucursales($q),
+            )
             // Nada de subconsultas contra el historial: el estado de
             // conexión y la última vez conectada viven en la propia
             // cuenta, mantenidos por el muestreador. Deducirlos de

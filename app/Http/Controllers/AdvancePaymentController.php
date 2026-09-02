@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Pagos por adelantado (anticipos) y saldo a favor del cliente.
@@ -131,7 +132,7 @@ class AdvancePaymentController extends Controller
     private function verificarSucursal(Contract $contract): void
     {
         abort_unless(
-            (int) $contract->branch_id === (int) session('branch_id'),
+            app(CurrentContext::class)->permiteSucursal($contract->branch_id),
             403,
             'Este contrato pertenece a otra sucursal.',
         );

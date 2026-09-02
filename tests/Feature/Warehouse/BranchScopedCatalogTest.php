@@ -40,7 +40,12 @@ class BranchScopedCatalogTest extends TestCase
         $this->seed(RoleSeeder::class);
 
         $this->sucursal = Branch::factory()->create(['name' => 'Gómez Plata']);
-        $this->otraSucursal = Branch::factory()->create(['name' => 'Yarumal']);
+        // Misma empresa, otra sede: el catalogo se acota por
+        // sucursal y eso es lo que prueba este archivo.
+        $this->otraSucursal = Branch::factory()->create([
+            'name' => 'Yarumal',
+            'company_id' => $this->sucursal->company_id,
+        ]);
 
         $rol = Role::where('name', 'superadministrador')->firstOrFail();
 

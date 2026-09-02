@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Movimientos de Material
@@ -63,7 +64,7 @@ class MaterialMovementController extends Controller
         // Catálogo de ESTA sucursal: mostrar el de todas llenaba el
         // buscador de materiales que en esta bodega no existen.
         $materials  = Material::deSucursal()->with('category')->orderBy('name')->get();
-        $warehouses = Warehouse::where('branch_id', session('branch_id'))->get();
+        $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
 
         return view('gestisp.materials.movements.index', compact('materials', 'warehouses'));
     }
@@ -97,7 +98,7 @@ class MaterialMovementController extends Controller
                 // enviar el id de otra sede para mover material ajeno.
                 'materials.*.material_id'         => [
                     'required',
-                    Rule::exists('materials', 'id')->where('branch_id', session('branch_id')),
+                    Rule::exists('materials', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
                 ],
                 'materials.*.quantity'            => 'required|numeric|min:1',
                 'materials.*.unit_of_measurement' => 'required|string',
@@ -105,11 +106,11 @@ class MaterialMovementController extends Controller
                 'materials.*.serial_numbers.*'    => 'string',
                 'warehouse_origin_id'             => [
                     'nullable', 'required_if:type,Salida,Transferencia',
-                    Rule::exists('warehouses', 'id')->where('branch_id', session('branch_id')),
+                    Rule::exists('warehouses', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
                 ],
                 'warehouse_destination_id'        => [
                     'nullable', 'required_if:type,Entrada,Transferencia',
-                    Rule::exists('warehouses', 'id')->where('branch_id', session('branch_id')),
+                    Rule::exists('warehouses', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
                 ],
                 'reason'                          => 'required|string|max:100',
             ], [
@@ -387,7 +388,7 @@ class MaterialMovementController extends Controller
     {
         abort_unless(
             Warehouse::where('id', $warehouseId)
-                ->where('branch_id', session('branch_id'))
+                ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
                 ->exists(),
             403,
             'Ese almacén pertenece a otra sucursal.',
@@ -468,7 +469,12 @@ class MaterialMovementController extends Controller
         }
 
         $movements = $query
-            ->with(['warehouseOrigin', 'warehouseDestination', 'material', 'user'])
+            ->with([
+                // Los almacenes traen su sucursal: el listado la
+                // muestra en panel consolidado.
+                'warehouseOrigin.branch', 'warehouseDestination.branch',
+                'material', 'user',
+            ])
             ->orderByDesc('created_at')
             ->get();
 
@@ -483,7 +489,12 @@ class MaterialMovementController extends Controller
     public function exportMovementsPDF(Request $request)
     {
         $movements = $this->applyFilters($request)
-            ->with(['warehouseOrigin', 'warehouseDestination', 'material', 'user'])
+            ->with([
+                // Los almacenes traen su sucursal: el listado la
+                // muestra en panel consolidado.
+                'warehouseOrigin.branch', 'warehouseDestination.branch',
+                'material', 'user',
+            ])
             ->orderByDesc('created_at')
             ->get();
 
@@ -528,7 +539,7 @@ class MaterialMovementController extends Controller
      */
     private function applyFilters(Request $request): Builder
     {
-        $branchId = session('branch_id');
+        $branchIds = app(CurrentContext::class)->branchIds();
 
         $query = MaterialMovement::query();
 
@@ -536,11 +547,11 @@ class MaterialMovementController extends Controller
         // si su almacén de origen O el de destino son de ella.
         // El agrupamiento con where(closure) es imprescindible para
         // que el OR no rompa los demás filtros.
-        $query->where(function ($q) use ($branchId) {
-            $q->whereHas('warehouseOrigin', function ($w) use ($branchId) {
-                $w->where('branch_id', $branchId);
-            })->orWhereHas('warehouseDestination', function ($w) use ($branchId) {
-                $w->where('branch_id', $branchId);
+        $query->where(function ($q) use ($branchIds) {
+            $q->whereHas('warehouseOrigin', function ($w) use ($branchIds) {
+                $w->whereIn('branch_id', $branchIds);
+            })->orWhereHas('warehouseDestination', function ($w) use ($branchIds) {
+                $w->whereIn('branch_id', $branchIds);
             });
         });
 

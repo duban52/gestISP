@@ -1,0 +1,30 @@
+@extends('adminlte::page')
+@section('title', 'Nueva empresa')
+
+@section('content_header')
+    <h1 class="mb-0"><i class="fas fa-building mr-2"></i>Nueva empresa</h1>
+@endsection
+
+@section('content')
+    <div class="callout callout-info">
+        Tras crearla habrá que darle <strong>al menos una sucursal</strong>: una empresa
+        sin sucursales no puede operar, porque nadie puede entrar a ella.
+    </div>
+
+    <div class="card">
+        <form method="POST" enctype="multipart/form-data" action="{{ route('companies.store') }}">
+            @csrf
+            <div class="card-body toque">
+                @include('gestisp.companies._form')
+            </div>
+            <div class="card-footer acciones-movil">
+                <button class="btn btn-primary"><i class="fas fa-save"></i> Crear empresa</button>
+                <a href="{{ route('companies.index') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+@endsection
+
+@section('css')
+    <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
+@endsection

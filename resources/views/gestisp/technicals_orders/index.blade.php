@@ -87,6 +87,7 @@
                 <table id="ordersTable" class="table table-hover tabla-movil" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th># Orden</th>
                         <th># Contrato</th>
                         <th>Cliente</th>
@@ -101,6 +102,11 @@
                     <tbody>
                     @foreach($technical_orders as $technical_order)
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $technical_order->branch?->name ?: '—' }}</td>
                             {{-- Celda principal: encabeza la ficha en el telefono
                                  con lo que identifica la orden de un vistazo. --}}
                             <td class="celda-principal" data-label="">
@@ -252,13 +258,17 @@
                     emptyTable: 'No hay órdenes técnicas para mostrar.'
                 },
                 // Orden inicial: por fecha de creación descendente
-                order: [[6, 'desc']],
+                order: [[7, 'desc']],
                 // En el teléfono cada orden ocupa una ficha entera:
                 // veinticinco fichas son un desplazamiento larguísimo.
                 pageLength: enMovil ? 10 : 25,
                 dom: enMovil ? 'ftip' : 'lfrtip',
                 columnDefs: [
-                    { orderable: false, targets: [8] },
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
+                    { orderable: false, targets: [9] },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

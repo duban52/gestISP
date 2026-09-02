@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
+use App\Tenancy\CurrentContext;
 
 /**
  * Muflas: el inventario y lo que se hace dentro de ellas.
@@ -364,12 +365,15 @@ class SpliceClosureController extends Controller
     /** @return array<string, mixed> */
     private function validar(Request $request, ?SpliceClosure $mufla = null): array
     {
-        $branchId = session('branch_id');
+        // Cualquier red del alcance vale; la sucursal la fija la
+        // red elegida, no la sesion.
+        $branchIds = app(CurrentContext::class)->branchIds();
 
         return $request->validate([
             'optical_network_id' => [
                 'required',
-                Rule::exists('optical_networks', 'id')->where('branch_id', $branchId),
+                Rule::exists('optical_networks', 'id')
+                    ->whereIn('branch_id', $branchIds),
             ],
             'network_zone_id' => [
                 'nullable',
@@ -405,7 +409,7 @@ class SpliceClosureController extends Controller
     private function exigirSucursal(?SpliceClosure $mufla): void
     {
         abort_if(
-            !$mufla || (int) $mufla->network?->branch_id !== (int) session('branch_id'),
+            !$mufla || ! app(CurrentContext::class)->permiteSucursal($mufla->network?->branch_id),
             403,
             'Esa mufla pertenece a otra sucursal.',
         );
@@ -413,6 +417,6 @@ class SpliceClosureController extends Controller
 
     private function exigirSucursalDeRed(OpticalNetwork $red): void
     {
-        abort_if((int) $red->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($red->branch_id), 403);
     }
 }

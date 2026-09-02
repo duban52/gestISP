@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Billing\Enums\InvoiceStatus;
 use App\Models\Contract;
 use Illuminate\Database\Eloquent\Builder;
+use App\Tenancy\CurrentContext;
 
 /**
  * Consulta filtrable del listado de contratos.
@@ -45,6 +46,24 @@ class ContractQuery
         return [
             // ---- Identificación ----
             'contract_number' => ['titulo' => 'N.º contrato', 'grupo' => 'Contrato', 'defecto' => true],
+            // La sucursal se ofrece SIEMPRE, pero solo viene marcada de
+            // serie en panel consolidado: es ahí donde el listado
+            // mezcla sedes y no saber de cuál es cada fila sale caro.
+            // Trabajando en una sola sede repetiría el mismo valor en
+            // todas las filas, así que quien la quiera la activa.
+            'branch' => [
+                'titulo' => 'Sucursal',
+                'grupo' => 'Contrato',
+                'defecto' => app(CurrentContext::class)->mostrarSucursal(),
+            ],
+            // El grupo decide como se factura el contrato. Se ofrece
+            // siempre, sin marcar de serie: mientras una empresa tenga
+            // un solo grupo no aporta, y en cuanto tenga varios es de
+            // las primeras que se activan.
+            'affinity_group' => ['titulo' => 'Grupo', 'grupo' => 'Contrato', 'defecto' => false],
+            // La consecuencia del grupo, que es lo que de verdad se
+            // quiere ver de un vistazo: por que camino sale la factura.
+            'facturacion' => ['titulo' => 'Facturación', 'grupo' => 'Contrato', 'defecto' => false],
             'client_identity' => ['titulo' => 'Identificación', 'grupo' => 'Cliente', 'defecto' => true],
             'client_name' => ['titulo' => 'Cliente', 'grupo' => 'Cliente', 'defecto' => true],
             'client_phone' => ['titulo' => 'Teléfono', 'grupo' => 'Cliente', 'defecto' => true],
@@ -114,7 +133,14 @@ class ContractQuery
 
         $query = Contract::query()
             ->with([
-                'client', 'plan', 'user', 'ont.olt',
+                // 'branch' va aquí y no bajo demanda porque la columna
+                // sale marcada en consolidado: sin precargarla, cada
+                // fila del listado dispararía una consulta más.
+                'client', 'plan', 'user', 'ont.olt', 'branch',
+                // El grupo se precarga aunque su columna no venga
+                // marcada: lo usa tambien el filtro por modalidad de
+                // facturacion, y sin esto cada fila seria una consulta.
+                'affinityGroup',
                 // La caja se precarga aunque sus columnas estén ocultas
                 // por defecto: si el usuario las activa, sin esto cada
                 // fila dispararía cuatro consultas más.
@@ -132,10 +158,14 @@ class ContractQuery
                     ->where('pending_invoice_amount', '>', 0),
             ]);
 
-        $branchId ??= session('branch_id');
-
-        if ($branchId) {
+        // Una sucursal concreta si la piden; si no, todas las del
+        // alcance. Sin contexto —cola, consola— no se filtra, que es
+        // la misma regla del global scope de empresa: escribir el
+        // whereIn a mano dejaba la consulta sin resultados.
+        if ($branchId !== null) {
             $query->where('contracts.branch_id', $branchId);
+        } else {
+            app(CurrentContext::class)->limitarSucursales($query, 'contracts.branch_id');
         }
 
         $this->aplicarBusquedaLibre($query, $filtros);
@@ -184,6 +214,14 @@ class ContractQuery
         foreach ([
             'status' => 'contracts.status',
             'plan_id' => 'contracts.plan_id',
+            'affinity_group_id' => 'contracts.affinity_group_id',
+            // Solo tiene sentido en panel consolidado, que es donde el
+            // listado mezcla sedes. La pantalla lo pinta unicamente
+            // ahi, pero el filtro se aplica venga de donde venga: si
+            // llegara en modo independiente, se cruza igualmente con
+            // el alcance del usuario (mas abajo) y no puede colar una
+            // sucursal ajena.
+            'branch_id' => 'contracts.branch_id',
             'social_stratum' => 'contracts.social_stratum',
             'home_type' => 'contracts.home_type',
         ] as $filtro => $columna) {
@@ -237,6 +275,17 @@ class ContractQuery
      */
     private function aplicarEquipos(Builder $query, array $filtros): void
     {
+        // Contratos sin clasificar.
+        //
+        // Como se factura lo decide el GRUPO, y para elegir grupo esta
+        // su propio filtro. Lo unico que ese no puede responder es
+        // "cuales se quedaron sin grupo", porque no hay ninguna opcion
+        // que marcar — de ahi esta, que es la que permite encontrarlos
+        // y clasificarlos.
+        if (($filtros['sin_grupo'] ?? '') === 'si') {
+            $query->whereNull('contracts.affinity_group_id');
+        }
+
         if (($filtros['has_ont'] ?? '') === 'si') {
             $query->whereHas('ont');
         } elseif (($filtros['has_ont'] ?? '') === 'no') {
@@ -318,6 +367,14 @@ class ContractQuery
 
         return match ($columna) {
             'contract_number' => $contrato->numero_visible,
+            'branch' => (string) ($contrato->branch?->name ?? ''),
+            'affinity_group' => (string) ($contrato->affinityGroup?->etiqueta() ?? ''),
+            // "Sin grupo" y no vacio: una celda en blanco en el Excel
+            // se confunde con un error de exportacion, y un contrato
+            // sin grupo es justo lo que hay que poder detectar.
+            'facturacion' => $contrato->affinityGroup
+                ? $contrato->affinityGroup->modalidadFacturacion()
+                : 'Sin grupo',
             'client_identity' => (string) ($cliente?->identity_number ?? ''),
             'client_name' => trim(($cliente?->name ?? '') . ' ' . ($cliente?->last_name ?? '')),
             'client_phone' => (string) ($cliente?->number_phone ?? ''),

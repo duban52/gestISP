@@ -110,6 +110,11 @@
                 </div>
                 <form action="{{ route('clients.import.preview') }}" method="POST" enctype="multipart/form-data">
                     @csrf
+
+                    {{-- La importacion crea contratos, y un contrato es de
+                         una sucursal. Solo se pregunta en consolidado. --}}
+                    <x-selector-sucursal titulo="Sucursal de los contratos"
+                                         ayuda="Los contratos que se creen quedaran en esta sucursal." />
                     <div class="card-body">
                         <div class="form-group">
                             <label for="archivo">Archivo de clientes y contratos</label>

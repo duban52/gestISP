@@ -7,6 +7,7 @@ use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use App\Tenancy\CurrentContext;
 
 class PaymentsExport implements FromQuery, WithHeadings, WithMapping
 {
@@ -20,7 +21,7 @@ class PaymentsExport implements FromQuery, WithHeadings, WithMapping
         // Si hay una sucursal configurada en la sesión, se filtra por ella
         if (session()->has('branch_id')) {
             $query->whereHas('invoice.contract', function ($query) {
-                $query->where('branch_id', session('branch_id'));
+                $query->whereIn('branch_id', app(CurrentContext::class)->branchIds());
             });
         }
 

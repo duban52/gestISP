@@ -159,6 +159,9 @@
               onsubmit="return confirm('¿Importar definitivamente? Esta acción crea los clientes, los contratos y las facturas de saldo migrado.');">
             @csrf
             <input type="hidden" name="ruta" value="{{ $ruta }}">
+            {{-- La sucursal elegida en el paso 1: se arrastra para que
+                 lo que se revisa y lo que se importa sean lo mismo. --}}
+            <input type="hidden" name="branch_id" value="{{ $branchId }}">
             <div class="card-body">
                 @if($resumen['con_saldo'] > 0)
                     <div class="form-group">

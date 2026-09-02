@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use App\Billing\Concerns\Auditable;
 use App\Billing\Enums\NoteType;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class CreditDebitNote extends Model
 {
+    use BelongsToCompany;
+
     use Auditable;
 
     protected $fillable = [

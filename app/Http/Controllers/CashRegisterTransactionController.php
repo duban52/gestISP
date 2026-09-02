@@ -8,6 +8,7 @@ use App\Models\CashRegisterTransaction;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use App\Tenancy\CurrentContext;
 
 class CashRegisterTransactionController extends Controller
 {
@@ -35,9 +36,9 @@ class CashRegisterTransactionController extends Controller
 
         // Filtrar por sucursal actual
         if (session()->has('branch_id')) {
-            $branchId = session('branch_id');
-            $query->whereHas('cashRegister.branch', function ($q) use ($branchId) {
-                $q->where('id', $branchId);
+            $branchIds = app(CurrentContext::class)->branchIds();
+            $query->whereHas('cashRegister.branch', function ($q) use ($branchIds) {
+                $q->whereIn('id', $branchIds);
             });
         }
 
@@ -88,9 +89,9 @@ class CashRegisterTransactionController extends Controller
 
         // Filtrar por sucursal actual
         if (session()->has('branch_id')) {
-            $branchId = session('branch_id');
-            $query->whereHas('cashRegister.branch', function ($q) use ($branchId) {
-                $q->where('id', $branchId);
+            $branchIds = app(CurrentContext::class)->branchIds();
+            $query->whereHas('cashRegister.branch', function ($q) use ($branchIds) {
+                $q->whereIn('id', $branchIds);
             });
         }
 

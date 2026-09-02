@@ -242,7 +242,11 @@
                     </td>
                     <td style="padding-right: 50px; margin-bottom: 0;">
                         <img src="{{ $barcodeUrls[$invoice->id] }}" alt="Código de barras" width="250px">
-                        <p style="text-align: center; margin: 0;">{{ $code }}</p>
+                        {{-- El codigo DE ESTA factura. Antes era una unica
+                             variable $code —la del ultimo codigo generado— y
+                             se imprimia igual debajo de todos los codigos de
+                             barras del PDF. --}}
+                        <p style="text-align: center; margin: 0;">{{ $barcodeCodes[$invoice->id] ?? '' }}</p>
                     </td>
                     <td>
                         <p style="text-align: right; padding-right: 15px;">Señal empaquetada</p>

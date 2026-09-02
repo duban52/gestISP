@@ -39,6 +39,7 @@
                 <table id="notesTable" class="table table-hover table-sm w-100">
                     <thead class="thead-light">
                     <tr>
+                        <th>Sucursal</th>
                         <th>Número</th>
                         <th>Tipo</th>
                         <th>Fecha</th>
@@ -55,6 +56,11 @@
                     <tbody>
                     @foreach($notas as $nota)
                         <tr @class(['text-muted' => !$nota->vigente])>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $nota->branch?->name ?: '—' }}</td>
                             <td><strong>{{ $nota->full_number }}</strong></td>
                             <td>
                                 <span class="badge badge-{{ $nota->tipo()->disminuye() ? 'success' : 'warning' }}">
@@ -112,9 +118,13 @@
                     emptyTable: 'Todavía no se ha emitido ninguna nota.'
                 },
                 pageLength: 25,
-                order: [[2, 'desc']],
+                order: [[3, 'desc']],
                 columnDefs: [
-                    { orderable: false, targets: 10 },
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
+                    { orderable: false, targets: 11 },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

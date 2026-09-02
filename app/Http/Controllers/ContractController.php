@@ -22,6 +22,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Tenancy\CurrentContext;
+use Illuminate\Validation\Rule;
 
 class ContractController extends Controller
 {
@@ -61,7 +63,13 @@ class ContractController extends Controller
             'contracts' => $contracts,
             'columnas' => ContractQuery::columnas(),
             'columnasActivas' => ContractQuery::columnasValidas($request->input('columnas')),
-            'planes' => Plan::where('branch_id', session('branch_id'))->orderBy('name')->get(),
+            'planes' => Plan::whereIn('branch_id', app(CurrentContext::class)->branchIds())->orderBy('name')->get(),
+            // Los grupos son de la EMPRESA: el global scope ya los
+            // acota, no hay que filtrar por sucursal. Se ofrecen todos
+            // —incluidos los inactivos— porque este es un filtro de
+            // busqueda: hay contratos que siguen en un grupo que dejo
+            // de ofrecerse, y hay que poder encontrarlos.
+            'gruposAfinidad' => \App\Models\AffinityGroup::ordenados()->get(),
             // Para el filtro por caja. Solo el código y el nombre: no
             // hacen falta los puertos y son cientos de cajas.
             'cajasNap' => \App\Models\NapBox::deSucursal()
@@ -119,7 +127,7 @@ class ContractController extends Controller
      */
     public function diagnostics(Contract $contract, ContractDiagnostics $diagnostico)
     {
-        abort_if((int) $contract->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($contract->branch_id), 403);
 
         return response()->json($diagnostico->para($contract));
     }
@@ -129,17 +137,80 @@ class ContractController extends Controller
      */
     public function create(Client $client)
     {
-        // Obtener los datos necesarios para el formulario de creación
-        $clients = Client::where('branch_id', session('branch_id'))->get(); // Todos los clientes de la sucursal
-        $plans = Plan::where('branch_id', session('branch_id'))->get(); // Todos los planes disponibles
+        $contexto = app(CurrentContext::class);
+
+        // Los clientes son de la EMPRESA, no de la sucursal: el global
+        // scope ya acota a la empresa del contexto y filtrar ademas por
+        // sucursal escondia a quien se dio de alta en otra sede.
+        $clients = Client::all();
+
+        // Los planes SI son de la sucursal. Se traen los de todas las
+        // sucursales alcanzables y la vista los filtra segun la que se
+        // elija: con session('branch_id') a null —panel consolidado— el
+        // desplegable salia vacio y no se podia crear ni un contrato.
+        $plans = Plan::whereIn('branch_id', $contexto->branchIds())
+            ->orderBy('name')
+            ->get();
+
         $users = User::all(); // Todos los usuarios para asignar a un contrato
+
+        // Los grupos de afinidad son de la EMPRESA: se ofrecen los
+        // ACTIVOS —al dar de alta no tiene sentido ofrecer uno que ya
+        // no se usa— y viene marcado el predeterminado.
+        $gruposAfinidad = \App\Models\AffinityGroup::activos()->ordenados()->get();
+        $grupoPorDefecto = \App\Models\AffinityGroup::porDefectoDelContexto();
+
+        // Solo se pregunta la sucursal cuando hay mas de una alcanzable.
+        $hayQueElegirSucursal = $contexto->hayQueElegirSucursal();
+        $sucursales = $hayQueElegirSucursal ? $contexto->sucursalesElegibles() : collect();
 
         // Devolver la vista con los datos necesarios
         $colombiaLocations = ColombiaLocations::departmentsWithMunicipalities();
 
         return view('gestisp.contracts.create', compact(
-            'clients', 'plans', 'users', 'client', 'colombiaLocations'
+            'clients', 'plans', 'users', 'client', 'colombiaLocations',
+            'hayQueElegirSucursal', 'sucursales',
+            'gruposAfinidad', 'grupoPorDefecto'
         ));
+    }
+
+    /**
+     * Con que grupo nace el contrato.
+     *
+     * Si el formulario trae uno, tiene que ser de la empresa y estar
+     * activo — se comprueba con una regla de validacion y no a mano,
+     * para que el error salga junto al campo. El global scope de
+     * empresa ya impide que valga uno de otra empresa: `Rule::exists`
+     * consulta la tabla directamente, asi que la condicion de empresa
+     * se pone explicita aqui.
+     *
+     * Si no trae ninguno, se asume el predeterminado. Y si la empresa
+     * no tiene predeterminado, se deja NULO en vez de fallar: el
+     * contrato se puede dar de alta igual y el listado tiene un filtro
+     * "sin grupo asignado" para encontrarlos y clasificarlos despues.
+     * Bloquear el alta por una configuracion que falta seria peor que
+     * el problema que evita.
+     */
+    private function grupoParaElContrato(Request $request): ?int
+    {
+        $companyId = app(CurrentContext::class)->companyId();
+
+        $request->validate([
+            'affinity_group_id' => [
+                'nullable',
+                Rule::exists('affinity_groups', 'id')
+                    ->where('company_id', $companyId)
+                    ->where('active', true),
+            ],
+        ], [
+            'affinity_group_id.exists' => 'Ese grupo de afinidad no existe en esta empresa o esta inactivo.',
+        ]);
+
+        if ($request->filled('affinity_group_id')) {
+            return (int) $request->input('affinity_group_id');
+        }
+
+        return \App\Models\AffinityGroup::porDefectoDelContexto()?->id;
     }
 
     /**
@@ -159,9 +230,54 @@ class ContractController extends Controller
             'longitude.required_with' => 'Faltó la longitud: vuelva a marcar el punto sobre el mapa.',
         ]);
 
+        // La sucursal del contrato: en panel consolidado viene del
+        // formulario y se comprueba contra las del usuario; con una
+        // sola alcanzable se asume; en modo independiente manda la
+        // activa y lo que llegue se ignora.
+        $branchId = app(CurrentContext::class)
+            ->branchParaEscritura($request->input('branch_id'));
+
+        // EL PLAN ES OBLIGATORIO.
+        //
+        // De el salen el precio, los servicios que se facturan y el IVA
+        // de cada uno. Un contrato sin plan se daba de alta sin ruido y
+        // luego no facturaba nada: no aparecia en la corrida mensual,
+        // asi que el cliente quedaba con servicio y sin factura, y solo
+        // se notaba al cuadrar el mes.
+        //
+        // Ademas tiene que ser DE ESA sucursal. La pantalla ya esconde
+        // los demas, pero eso es ayuda visual: sin esta comprobacion se
+        // podria asignar a un contrato de Bogota un plan de Medellin, y
+        // el precio saldria del sitio equivocado.
+        $request->validate([
+            'plan_id' => [
+                'required',
+                Rule::exists('plans', 'id')->where('branch_id', $branchId),
+            ],
+        ], [
+            'plan_id.required' => 'Elija el plan de servicio: sin plan el contrato no tiene precio '
+                . 'ni servicios que facturar.',
+            'plan_id.exists' => 'Ese plan no pertenece a la sucursal en la que se registra el contrato.',
+        ]);
+
+        // EL GRUPO DE CONTRATO.
+        //
+        // Es lo que decide que documento emite este contrato: factura
+        // electronica —con firma digital y numeracion autorizada— o
+        // documento interno. Hoy esa decision todavia no tiene
+        // consecuencias tecnicas, pero el contrato se clasifica desde
+        // ya para no tener que clasificar la cartera entera a la
+        // carrera cuando las tenga.
+        //
+        // Si no llega ninguno se asume el predeterminado de la empresa.
+        // Preguntarlo cuando hay una sola respuesta posible seria un
+        // campo de mas en cada alta.
+        $grupoId = $this->grupoParaElContrato($request);
+
         $request->merge([
             'user_id' => Auth::user()->id,
-            'branch_id' => session('branch_id')
+            'branch_id' => $branchId,
+            'affinity_group_id' => $grupoId,
         ]);
 
 
@@ -201,7 +317,9 @@ class ContractController extends Controller
 
         TechnicalOrder::create([
             'contract_id' => $contract->id,
-            'branch_id' => session('branch_id'),
+            // Hereda la del contrato: la orden es para instalar ESE
+            // servicio, no puede estar en otra sede.
+            'branch_id' => $contract->branch_id,
             'created_by' => Auth::user()->id,
             'type' => 'Servicio',
             'status' => 'Pendiente',
@@ -232,6 +350,19 @@ class ContractController extends Controller
         $branches = Branch::all(); // Todas las sucursales
         $clients = Client::all(); // Todos los clientes
         $plans = Plan::all(); // Todos los planes disponibles
+        // Grupos ACTIVOS para el desplegable de cambio. El grupo actual
+        // se añade aunque este inactivo: si no, al abrir el modal
+        // apareceria seleccionado otro distinto y guardar sin querer le
+        // cambiaria la modalidad de facturacion al contrato.
+        $gruposAfinidad = \App\Models\AffinityGroup::activos()->ordenados()->get();
+
+        if ($contract->affinity_group_id && !$gruposAfinidad->contains('id', $contract->affinity_group_id)) {
+            $gruposAfinidad = $gruposAfinidad
+                ->push($contract->affinityGroup)
+                ->filter()
+                ->sortBy('sort_order')
+                ->values();
+        }
         $users = User::all(); // Todos los usuarios para asignar a un contrato
         // Las tablas de las pestañas usan DataTables del lado del
         // cliente: se entregan las colecciones completas (sin paginar)
@@ -269,7 +400,7 @@ class ContractController extends Controller
         $contract->loadMissing('napPort.napBox', 'locatedBy');
 
         // Devolver la vista con los datos necesarios
-        return view('gestisp.contracts.show', compact('branches', 'clients', 'plans', 'users', 'contract', 'invoices', 'additionalCharges', 'technicalOrders', 'comments', 'napBoxes'));
+        return view('gestisp.contracts.show', compact('branches', 'clients', 'plans', 'users', 'contract', 'invoices', 'additionalCharges', 'technicalOrders', 'comments', 'napBoxes', 'gruposAfinidad'));
     }
 
     /**
@@ -295,10 +426,46 @@ class ContractController extends Controller
                 'municipality' => $request->municipality,
             ]);
         }elseif (isset($request->plan_id) || isset($request->permanence_clause)){
-            $contract->update([
+            // El grupo se valida aparte porque cambiarlo NO es como
+            // cambiar el plan: cambia por que camino saldra la factura
+            // de este contrato de aqui en adelante. Tiene que ser de la
+            // empresa, y se comprueba aunque la pantalla ya lo limite —
+            // lo que llega de un formulario no es de fiar.
+            //
+            // Se admite un grupo inactivo SOLO si es el que ya tenia:
+            // guardar el modal sin tocar ese campo no puede fallar por
+            // algo que se desactivo despues de asignarlo.
+            $request->validate([
+                'affinity_group_id' => [
+                    'nullable',
+                    Rule::exists('affinity_groups', 'id')
+                        ->where('company_id', app(CurrentContext::class)->companyId())
+                        ->where(fn ($q) => $contract->affinity_group_id
+                            ? $q->where(fn ($sub) => $sub->where('active', true)
+                                ->orWhere('id', $contract->affinity_group_id))
+                            : $q->where('active', true)),
+                ],
+            ], [
+                'affinity_group_id.exists' => 'Ese grupo de afinidad no existe en esta empresa o está inactivo.',
+            ]);
+
+            $cambios = [
                 'plan_id' => $request->plan_id,
                 'permanence_clause' => $request->permanence_clause,
-            ]);
+            ];
+
+            // Solo se toca si viene en la peticion: otros formularios
+            // comparten esta rama y no mandan el grupo. Sin esto le
+            // pondrian null y el contrato quedaria sin clasificar.
+            if ($request->has('affinity_group_id')) {
+                $cambios['affinity_group_id'] = $request->input('affinity_group_id') ?: null;
+            }
+
+            // El cambio queda en la trazabilidad por la auditoria
+            // global: es un requisito del analisis fiscal, porque si un
+            // contrato deja de facturar electronicamente hay que poder
+            // responder quien lo decidio y cuando.
+            $contract->update($cambios);
         }else{
             $contract->update([
                 'cpe_sn' => $request->cpe_sn,
@@ -373,7 +540,7 @@ class ContractController extends Controller
         // red) para que nadie pueda instalar un contrato en la red de
         // otra sede manipulando el formulario.
         abort_unless(
-            (int) $puerto->napBox->network->branch_id === (int) session('branch_id'),
+            app(CurrentContext::class)->permiteSucursal($puerto->napBox->network->branch_id),
             403,
         );
 

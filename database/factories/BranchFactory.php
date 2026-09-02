@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Company;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,7 +17,17 @@ class BranchFactory extends Factory
      */
     public function definition(): array
     {
+        // Cada sucursal nace con su propia empresa, salvo que la
+        // prueba diga otra cosa. Eso hace que las pruebas sean
+        // multiempresa por defecto, que es justo lo que hace falta
+        // para que salten los fallos de aislamiento entre empresas.
+        // Para varias sucursales de la MISMA empresa:
+        //
+        //     $empresa = Company::factory()->create();
+        //     Branch::factory()->create(['company_id' => $empresa->id]);
+        //     Branch::factory()->create(['company_id' => $empresa->id]);
         return [
+            'company_id' => Company::factory(),
             'nit' => fake()->unique()->numerify('##########'),
             'name' => fake()->unique()->city(),
             'country' => fake()->country(),

@@ -23,6 +23,19 @@ class RoleSeeder extends Seeder
         // Permisos
         Permission::create(['name' => 'gestisp.index', 'description' => 'Ver el dashboard']);
 
+        // Empresas (el contribuyente). Van antes que las sucursales
+        // porque las sucursales cuelgan de ellas.
+        // Grupos de afinidad: clasifican los contratos de la empresa y
+        // deciden si su factura es electronica o interna.
+        Permission::create(['name' => 'affinity_groups.index', 'description' => 'Ver grupos de afinidad']);
+        Permission::create(['name' => 'affinity_groups.create', 'description' => 'Crear grupos de afinidad']);
+        Permission::create(['name' => 'affinity_groups.edit', 'description' => 'Editar grupos de afinidad']);
+        Permission::create(['name' => 'affinity_groups.destroy', 'description' => 'Eliminar grupos de afinidad']);
+
+        Permission::create(['name' => 'companies.index', 'description' => 'Ver empresas']);
+        Permission::create(['name' => 'companies.create', 'description' => 'Crear empresas']);
+        Permission::create(['name' => 'companies.edit', 'description' => 'Editar empresas']);
+
         // Sucursales
         Permission::create(['name' => 'branches.index', 'description' => 'Ver sucursales']);
         Permission::create(['name' => 'branches.create', 'description' => 'Crear sucursales']);

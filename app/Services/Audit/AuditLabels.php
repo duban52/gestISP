@@ -22,6 +22,7 @@ class AuditLabels
         \App\Models\Client::class => ['el cliente', 'clientes'],
         \App\Models\Contract::class => ['el contrato', 'contratos'],
         \App\Models\ContractComment::class => ['un comentario del contrato', 'contratos'],
+        \App\Models\AffinityGroup::class => ['el grupo de afinidad', 'contratos'],
         \App\Models\Plan::class => ['el plan', 'planes'],
         \App\Models\Service::class => ['el servicio', 'servicios'],
         \App\Models\Invoice::class => ['la factura', 'facturacion'],

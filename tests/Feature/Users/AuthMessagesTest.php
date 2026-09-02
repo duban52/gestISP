@@ -89,17 +89,23 @@ class AuthMessagesTest extends TestCase
         $this->assertStringContainsString('inhabilitado', $errores[0]);
     }
 
-    public function test_sin_sucursal_se_pide_seleccionarla(): void
+    public function test_el_acceso_ya_no_pide_sucursal(): void
     {
+        // Antes la sucursal era obligatoria EN el formulario de acceso
+        // y su ausencia daba un error de validacion. Con el prelogin se
+        // elige despues, en /contexto, asi que entrar sin mandarla es
+        // ahora el camino normal.
+        //
+        // El motivo del cambio no fue comodidad: para poder ofrecer el
+        // desplegable habia que consultar las sucursales de un correo
+        // SIN autenticar, y eso permitia enumerar usuarios.
         $this->from(route('login'))->post(route('login'), [
             'email' => $this->user->email,
             'password' => 'clave-correcta',
         ]);
 
-        $errores = session('errors')->getBag('default')->all();
-
-        $this->assertSinClavesCrudas($errores);
-        $this->assertStringContainsString('sucursal', $errores[0]);
+        $this->assertAuthenticatedAs($this->user);
+        $this->assertNull(session('errors'));
     }
 
     public function test_los_campos_vacios_no_muestran_claves_de_validacion(): void

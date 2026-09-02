@@ -101,6 +101,12 @@
             </div>
         </div>
 
+        {{-- El corte es de una sucursal: la revisión avisa cuando un
+             identificador es de otra sede. En panel consolidado hay que
+             decir en cuál se trabaja; con una sola no se pinta nada. --}}
+        <x-selector-sucursal compacto clase="px-3"
+                             titulo="Sucursal en la que se corta" />
+
         <div class="card-footer text-right acciones-movil">
             <button type="button" class="btn btn-primary" id="btnRevisar">
                 <i class="fas fa-search"></i> Revisar la lista
@@ -288,6 +294,14 @@
                 const datos = new FormData();
                 datos.append('_token', TOKEN);
 
+                // Solo existe en panel consolidado; si no está, el
+                // servidor deduce la sucursal como siempre.
+                const sucursal = $('#branch_id').val();
+
+                if (sucursal) {
+                    datos.append('branch_id', sucursal);
+                }
+
                 // El archivo manda si está cargado; si no, el texto.
                 if (archivo) {
                     datos.append('archivo', archivo);
@@ -463,7 +477,11 @@
                 $.ajax({
                     url: '{{ route('pppoe.cutoff.execute') }}',
                     method: 'POST',
-                    data: { _token: TOKEN, identificadores: identificadores },
+                    data: {
+                        _token: TOKEN,
+                        identificadores: identificadores,
+                        branch_id: $('#branch_id').val() || null,
+                    },
                     dataType: 'json',
                     success: function (respuesta) {
                         $('#modalConfirmar').modal('hide');

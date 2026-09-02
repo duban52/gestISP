@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class InvoiceNumberingSequence extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'branch_id',
         'prefix',

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use RuntimeException;
+use App\Tenancy\CurrentContext;
 
 /**
  * Redes ópticas (ODN), zonas y puertos PON.
@@ -48,6 +49,7 @@ class OpticalNetworkController extends Controller
     public function index(): View
     {
         $networks = OpticalNetwork::deSucursal()
+            ->with('branch')
             ->withCount(['olts', 'zones', 'ponPorts', 'napBoxes'])
             ->orderBy('name')
             ->get();
@@ -80,7 +82,8 @@ class OpticalNetworkController extends Controller
                 'sin_ubicar' => $cajas->reject->estaGeorreferenciada()->count(),
             ],
             // OLTs de la sucursal que todavía no pertenecen a una red
-            'oltsLibres' => Olt::where('branch_id', session('branch_id'))
+            // Listado: todo el alcance visible, no una sola sucursal.
+            'oltsLibres' => Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())
                 ->whereNull('optical_network_id')
                 ->orderBy('name')
                 ->get(),
@@ -97,7 +100,7 @@ class OpticalNetworkController extends Controller
         $datos = $this->validarRed($request);
 
         $red = OpticalNetwork::create(array_merge($datos, [
-            'branch_id' => session('branch_id'),
+            'branch_id' => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
             'user_id' => auth()->id(),
         ]));
 
@@ -153,7 +156,7 @@ class OpticalNetworkController extends Controller
         $validado = $request->validate([
             'olt_id' => [
                 'required',
-                Rule::exists('olts', 'id')->where('branch_id', session('branch_id')),
+                Rule::exists('olts', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
             ],
         ]);
 
@@ -301,7 +304,7 @@ class OpticalNetworkController extends Controller
         $datos = $request->validate([
             'olt_id' => [
                 'required',
-                Rule::exists('olts', 'id')->where('branch_id', session('branch_id')),
+                Rule::exists('olts', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
             ],
             'frame' => 'required|integer|min:0|max:99',
             'slot' => 'required|integer|min:0|max:99',
@@ -378,7 +381,7 @@ class OpticalNetworkController extends Controller
         $validado = $request->validate([
             'olt_id' => [
                 'required',
-                Rule::exists('olts', 'id')->where('branch_id', session('branch_id')),
+                Rule::exists('olts', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
             ],
         ]);
 
@@ -404,7 +407,24 @@ class OpticalNetworkController extends Controller
             'name' => [
                 'required', 'string', 'max:120',
                 Rule::unique('optical_networks', 'name')
-                    ->where(fn ($q) => $q->where('branch_id', session('branch_id')))
+                    // El nombre es unico DENTRO de la sucursal donde se
+                    // va a guardar. Se resuelve sin lanzar: si en panel
+                    // consolidado no se eligio sucursal, la validacion
+                    // de branch_id ya lo dira; aqui no toca reventar.
+                    ->where(fn ($q) => $q->where(
+                        'branch_id',
+                        // La MISMA sucursal que usara store(). Antes caia
+                        // a branchId(), que en consolidado con una sola
+                        // sede alcanzable es null: la comprobacion se
+                        // hacia contra `branch_id = null` y no encontraba
+                        // el duplicado que si existia.
+                        rescue(
+                            fn () => app(CurrentContext::class)
+                                ->branchParaEscritura($request->input('branch_id')),
+                            null,
+                            report: false,
+                        ),
+                    ))
                     ->ignore($red?->id),
             ],
             'description' => 'nullable|string|max:255',
@@ -420,7 +440,7 @@ class OpticalNetworkController extends Controller
     private function exigirSucursal(?OpticalNetwork $red): void
     {
         abort_if(
-            !$red || (int) $red->branch_id !== (int) session('branch_id'),
+            !$red || !app(CurrentContext::class)->permiteSucursal($red->branch_id),
             403,
             'Esa red pertenece a otra sucursal.',
         );

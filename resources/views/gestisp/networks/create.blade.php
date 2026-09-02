@@ -20,6 +20,12 @@
 
             <form method="POST" action="{{ route('networks.store') }}">
                 @csrf
+                {{-- En panel consolidado no hay una sucursal activa: hay que
+                     decir en cual se guarda. Con una sola alcanzable no se
+                     pinta nada y el controlador la asume. --}}
+                <x-selector-sucursal titulo="Sucursal de la red"
+                                     ayuda="La red y todo lo que cuelgue de ella —OLTs, muflas, cajas— queda en esta sucursal." />
+
                 @include('gestisp.networks.partials.form', ['network' => null])
             </form>
         </div>

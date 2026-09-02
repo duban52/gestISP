@@ -127,6 +127,7 @@
                 <table id="movementsTable" class="table table-hover table-bordered" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>Fecha</th>
                         <th>Tipo</th>
                         <th>Almacén origen</th>
@@ -142,6 +143,12 @@
                     <tbody>
                     @foreach($movements as $movement)
                         <tr>
+                            {{-- El movimiento no tiene sucursal propia: es la de
+                                 sus almacenes. Se mira primero el de origen y,
+                                 si es una entrada, el de destino. --}}
+                            <td>{{ $movement->warehouseOrigin?->branch?->name
+                                    ?? $movement->warehouseDestination?->branch?->name
+                                    ?: '—' }}</td>
                             <td>{{ $movement->created_at->format('Y-m-d H:i') }}</td>
 
                             {{-- Tipo con badge de color según la operación --}}
@@ -198,8 +205,11 @@
                 },
                 pageLength: 25,
                 // Orden inicial: por fecha (columna 0) descendente
-                order: [[0, 'desc']],
+                order: [[1, 'desc']],
                 columnDefs: [
+                    // Se pinta siempre para no mover los indices de columna;
+                    // DataTables la esconde cuando no hay varias sedes.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

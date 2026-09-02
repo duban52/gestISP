@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Traits\HasRoles;
+use App\Tenancy\CurrentContext;
 
 class User extends Authenticatable
 {
@@ -137,11 +138,29 @@ class User extends Authenticatable
     public function adminlte_desc(): string
     {
         $rol = Role::find(session('current_role_id'));
-        $sucursal = Branch::find(session('branch_id'));
+        // El contexto manda; la sesión rescata cuando no ha corrido
+        // el middleware que lo establece (consola, tareas en cola).
+        $sucursalId = app(CurrentContext::class)->branchId() ?? session('branch_id');
+        $sucursal = $sucursalId ? Branch::find($sucursalId) : null;
+
+        // En panel consolidado no hay UNA sucursal activa: se trabajan
+        // varias a la vez y decirlo evita que alguien crea que esta
+        // viendo solo una sede.
+        $alcance = $sucursal?->name
+            ?? (session('branch_ids') ? 'Todas las sucursales' : null);
+
+        // La empresa solo se nombra cuando el usuario tiene acceso a
+        // mas de una. Con una sola es ruido: ya sabe donde esta.
+        $empresa = null;
+
+        if ($this->branches()->withoutGlobalScope('empresa')->distinct()->count('branches.company_id') > 1) {
+            $empresa = Company::find(session('company_id'))?->nombreVisible();
+        }
 
         return collect([
+            $empresa,
             $rol?->name ? ucfirst($rol->name) : null,
-            $sucursal?->name,
+            $alcance,
         ])->filter()->implode(' · ') ?: $this->email;
     }
 
@@ -263,7 +282,12 @@ class User extends Authenticatable
     }
     public function getCurrentRole()
     {
-        $branchId = session('branch_id'); // Obtener la sucursal actual desde la sesión
+        // En panel consolidado no hay UNA sucursal activa. Se toma la
+        // primera del alcance: el rol es el mismo en todas mientras no
+        // se decida qué hacer con quien tenga roles distintos por sede
+        // (queda anotado como pendiente en docs/Multiempresa.md).
+        $contexto = app(CurrentContext::class);
+        $branchId = $contexto->branchId() ?? ($contexto->branchIds()[0] ?? null);
 
         if ($branchId) {
             // Obtener el rol del usuario en la sucursal actual

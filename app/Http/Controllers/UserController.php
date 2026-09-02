@@ -71,7 +71,22 @@ class UserController extends Controller
      */
     public function create(): View
     {
-        $branches = Branch::all();
+        // TODAS las sucursales, de TODAS las empresas.
+        //
+        // Asignar un usuario a una sucursal es una tarea de
+        // administracion de plataforma: el superadministrador tiene que
+        // poder hacerlo sin estar dentro de esa empresa. Con el global
+        // scope solo veria las de su contexto activo, y no habria forma
+        // de dar de alta a nadie en una empresa recien creada.
+        //
+        // Es seguro porque users.* solo lo tiene el superadministrador.
+        $branches = Branch::withoutGlobalScope('empresa')
+            ->with('company')
+            ->join('companies', 'companies.id', '=', 'branches.company_id')
+            ->orderBy('companies.legal_name')
+            ->orderBy('branches.name')
+            ->select('branches.*')
+            ->get();
         $roles = Role::all();
 
         return view('gestisp.users.create', compact('branches', 'roles'));
@@ -296,7 +311,22 @@ class UserController extends Controller
      */
     public function edit(User $user): View
     {
-        $branches = Branch::all();
+        // TODAS las sucursales, de TODAS las empresas.
+        //
+        // Asignar un usuario a una sucursal es una tarea de
+        // administracion de plataforma: el superadministrador tiene que
+        // poder hacerlo sin estar dentro de esa empresa. Con el global
+        // scope solo veria las de su contexto activo, y no habria forma
+        // de dar de alta a nadie en una empresa recien creada.
+        //
+        // Es seguro porque users.* solo lo tiene el superadministrador.
+        $branches = Branch::withoutGlobalScope('empresa')
+            ->with('company')
+            ->join('companies', 'companies.id', '=', 'branches.company_id')
+            ->orderBy('companies.legal_name')
+            ->orderBy('branches.name')
+            ->select('branches.*')
+            ->get();
         $roles = Role::all();
         // La relación ya trae role_id en la pivote (withPivot en el modelo)
         $userBranches = $user->branches;

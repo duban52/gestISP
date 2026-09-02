@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Servicios
@@ -39,7 +40,9 @@ class ServiceController extends Controller
      */
     public function index(): View
     {
-        $services = Service::where('branch_id', session('branch_id'))->get();
+        $services = Service::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->with('branch')
+            ->get();
 
         return view('gestisp.services.index', compact('services'));
     }
@@ -67,7 +70,7 @@ class ServiceController extends Controller
             'base_price'     => $validated['base_price'],
             'tax_percentage' => $validated['tax_percentage'],
             'user_id'        => Auth::id(),
-            'branch_id'      => session('branch_id'),
+            'branch_id'      => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
         ]);
 
         return redirect()

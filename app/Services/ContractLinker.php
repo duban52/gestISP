@@ -7,6 +7,7 @@ use App\Models\Ont;
 use App\Models\PppoeAccount;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use App\Tenancy\CurrentContext;
 
 /**
  * Vinculación de equipos con contratos.
@@ -196,7 +197,7 @@ class ContractLinker
 
     private function verificarSucursal(int $branchId): void
     {
-        if ($branchId !== (int) session('branch_id')) {
+        if (! app(CurrentContext::class)->permiteSucursal($branchId)) {
             throw new RuntimeException('El equipo o el contrato pertenecen a otra sucursal.');
         }
     }

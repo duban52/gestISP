@@ -260,6 +260,7 @@
                 <table id="ontsTable" class="table table-hover table-sm tabla-movil">
                     <thead class="thead-light">
                     <tr>
+                        <th>Sucursal</th>
                         <th>ONT</th>
                         <th>Ubicación</th>
                         <th>Cliente</th>
@@ -279,6 +280,11 @@
                             $deshabilitada = $ont->admin_enabled === false;
                         @endphp
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $ont->branch?->name ?: '—' }}</td>
                             {{-- El serial es lo que identifica la ONT en campo;
                                  el resto de datos técnicos van debajo, pequeños. --}}
                             {{-- Celda principal: encabeza la ficha en el
@@ -449,10 +455,14 @@
                 // En el telefono cada ONT ocupa una ficha entera: 25 por
                 // pagina son un desplazamiento interminable.
                 pageLength: enMovil ? 10 : 25,
-                order: [[0, 'asc']],
+                order: [[1, 'asc']],
                 // Estado y acciones no se ordenan; la señal sí, por el
                 // data-order numérico de cada celda.
-                columnDefs: [{ orderable: false, targets: [3, 6] }],
+                columnDefs: [
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },{ orderable: false, targets: [4, 7] }],
                 // El selector "mostrar N" ocupa una linea entera y no
                 // aporta en un telefono: se esconde.
                 dom: enMovil ? 'ftip' : 'lfrtip',

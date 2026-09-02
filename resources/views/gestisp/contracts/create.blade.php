@@ -51,6 +51,47 @@
         <input type="hidden" value="{{ $client->id }}" name="client_id" id="client_id">
 
         {{-- ============================================================
+             En que sucursal queda el servicio
+
+             El CLIENTE es de la empresa, pero el CONTRATO es de una
+             sucursal: ahi es donde se presta el servicio, y de ahi salen
+             su prefijo, su consecutivo y sus reglas de facturacion.
+
+             Solo se pregunta cuando hay mas de una sucursal alcanzable.
+             Con una sola se asume, y este bloque no aparece.
+             ============================================================ --}}
+        @if($hayQueElegirSucursal)
+            <div class="card card-outline card-warning">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-store mr-1"></i> Sucursal del servicio
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group mb-0">
+                        <label for="branch_id">Sucursal <span class="text-danger">*</span></label>
+                        <select name="branch_id" id="branch_id"
+                                class="form-control @error('branch_id') is-invalid @enderror" required>
+                            <option value="">Seleccione la sucursal</option>
+                            @foreach($sucursales as $sucursal)
+                                <option value="{{ $sucursal->id }}" @selected(old('branch_id') == $sucursal->id)>
+                                    {{ $sucursal->name }}
+                                    @if($sucursal->contract_prefix)
+                                        — contratos {{ $sucursal->contract_prefix }}
+                                    @endif
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('branch_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <small class="form-text text-muted">
+                            Determina el consecutivo del contrato y los planes disponibles.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- ============================================================
              1. Dónde vive el cliente
              ============================================================ --}}
         <div class="card card-outline card-primary">
@@ -179,18 +220,111 @@
             <div class="card-body">
                 <div class="row">
                     <div class="form-group col-md-6">
-                        <label for="plan_id">Plan de servicio</label>
-                        <select name="plan_id" id="plan_id" class="form-control">
-                            <option value="">Seleccionar plan</option>
-                            @foreach($plans as $plan)
-                                <option value="{{ $plan->id }}" @selected(old('plan_id') == $plan->id)>
-                                    {{ $plan->name }}
-                                </option>
-                            @endforeach
-                        </select>
+                        <label for="plan_id">
+                            Plan de servicio <span class="text-danger">*</span>
+                        </label>
+
+                        {{-- Sin ningun plan dado de alta no hay contrato
+                             posible: del plan salen el precio y los servicios
+                             que se facturan. En vez de dejar un desplegable
+                             vacio, se dice que falta y por donde se arregla. --}}
+                        @if($plans->isEmpty())
+                            <div class="alert alert-warning mb-0">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                    Todavia no hay planes
+                                </h6>
+                                <p class="mb-2 small">
+                                    Un contrato necesita un plan: de el salen el precio, los
+                                    servicios incluidos y el IVA de cada uno. Cree al menos uno
+                                    antes de dar de alta contratos.
+                                </p>
+                                @can('plans.create')
+                                    <a href="{{ route('plans.create') }}" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-plus mr-1"></i> Crear un plan
+                                    </a>
+                                @else
+                                    <span class="small text-muted">
+                                        Pidale a un administrador que cree los planes de esta sucursal.
+                                    </span>
+                                @endcan
+                            </div>
+                        @else
+                            <select name="plan_id" id="plan_id" class="form-control" required>
+                                <option value="">Seleccionar plan</option>
+                                @foreach($plans as $plan)
+                                    {{-- data-branch deja que el JS de abajo esconda
+                                         los planes que no son de la sucursal
+                                         elegida: un plan es de UNA sucursal. --}}
+                                    <option value="{{ $plan->id }}" data-branch="{{ $plan->branch_id }}"
+                                            @selected(old('plan_id') == $plan->id)>
+                                        {{ $plan->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+
+                            {{-- Lo llena el JS cuando la sucursal elegida no
+                                 tiene ningun plan propio. --}}
+                            <div id="avisoSinPlanes" class="alert alert-warning mt-2 d-none">
+                                <span class="small"></span>
+                                @can('plans.create')
+                                    <a href="{{ route('plans.create') }}" class="alert-link small">
+                                        Crear un plan
+                                    </a>
+                                @endcan
+                            </div>
+                        @endif
+
                         @error('plan_id')
                             <span class="text-danger small">* {{ $message }}</span>
                         @enderror
+                    </div>
+
+                    {{-- ============================================================
+                         GRUPO DE CONTRATO
+
+                         Decide como se factura este contrato: con
+                         factura electronica o con documento interno.
+
+                         Viene marcado el predeterminado de la empresa. Si la
+                         empresa solo tiene ese, el campo se deja igualmente
+                         a la vista: no es un tramite, es la clasificacion
+                         fiscal del contrato y conviene que quien lo da de
+                         alta la vea.
+                         ============================================================ --}}
+                    <div class="form-group col-md-6">
+                        <label for="affinity_group_id">Grupo de afinidad</label>
+
+                        @if($gruposAfinidad->isEmpty())
+                            <div class="alert alert-warning mb-0">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                    Esta empresa no tiene grupos activos
+                                </h6>
+                                <p class="mb-2 small">
+                                    El contrato se creara sin clasificar. Podra encontrarlo despues
+                                    con el filtro <em>«Sin grupo asignado»</em> del listado.
+                                </p>
+                                @can('affinity_groups.create')
+                                    <a href="{{ route('affinity_groups.index') }}"
+                                       class="btn btn-sm btn-warning" target="_blank">
+                                        <i class="fas fa-layer-group mr-1"></i> Administrar grupos
+                                    </a>
+                                @endcan
+                            </div>
+                        @else
+                            <select name="affinity_group_id" id="affinity_group_id"
+                                    class="form-control @error('affinity_group_id') is-invalid @enderror">
+                                @foreach($gruposAfinidad as $grupoAfinidad)
+                                    <option value="{{ $grupoAfinidad->id }}"
+                                            data-electronica="{{ $grupoAfinidad->requires_electronic_invoicing ? '1' : '0' }}"
+                                            @selected(old('affinity_group_id', $grupoPorDefecto?->id) == $grupoAfinidad->id)>
+                                        {{ $grupoAfinidad->etiqueta() }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('affinity_group_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        @endif
                     </div>
 
                     <div class="form-group col-md-6">
@@ -411,4 +545,80 @@
             $municipalitySelect.on('change', proposeSearchText);
         });
     </script>
+
+    {{-- ============================================================
+         Los planes son de UNA sucursal
+
+         Al elegir la sucursal se dejan solo sus planes. Sin esto se
+         podria asignar a un contrato de Bogota un plan de Medellin, y
+         el precio saldria del sitio equivocado.
+
+         Es ayuda de la pantalla, no la barrera: el servidor comprueba
+         igualmente que el plan sea de la sucursal del contrato.
+         ============================================================ --}}
+    <script>
+        (function () {
+            const sucursal = document.getElementById('branch_id');
+
+            // Solo existe cuando hay mas de una sucursal que elegir
+            if (!sucursal) {
+                return;
+            }
+
+            const planes = document.getElementById('plan_id');
+
+            // No hay desplegable cuando no existe ningun plan: la vista
+            // pinta el aviso en su lugar y aqui no hay nada que filtrar.
+            if (!planes) {
+                return;
+            }
+
+            const opciones = Array.from(planes.options).slice(1);
+            const aviso = document.getElementById('avisoSinPlanes');
+
+            function filtrar() {
+                const elegida = sucursal.value;
+                let visibles = 0;
+
+                opciones.forEach(function (opcion) {
+                    const suya = !elegida || opcion.dataset.branch === elegida;
+
+                    opcion.hidden = !suya;
+                    opcion.disabled = !suya;
+
+                    if (suya) {
+                        visibles++;
+                    }
+
+                    // Si el plan que estaba puesto ya no es de esta
+                    // sede, se suelta: dejarlo seleccionado y oculto es
+                    // la forma mas facil de mandar un dato invalido.
+                    if (!suya && planes.value === opcion.value) {
+                        planes.value = '';
+                    }
+                });
+
+                // Hay planes, pero ninguno de la sucursal elegida. Sin
+                // este aviso el desplegable se queda vacio sin explicar
+                // por que, y parece que la pantalla esta rota.
+                if (aviso) {
+                    const faltan = elegida !== '' && visibles === 0;
+
+                    aviso.classList.toggle('d-none', !faltan);
+                    planes.classList.toggle('d-none', faltan);
+
+                    if (faltan) {
+                        const nombre = sucursal.options[sucursal.selectedIndex].text.trim();
+
+                        aviso.querySelector('span').textContent =
+                            'La sucursal "' + nombre + '" no tiene ningun plan. ';
+                    }
+                }
+            }
+
+            sucursal.addEventListener('change', filtrar);
+            filtrar();
+        })();
+    </script>
+
 @endsection

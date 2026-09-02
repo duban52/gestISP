@@ -12,8 +12,20 @@
                 @method('PUT')
                 <div class="row">
                     <div class="form-group col-md-6">
-                        <label for="nit">Nit</label>
-                        <input type="text" name="nit" class="form-control" value="{{ $branch->nit }}" required>
+                        <label for="company_id">Empresa <span class="text-danger">*</span></label>
+                        <select name="company_id" id="company_id"
+                                class="form-control @error('company_id') is-invalid @enderror" required>
+                            @foreach($empresas as $emp)
+                                <option value="{{ $emp->id }}"
+                                        @selected(old('company_id', $branch->company_id) == $emp->id)>
+                                    {{ $emp->nombreVisible() }} — NIT {{ $emp->identificacion() }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('company_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        <small class="form-text text-muted">
+                            Mover una sucursal de empresa cambia el NIT con el que factura.
+                        </small>
                     </div>
                     <div class="form-group col-md-6">
                         <label for="name">Nombre</label>
@@ -64,16 +76,21 @@
                         <label for="additional_number">Teléfono Adicional</label>
                         <input type="text" name="additional_number" class="form-control" value="{{ $branch->additional_number }}">
                     </div>
+                    {{-- El logo se administra en la EMPRESA, no aqui.
+                         Ver companies/_form.blade.php --}}
                     <div class="form-group col-md-6">
-                        <label for="image">Cambiar Imagen</label>
-                        <input type="file" name="image" class="form-control">
-                        <div class="rounded mx-auto d-block text-center mt-2">
-                            <img src="{{ asset('storage/'.$branch->image) }}" style="width: 250px">
+                        <label>Logo</label>
+                        <div>
+                            @if($branch->company?->logo)
+                                <img src="{{ asset('storage/' . $branch->company->logo) }}"
+                                     style="max-height: 70px" class="mb-1">
+                            @endif
+                            <small class="form-text text-muted">
+                                El logo es de la empresa
+                                <a href="{{ route('companies.edit', $branch->company_id) }}">{{ $branch->company?->nombreVisible() }}</a>
+                                y lo comparten todas sus sucursales.
+                            </small>
                         </div>
-                    </div>
-                    <div class="form-group col-md-6">
-                        <label for="moving_price">Precio de Traslado</label>
-                        <input type="number" step="0.01" name="moving_price" class="form-control" value="{{ $branch->moving_price }}">
                     </div>
                     <div class="form-group col-md-6">
                         <label for="reconnection_price">Precio de Reconexión</label>

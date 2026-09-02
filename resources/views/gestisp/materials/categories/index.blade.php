@@ -35,12 +35,18 @@
             <table class="table table-hover">
                 <table-body>
                     <tr>
+                        @if($mostrarSucursal)<th>Sucursal</th>@endif
                         <th>Nombre</th>
                         <th>Descripción</th>
                         <th></th>
                     </tr>
                     @foreach($categories as $category)
                         <tr>
+                            {{-- Tabla simple paginada en servidor, sin DataTables:
+                                 la columna se condiciona aqui. --}}
+                            @if($mostrarSucursal)
+                                <td>{{ $category->branch?->name ?: '—' }}</td>
+                            @endif
                             <td>{{ $category->name }}</td>
                             <td>{{ $category->description }}</td>
                             <td class="text-right"><a href="{{route('categories.edit', $category)}}" class="btn btn-warning">Editar</a></td>

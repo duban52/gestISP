@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
+use App\Tenancy\CurrentContext;
 
 /**
  * Ubicación de la vivienda del contrato.
@@ -132,6 +133,6 @@ class ContractLocationController extends Controller
      */
     private function requireSameBranch(Contract $contract): void
     {
-        abort_if((int) $contract->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($contract->branch_id), 403);
     }
 }

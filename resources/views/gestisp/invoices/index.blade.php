@@ -31,8 +31,41 @@
                         Reportes <i class="fas fa-chart-bar"></i>
                     </a>
                 </div>
+                {{-- ============================================================
+                     Sucursal de la corrida y del PDF masivo.
+
+                     Las dos operaciones son DE UNA SUCURSAL: recorren sus
+                     contratos, usan su membrete y consumen su consecutivo.
+                     En modo independiente la manda la sesión y esto no
+                     aparece; en panel consolidado hay que decir cuál.
+
+                     El selector vive FUERA del formulario y se asocia a él
+                     con el atributo `form`, porque el mismo valor lo
+                     necesitan dos acciones distintas: el POST de la corrida
+                     y la petición AJAX del PDF.
+                     ============================================================ --}}
+                @php
+                    $contextoFacturacion = app(\App\Tenancy\CurrentContext::class);
+                    $elegirSucursal = $contextoFacturacion->hayQueElegirSucursal();
+                @endphp
+
+                @if($elegirSucursal)
+                    <div class="col-md-2 mb-2">
+                        <label for="branch_id" class="mb-1 small text-muted">
+                            Sucursal <span class="text-danger">*</span>
+                        </label>
+                        <select name="branch_id" id="branch_id" form="formGenerarFacturas"
+                                class="form-control form-control-sm" required>
+                            <option value="">Seleccione…</option>
+                            @foreach($contextoFacturacion->sucursalesElegibles() as $sucursal)
+                                <option value="{{ $sucursal->id }}">{{ $sucursal->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+
                 <div class="col-md-2 text-center text-md-right mb-2">
-                    <form action="{{ route('invoices.generate') }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas generar las facturas?');">
+                    <form id="formGenerarFacturas" action="{{ route('invoices.generate') }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas generar las facturas?');">
                         @csrf
                         <button type="submit" class="btn btn-primary col-10">Generar Facturas</button>
                     </form>
@@ -63,6 +96,7 @@
                 <table id="invoicesTable" class="table table-hover table-striped">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>ID</th>
                         <th>N.º contrato</th>
                         <th>Identificación</th>
@@ -78,6 +112,11 @@
                     <tbody>
                     @foreach($invoices as $invoice)
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $invoice->branch?->name ?: '—' }}</td>
                             {{-- Número formal (prefijo-consecutivo); las facturas
                                  históricas sin numerar muestran su id --}}
                             <td>{{ $invoice->displayNumber() }}</td>
@@ -278,30 +317,34 @@
                 "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
 
                 // Configuración de ordenamiento
-                "order": [[0, "desc"]], // Ordenar por ID descendente por defecto
+                "order": [[1, "desc"]], // Ordenar por ID descendente por defecto
 
                 // Configuración de columnas
                 // Los índices se corrieron dos posiciones al agregar
                 // las columnas de contrato e identificación.
                 "columnDefs": [
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     {
-                        "targets": [7], // Columna Total
+                        "targets": [8], // Columna Total
                         "type": "num-fmt", // Para ordenamiento numérico
                         "className": "text-right"
                     },
                     {
-                        "targets": [9], // Columna Acciones
+                        "targets": [10], // Columna Acciones
                         "orderable": false,
                         "searchable": false,
                         "className": "text-center"
                     },
                     {
-                        "targets": [5, 6], // Columnas de fechas
+                        "targets": [6, 7], // Columnas de fechas
                         "type": "date",
                         "className": "text-center"
                     },
                     {
-                        "targets": [8], // Columna Estado
+                        "targets": [9], // Columna Estado
                         "className": "text-center"
                     }
                 ],
@@ -357,8 +400,17 @@
 
                 console.log("Iniciando proceso de generación de PDF...");
 
+                // La sucursal solo existe en panel consolidado; si no
+                // hay selector, el servidor la deduce como siempre.
+                let urlPdf = $(this).attr('href');
+                const sucursalPdf = $('#branch_id').val();
+
+                if (sucursalPdf) {
+                    urlPdf += (urlPdf.indexOf('?') === -1 ? '?' : '&') + 'branch_id=' + encodeURIComponent(sucursalPdf);
+                }
+
                 $.ajax({
-                    url: $(this).attr('href'),
+                    url: urlPdf,
                     method: 'GET',
                     success: function(response) {
                         console.log("PDF generado. Iniciando verificación del estado...");

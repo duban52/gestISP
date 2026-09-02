@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de cuentas PPPoE
@@ -112,7 +113,8 @@ class PppoeAccountController extends Controller
         );
 
         return view('gestisp.pppoe.index', [
-            'routers' => Router::byBranch(session('branch_id'))->active()->get(),
+            'routers' => Router::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+                ->active()->get(),
             'accounts' => $accounts,
             'filtros' => $filtros,
             'resumen' => $consulta->resumen($accounts),
@@ -121,7 +123,7 @@ class PppoeAccountController extends Controller
             'ultimoSondeo' => $accounts->max('last_polled_at'),
             // Los perfiles que de verdad hay en uso, para el filtro: la
             // lista de perfiles del router incluye muchos que nadie usa.
-            'perfiles' => PppoeAccount::where('branch_id', session('branch_id'))
+            'perfiles' => PppoeAccount::whereIn('branch_id', app(CurrentContext::class)->branchIds())
                 ->whereNotNull('profile')
                 ->distinct()
                 ->orderBy('profile')
@@ -240,7 +242,10 @@ class PppoeAccountController extends Controller
         }
 
         $cuenta = PppoeAccount::create([
-            'branch_id'      => session('branch_id'),
+            // Hereda la del router: una cuenta PPPoE vive en el equipo
+            // donde se crea el secret, no en la sede desde la que se
+            // esta mirando.
+            'branch_id'      => $router->branch_id,
             'router_id'      => $validated['router_id'],
             'contract_id'    => $validated['contract_id'] ?? null,
             'mikrotik_id'    => $mikrotikId,
@@ -453,7 +458,8 @@ class PppoeAccountController extends Controller
             }
 
             $toInsert[] = [
-                'branch_id'      => session('branch_id'),
+                // Importadas DEL router: su sucursal es la de el.
+                'branch_id'      => $router->branch_id,
                 'router_id'      => $router->id,
                 'mikrotik_id'    => $secret['mikrotik_id'],
                 'username'       => $secret['username'],

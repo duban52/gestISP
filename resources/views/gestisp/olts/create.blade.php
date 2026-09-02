@@ -10,6 +10,12 @@
         <div class="card-body">
             <form method="POST" action="{{ route('olts.store') }}" enctype="multipart/form-data">
                 @csrf
+                {{-- En panel consolidado no hay una sucursal activa: hay que
+                     decir en cual se guarda. Con una sola alcanzable no se
+                     pinta nada y el controlador la asume. --}}
+                <x-selector-sucursal titulo="Sucursal de la OLT"
+                                     ayuda="El equipo queda en esta sucursal, igual que las ONTs que se conecten a el." />
+
                 <div class="row">
 
                     <div class="form-group col-12 col-md-6">

@@ -156,12 +156,18 @@ class ContractStatusMap
      *
      * @return array<int, string>
      */
-    public static function estadosSinClasificar(?int $branchId = null): array
+    /**
+     * @param  int|array<int, mixed>|null  $sucursales  Una, varias o
+     *         ninguna, igual que los informes.
+     * @return array<int, string>
+     */
+    public static function estadosSinClasificar(int|array|null $sucursales = null): array
     {
         $conocidos = array_merge(...array_values(self::GRUPOS));
+        $branchIds = BranchFilter::normalizar($sucursales);
 
         return Contract::query()
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($branchIds !== [], fn ($q) => $q->whereIn('branch_id', $branchIds))
             ->whereNotNull('status')
             ->whereNotIn('status', $conocidos)
             ->distinct()

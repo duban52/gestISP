@@ -47,6 +47,7 @@
                 <table id="plansTable" class="table table-hover table-bordered" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>Nombre</th>
                         <th>Servicios incluidos</th>
                         <th>Precio Total</th>
@@ -65,6 +66,11 @@
                             );
                         @endphp
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $plan->branch?->name ?: '—' }}</td>
                             <td>{{ $plan->name }}</td>
 
                             {{-- Servicios del plan como badges --}}
@@ -170,11 +176,15 @@
                 pageLength: 25,
 
                 // Orden inicial: por nombre (columna 0) ascendente
-                order: [[0, 'asc']],
+                order: [[1, 'asc']],
 
                 columnDefs: [
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     // Servicios (badges) y acciones no son ordenables
-                    { orderable: false, targets: [1, 3] },
+                    { orderable: false, targets: [2, 4] },
 
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }

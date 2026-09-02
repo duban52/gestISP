@@ -311,7 +311,8 @@ class OdnTest extends TestCase
      */
     private function cajaDeOtraSucursal(): NapBox
     {
-        $otraSucursal = Branch::factory()->create();
+        // Misma empresa, otra sede
+        $otraSucursal = Branch::factory()->create(['company_id' => $this->branch->company_id]);
 
         $redAjena = OpticalNetwork::create([
             'branch_id' => $otraSucursal->id,

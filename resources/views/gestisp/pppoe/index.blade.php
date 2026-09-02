@@ -245,6 +245,7 @@
                 <table id="pppoeTable" class="table table-hover tabla-movil" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>Usuario</th>
                         <th>Router</th>
                         <th>Perfil</th>
@@ -261,6 +262,11 @@
                     <tbody>
                     @foreach($accounts as $account)
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $account->branch?->name ?: '—' }}</td>
                             {{-- Celda principal: encabeza la ficha en el teléfono
                                  con el usuario, que es por lo que se reconoce
                                  la cuenta, y el router debajo. --}}
@@ -669,6 +675,10 @@
                 pageLength: enMovil ? 10 : 25,
                 dom: enMovil ? 'ftip' : 'lfrtip',
                 columnDefs: [
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     // Acciones: la última columna. Se ha corrido dos
                     // veces al añadir columnas (número de contrato,
                     // y luego conexión y última conexión), así que se

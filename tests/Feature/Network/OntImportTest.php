@@ -327,7 +327,8 @@ class OntImportTest extends TestCase
     {
         Queue::fake();
 
-        $otraSucursal = Branch::factory()->create();
+        // Misma empresa, otra sede
+        $otraSucursal = Branch::factory()->create(['company_id' => $this->branch->company_id]);
         $oltAjena = Olt::create([
             'branch_id' => $otraSucursal->id,
             'name' => 'OLT ajena',
@@ -421,7 +422,8 @@ class OntImportTest extends TestCase
     {
         Queue::fake();
 
-        $otraSucursal = Branch::factory()->create();
+        // Misma empresa, otra sede
+        $otraSucursal = Branch::factory()->create(['company_id' => $this->branch->company_id]);
         $oltAjena = Olt::create([
             'branch_id' => $otraSucursal->id,
             'name' => 'OLT ajena',

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class OntImportRun extends Model
 {
+    use BelongsToCompany;
+
     public const ESTADO_PENDIENTE = 'pending';
     public const ESTADO_EJECUTANDO = 'running';
     public const ESTADO_COMPLETADO = 'completed';

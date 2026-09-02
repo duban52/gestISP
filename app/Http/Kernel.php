@@ -41,6 +41,10 @@ class Kernel extends HttpKernel
             // perdió (restablecimiento de contraseña, "recordarme").
             // Va ANTES de TrackUserActivity y de check.permission.
             \App\Http\Middleware\EnsureBranchSession::class,
+            // Aislamiento entre empresas: enciende el contexto del que
+            // vive el global scope. Va justo despues de que la sesion
+            // tenga sucursal y ANTES de cualquier consulta de datos.
+            \App\Http\Middleware\SetCompanyContext::class,
             // Repone el tema (claro/oscuro) que el usuario dejó
             // guardado, ya que AdminLTE solo lo recuerda en la sesión.
             \App\Http\Middleware\ApplyUserTheme::class,

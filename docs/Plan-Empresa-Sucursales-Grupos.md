@@ -153,7 +153,7 @@ Company  (el contribuyente — un NIT)
 ├── Certificados (1:N)          .p12 cifrado · vigencia · histórico
 ├── Resoluciones (1:N)          número · vigencia · tipo de documento
 │    └── Rangos (1:N)           prefijo · desde · hasta · consecutivo → Branch
-├── Grupos de contrato (1:N)    código · nombre · ¿electrónica? · defaults
+├── Grupos de afinidad (1:N)    código · nombre · ¿electrónica? · defaults
 │
 └── Branches (1:N)
      ├── Datos operativos       dirección · contacto · precios
@@ -161,7 +161,7 @@ Company  (el contribuyente — un NIT)
      ├── Reglas de facturación  prorrateo · plazo · corte     (ya existe)
      └── Usuarios (N:M + rol)                                  (ya existe)
 
-Contract → company_id (derivado) · branch_id · contract_group_id
+Contract → company_id (derivado) · branch_id · affinity_group_id
               └── el grupo decide si su factura va a la DIAN
 ```
 
@@ -205,9 +205,9 @@ redundantes pero **no se quitan en la misma fase**: primero se añade el scope,
 se comprueba que todo sigue pasando, y solo después se limpian. Quitarlos antes
 deja una ventana sin ninguna barrera.
 
-## B.3 Grupo de contrato
+## B.3 Grupo de afinidad
 
-**Nombre propuesto: `ContractGroup` / «Grupo de contrato».**
+**Nombre propuesto: `AffinityGroup` / «Grupo de afinidad».**
 
 Descarté las alternativas: «Tipo de facturación» acopla el nombre a un solo uso
 —y tú mismo dices que quieres poder ampliar reglas—; «Categoría» ya está usado
@@ -240,7 +240,7 @@ active · timestamps
 `company_id · responsibility_code` — N:M. Son varias por empresa (`O-13`,
 `O-15`, `O-23`…); una columna no basta.
 
-### `contract_groups`
+### `affinity_groups`
 ```
 id · company_id · code · name · description
 requires_electronic_invoicing BOOLEAN DEFAULT false
@@ -300,8 +300,8 @@ desplegar código para actualizarlos.
 | `plans` | `+ company_id` · `name` UNIQUE → `(company_id, name)` | Ídem | Sí |
 | `services` | `+ company_id` · `+ unspsc_code` · `+ tax_code` | Datos fiscales del catálogo | Sí |
 | `clients` | `+ company_id` · `+ document_type_code` · `+ verification_digit` · `+ organization_type_code` · `+ address` · `+ dane codes` · `+ tax_responsibilities` | `type_document` hoy es **texto libre** (3 valores) → migrar a código | Sí |
-| `contracts` | `+ company_id` · **`+ contract_group_id`** | El corazón de §5 y §6 | Sí |
-| `invoices` | `+ company_id` · `+ contract_group_id` (congelado) · `+ payment_means_code` · `+ payment_method_code` | Ver ⚖️ D5 | Sí |
+| `contracts` | `+ company_id` · **`+ affinity_group_id`** | El corazón de §5 y §6 | Sí |
+| `invoices` | `+ company_id` · `+ affinity_group_id` (congelado) · `+ payment_means_code` · `+ payment_method_code` | Ver ⚖️ D5 | Sí |
 | `credit_debit_notes` | `+ company_id` | | Sí |
 | `payments`, `cash_registers`, `technical_orders`, `olts`, `onts`, `pppoe_accounts`, `routers`, `optical_networks`, `materials`, `warehouses`, `categories` | `+ company_id` | Aislamiento | Sí |
 | **`audits`** | `+ company_id` | **Sin esto la propia trazabilidad es un punto de fuga** | Sí |
@@ -368,7 +368,7 @@ entra directo sin pantalla intermedia. «Un solo contexto» significa: una empre
 
 | Servicio | Cambio |
 |---|---|
-| `InvoiceGenerator` | Copia `contract_group_id` a la factura al emitirla (congelado) |
+| `InvoiceGenerator` | Copia `affinity_group_id` a la factura al emitirla (congelado) |
 | `BillingRun` / `MonthlyBillingRun` | Acepta contexto de empresa; en consolidado puede correr todas las sucursales |
 | **`ElectronicInvoicingDecider`** | **Nuevo y central.** Única fuente de la decisión «¿esta factura va a la DIAN?». Ningún otro sitio la toma |
 | Listener de `InvoiceIssued` | Consulta al decider y encola o no |
@@ -376,7 +376,7 @@ entra directo sin pantalla intermedia. «Un solo contexto» significa: una empre
 **La regla, en un solo sitio:**
 ```php
 $empresa->electronic_invoicing_enabled
-    && $factura->contractGroup?->requires_electronic_invoicing
+    && $factura->affinityGroup?->requires_electronic_invoicing
     && $empresa->dianConfiguration?->estaEnProduccion()
 ```
 Tres condiciones. Ninguna hardcodeada. Si mañana hay una cuarta, se añade aquí.
@@ -385,7 +385,7 @@ Tres condiciones. Ninguna hardcodeada. Si mañana hay una cuarta, se añade aqu�
 
 `ContractQuery` ya recibe `?int $branchId` y cae a `session('branch_id')`.
 Pasa a recibir el **contexto** y a filtrar por `branchIds`. Se añaden filtros
-`company_id`, `branch_id`, `contract_group_id` y
+`company_id`, `branch_id`, `affinity_group_id` y
 `requires_electronic_invoicing`.
 
 **El filtro nunca amplía el alcance**: se intersecta con el contexto, no lo
@@ -405,7 +405,7 @@ existen.
 | Barra superior | Muestra empresa + sucursal (o «Todas las sucursales» en consolidado) |
 | Admin. de empresas | **Nueva.** Solo superadministrador de plataforma |
 | Admin. de sucursales | Existe; se le cuelga de la empresa y se le quita el NIT |
-| **Admin. de grupos de contrato** | **Nueva.** Configuración → Grupos de contratos |
+| **Admin. de grupos de afinidad** | **Nueva.** Configuración → Grupos de afinidads |
 | Alta/edición de contrato | `+ selector de grupo` (obligatorio) · `+ selector de sucursal` **solo en consolidado** |
 | Listado de contratos | `+ columna y filtro de grupo` · `+ filtro de sucursal` en consolidado · `+ filtro «va a la DIAN»` |
 | Facturación | Distintivo visual claro entre documento fiscal y documento interno |
@@ -472,7 +472,7 @@ hace la migración inicial mucho más simple de lo que sería en el caso general
       cash_registers, plans, services, audits…
    Todas vía su branch_id. Ninguna requiere decisión humana.
 4. Crear el grupo por defecto de cada empresa (is_default = true)
-5. contracts.contract_group_id ← el grupo por defecto
+5. contracts.affinity_group_id ← el grupo por defecto
 6. Migrar los tres contadores  ← LA PARTE DELICADA
 7. Convertir clients.type_document de texto a código
 8. Quitar branches.nit  (solo cuando 1–7 estén verificados)
@@ -626,8 +626,8 @@ indicador permanente.
 **Termina cuando:** en consolidado se crean documentos en la sucursal correcta y
 las reglas de cada sucursal se siguen respetando.
 
-### Fase 5 — Grupos de contrato
-`contract_groups`, CRUD, `contracts.contract_group_id`, grupo por defecto,
+### Fase 5 — Grupos de afinidad
+`affinity_groups`, CRUD, `contracts.affinity_group_id`, grupo por defecto,
 validación en alta de contrato.
 
 ### Fase 6 — Numeración unificada
@@ -645,7 +645,7 @@ desde los `.gc`. Informe de completitud fiscal.
 
 ### Fase 9 — Decisión de facturación electrónica
 `ElectronicInvoicingDecider`, `electronic_invoicing_enabled` por empresa,
-`contract_group_id` congelado en la factura, serie interna separada.
+`affinity_group_id` congelado en la factura, serie interna separada.
 **Termina cuando:** un contrato de grupo electrónico y otro de grupo interno
 producen facturas correctas por caminos distintos, **sin que exista todavía
 ninguna conexión con la DIAN**.
@@ -674,7 +674,7 @@ tecnológico.
 | **D4** | ¿El cliente es de la empresa o de la sucursal? | Sucursal (hoy) · **Empresa** | **Empresa.** En los datos reales que analizamos, 215 personas tienen contratos en más de una sucursal, y ante la DIAN son **un solo adquiriente** |
 | **D5** | Las facturas internas, ¿comparten serie con las fiscales? | Sí · **No** | **No.** Serie propia. Consumir consecutivos DIAN con documentos que nunca se reportan agota el rango autorizado y deja huecos que hay que justificar |
 | **D6** | Las notas internas, ¿dónde numeran? | `document_sequences` · `numbering_ranges` | **Igual que las facturas**: interna si su grupo es interno, fiscal si es electrónico |
-| **D7** | ¿Cambiar el grupo de un contrato afecta a facturas ya emitidas? | Sí · **No** | **No, nunca.** Por eso `contract_group_id` se copia a la factura al emitirla |
+| **D7** | ¿Cambiar el grupo de un contrato afecta a facturas ya emitidas? | Sí · **No** | **No, nunca.** Por eso `affinity_group_id` se copia a la factura al emitirla |
 | **D8** | ¿Los planes y servicios son de empresa o de sucursal? | | **Servicio → empresa** (lleva UNSPSC e IVA: es fiscal). **Plan → sucursal**, con el precio de la empresa como valor por defecto |
 | **D9** | ¿Migro `branches.contract_prefix` a `document_sequences`? | Sí · Dejarlo | **Sí, pero en la fase 6 y con `--dry-run`.** Es la de menor riesgo fiscal y sirve de ensayo para las de factura |
 

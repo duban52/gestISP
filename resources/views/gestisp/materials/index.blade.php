@@ -50,6 +50,7 @@
                 <table id="materialsTable" class="table table-hover table-bordered" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>Nombre</th>
                         <th>Categoría</th>
                         <th>Tipo</th>
@@ -60,6 +61,11 @@
                     <tbody>
                     @foreach($materials as $material)
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $material->branch?->name ?: '—' }}</td>
                             <td>{{ $material->name }}</td>
                             <td>{{ $material->category->name ?? '—' }}</td>
 
@@ -182,11 +188,15 @@
                 pageLength: 25,
 
                 // Orden inicial: por nombre (columna 0) ascendente
-                order: [[0, 'asc']],
+                order: [[1, 'asc']],
 
                 columnDefs: [
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     // La columna de acciones (índice 4) no es ordenable
-                    { orderable: false, targets: [4] },
+                    { orderable: false, targets: [5] },
 
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }

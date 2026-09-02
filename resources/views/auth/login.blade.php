@@ -38,55 +38,6 @@
                             </div>
 
                             <div class="row mb-3">
-                                <label class="col-md-4 col-form-label text-md-end" for="branch">Sucursal</label>
-
-                                <div class="col-md-6">
-
-                                    <select name="branch_id" id="branch" required class="form-control @error('branch_id') is-invalid @enderror">
-                                        <option value="" selected disabled>Seleccione una sucursal</option>
-                                        <!-- Opciones dinámicas se llenan con AJAX -->
-                                    </select>
-                                </div>
-                            </div>
-                            <script>
-
-                                document.getElementById('email').addEventListener('blur', function() {
-                                    const email = this.value;
-                                    const branchSelect = document.getElementById('branch');
-
-                                    if (email) {
-                                        fetch(`/user/branches?email=${encodeURIComponent(email)}`)
-                                    .then(response => {
-                                            if (!response.ok) {
-                                                throw new Error('Error en la respuesta del servidor');
-                                            }
-                                            return response.json();
-                                        })
-                                            .then(data => {
-                                                branchSelect.innerHTML = '<option value="" selected disabled>Seleccione una sucursal</option>';
-
-                                                if (data.branches && Object.keys(data.branches).length > 0) {
-                                                    Object.entries(data.branches).forEach(([id, name]) => {
-                                                        const option = document.createElement('option');
-                                                        option.value = id;
-                                                        option.textContent = name;
-                                                        branchSelect.appendChild(option);
-                                                    });
-                                                } else {
-                                                    branchSelect.innerHTML = '<option value="" selected disabled>No hay sucursales disponibles</option>';
-                                                }
-                                            })
-                                            .catch(error => {
-                                                console.error('Error al cargar las sucursales:', error);
-                                                branchSelect.innerHTML = '<option value="" selected disabled>Error al cargar sucursales</option>';
-                                            });
-                                    }
-                                });
-
-                            </script>
-
-
-                            <div class="row mb-3">
                                 <div class="col-md-6 offset-md-4">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="remember" id="remember" {{ old('remember') ? 'checked' : '' }}>

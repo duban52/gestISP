@@ -2,6 +2,7 @@
 
 namespace App\Reports;
 
+use App\Reports\Support\BranchFilter;
 use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Enums\PaymentStatus;
 use App\Models\Invoice;
@@ -29,10 +30,23 @@ use Illuminate\Support\Facades\DB;
  */
 class BillingReport
 {
+    /**
+     * Sucursales que entran en el informe. Lista vacia = sin filtro.
+     *
+     * @var array<int, int>
+     */
+    private readonly array $branchIds;
+
+    /**
+     * @param  int|array<int, mixed>|null  $sucursales  Una, varias o
+     *         ninguna. Se admite el entero suelto porque es como
+     *         llamaba a este informe todo lo que ya existia.
+     */
     public function __construct(
         private readonly ReportPeriod $period,
-        private readonly ?int $branchId = null,
+        int|array|null $sucursales = null,
     ) {
+        $this->branchIds = BranchFilter::normalizar($sucursales);
     }
 
     /**
@@ -159,7 +173,7 @@ class BillingReport
     public function facturasPorEstado(): Collection
     {
         return Invoice::query()
-            ->when($this->branchId, fn ($q) => $q->where('invoices.branch_id', $this->branchId))
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('invoices.branch_id', $this->branchIds))
             ->whereBetween('invoices.issue_date', [$this->period->from, $this->period->to])
             ->selectRaw('invoices.status as etiqueta, COUNT(*) as total, SUM(invoices.total) as monto')
             ->groupBy('invoices.status')
@@ -285,7 +299,7 @@ class BillingReport
     private function totalRetenido(ReportPeriod $periodo): float
     {
         return round((float) PaymentRetention::query()
-            ->when($this->branchId, fn ($q) => $q->where('branch_id', $this->branchId))
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('branch_id', $this->branchIds))
             // created_at lleva hora, así que el rango se abre al
             // día completo: con las fechas peladas se perdería todo
             // lo retenido el último día del período.
@@ -303,7 +317,7 @@ class BillingReport
     private function facturasQuery()
     {
         return Invoice::query()
-            ->when($this->branchId, fn ($q) => $q->where('invoices.branch_id', $this->branchId))
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('invoices.branch_id', $this->branchIds))
             ->whereNotIn('invoices.status', [
                 InvoiceStatus::Anulada->value,
                 InvoiceStatus::Borrador->value,
@@ -317,7 +331,7 @@ class BillingReport
     private function carteraQuery()
     {
         return Invoice::query()
-            ->when($this->branchId, fn ($q) => $q->where('invoices.branch_id', $this->branchId))
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('invoices.branch_id', $this->branchIds))
             ->whereIn('invoices.status', InvoiceStatus::payable())
             ->where('invoices.pending_invoice_amount', '>', 0);
     }
@@ -330,12 +344,12 @@ class BillingReport
     {
         return Payment::query()
             ->where('payments.status', PaymentStatus::Completed->value)
-            ->when($this->branchId, function ($q) {
+            ->when($this->branchIds !== [], function ($q) {
                 $q->whereExists(function ($sub) {
                     $sub->select(DB::raw(1))
                         ->from('invoices')
                         ->whereColumn('invoices.id', 'payments.invoice_id')
-                        ->where('invoices.branch_id', $this->branchId);
+                        ->whereIn('invoices.branch_id', $this->branchIds);
                 });
             });
     }

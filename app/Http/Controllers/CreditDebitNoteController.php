@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Notas crédito y débito sobre facturas.
@@ -40,8 +41,8 @@ class CreditDebitNoteController extends Controller
      */
     public function index(Request $request): View
     {
-        $notas = CreditDebitNote::with(['invoice', 'contract.client', 'user'])
-            ->where('branch_id', session('branch_id'))
+        $notas = CreditDebitNote::with(['invoice', 'contract.client', 'user', 'branch'])
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->when($request->filled('tipo'), fn ($q) => $q->where('type', $request->input('tipo')))
             ->orderByDesc('issue_date')
             ->orderByDesc('id')
@@ -61,7 +62,7 @@ class CreditDebitNoteController extends Controller
         $factura = Invoice::with(['contract.client', 'invoice_items', 'notes'])
             ->findOrFail($request->input('invoice'));
 
-        if ((int) $factura->branch_id !== (int) session('branch_id')) {
+        if (!app(CurrentContext::class)->permiteSucursal($factura->branch_id)) {
             abort(403, 'Esta factura pertenece a otra sucursal.');
         }
 
@@ -98,7 +99,7 @@ class CreditDebitNoteController extends Controller
 
         $factura = Invoice::findOrFail($datos['invoice_id']);
 
-        if ((int) $factura->branch_id !== (int) session('branch_id')) {
+        if (!app(CurrentContext::class)->permiteSucursal($factura->branch_id)) {
             abort(403, 'Esta factura pertenece a otra sucursal.');
         }
 
@@ -178,7 +179,7 @@ class CreditDebitNoteController extends Controller
     private function verificarSucursal(CreditDebitNote $note): void
     {
         abort_unless(
-            (int) $note->branch_id === (int) session('branch_id'),
+            app(CurrentContext::class)->permiteSucursal($note->branch_id),
             403,
             'Esta nota pertenece a otra sucursal.',
         );

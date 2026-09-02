@@ -55,6 +55,21 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
             // Array para almacenar las rutas de los códigos de barras
             $barcodeUrls = [];
 
+            // ...y el numero legible de cada uno, POR FACTURA.
+            //
+            // Antes se pasaba a la vista una sola variable $code, que
+            // era la del ULTIMO codigo generado en el bucle. La vista
+            // la imprime debajo del codigo de barras de CADA factura,
+            // asi que todas las paginas mostraban el mismo numero bajo
+            // barras distintas: el numero solo coincidia con su barra
+            // en la ultima factura del PDF.
+            //
+            // Y si no habia ninguna factura pendiente, $code no
+            // llegaba a existir y compact() reventaba con
+            // "Undefined variable $code" — es decir, el PDF masivo
+            // fallaba justo cuando no habia nada que imprimir.
+            $barcodeCodes = [];
+
             // Generar y almacenar los códigos de barras para cada factura
             foreach ($invoices as $invoice) {
                 $code = '0100' . $invoice->id . '000000' . $invoice->total; // Generar código único
@@ -66,10 +81,14 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
 
                 // Guardar la URL del código de barras para su uso en la vista
                 $barcodeUrls[$invoice->id] = asset("storage/{$barcodePath}");
+                $barcodeCodes[$invoice->id] = $code;
             }
 
             // Generar el PDF con la vista y los datos necesarios
-            $pdf = Pdf::loadView('gestisp.invoices.pending_invoices_pdf', compact('invoices', 'barcodeUrls', 'code'));
+            $pdf = Pdf::loadView(
+                'gestisp.invoices.pending_invoices_pdf',
+                compact('invoices', 'barcodeUrls', 'barcodeCodes'),
+            );
 
             // Configurar tamaño media carta (5.5" x 8.5") en puntos
             $pdf->setPaper([0, 0, 612.00, 419.53], 'portrait');

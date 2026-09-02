@@ -111,6 +111,7 @@
                 <table class="table table-hover mb-0">
                     <thead class="thead-light">
                     <tr>
+                        @if($mostrarSucursal)<th>Sucursal</th>@endif
                         <th>Mufla</th>
                         <th>Dónde está</th>
                         <th>Tipo</th>
@@ -125,6 +126,11 @@
                             $oc = $mufla->ocupacion();
                         @endphp
                         <tr>
+                            {{-- Esta tabla no es un DataTable, asi que la columna se
+                                 condiciona aqui en vez de esconderla con JS. --}}
+                            @if($mostrarSucursal)
+                            <td>{{ $mufla->network?->branch?->name ?: '—' }}</td>
+                            @endif
                             <td>
                                 <a href="{{ route('closures.show', $mufla) }}" class="font-weight-bold">
                                     {{ $mufla->code }}
@@ -168,7 +174,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-4">
+                            <td colspan="{{ $mostrarSucursal ? 7 : 6 }}" class="text-center text-muted py-4">
                                 Todavía no hay muflas registradas.
                                 <a href="{{ route('closures.create') }}">Registre la primera</a>.
                             </td>

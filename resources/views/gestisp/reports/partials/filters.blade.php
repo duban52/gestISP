@@ -5,7 +5,7 @@
     concreto se puede guardar en favoritos o enviar por correo, y el
     botón de PDF descarga exactamente lo que se está viendo.
 
-    Parámetros: $period, $granularidades, $rutaPdf
+    Parámetros: $period, $granularidades, $rutaPdf, $sucursales
 --}}
 <div class="card card-outline card-primary">
     <div class="card-header py-2">
@@ -21,6 +21,85 @@
 
     <div class="card-body">
         <form method="GET" class="form-row align-items-end">
+
+            {{-- ============================================================
+                 QUÉ SUCURSALES ENTRAN EN EL INFORME
+
+                 Solo aparece en panel consolidado con más de una sede:
+                 en modo independiente manda la activa y no hay nada
+                 que elegir.
+
+                 A LA VISTA Y NO EN UN DESPLEGABLE
+                 ---------------------------------
+                 Estaban dentro de un dropdown y no se veían: quien
+                 abría el informe no sabía qué sedes estaba sumando sin
+                 desplegar el menú, y las casillas salían recortadas
+                 contra el borde. Ahora son fichas que se marcan y se
+                 desmarcan, y el estado se lee de un vistazo.
+
+                 Son varias casillas y no un desplegable múltiple
+                 porque la pregunta real no es «cuál» sino «cuáles»:
+                 ver una sede, sumar varias, o verlas todas menos una.
+                 Un desplegable múltiple obliga a saber que hay que
+                 dejar pulsada la tecla de control; una ficha se
+                 entiende sola y funciona igual con el dedo.
+
+                 Van dentro del mismo formulario GET que el resto, así
+                 que viajan por la URL como los demás filtros — y el
+                 botón de PDF, que arrastra request()->query(), se las
+                 lleva sin tener que hacer nada.
+
+                 Ninguna marcada = todas. Lo resuelve el controlador.
+                 ============================================================ --}}
+            @if(isset($sucursales) && $sucursales->isNotEmpty())
+                @php
+                    $marcadas = collect(request()->query('sucursales', []))
+                        ->map(fn ($id) => (int) $id);
+                    // Sin nada en la URL están todas dentro, y las
+                    // fichas tienen que reflejarlo.
+                    $todasDentro = $marcadas->isEmpty();
+                @endphp
+
+                <div class="form-group col-12 mb-2" id="filtroSucursales">
+                    <label class="mb-1 small text-muted d-block">
+                        Sucursales
+                        <span class="ml-1 text-muted">·</span>
+                        <button type="button" class="btn btn-link btn-sm p-0 align-baseline"
+                                data-sucursales="todas">todas</button>
+                        <span class="text-muted">/</span>
+                        <button type="button" class="btn btn-link btn-sm p-0 align-baseline text-muted"
+                                data-sucursales="ninguna">ninguna</button>
+                    </label>
+
+                    <div class="d-flex flex-wrap">
+                        @foreach ($sucursales as $sucursal)
+                            {{-- Bloque completo y no @php(...) en linea: la forma
+                                 corta se empareja con el siguiente @endphp y se
+                                 traga el resto de la plantilla. Ya ha pasado
+                                 tres veces en este proyecto. --}}
+                            @php
+                                $dentro = $todasDentro || $marcadas->contains($sucursal->id);
+                            @endphp
+                            <label class="btn btn-sm mr-2 mb-1 ficha-sucursal
+                                          {{ $dentro ? 'btn-primary' : 'btn-outline-secondary' }}">
+                                {{-- La casilla va oculta pero SIGUE en el formulario: es
+                                     ella la que viaja en la URL. La ficha es su etiqueta,
+                                     así que hacer clic en la ficha la marca. --}}
+                                <input type="checkbox" class="d-none casilla-sucursal"
+                                       name="sucursales[]" value="{{ $sucursal->id }}"
+                                       @checked($dentro)>
+                                <i class="fas fa-{{ $dentro ? 'check-square' : 'square' }} mr-1"></i>
+                                {{ $sucursal->name }}
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <small class="form-text text-muted">
+                        <span id="resumenSucursales"></span>
+                        Sin ninguna marcada se informa de todas.
+                    </small>
+                </div>
+            @endif
 
             <div class="form-group col-6 col-md-2 mb-2">
                 <label class="mb-1 small text-muted">Desde</label>
@@ -109,4 +188,67 @@
         ({{ implode(', ', $estadosSinClasificar) }}). Aparecen agrupados como
         <em>Sin clasificar</em> y conviene normalizarlos para que las cifras cuadren.
     </div>
+@endif
+
+{{-- El JS solo hace falta si el selector se ha pintado. Antes se
+     emitia siempre, aunque no hubiera nada que gobernar. --}}
+@if(isset($sucursales) && $sucursales->isNotEmpty())
+@once
+    @push('js')
+        <script>
+            (function () {
+                const filtro = document.getElementById('filtroSucursales');
+
+                // Solo existe en panel consolidado con varias sedes.
+                if (!filtro) {
+                    return;
+                }
+
+                const casillas = Array.from(filtro.querySelectorAll('.casilla-sucursal'));
+                const resumen = document.getElementById('resumenSucursales');
+                const total = casillas.length;
+
+                function pintar(casilla) {
+                    const ficha = casilla.closest('.ficha-sucursal');
+                    const icono = ficha.querySelector('i');
+
+                    ficha.classList.toggle('btn-primary', casilla.checked);
+                    ficha.classList.toggle('btn-outline-secondary', !casilla.checked);
+                    icono.classList.toggle('fa-check-square', casilla.checked);
+                    icono.classList.toggle('fa-square', !casilla.checked);
+                }
+
+                function refrescar() {
+                    casillas.forEach(pintar);
+
+                    const marcadas = casillas.filter((c) => c.checked).length;
+
+                    // Se dice en palabras lo que va a salir, porque
+                    // "ninguna marcada" y "todas marcadas" dan el mismo
+                    // informe y eso no es evidente mirando las fichas.
+                    if (marcadas === 0 || marcadas === total) {
+                        resumen.textContent = 'Se informará de las ' + total + ' sucursales. ';
+                    } else if (marcadas === 1) {
+                        resumen.textContent = 'Se informará de 1 sucursal. ';
+                    } else {
+                        resumen.textContent = 'Se informará de ' + marcadas + ' de ' + total + ' sucursales. ';
+                    }
+                }
+
+                casillas.forEach((c) => c.addEventListener('change', refrescar));
+
+                filtro.querySelectorAll('[data-sucursales]').forEach((boton) => {
+                    boton.addEventListener('click', function () {
+                        const marcar = this.dataset.sucursales === 'todas';
+
+                        casillas.forEach((c) => { c.checked = marcar; });
+                        refrescar();
+                    });
+                });
+
+                refrescar();
+            })();
+        </script>
+    @endpush
+@endonce
 @endif

@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de ONTs
@@ -62,8 +63,8 @@ class OntController extends Controller
 
     public function no_authorized_ont_index()
     {
-        $contracts = Contract::where('branch_id', session('branch_id'))->get();
-        $olts      = Olt::where('branch_id', session('branch_id'))->get();
+        $contracts = Contract::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
+        $olts      = Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
         return view('gestisp.onts.no-authorized.index', compact('olts', 'contracts'));
     }
 
@@ -78,13 +79,13 @@ class OntController extends Controller
     {
         $oltFiltrada = null;
 
-        $query = Ont::where('branch_id', session('branch_id'))
-            ->with(['olt', 'contract']);
+        $query = Ont::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->with(['olt', 'contract', 'branch']);
 
         if ($request->filled('olt')) {
             // Se busca dentro de la sucursal activa: así el filtro no
             // sirve para asomarse a las OLTs de otra sucursal.
-            $oltFiltrada = Olt::where('branch_id', session('branch_id'))
+            $oltFiltrada = Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())
                 ->find($request->query('olt'));
 
             if ($oltFiltrada) {
@@ -136,7 +137,11 @@ class OntController extends Controller
         return view('gestisp.onts.authorized.index', [
             'onts' => $onts,
             'oltFiltrada' => $oltFiltrada,
-            'olts' => Olt::where('branch_id', session('branch_id'))->orderBy('name')->get(),
+            // Listado: se muestran las OLT de TODO el alcance visible.
+            // En modo independiente eso es una sucursal; en panel
+            // consolidado, todas las del usuario.
+            'olts' => Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+                ->orderBy('name')->get(),
             'filtros' => $request->only(['olt', 'estado', 'contrato', 'banda']),
             'resumen' => $this->resumenDeOnts($onts),
         ]);
@@ -198,14 +203,14 @@ class OntController extends Controller
     {
         $query = $request->get('q');
 
-        $contratos = Contract::where('branch_id', session('branch_id'))
+        $contratos = Contract::whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->whereHas('client', function ($q) use ($query) {
                 $q->where('identity_number', 'like', "%{$query}%")
                     ->orWhere('name', 'like', "%{$query}%")
                     ->orWhere('last_name', 'like', "%{$query}%");
             })
             ->orWhere(function ($q) use ($query) {
-                $q->where('branch_id', session('branch_id'))
+                $q->whereIn('branch_id', app(CurrentContext::class)->branchIds())
                     ->where('id', 'like', "%{$query}%");
             })
             ->with('client')
@@ -337,7 +342,7 @@ class OntController extends Controller
         $ifIndex = $this->resolveIfIndex($olt, $parts[1], $parts[2]);
 
         $ont = Ont::create([
-            'branch_id'    => session('branch_id'),
+            'branch_id'    => app(CurrentContext::class)->branchParaEscritura($olt->branch_id),
             'olt_id'       => $validated['olt_id'],
             'contract_id'  => $contractId,
             'slot'         => $parts[1],
@@ -409,7 +414,7 @@ class OntController extends Controller
         // sucursal activa y colgar del MISMO puerto PON donde acaba de
         // quedar la ONT. Si no, se estaría registrando una instalación
         // físicamente imposible.
-        $mismaSucursal = (int) $puerto?->napBox?->network?->branch_id === (int) session('branch_id');
+        $mismaSucursal = app(CurrentContext::class)->permiteSucursal($puerto?->napBox?->network?->branch_id);
         $mismoPon = $puerto?->napBox?->ponPort
             && (int) $puerto->napBox->ponPort->olt_id === (int) $ont->olt_id
             && (int) $puerto->napBox->ponPort->slot === (int) $ont->slot
@@ -597,7 +602,7 @@ class OntController extends Controller
             'sn_length'   => strlen($sn),
         ]);
 
-        $ont = Ont::where('branch_id', session('branch_id'))
+        $ont = Ont::whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->where('sn', $sn)
             ->with('olt')
             ->first();

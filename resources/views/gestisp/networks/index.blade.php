@@ -53,6 +53,16 @@
                                 @unless($red->active)
                                     <span class="badge badge-secondary ml-1">Inactiva</span>
                                 @endunless
+                                {{-- Aqui las redes se pintan como tarjetas y no
+                                     como filas, asi que la sucursal va de
+                                     distintivo junto al nombre. Todo lo que
+                                     cuelga de la red —OLTs, muflas, cajas,
+                                     cables— hereda la suya. --}}
+                                @if($mostrarSucursal)
+                                    <span class="badge badge-info ml-1 distintivo-sucursal">
+                                        <i class="fas fa-store mr-1"></i>{{ $red->branch?->name ?? '—' }}
+                                    </span>
+                                @endif
                             </h3>
                             <div class="card-tools">
                                 <a href="{{ route('networks.show', $red) }}" class="btn btn-tool" title="Ver">

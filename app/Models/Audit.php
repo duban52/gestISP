@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use App\Services\Audit\AuditLabels;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Audit extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'auditable_type',
         'auditable_id',

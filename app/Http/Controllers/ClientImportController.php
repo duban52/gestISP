@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use App\Tenancy\CurrentContext;
 
 /**
  * Importación masiva de clientes y contratos.
@@ -54,13 +55,17 @@ class ClientImportController extends Controller
             'archivo.max' => 'El archivo no puede pesar más de 10 MB.',
         ]);
 
+        // La importacion crea CONTRATOS, y un contrato vive en una
+        // sucursal: en panel consolidado hay que decir en cual.
+        $branchId = app(CurrentContext::class)->branchParaEscritura($request->input('branch_id'));
+
         // Se guarda para no obligar a subirlo otra vez al confirmar
         $ruta = $request->file('archivo')->store(self::CARPETA);
 
         try {
             $resultado = $importador->previsualizar(
                 Storage::path($ruta),
-                (int) session('branch_id'),
+                $branchId,
             );
         } catch (\Throwable $e) {
             Storage::delete($ruta);
@@ -76,6 +81,10 @@ class ClientImportController extends Controller
 
         return view('gestisp.clients.import.preview', [
             'ruta' => $ruta,
+            // Viaja al paso 2 en un campo oculto: si se volviera a
+            // resolver alli, el usuario podria haber cambiado de
+            // contexto entre pantalla y pantalla.
+            'branchId' => $branchId,
             'nombreArchivo' => $request->file('archivo')->getClientOriginalName(),
             'filas' => $resultado['filas'],
             'resumen' => $resultado['resumen'],
@@ -105,7 +114,7 @@ class ClientImportController extends Controller
         try {
             $resultado = $importador->importar(
                 Storage::path($ruta),
-                (int) session('branch_id'),
+                app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
                 $request->boolean('crear_saldos', true),
             );
         } catch (\Throwable $e) {

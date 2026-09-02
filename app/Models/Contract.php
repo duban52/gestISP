@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use App\Billing\Enums\InvoiceStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Contract extends Model
 {
+    use BelongsToCompany;
+
     use HasFactory;
 
     protected $fillable = [
@@ -15,6 +18,9 @@ class Contract extends Model
         // ENG000123). El id sigue siendo el identificador interno.
         'contract_number',
         'branch_id',
+        // Como se factura este contrato: electronica o interna. Lo
+        // decide el grupo, no el contrato (ver AffinityGroup).
+        'affinity_group_id',
         'client_id',
         'plan_id',
         'neighborhood',
@@ -200,6 +206,18 @@ class Contract extends Model
     public function napPort()
     {
         return $this->belongsTo(NapPort::class, 'nap_port_id');
+    }
+
+    /**
+     * El grupo al que pertenece: quien decide como se factura.
+     *
+     * Puede venir nulo en contratos creados por un camino que no lo
+     * asigne. La columna admite nulo a proposito —ver la migracion—,
+     * asi que todo lo que lo lea tiene que contar con ello.
+     */
+    public function affinityGroup()
+    {
+        return $this->belongsTo(AffinityGroup::class);
     }
 
     public function branch()

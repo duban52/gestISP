@@ -124,6 +124,7 @@
                 <table id="paymentsTable" class="table table-hover table-bordered" style="width:100%">
                     <thead>
                     <tr>
+                        <th>Sucursal</th>
                         <th>ID</th>
                         <th>Identidad cliente</th>
                         <th>Cliente</th>
@@ -144,6 +145,11 @@
                             $cliente = $contrato?->client;
                         @endphp
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $payment->invoice?->contract?->branch?->name ?? $payment->contract?->branch?->name ?: '—' }}</td>
                             <td>{{ $payment->id }}</td>
                             <td>{{ $cliente->identity_number ?? '—' }}</td>
                             <td>
@@ -188,7 +194,7 @@
                     {{-- Total de lo mostrado al pie de la tabla --}}
                     <tfoot>
                     <tr>
-                        <th colspan="4" class="text-right">Total mostrado:</th>
+                        <th colspan="{{ $mostrarSucursal ? 5 : 4 }}" class="text-right">Total mostrado:</th>
                         <th>${{ number_format($payments->sum('amount'), 0, ',', '.') }}</th>
                         <th colspan="4"></th>
                     </tr>
@@ -258,11 +264,15 @@
 
                 // Orden inicial: por fecha de pago (columna 6) descendente.
                 // Se corrió un puesto al agregar la columna de contrato.
-                order: [[6, 'desc']],
+                order: [[7, 'desc']],
 
                 columnDefs: [
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     // La columna del recibo son botones: no se ordena
-                    { orderable: false, targets: 8 },
+                    { orderable: false, targets: 9 },
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }
                 ]

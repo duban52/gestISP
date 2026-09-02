@@ -83,7 +83,11 @@ class BatchPaymentRegistrar
 
         return DB::transaction(function () use ($items, $data, $userId, $branchId, $caja) {
             $lote = PaymentBatch::create([
-                'branch_id' => $branchId,
+                // Donde esta la caja es donde entra el dinero. En panel
+                // consolidado no hay sucursal en sesion y el lote se
+                // guardaba sin ella; la caja siempre la tiene, porque
+                // se abrio en una sede concreta.
+                'branch_id' => $branchId ?? $caja->branch_id,
                 'user_id' => $userId,
                 'cash_register_id' => $caja->id,
                 'payer_name' => $data['payer_name'] ?? null,

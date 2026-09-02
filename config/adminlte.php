@@ -324,6 +324,15 @@ return [
             'type' => 'fullscreen-widget',
             'topnav_right' => true,
         ],
+        // Cambio de contexto sin cerrar sesión. Antes, cambiar de
+        // sucursal obligaba a salir y volver a entrar; con varias
+        // empresas eso pasa de incómodo a inviable.
+        [
+            'text' => 'Cambiar contexto',
+            'url' => 'contexto',
+            'icon' => 'fas fa-building',
+            'topnav_right' => true,
+        ],
 
         // Sidebar items:
         [
@@ -378,6 +387,19 @@ return [
             'text' => 'Gestión empresarial',
             'icon' => 'fas  fa-building',
             'submenu' => [
+                [
+                    'text' => 'Empresas',
+                    'icon' => 'fas fa-building',
+                    'url' => 'empresas',
+                    'can' => 'companies.index',
+                ],
+                [
+                    'text' => 'Grupos de afinidad',
+                    'route' => 'affinity_groups.index',
+                    'active' => ['grupos-de-afinidad*'],
+                    'icon' => 'fas fa-layer-group',
+                    'can' => 'affinity_groups.index',
+                ],
                 [
                     'text' => 'Sucursales',
                     'route' => 'branches.index',

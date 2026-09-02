@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Almacenes (Warehouses)
@@ -48,8 +49,8 @@ class WarehouseController extends Controller
      */
     public function index(): View
     {
-        $warehouses = Warehouse::where('branch_id', session('branch_id'))
-            ->with('user')
+        $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->with(['user', 'branch'])
             ->withCount('inventories')
             ->get();
 
@@ -103,7 +104,7 @@ class WarehouseController extends Controller
         // Usuarios de la sucursal activa para el desplegable
         // "vincular usuario a almacén" (el dueño del almacén).
         $users = User::whereHas('branches', function ($q) {
-            $q->where('branches.id', session('branch_id'));
+            $q->whereIn('branches.id', app(CurrentContext::class)->branchIds());
         })->orderBy('name')->get();
 
         return view('gestisp.warehouses.create', compact('users'));
@@ -123,7 +124,7 @@ class WarehouseController extends Controller
 
         Warehouse::create([
             'description' => $validated['description'],
-            'branch_id'   => session('branch_id'),
+            'branch_id'   => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
             'user_id'     => $validated['user_id'] ?? Auth::id(),
         ]);
 
@@ -138,7 +139,7 @@ class WarehouseController extends Controller
     public function edit(Warehouse $warehouse): View
     {
         $users = User::whereHas('branches', function ($q) {
-            $q->where('branches.id', session('branch_id'));
+            $q->whereIn('branches.id', app(CurrentContext::class)->branchIds());
         })->orderBy('name')->get();
 
         return view('gestisp.warehouses.edit', compact('warehouse', 'users'));

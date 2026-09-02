@@ -22,6 +22,12 @@
         <div class="card-body">
             <form method="POST" action="{{ route('routers.store') }}">
                 @csrf
+                {{-- En panel consolidado no hay una sucursal activa: hay que
+                     decir en cual se guarda. Con una sola alcanzable no se
+                     pinta nada y el controlador la asume. --}}
+                <x-selector-sucursal titulo="Sucursal del router"
+                                     ayuda="El router queda en esta sucursal, y las cuentas PPPoE heredan la suya." />
+
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">

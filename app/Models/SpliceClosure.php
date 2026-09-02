@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use App\Tenancy\CurrentContext;
 
 /**
  * Mufla o caja de empalme.
@@ -146,7 +147,9 @@ class SpliceClosure extends Model
     {
         return $query->whereHas(
             'network',
-            fn ($q) => $q->where('branch_id', $branchId ?? session('branch_id')),
+            fn ($q) => $branchId !== null
+                ? $q->where('branch_id', $branchId)
+                : app(CurrentContext::class)->limitarSucursales($q),
         );
     }
 }

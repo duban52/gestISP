@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Branch;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfWrapper;
+use App\Tenancy\CurrentContext;
 
 /**
  * Datos de marca para los PDFs del sistema.
@@ -89,7 +90,13 @@ class PdfBranding
             return $branch;
         }
 
-        $branchId = session('branch_id');
+        // El logo y los datos fiscales son de la EMPRESA, y todas
+        // las sucursales de una empresa devuelven los mismos (ver
+        // Branch::getImageAttribute). Por eso, en panel consolidado
+        // —donde no hay una activa— vale cualquiera del alcance: antes
+        // se devolvía null y los PDF salían sin membrete.
+        $contexto = app(CurrentContext::class);
+        $branchId = $contexto->branchId() ?? ($contexto->branchIds()[0] ?? null);
 
         return $branchId ? Branch::find($branchId) : null;
     }

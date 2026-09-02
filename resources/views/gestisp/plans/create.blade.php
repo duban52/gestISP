@@ -10,6 +10,12 @@
         <div class="card-body">
             <form method="POST" action="{{ route('plans.store') }}" enctype="multipart/form-data">
                 @csrf
+                {{-- En panel consolidado no hay una sucursal activa: hay que
+                     decir en cual se guarda. Con una sola alcanzable no se
+                     pinta nada y el controlador la asume. --}}
+                <x-selector-sucursal titulo="Sucursal del plan"
+                                     ayuda="El plan se ofrece en esta sucursal: solo aparecera al crear contratos suyos." />
+
                 <div class="form-group">
                     <label for="name">Nombre del plan</label>
                     <input type="text" class="form-control" id="name" name='name'

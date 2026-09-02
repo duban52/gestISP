@@ -106,6 +106,7 @@
                 <table id="retentionsTable" class="table table-hover table-sm w-100">
                     <thead class="thead-light">
                     <tr>
+                        <th>Sucursal</th>
                         <th>Fecha</th>
                         <th>Tipo</th>
                         <th>Concepto</th>
@@ -122,6 +123,11 @@
                     <tbody>
                     @foreach($retenciones as $retencion)
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $retencion->branch?->name ?: '—' }}</td>
                             <td data-order="{{ $retencion->created_at?->timestamp }}">
                                 {{ $retencion->created_at?->format('d/m/Y') }}
                             </td>
@@ -183,9 +189,13 @@
                     emptyTable: 'No se practicaron retenciones en este período.'
                 },
                 pageLength: 25,
-                order: [[0, 'desc']],
+                order: [[1, 'desc']],
                 columnDefs: [
-                    { orderable: false, targets: 10 },
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
+                    { orderable: false, targets: 11 },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

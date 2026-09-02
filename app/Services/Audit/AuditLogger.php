@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
+use App\Tenancy\CurrentContext;
 
 /**
  * Punto único por donde pasa TODO lo que se registra en la auditoría.
@@ -133,7 +134,16 @@ class AuditLogger
      */
     private function sucursalActiva(): ?int
     {
-        $id = session('branch_id');
+        // Del contexto primero: es quien decide en que sucursal se
+        // esta trabajando, y en panel consolidado devuelve null —que
+        // es lo honesto, porque ahi no hay UNA sucursal activa.
+        //
+        // La sesion queda de respaldo para lo que se guarda fuera de
+        // una peticion HTTP: ahi no ha corrido el middleware que
+        // establece el contexto, pero la sesion puede traer la
+        // sucursal. Sin este respaldo esas auditorias se quedaban sin
+        // sucursal.
+        $id = app(CurrentContext::class)->branchId() ?? session('branch_id');
 
         return $id ? (int) $id : null;
     }

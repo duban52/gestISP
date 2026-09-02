@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -23,6 +24,8 @@ use Illuminate\Support\Carbon;
  */
 class UserSession extends Model
 {
+    use BelongsToCompany;
+
     public const REASON_MANUAL = 'manual';
     public const REASON_EXPIRED = 'expired';
     public const REASON_FORCED = 'forced';

@@ -113,6 +113,7 @@
                 <table id="napsTable" class="table table-hover" style="width:100%">
                     <thead class="thead-light">
                     <tr>
+                        <th>Sucursal</th>
                         <th>Código</th>
                         <th>Nombre</th>
                         <th>Dirección</th>
@@ -130,6 +131,11 @@
                             $oc = $caja->ocupacion();
                         @endphp
                         <tr>
+                            {{-- Solo se ve en panel consolidado; DataTables la
+                                 oculta en los demas modos (ver el columnDef de
+                                 mas abajo). Se pinta siempre para que los
+                                 indices de columna no cambien segun el modo. --}}
+                            <td>{{ $caja->network?->branch?->name ?: '—' }}</td>
                             <td>
                                 <a href="{{ route('naps.show', $caja) }}"><strong>{{ $caja->code }}</strong></a>
                                 @if($caja->status !== 'operativa')
@@ -201,9 +207,13 @@
                     emptyTable: 'No hay cajas que coincidan con el filtro.'
                 },
                 pageLength: 50,
-                order: [[0, 'asc']],
+                order: [[1, 'asc']],
                 columnDefs: [
-                    { orderable: false, targets: [7, 8] },
+                    // La sucursal se pinta siempre para que los indices de
+                    // columna no cambien con el modo de trabajo; DataTables
+                    // la esconde cuando no hay varias sedes que distinguir.
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
+                    { orderable: false, targets: [8, 9] },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

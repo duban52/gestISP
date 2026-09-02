@@ -6,6 +6,7 @@ use App\Models\Category;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Categorías de material.
@@ -35,6 +36,7 @@ class CategoryController extends Controller
     public function index(): View
     {
         $categories = Category::deSucursal()
+            ->with('branch')
             ->withCount('materials')
             ->orderBy('name')
             ->simplePaginate(8);
@@ -52,7 +54,7 @@ class CategoryController extends Controller
         $validated = $this->validar($request);
 
         Category::create([
-            'branch_id' => session('branch_id'),
+            'branch_id' => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
             'name' => $validated['name'],
             'description' => $validated['description'] ?? '',
         ]);
@@ -116,8 +118,12 @@ class CategoryController extends Controller
      */
     private function validar(Request $request): array
     {
-        $branchId = session('branch_id');
+        // La misma sucursal que usara store(): si se validara contra
+        // otra, el unique dejaria pasar un duplicado.
         $categoria = $request->route('category');
+        $branchId = $categoria
+            ? (int) $categoria->branch_id
+            : app(CurrentContext::class)->branchParaEscritura($request->input('branch_id'));
 
         return $request->validate([
             'name' => [
@@ -136,7 +142,7 @@ class CategoryController extends Controller
     private function exigirMismaSucursal(Category $category): void
     {
         abort_unless(
-            (int) $category->branch_id === (int) session('branch_id'),
+            app(CurrentContext::class)->permiteSucursal($category->branch_id),
             403,
             'Esa categoría pertenece a otra sucursal.',
         );

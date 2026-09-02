@@ -70,9 +70,16 @@ class SessionContextTest extends TestCase
         $huerfano = User::factory()->create(['selected_branch_id' => null]);
         $huerfano->assignRole($this->superRole);
 
-        $respuesta = $this->actingAs($huerfano)->get('/');
+        // Ahora son dos saltos: sin contexto no se pueden ver datos,
+        // asi que primero se le manda a elegir; y como no tiene NADA
+        // que elegir, esa pantalla lo saca con un mensaje que explica
+        // por que. Lo que importa es que no se queda encerrado.
+        $this->actingAs($huerfano)->get('/')
+            ->assertRedirect(route('context.select'));
 
-        $respuesta->assertRedirect(route('login'));
+        $this->get(route('context.select'))
+            ->assertRedirect(route('login'));
+
         $this->assertGuest();
     }
 

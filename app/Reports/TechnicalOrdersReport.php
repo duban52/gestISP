@@ -2,6 +2,7 @@
 
 namespace App\Reports;
 
+use App\Reports\Support\BranchFilter;
 use App\Models\TechnicalOrder;
 use App\Reports\Support\OrderDetailMap;
 use App\Reports\Support\ReportPeriod;
@@ -29,10 +30,23 @@ class TechnicalOrdersReport
     private const ESTADO_CERRADA = 'Cerrada';
     private const ESTADO_RECHAZADA = 'Rechazada';
 
+    /**
+     * Sucursales que entran en el informe. Lista vacia = sin filtro.
+     *
+     * @var array<int, int>
+     */
+    private readonly array $branchIds;
+
+    /**
+     * @param  int|array<int, mixed>|null  $sucursales  Una, varias o
+     *         ninguna. Se admite el entero suelto porque es como
+     *         llamaba a este informe todo lo que ya existia.
+     */
     public function __construct(
         private readonly ReportPeriod $period,
-        private readonly ?int $branchId = null,
+        int|array|null $sucursales = null,
     ) {
+        $this->branchIds = BranchFilter::normalizar($sucursales);
     }
 
     /**
@@ -268,7 +282,7 @@ class TechnicalOrdersReport
     {
         return DB::table('technical_order_verifications as v')
             ->join('technical_orders as o', 'o.id', '=', 'v.technical_order_id')
-            ->when($this->branchId, fn ($q) => $q->where('o.branch_id', $this->branchId))
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('o.branch_id', $this->branchIds))
             ->whereBetween('v.created_at', [$this->period->from, $this->period->to])
             ->selectRaw('v.status as etiqueta, COUNT(*) as total')
             ->groupBy('v.status')
@@ -332,6 +346,6 @@ class TechnicalOrdersReport
     private function baseQuery()
     {
         return TechnicalOrder::query()
-            ->when($this->branchId, fn ($q) => $q->where('technical_orders.branch_id', $this->branchId));
+            ->when($this->branchIds !== [], fn ($q) => $q->whereIn('technical_orders.branch_id', $this->branchIds));
     }
 }

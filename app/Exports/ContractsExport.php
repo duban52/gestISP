@@ -7,6 +7,7 @@ use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use App\Tenancy\CurrentContext;
 
 class ContractsExport implements FromQuery, WithHeadings, WithMapping
 {
@@ -16,8 +17,8 @@ class ContractsExport implements FromQuery, WithHeadings, WithMapping
     public function query()
     {
         return Contract::query()
-            ->where('branch_id', session('branch_id'))
-            ->with(['client', 'plan']);
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->with(['client', 'plan', 'affinityGroup']);
     }
 
     // Encabezados personalizados
@@ -38,6 +39,8 @@ class ContractsExport implements FromQuery, WithHeadings, WithMapping
             'Estrato social',              // $contract->social_stratum
             'Cláusula de permanencia',     // $contract->permanence_clause
             'Plan',                        // $contract->plan->name
+            'Grupo de afinidad',           // $contract->affinityGroup->etiqueta()
+            'Facturación',                 // electronica o interna
             'Número de serie CPE',         // $contract->cpe_sn
             'Puerto NAP',                  // $contract->nap_port
             'Usuario PPPoE',               // $contract->user_pppoe
@@ -70,6 +73,11 @@ class ContractsExport implements FromQuery, WithHeadings, WithMapping
             $contract->social_stratum,
             $contract->permanence_clause ?? '',
             $contract->plan->name ?? 'N/A',
+            $contract->affinityGroup?->etiqueta() ?? 'Sin grupo',
+            // "Sin grupo" y no vacio: una celda en blanco en el Excel se
+            // confunde con un error de exportacion, y un contrato sin
+            // clasificar es justo lo que hay que poder detectar.
+            $contract->affinityGroup?->modalidadFacturacion() ?? 'Sin grupo',
             $contract->cpe_sn ?? '',
             $contract->nap_port ?? '',
             $contract->user_pppoe ?? '',

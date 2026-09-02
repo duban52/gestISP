@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Milon\Barcode\Facades\DNS1DFacade;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Facturas
@@ -55,24 +56,27 @@ class InvoiceController extends Controller
         // de todas las facturas abiertas (pendientes, parciales,
         // con riesgo y vencidas). Antes solo sumaba el total de
         // las pendientes e ignoraba vencidas y abonos.
-        if (session()->has('branch_id')) {
+        if (app(CurrentContext::class)->activo()) {
             $totalPendding = Invoice::whereIn('status', InvoiceStatus::payable())
-                ->where('branch_id', session('branch_id'))
+                ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
                 ->sum('pending_invoice_amount');
         }
 
-        $branchId = session('branch_id');
-
-        // Cambiar simplePaginate() por get() para DataTables
+        // El filtro va SOLO por la sucursal del contrato.
+        //
+        // Antes tambien exigia clients.branch_id, y desde que el
+        // cliente pertenece a la EMPRESA esa columna es opcional: un
+        // cliente creado en panel consolidado la tiene nula y sus
+        // facturas desaparecian del listado. La sucursal donde se
+        // presta el servicio —y donde se factura— es la del contrato.
         $invoices = Invoice::join('contracts', 'invoices.contract_id', '=', 'contracts.id')
             ->join('clients', 'contracts.client_id', '=', 'clients.id')
-            ->where('clients.branch_id', $branchId)
-            ->where('contracts.branch_id', $branchId)
+            ->whereIn('contracts.branch_id', app(CurrentContext::class)->branchIds())
             ->select('invoices.*')
             // El listado muestra el número de contrato y la
             // identificación del cliente: se precargan para no hacer
             // dos consultas por cada fila de la tabla.
-            ->with(['contract.client'])
+            ->with(['contract.client', 'branch'])
             ->orderBy('invoices.created_at', 'desc')
             ->get(); // Cambiado de simplePaginate(10) a get()
 
@@ -162,9 +166,15 @@ class InvoiceController extends Controller
      * activa. Toda la logica vive en MonthlyBillingRun /
      * InvoiceGenerator / OverdueProcessor (app/Billing/Services).
      */
-    public function generateInvoices(MonthlyBillingRun $billingRun)
+    public function generateInvoices(Request $request, MonthlyBillingRun $billingRun)
     {
-        $result = $billingRun->runForBranch(session('branch_id'), Auth::id());
+        // La corrida es DE UNA SUCURSAL: recorre sus contratos y
+        // consume su consecutivo. En consolidado hay que decir cual;
+        // antes se pasaba null y no facturaba nada.
+        $result = $billingRun->runForBranch(
+            app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+            Auth::id(),
+        );
 
         if ($result['total_contracts'] === 0) {
             return redirect()->route('invoices.index')
@@ -199,7 +209,7 @@ class InvoiceController extends Controller
     public function billingRuns()
     {
         $runs = BillingRun::with('user')
-            ->where('branch_id', session('branch_id'))
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->orderByDesc('executed_at')
             ->get();
 
@@ -243,11 +253,13 @@ class InvoiceController extends Controller
     /**
      * PDF Masivo
      */
-    public function generatePendingInvoicesPdf()
+    public function generatePendingInvoicesPdf(Request $request)
     {
-        $branchId = session('branch_id');
-
-        GeneratePendingInvoicesPdf::dispatch($branchId);
+        // El PDF masivo sale por sucursal, con su membrete y su
+        // numeracion. En consolidado hay que decir de cual.
+        GeneratePendingInvoicesPdf::dispatch(
+            app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+        );
 
         return redirect()->route('invoices.index')
             ->with('success', 'La generación del PDF de facturas pendientes ha sido encolada. No cierre ni recargue la página hasta ser notificado');
@@ -255,9 +267,7 @@ class InvoiceController extends Controller
 
     public function checkPdfStatus(Request $request)
     {
-        $branchId = session('branch_id');
-
-        $pdfReport = PdfReport::where('branch_id', $branchId)
+        $pdfReport = PdfReport::whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->orderBy('created_at', 'desc')
             ->first();
 

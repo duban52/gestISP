@@ -47,7 +47,13 @@ class PppoeMassCutoffTest extends TestCase
         $this->seed(RoleSeeder::class);
 
         $this->branch = Branch::factory()->create(['contract_prefix' => 'ENG']);
-        $this->otraBranch = Branch::factory()->create(['contract_prefix' => 'OTR']);
+        // Misma empresa, otra sede: el corte masivo tiene que
+        // distinguir "esta en otra sucursal" de "no existe", y eso
+        // solo tiene sentido dentro de la misma empresa.
+        $this->otraBranch = Branch::factory()->create([
+            'contract_prefix' => 'OTR',
+            'company_id' => $this->branch->company_id,
+        ]);
 
         $role = Role::where('name', 'superadministrador')->firstOrFail();
 

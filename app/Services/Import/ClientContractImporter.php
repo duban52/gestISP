@@ -2,6 +2,8 @@
 
 namespace App\Services\Import;
 
+use App\Models\AffinityGroup;
+use App\Models\Branch;
 use App\Billing\Enums\InvoiceStatus;
 use App\Models\Client;
 use App\Models\Contract;
@@ -247,6 +249,35 @@ class ClientContractImporter
     }
 
     /**
+     * El grupo predeterminado de la empresa a la que pertenece la
+     * sucursal en la que se importa.
+     *
+     * Se resuelve una sola vez por corrida: una importacion de mil
+     * filas no puede hacer mil consultas para leer el mismo dato.
+     */
+    private function grupoPorDefectoDe(int $branchId): ?int
+    {
+        if (array_key_exists($branchId, $this->gruposPorSucursal)) {
+            return $this->gruposPorSucursal[$branchId];
+        }
+
+        $companyId = Branch::withoutGlobalScopes()
+            ->whereKey($branchId)
+            ->value('company_id');
+
+        return $this->gruposPorSucursal[$branchId] = $companyId
+            ? AffinityGroup::porDefectoDe((int) $companyId)?->id
+            : null;
+    }
+
+    /**
+     * Grupo predeterminado por sucursal, cacheado durante la corrida.
+     *
+     * @var array<int, int|null>
+     */
+    private array $gruposPorSucursal = [];
+
+    /**
      * Crea el contrato respetando el número que traiga el archivo.
      */
     private function crearContrato(array $datos, Client $cliente, int $branchId): Contract
@@ -255,6 +286,15 @@ class ClientContractImporter
             'branch_id' => $branchId,
             'client_id' => $cliente->id,
             'user_id' => Auth::id(),
+            // Los contratos importados tambien se clasifican. Sin esto
+            // una migracion de mil clientes dejaria mil contratos sin
+            // grupo, que es justo la situacion que el modulo evita —y
+            // la mas cara de arreglar despues.
+            //
+            // El grupo se resuelve por la EMPRESA de la sucursal y no
+            // por el contexto: la importacion puede correr desde un
+            // comando, donde no hay contexto establecido.
+            'affinity_group_id' => $this->grupoPorDefectoDe($branchId),
         ]);
 
         if (!empty($datos['contrato']['contract_number'])) {

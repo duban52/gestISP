@@ -14,6 +14,12 @@
         <div>
             <form class="" action="{{route('materials.store')}}" method="post">
                 @csrf
+                {{-- En panel consolidado no hay una sucursal activa: hay que
+                     decir en cual se guarda. Con una sola alcanzable no se
+                     pinta nada y el controlador la asume. --}}
+                <x-selector-sucursal titulo="Sucursal del material"
+                                     ayuda="El material se da de alta en el catalogo de esta sucursal." />
+
                 <div>
                     <label for="" class="form-label">Nombre</label>
                     <input type="text" class="form-control" id="name" name="name" required>

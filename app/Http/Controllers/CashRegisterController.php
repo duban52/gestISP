@@ -11,6 +11,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Tenancy\CurrentContext;
 
 class CashRegisterController extends Controller
 {
@@ -47,7 +48,7 @@ class CashRegisterController extends Controller
         $to = $validated['end_date'] ?? $from;
 
         $registers = CashRegister::with('user')
-            ->where('branch_id', session('branch_id'))
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->whereBetween('opened_at', ["{$from} 00:00:00", "{$to} 23:59:59"])
             ->orderBy('opened_at')
             ->get();
@@ -85,7 +86,7 @@ class CashRegisterController extends Controller
         // sin explicación: hay facturas marcadas como pagadas por más
         // dinero del que entró.
         $retentions = PaymentRetention::query()
-            ->where('branch_id', session('branch_id'))
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->whereBetween('created_at', ["{$from} 00:00:00", "{$to} 23:59:59"])
             ->get();
 
@@ -121,7 +122,7 @@ class CashRegisterController extends Controller
     public function index()
     {
         $caja = CashRegister::where('user_id', auth()->id())
-            ->where('branch_id', session('branch_id'))
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->where('status', 'open')
             ->first();
 
@@ -153,7 +154,7 @@ class CashRegisterController extends Controller
         // Última caja cerrada: da contexto cuando no hay ninguna
         // abierta ("cerraste hace 2 horas con $X").
         $ultimoCierre = CashRegister::where('user_id', auth()->id())
-            ->where('branch_id', session('branch_id'))
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->where('status', 'closed')
             ->latest('closed_at')
             ->first();
@@ -214,12 +215,21 @@ class CashRegisterController extends Controller
     // Método para abrir una nueva caja
     public function open(Request $request)
     {
-        $branchId = session('branch_id');
         // Validamos los datos de apertura
         $validated = $request->validate([
             'initial_amount' => 'required|numeric|min:0',  // Monto inicial no negativo
-            'opening_notes' => 'nullable|string'           // Notas opcionales
+            'opening_notes' => 'nullable|string',          // Notas opcionales
+            'branch_id' => 'nullable|integer',
         ]);
+
+        // Una caja SE ABRE EN UNA SUCURSAL: es la sede cuyo dinero se
+        // esta contando. En panel consolidado hay que decir cual; con
+        // una sola alcanzable se asume.
+        try {
+            $branchId = app(CurrentContext::class)->branchParaEscritura($request->input('branch_id'));
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
 
         // Verificamos que el usuario no tenga otra caja abierta
         $activeRegister = CashRegister::where('user_id', auth()->id())
@@ -253,10 +263,11 @@ class CashRegisterController extends Controller
 
     public function close(Request $request)
     {
-        $branchId = session('branch_id');
-        // Buscar la última caja abierta para el usuario autenticado
+        // Se busca en todo el alcance del usuario: la caja abierta
+        // puede estar en cualquiera de sus sedes, y en consolidado no
+        // hay una activa con la que filtrar.
         $cashRegister = CashRegister::where('user_id', auth()->id())
-            ->where('branch_id', $branchId)
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->where('status', 'open')
             ->first();
 
@@ -335,9 +346,9 @@ class CashRegisterController extends Controller
 
     public function status()
     {
-        $branchId = session('branch_id');
+        $branchIds = app(CurrentContext::class)->branchIds();
         $activeRegister = CashRegister::where('user_id', auth()->id())
-            ->where('branch_id', $branchId)
+            ->whereIn('branch_id', $branchIds)
             ->where('status', 'open')
             ->first();
 
@@ -357,7 +368,6 @@ class CashRegisterController extends Controller
     // Método para generar reportes
     public function report(Request $request)
     {
-        $branchId = session('branch_id');
         // Validamos los filtros del reporte
         $validated = $request->validate([
             'start_date' => 'required|date',
@@ -366,7 +376,11 @@ class CashRegisterController extends Controller
         ]);
 
         // Construimos la consulta base
-        $query = CashRegister::with(['transactions', 'user', $branchId])
+        // $branchId estaba DENTRO del with(), es decir, se pasaba el id
+        // de la sucursal como si fuera el nombre de una relacion que
+        // cargar. No filtraba nada. Ahora se filtra donde toca.
+        $query = CashRegister::with(['transactions', 'user'])
+            ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->whereBetween('opened_at', [
                 $validated['start_date'],
                 $validated['end_date'] . ' 23:59:59'

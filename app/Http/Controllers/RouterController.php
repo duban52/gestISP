@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Routers (Mikrotik)
@@ -52,7 +53,7 @@ class RouterController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validateRouter($request);
-        $validated['branch_id'] = session('branch_id');
+        $validated['branch_id'] = app(CurrentContext::class)->branchParaEscritura($request->input('branch_id'));
 
         Router::create($validated);
 
@@ -91,7 +92,10 @@ class RouterController extends Controller
      */
     public function apiRouters(): JsonResponse
     {
-        $routers = Router::byBranch(session('branch_id'))->get();
+        $routers = Router::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            // El listado muestra la sucursal en panel consolidado.
+            ->with('branch')
+            ->get();
 
         $data = $routers->map(function ($router) {
             try {
@@ -110,6 +114,7 @@ class RouterController extends Controller
 
             return [
                 'id'         => $router->id,
+                'branch'     => $router->branch?->name ?? '—',
                 'name'       => $router->name,
                 'ip_address' => $router->ip_address,
                 'status'     => $info['status'],

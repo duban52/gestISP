@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Pagos
@@ -80,7 +81,10 @@ class PaymentController extends Controller
         $payments = $query
             // contract.client va aparte de invoice.contract.client
             // porque los anticipos no pasan por una factura
-            ->with(['invoice.contract.client', 'contract.client', 'user'])
+            ->with([
+                'invoice.contract.client', 'invoice.contract.branch',
+                'contract.client', 'contract.branch', 'user',
+            ])
             ->orderByDesc('payment_date')
             ->get();
 
@@ -147,12 +151,16 @@ class PaymentController extends Controller
         // solo se filtraba por invoice.contract.branch y los anticipos
         // quedaban invisibles en el registro de pagos, aunque su
         // dinero sí hubiera entrado a la caja.
-        if (session()->has('branch_id')) {
-            $branchId = session('branch_id');
+        // La guarda era session()->has('branch_id'), que devuelve
+        // FALSE cuando el valor es null — es decir, en panel
+        // consolidado no se aplicaba filtro NINGUNO y se veian los
+        // pagos de sucursales sin acceso concedido.
+        $branchIds = app(CurrentContext::class)->branchIds();
 
-            $query->where(function ($q) use ($branchId) {
-                $q->whereHas('invoice.contract', fn ($c) => $c->where('branch_id', $branchId))
-                    ->orWhereHas('contract', fn ($c) => $c->where('branch_id', $branchId));
+        if ($branchIds !== []) {
+            $query->where(function ($q) use ($branchIds) {
+                $q->whereHas('invoice.contract', fn ($c) => $c->whereIn('branch_id', $branchIds))
+                    ->orWhereHas('contract', fn ($c) => $c->whereIn('branch_id', $branchIds));
             });
         }
 
@@ -251,7 +259,7 @@ class PaymentController extends Controller
 
         // Restringir a la sucursal activa (columna propia, con índice)
         if (session()->has('branch_id')) {
-            $query->where('branch_id', session('branch_id'));
+            $query->whereIn('branch_id', app(CurrentContext::class)->branchIds());
         }
 
         $this->applySearchCriteria($query, $term, $field);
@@ -399,7 +407,7 @@ class PaymentController extends Controller
             // Toda la regla de negocio (saldo, caja, retenciones,
             // estados de factura y contrato, orden de reconexión,
             // movimiento de caja) vive en el servicio.
-            $payment = $registrar->register($validated, auth()->id(), session('branch_id'));
+            $payment = $registrar->register($validated, auth()->id(), app(CurrentContext::class)->branchId());
 
             DB::commit();
 
@@ -467,7 +475,7 @@ class PaymentController extends Controller
                 'items.required' => 'No hay facturas seleccionadas para cobrar.',
             ]);
 
-            $batch = $registrar->register($validated, auth()->id(), session('branch_id'));
+            $batch = $registrar->register($validated, auth()->id(), app(CurrentContext::class)->branchId());
 
             return response()->json([
                 'success' => true,

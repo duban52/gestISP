@@ -89,9 +89,22 @@
                         <span class="text-muted">Rol activo</span>
                         <strong>{{ optional(\Spatie\Permission\Models\Role::find(session('current_role_id')))->name ? ucfirst(\Spatie\Permission\Models\Role::find(session('current_role_id'))->name) : '—' }}</strong>
                     </li>
+                    {{-- En panel consolidado no hay UNA sucursal actual: se
+                         trabajan varias a la vez. Decir "—" haría pensar que
+                         no se está en ninguna. Es el mismo texto que sale en
+                         el menú de usuario (User::adminlte_desc). --}}
+                    @php
+                        $contextoPerfil = app(\App\Tenancy\CurrentContext::class);
+                        $sucursalActual = $contextoPerfil->branchId()
+                            ? \App\Models\Branch::find($contextoPerfil->branchId())
+                            : null;
+                    @endphp
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <span class="text-muted">Sucursal actual</span>
-                        <strong>{{ optional(\App\Models\Branch::find(session('branch_id')))->name ?? '—' }}</strong>
+                        <strong>
+                            {{ $sucursalActual?->name
+                                ?? ($contextoPerfil->esConsolidado() ? 'Todas las sucursales' : '—') }}
+                        </strong>
                     </li>
                     <li class="list-group-item">
                         <span class="text-muted d-block mb-1">Sucursales con acceso</span>

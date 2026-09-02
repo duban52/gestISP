@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de Materiales
@@ -52,7 +53,7 @@ class MaterialController extends Controller
     public function index(): View
     {
         $materials = Material::deSucursal()
-            ->with('category')
+            ->with(['category', 'branch'])
             ->withCount('inventories')
             ->get();
 
@@ -81,7 +82,7 @@ class MaterialController extends Controller
         $validated = $this->validateMaterial($request);
 
         Material::create([
-            'branch_id'    => session('branch_id'),
+            'branch_id'    => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
             'name'         => $validated['name'],
             'category_id'  => $validated['category_id'],
             'is_equipment' => $request->boolean('is_equipment'),
@@ -174,7 +175,7 @@ class MaterialController extends Controller
             // colar un material bajo una categoría ajena.
             'category_id'  => [
                 'required',
-                Rule::exists('categories', 'id')->where('branch_id', session('branch_id')),
+                Rule::exists('categories', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
             ],
             'is_equipment' => 'nullable|boolean',
         ], [
@@ -192,7 +193,7 @@ class MaterialController extends Controller
     private function exigirMismaSucursal(Material $material): void
     {
         abort_unless(
-            (int) $material->branch_id === (int) session('branch_id'),
+            app(CurrentContext::class)->permiteSucursal($material->branch_id),
             403,
             'Ese material pertenece a otra sucursal.',
         );

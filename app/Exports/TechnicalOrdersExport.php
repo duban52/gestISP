@@ -8,6 +8,7 @@ use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Illuminate\Http\Request;
+use App\Tenancy\CurrentContext;
 
 class TechnicalOrdersExport implements FromQuery, WithHeadings, WithMapping
 {
@@ -26,7 +27,7 @@ class TechnicalOrdersExport implements FromQuery, WithHeadings, WithMapping
 
         // Filtrar por sucursal de la sesión
         if (session()->has('branch_id')) {
-            $query->where('branch_id', session('branch_id'));
+            $query->whereIn('branch_id', app(CurrentContext::class)->branchIds());
         }
 
         // Aplicar filtros dinámicos

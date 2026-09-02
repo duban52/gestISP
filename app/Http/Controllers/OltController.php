@@ -17,6 +17,7 @@ use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Model;
+use App\Tenancy\CurrentContext;
 
 /**
  * Controlador de OLTs
@@ -70,7 +71,7 @@ class OltController extends Controller
      */
     public function index(): View
     {
-        $olts = Olt::byBranch(session('branch_id'))
+        $olts = Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())
             // El conteo va en la misma consulta: pedirlo por fila
             // sería un N+1 con tantas consultas como OLTs.
             ->withCount('onts')
@@ -91,7 +92,7 @@ class OltController extends Controller
      */
     public function show(Olt $olt, OltStatistics $estadisticas): View
     {
-        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($olt->branch_id), 403);
 
         // Los puertos se agrupan por tarjeta porque es como está el
         // equipo en el rack y como habla de él la gente de planta. Una
@@ -138,7 +139,7 @@ class OltController extends Controller
     {
         $port->loadMissing('olt', 'zone', 'napBoxes.ports.contract.client');
 
-        abort_if((int) $port->olt->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($port->olt->branch_id), 403);
 
         return response()->json($estadisticas->detalleDePuerto($port));
     }
@@ -151,7 +152,7 @@ class OltController extends Controller
      */
     public function discoverPorts(Olt $olt, OltHardwareDiscovery $descubridor): RedirectResponse
     {
-        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($olt->branch_id), 403);
 
         try {
             $resumen = $descubridor->descubrir($olt);
@@ -197,7 +198,7 @@ class OltController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validateOltData($request);
-        $validated['branch_id'] = session('branch_id');
+        $validated['branch_id'] = app(CurrentContext::class)->branchParaEscritura($request->input('branch_id'));
 
         // La contraseña se guarda tal cual: bcrypt es irreversible
         // y el acceso por SSH necesita recuperarla para autenticar
@@ -219,7 +220,7 @@ class OltController extends Controller
      */
     public function update(Request $request, Olt $olt): RedirectResponse
     {
-        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($olt->branch_id), 403);
 
         $validated = $this->validateOltData($request, actualizando: true);
 
@@ -260,7 +261,7 @@ class OltController extends Controller
      */
     public function apiOltStatus(Olt $olt): JsonResponse
     {
-        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($olt->branch_id), 403);
 
         $datos = $this->getRemoteData($olt);
 
@@ -576,7 +577,7 @@ class OltController extends Controller
     {
         $olt = Olt::findOrFail($oltId);
 
-        abort_if((int) $olt->branch_id !== (int) session('branch_id'), 403);
+        abort_if(!app(CurrentContext::class)->permiteSucursal($olt->branch_id), 403);
     }
 
     /**

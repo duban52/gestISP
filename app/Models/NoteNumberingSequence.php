@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class NoteNumberingSequence extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'branch_id',
         'type',

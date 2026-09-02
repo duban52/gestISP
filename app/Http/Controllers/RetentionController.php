@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Tenancy\CurrentContext;
 
 /**
  * Reporte de retenciones practicadas por los clientes.
@@ -105,14 +106,14 @@ class RetentionController extends Controller
     private function consulta(Request $request): Builder
     {
         $query = PaymentRetention::query()
-            ->with(['contract.client', 'invoice', 'user'])
+            ->with(['contract.client', 'invoice', 'user', 'branch'])
             ->whereBetween('created_at', [
                 $this->desde($request) . ' 00:00:00',
                 $this->hasta($request) . ' 23:59:59',
             ]);
 
         if (session()->has('branch_id')) {
-            $query->where('branch_id', session('branch_id'));
+            $query->whereIn('branch_id', app(CurrentContext::class)->branchIds());
         }
 
         if ($request->filled('type') && RetentionType::tryFrom($request->type)) {

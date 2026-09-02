@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use App\Tenancy\CurrentContext;
 
 /**
  * Red óptica (ODN) de una sucursal.
@@ -15,6 +17,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class OpticalNetwork extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'branch_id',
         'name',
@@ -75,6 +79,12 @@ class OpticalNetwork extends Model
     /** Limita a la sucursal activa. */
     public function scopeDeSucursal(Builder $query, ?int $branchId = null): Builder
     {
-        return $query->where('branch_id', $branchId ?? session('branch_id'));
+        // Sin sucursal explicita se usa TODO el alcance del usuario.
+        // Antes caia a session('branch_id'), que en panel consolidado
+        // es null: el filtro quedaba en `branch_id = null` y el modulo
+        // aparecia vacio.
+        return $branchId !== null
+            ? $query->where('branch_id', $branchId)
+            : app(CurrentContext::class)->limitarSucursales($query);
     }
 }
