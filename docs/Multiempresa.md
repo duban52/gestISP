@@ -374,6 +374,39 @@ El detalle está en [Grupos-de-Contrato.md](Grupos-de-Contrato.md) — incluidas
 dos trampas de MySQL con las columnas generadas que se manifiestan con un
 mensaje que no tiene nada que ver con el problema real.
 
+## Numeración unificada
+
+Fase 6. Los tres mecanismos de consecutivo —contratos, facturas y notas— pasan
+por un único servicio con un único bloqueo y una única comprobación de rango.
+
+Contratos y notas mudaron su contador a `document_sequences`; las facturas
+conservan el suyo hasta que exista la serie fiscal, porque moverlo dos veces es
+justo lo que no conviene hacer con un consecutivo de factura.
+
+El detalle está en [Numeracion.md](Numeracion.md).
+
+## Datos fiscales y catálogos
+
+Fase 8. Los códigos de la DIAN pasan a vivir en una tabla —cambian por
+resolución, y un código nuevo no puede exigir un despliegue—, y el cliente
+recibe los campos que el XML exige y que no existían en ninguna parte.
+
+Todo nace vacío a propósito; lo que dice cuánto falta es el informe de
+completitud fiscal.
+
+El detalle está en [Datos-Fiscales.md](Datos-Fiscales.md) — incluido el fallo
+del formulario que guardaba «Persona Jurídica» cuando se elegía «Pasaporte».
+
+## Por qué camino sale cada factura
+
+Fase 9. La decisión de si un documento es factura electrónica o documento
+interno vive en un solo sitio, se congela al emitir y cada camino tiene su
+propia serie de consecutivos.
+
+Sin ninguna conexión con la DIAN todavía: eso es la fase 10.
+
+El detalle está en [Decision-Facturacion.md](Decision-Facturacion.md).
+
 ## Lo que todavía NO hace
 
 - `branches.nit` sigue existiendo porque se imprime en **siete** plantillas

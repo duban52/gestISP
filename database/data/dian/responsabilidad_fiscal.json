@@ -1,0 +1,37 @@
+[
+    {
+        "code": "O-13",
+        "name": "Gran contribuyente",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "O-15",
+        "name": "Autorretenedor",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "O-23",
+        "name": "Agente de retención IVA",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "O-47",
+        "name": "Régimen simple de tributación",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "ZZ",
+        "name": "No aplica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    }
+]

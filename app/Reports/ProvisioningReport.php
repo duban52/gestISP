@@ -2,7 +2,7 @@
 
 namespace App\Reports;
 
-use App\Reports\Support\BranchFilter;
+use App\Support\BranchFilter;
 use App\Models\Contract;
 use App\Models\Ont;
 use App\Models\PppoeAccount;

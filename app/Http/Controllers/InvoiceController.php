@@ -16,6 +16,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Milon\Barcode\Facades\DNS1DFacade;
 use App\Tenancy\CurrentContext;
+use App\Support\BranchFilter;
 
 /**
  * Controlador de Facturas
@@ -44,7 +45,7 @@ class InvoiceController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(OverdueProcessor $overdueProcessor)
+    public function index(Request $request, OverdueProcessor $overdueProcessor)
     {
         // Actualizar facturas vencidas primero (en fase 5 esto
         // pasará a un comando programado diario y saldrá del GET)
@@ -69,18 +70,34 @@ class InvoiceController extends Controller
         // cliente creado en panel consolidado la tiene nula y sus
         // facturas desaparecian del listado. La sucursal donde se
         // presta el servicio —y donde se factura— es la del contrato.
+        // Filtros del buscador. Se aplican ADEMAS del alcance, nunca
+        // en su lugar: pedir por URL una sucursal o un grupo que no
+        // corresponden cruza las dos condiciones y da cero resultados,
+        // en vez de abrir nada y en vez de un 403 que confirmaria que
+        // existen.
+        $sucursalesPedidas = BranchFilter::normalizar($request->query('branch_id'));
+        $gruposPedidos = BranchFilter::normalizar($request->query('affinity_group_id'));
+
         $invoices = Invoice::join('contracts', 'invoices.contract_id', '=', 'contracts.id')
             ->join('clients', 'contracts.client_id', '=', 'clients.id')
             ->whereIn('contracts.branch_id', app(CurrentContext::class)->branchIds())
+            ->when($sucursalesPedidas !== [], fn ($q) => $q->whereIn('contracts.branch_id', $sucursalesPedidas))
+            ->when($gruposPedidos !== [], fn ($q) => $q->whereIn('contracts.affinity_group_id', $gruposPedidos))
             ->select('invoices.*')
             // El listado muestra el número de contrato y la
             // identificación del cliente: se precargan para no hacer
             // dos consultas por cada fila de la tabla.
-            ->with(['contract.client', 'branch'])
+            // El grupo se precarga porque el listado lo muestra: sin
+            // esto seria una consulta por fila.
+            ->with(['contract.client', 'contract.affinityGroup', 'branch'])
             ->orderBy('invoices.created_at', 'desc')
             ->get(); // Cambiado de simplePaginate(10) a get()
 
-        return view('gestisp.invoices.index', compact('invoices', 'totalPendding'));
+        return view('gestisp.invoices.index', [
+            'invoices' => $invoices,
+            'totalPendding' => $totalPendding,
+            'filtros' => $request->query(),
+        ]);
     }
 
     /**

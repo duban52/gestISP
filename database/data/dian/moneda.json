@@ -1,0 +1,1255 @@
+[
+    {
+        "code": "AED",
+        "name": "Dírham de los Emiratos Árabes Unidos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "AFN",
+        "name": "Afgani",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "ALL",
+        "name": "Lek",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "AMD",
+        "name": "Dram armenio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "ANG",
+        "name": "Florín antillano neerlandés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    },
+    {
+        "code": "AOA",
+        "name": "Kwanza",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 5
+    },
+    {
+        "code": "ARS",
+        "name": "Peso argentino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 6
+    },
+    {
+        "code": "AUD",
+        "name": "Dólar australiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 7
+    },
+    {
+        "code": "AWG",
+        "name": "Florín arubeño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 8
+    },
+    {
+        "code": "AZN",
+        "name": "Manat azerbaiyano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 9
+    },
+    {
+        "code": "BAM",
+        "name": "Marco convertible",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 10
+    },
+    {
+        "code": "BBD",
+        "name": "Dólar de Barbados",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 11
+    },
+    {
+        "code": "BDT",
+        "name": "Taka",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 12
+    },
+    {
+        "code": "BGN",
+        "name": "Lev búlgaro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 13
+    },
+    {
+        "code": "BHD",
+        "name": "Dinar bareiní",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 14
+    },
+    {
+        "code": "BIF",
+        "name": "Franco de Burundi",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 15
+    },
+    {
+        "code": "BMD",
+        "name": "Dólar bermudeño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 16
+    },
+    {
+        "code": "BND",
+        "name": "Dólar de Brunéi",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 17
+    },
+    {
+        "code": "BOB",
+        "name": "Boliviano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 18
+    },
+    {
+        "code": "BOV",
+        "name": "MVDOL",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 19
+    },
+    {
+        "code": "BRL",
+        "name": "Real brasileño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 20
+    },
+    {
+        "code": "BSD",
+        "name": "Dólar bahameño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 21
+    },
+    {
+        "code": "BTN",
+        "name": "Ngultrum",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 22
+    },
+    {
+        "code": "BWP",
+        "name": "Pula",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 23
+    },
+    {
+        "code": "BYR",
+        "name": "Rublo bielorruso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 24
+    },
+    {
+        "code": "BZD",
+        "name": "Dólar beliceño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 25
+    },
+    {
+        "code": "CAD",
+        "name": "Dólar canadiense",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 26
+    },
+    {
+        "code": "CDF",
+        "name": "Franco congoleño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 27
+    },
+    {
+        "code": "CHE",
+        "name": "Euro WIR",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 28
+    },
+    {
+        "code": "CHF",
+        "name": "Franco suizo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 29
+    },
+    {
+        "code": "CHW",
+        "name": "Franco WIR",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 30
+    },
+    {
+        "code": "CLF",
+        "name": "Unidad de fomento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 31
+    },
+    {
+        "code": "CLP",
+        "name": "Peso chileno",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 32
+    },
+    {
+        "code": "CNY",
+        "name": "Yuan chino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 33
+    },
+    {
+        "code": "COP",
+        "name": "Peso colombiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 34
+    },
+    {
+        "code": "COU",
+        "name": "Unidad de valor real",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 35
+    },
+    {
+        "code": "CRC",
+        "name": "Colón costarricense",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 36
+    },
+    {
+        "code": "CUC",
+        "name": "Peso convertible",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 37
+    },
+    {
+        "code": "CUP",
+        "name": "Peso cubano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 38
+    },
+    {
+        "code": "CVE",
+        "name": "Escudo caboverdiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 39
+    },
+    {
+        "code": "CZK",
+        "name": "Corona checa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 40
+    },
+    {
+        "code": "DJF",
+        "name": "Franco yibutiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 41
+    },
+    {
+        "code": "DKK",
+        "name": "Corona danesa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 42
+    },
+    {
+        "code": "DOP",
+        "name": "Peso dominicano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 43
+    },
+    {
+        "code": "DZD",
+        "name": "Dinar argelino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 44
+    },
+    {
+        "code": "EGP",
+        "name": "Libra egipcia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 45
+    },
+    {
+        "code": "ERN",
+        "name": "Nakfa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 46
+    },
+    {
+        "code": "ETB",
+        "name": "Birr etíope",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 47
+    },
+    {
+        "code": "EUR",
+        "name": "Euro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 48
+    },
+    {
+        "code": "FJD",
+        "name": "Dólar fiyiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 49
+    },
+    {
+        "code": "FKP",
+        "name": "Libra malvinense",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 50
+    },
+    {
+        "code": "GBP",
+        "name": "Libra esterlina",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 51
+    },
+    {
+        "code": "GEL",
+        "name": "Lari",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 52
+    },
+    {
+        "code": "GHS",
+        "name": "Cedi ghanés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 53
+    },
+    {
+        "code": "GIP",
+        "name": "Libra de Gibraltar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 54
+    },
+    {
+        "code": "GMD",
+        "name": "Dalasi",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 55
+    },
+    {
+        "code": "GNF",
+        "name": "Franco guineano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 56
+    },
+    {
+        "code": "GTQ",
+        "name": "Quetzal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 57
+    },
+    {
+        "code": "GYD",
+        "name": "Dólar guyanés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 58
+    },
+    {
+        "code": "HKD",
+        "name": "Dólar de Hong Kong",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 59
+    },
+    {
+        "code": "HNL",
+        "name": "Lempira",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 60
+    },
+    {
+        "code": "HRK",
+        "name": "Kuna",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 61
+    },
+    {
+        "code": "HTG",
+        "name": "Gourde",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 62
+    },
+    {
+        "code": "HUF",
+        "name": "Forinto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 63
+    },
+    {
+        "code": "IDR",
+        "name": "Rupia indonesia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 64
+    },
+    {
+        "code": "ILS",
+        "name": "Nuevo shéquel israelí",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 65
+    },
+    {
+        "code": "INR",
+        "name": "Rupia india",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 66
+    },
+    {
+        "code": "IQD",
+        "name": "Dinar iraquí",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 67
+    },
+    {
+        "code": "IRR",
+        "name": "Rial iraní",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 68
+    },
+    {
+        "code": "ISK",
+        "name": "Corona islandesa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 69
+    },
+    {
+        "code": "JMD",
+        "name": "Dólar jamaiquino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 70
+    },
+    {
+        "code": "JOD",
+        "name": "Dinar jordano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 71
+    },
+    {
+        "code": "JPY",
+        "name": "Yen",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 72
+    },
+    {
+        "code": "KES",
+        "name": "Chelín keniano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 73
+    },
+    {
+        "code": "KGS",
+        "name": "Som",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 74
+    },
+    {
+        "code": "KHR",
+        "name": "Riel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 75
+    },
+    {
+        "code": "KMF",
+        "name": "Franco comorense",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 76
+    },
+    {
+        "code": "KPW",
+        "name": "Won norcoreano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 77
+    },
+    {
+        "code": "KRW",
+        "name": "Won",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 78
+    },
+    {
+        "code": "KWD",
+        "name": "Dinar kuwaití",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 79
+    },
+    {
+        "code": "KYD",
+        "name": "Dólar de las Islas Caimán",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 80
+    },
+    {
+        "code": "KZT",
+        "name": "Tenge",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 81
+    },
+    {
+        "code": "LAK",
+        "name": "Kip",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 82
+    },
+    {
+        "code": "LBP",
+        "name": "Libra libanesa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 83
+    },
+    {
+        "code": "LKR",
+        "name": "Rupia de Sri Lanka",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 84
+    },
+    {
+        "code": "LRD",
+        "name": "Dólar liberiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 85
+    },
+    {
+        "code": "LSL",
+        "name": "Loti",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 86
+    },
+    {
+        "code": "LYD",
+        "name": "Dinar libio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 87
+    },
+    {
+        "code": "MAD",
+        "name": "Dírham marroquí",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 88
+    },
+    {
+        "code": "MDL",
+        "name": "Leu moldavo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 89
+    },
+    {
+        "code": "MGA",
+        "name": "Ariary malgache",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 90
+    },
+    {
+        "code": "MKD",
+        "name": "Denar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 91
+    },
+    {
+        "code": "MMK",
+        "name": "Kyat",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 92
+    },
+    {
+        "code": "MNT",
+        "name": "Tugrik",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 93
+    },
+    {
+        "code": "MOP",
+        "name": "Pataca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 94
+    },
+    {
+        "code": "MRO",
+        "name": "Uguiya",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 95
+    },
+    {
+        "code": "MUR",
+        "name": "Rupia de Mauricio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 96
+    },
+    {
+        "code": "MVR",
+        "name": "Rufiyaa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 97
+    },
+    {
+        "code": "MWK",
+        "name": "Kwacha",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 98
+    },
+    {
+        "code": "MXN",
+        "name": "Peso mexicano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 99
+    },
+    {
+        "code": "MXV",
+        "name": "Unidad de Inversión (UDI) mexicana",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 100
+    },
+    {
+        "code": "MYR",
+        "name": "Ringgit malayo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 101
+    },
+    {
+        "code": "MZN",
+        "name": "Metical mozambiqueño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 102
+    },
+    {
+        "code": "NAD",
+        "name": "Dólar namibio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 103
+    },
+    {
+        "code": "NGN",
+        "name": "Naira",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 104
+    },
+    {
+        "code": "NIO",
+        "name": "Córdoba",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 105
+    },
+    {
+        "code": "NOK",
+        "name": "Corona noruega",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 106
+    },
+    {
+        "code": "NPR",
+        "name": "Rupia nepalí",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 107
+    },
+    {
+        "code": "NZD",
+        "name": "Dólar neozelandés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 108
+    },
+    {
+        "code": "OMR",
+        "name": "Rial omaní",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 109
+    },
+    {
+        "code": "PAB",
+        "name": "Balboa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 110
+    },
+    {
+        "code": "PEN",
+        "name": "Sol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 111
+    },
+    {
+        "code": "PGK",
+        "name": "Kina",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 112
+    },
+    {
+        "code": "PHP",
+        "name": "Peso filipino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 113
+    },
+    {
+        "code": "PKR",
+        "name": "Rupia pakistaní",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 114
+    },
+    {
+        "code": "PLN",
+        "name": "Złoty",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 115
+    },
+    {
+        "code": "PYG",
+        "name": "Guaraní",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 116
+    },
+    {
+        "code": "QAR",
+        "name": "Riyal qatarí",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 117
+    },
+    {
+        "code": "RON",
+        "name": "Leu rumano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 118
+    },
+    {
+        "code": "RSD",
+        "name": "Dinar serbio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 119
+    },
+    {
+        "code": "RUB",
+        "name": "Rublo ruso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 120
+    },
+    {
+        "code": "RWF",
+        "name": "Franco ruandés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 121
+    },
+    {
+        "code": "SAR",
+        "name": "Riyal saudí",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 122
+    },
+    {
+        "code": "SBD",
+        "name": "Dólar de las Islas Salomón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 123
+    },
+    {
+        "code": "SCR",
+        "name": "Rupia seychelense",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 124
+    },
+    {
+        "code": "SDG",
+        "name": "Dinar sudanés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 125
+    },
+    {
+        "code": "SEK",
+        "name": "Corona sueca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 126
+    },
+    {
+        "code": "SGD",
+        "name": "Dólar de Singapur",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 127
+    },
+    {
+        "code": "SHP",
+        "name": "Libra de Santa Elena",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 128
+    },
+    {
+        "code": "SLL",
+        "name": "Leone",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 129
+    },
+    {
+        "code": "SOS",
+        "name": "Chelín somalí",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 130
+    },
+    {
+        "code": "SRD",
+        "name": "Dólar surinamés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 131
+    },
+    {
+        "code": "SSP",
+        "name": "Libra sursudanesa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 132
+    },
+    {
+        "code": "STD",
+        "name": "Dobra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 133
+    },
+    {
+        "code": "SVC",
+        "name": "Colon Salvadoreño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 134
+    },
+    {
+        "code": "SYP",
+        "name": "Libra siria",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 135
+    },
+    {
+        "code": "SZL",
+        "name": "Lilangeni",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 136
+    },
+    {
+        "code": "THB",
+        "name": "Baht",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 137
+    },
+    {
+        "code": "TJS",
+        "name": "Somoni tayiko",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 138
+    },
+    {
+        "code": "TMT",
+        "name": "Manat turcomano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 139
+    },
+    {
+        "code": "TND",
+        "name": "Dinar tunecino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 140
+    },
+    {
+        "code": "TOP",
+        "name": "Paʻanga",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 141
+    },
+    {
+        "code": "TRY",
+        "name": "Lira turca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 142
+    },
+    {
+        "code": "TTD",
+        "name": "Dólar de Trinidad y Tobago",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 143
+    },
+    {
+        "code": "TWD",
+        "name": "Nuevo dólar taiwanés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 144
+    },
+    {
+        "code": "TZS",
+        "name": "Chelín tanzano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 145
+    },
+    {
+        "code": "UAH",
+        "name": "Grivna",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 146
+    },
+    {
+        "code": "UGX",
+        "name": "Chelín ugandés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 147
+    },
+    {
+        "code": "USD",
+        "name": "Dólar estadounidense",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 148
+    },
+    {
+        "code": "USN",
+        "name": "Dólar estadounidense (Siguiente día)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 149
+    },
+    {
+        "code": "UYI",
+        "name": "Peso en Unidades Indexadas (Uruguay)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 150
+    },
+    {
+        "code": "UYU",
+        "name": "Peso uruguayo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 151
+    },
+    {
+        "code": "UZS",
+        "name": "Som uzbeko",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 152
+    },
+    {
+        "code": "VEF",
+        "name": "Bolívar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 153
+    },
+    {
+        "code": "VES7",
+        "name": "Bolívar soberano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 154
+    },
+    {
+        "code": "VND",
+        "name": "Dong vietnamita",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 155
+    },
+    {
+        "code": "VUV",
+        "name": "Vatu",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 156
+    },
+    {
+        "code": "WST",
+        "name": "Tala",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 157
+    },
+    {
+        "code": "XAF",
+        "name": "Franco CFA de África Central",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 158
+    },
+    {
+        "code": "XAG",
+        "name": "Plata (una onza troy)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 159
+    },
+    {
+        "code": "XAU",
+        "name": "Oro (una onza troy)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 160
+    },
+    {
+        "code": "XBA",
+        "name": "Unidad compuesta europea (EURCO) (Unidad del mercado de bonos)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 161
+    },
+    {
+        "code": "XBB",
+        "name": "Unidad Monetaria europea (E.M.U.-6) (Unidad del mercado de bonos)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 162
+    },
+    {
+        "code": "XBC",
+        "name": "Unidad europea de cuenta 9 (E.U.A.-9) (Unidad del mercado de bonos)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 163
+    },
+    {
+        "code": "XBD",
+        "name": "Unidad europea de cuenta 17 (E.U.A.-17) (Unidad del mercado de bonos)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 164
+    },
+    {
+        "code": "XCD",
+        "name": "Dólar del Caribe Oriental",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 165
+    },
+    {
+        "code": "XDR",
+        "name": "Derechos especiales de giro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 166
+    },
+    {
+        "code": "XOF",
+        "name": "Franco CFA de África Occidental",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 167
+    },
+    {
+        "code": "XPD",
+        "name": "Paladio (una onza troy)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 168
+    },
+    {
+        "code": "XPF",
+        "name": "Franco CFP",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 169
+    },
+    {
+        "code": "XPT",
+        "name": "Platino (una onza troy)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 170
+    },
+    {
+        "code": "XSU",
+        "name": "SUCRE",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 171
+    },
+    {
+        "code": "XTS",
+        "name": "Reservado para pruebas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 172
+    },
+    {
+        "code": "XUA",
+        "name": "Unidad de cuenta BAD",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 173
+    },
+    {
+        "code": "XXX",
+        "name": "Sin divisa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 174
+    },
+    {
+        "code": "YER",
+        "name": "Rial yemení",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 175
+    },
+    {
+        "code": "ZAR",
+        "name": "Rand",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 176
+    },
+    {
+        "code": "ZMW",
+        "name": "Kwacha zambiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 177
+    },
+    {
+        "code": "ZWL",
+        "name": "Dólar zimbabuense",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 178
+    }
+]

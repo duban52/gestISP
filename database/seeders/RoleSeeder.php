@@ -25,6 +25,8 @@ class RoleSeeder extends Seeder
 
         // Empresas (el contribuyente). Van antes que las sucursales
         // porque las sucursales cuelgan de ellas.
+        Permission::create(['name' => 'fiscal.completeness', 'description' => 'Ver el informe de completitud fiscal']);
+
         // Grupos de afinidad: clasifican los contratos de la empresa y
         // deciden si su factura es electronica o interna.
         Permission::create(['name' => 'affinity_groups.index', 'description' => 'Ver grupos de afinidad']);

@@ -1,0 +1,37 @@
+[
+    {
+        "code": "1",
+        "name": "Devolución parcial de los bienes y\/o no aceptación parcial del servicio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "2",
+        "name": "Anulación de factura electrónica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "3",
+        "name": "Rebaja  o descuento parcial o total",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "4",
+        "name": "Ajuste de precio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "5",
+        "name": "Otros",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    }
+]

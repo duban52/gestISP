@@ -2,7 +2,7 @@
 
 namespace App\Reports;
 
-use App\Reports\Support\BranchFilter;
+use App\Support\BranchFilter;
 use App\Models\TechnicalOrder;
 use App\Reports\Support\OrderDetailMap;
 use App\Reports\Support\ReportPeriod;

@@ -19,6 +19,14 @@ class Service extends Model
         'user_id',
         'branch_id',
 
+        // ---- Datos fiscales (deuda de la fase 8): las creo la
+        // migracion pero no eran ni fillable, y ningun formulario las
+        // ofrecia. El informe de completitud fiscal las exige sin que
+        // hubiera manera de completarlas. ----
+        'product_code',
+        'product_code_type',
+        'unit_measure_code',
+        'tax_code',
         ];
 
     //Relación con usuarios

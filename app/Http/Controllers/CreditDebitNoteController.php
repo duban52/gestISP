@@ -13,6 +13,7 @@ use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use App\Tenancy\CurrentContext;
+use App\Support\BranchFilter;
 
 /**
  * Notas crédito y débito sobre facturas.
@@ -41,9 +42,19 @@ class CreditDebitNoteController extends Controller
      */
     public function index(Request $request): View
     {
-        $notas = CreditDebitNote::with(['invoice', 'contract.client', 'user', 'branch'])
+        // El grupo lo hereda del contrato que corrige la nota. Se
+        // aplica ADEMAS del alcance, nunca en su lugar.
+        $gruposPedidos = BranchFilter::normalizar($request->query('affinity_group_id'));
+
+        $notas = CreditDebitNote::with([
+                'invoice', 'contract.client', 'contract.affinityGroup', 'user', 'branch',
+            ])
             ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
             ->when($request->filled('tipo'), fn ($q) => $q->where('type', $request->input('tipo')))
+            ->when(
+                $gruposPedidos !== [],
+                fn ($q) => $q->whereHas('contract', fn ($c) => $c->whereIn('affinity_group_id', $gruposPedidos)),
+            )
             ->orderByDesc('issue_date')
             ->orderByDesc('id')
             ->get();
@@ -51,6 +62,7 @@ class CreditDebitNoteController extends Controller
         return view('gestisp.notes.index', [
             'notas' => $notas,
             'tipos' => NoteType::opciones(),
+            'filtros' => $request->query(),
         ]);
     }
 

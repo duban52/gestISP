@@ -1,0 +1,114 @@
+[
+    {
+        "code": "01",
+        "name": "IVA",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "02",
+        "name": "IC",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "03",
+        "name": "ICA",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "04",
+        "name": "INC",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "05",
+        "name": "ReteIVA",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    },
+    {
+        "code": "06",
+        "name": "ReteFuente",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 5
+    },
+    {
+        "code": "07",
+        "name": "ReteICA",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 6
+    },
+    {
+        "code": "08",
+        "name": "ReteCREE",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 7
+    },
+    {
+        "code": "20",
+        "name": "FtoHorticultura",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 8
+    },
+    {
+        "code": "21",
+        "name": "Timbre",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 9
+    },
+    {
+        "code": "22",
+        "name": "Bolsas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 10
+    },
+    {
+        "code": "23",
+        "name": "INCarbono",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 11
+    },
+    {
+        "code": "24",
+        "name": "INCombustibles",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 12
+    },
+    {
+        "code": "25",
+        "name": "Sobretasa Combustibles",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 13
+    },
+    {
+        "code": "26",
+        "name": "Sordicom",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 14
+    },
+    {
+        "code": "ZZ",
+        "name": "Nombre de la figura tributaria",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 15
+    }
+]

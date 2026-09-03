@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Reports\Support;
+namespace App\Support;
 
 /**
  * Qué sucursales entran en un informe.

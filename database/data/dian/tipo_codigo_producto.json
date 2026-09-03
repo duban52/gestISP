@@ -1,0 +1,16 @@
+[
+    {
+        "code": "001",
+        "name": "UNSPSC",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "010",
+        "name": "GTIN",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    }
+]

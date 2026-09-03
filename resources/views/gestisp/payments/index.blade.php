@@ -125,6 +125,7 @@
                     <thead>
                     <tr>
                         <th>Sucursal</th>
+                        <th>Grupo</th>
                         <th>ID</th>
                         <th>Identidad cliente</th>
                         <th>Cliente</th>
@@ -150,6 +151,12 @@
                                  mas abajo). Se pinta siempre para que los
                                  indices de columna no cambien segun el modo. --}}
                             <td>{{ $payment->invoice?->contract?->branch?->name ?? $payment->contract?->branch?->name ?: '—' }}</td>
+                            {{-- El grupo del contrato que se esta pagando. Los
+                                 anticipos cuelgan del contrato directamente y
+                                 los demas pagos de la factura: de ahi los dos
+                                 caminos, los mismos que usa el filtro. --}}
+                            <td>{{ $payment->invoice?->contract?->affinityGroup?->etiqueta()
+                                    ?? $payment->contract?->affinityGroup?->etiqueta() ?: '—' }}</td>
                             <td>{{ $payment->id }}</td>
                             <td>{{ $cliente->identity_number ?? '—' }}</td>
                             <td>
@@ -194,7 +201,7 @@
                     {{-- Total de lo mostrado al pie de la tabla --}}
                     <tfoot>
                     <tr>
-                        <th colspan="{{ $mostrarSucursal ? 5 : 4 }}" class="text-right">Total mostrado:</th>
+                        <th colspan="{{ $mostrarSucursal ? 6 : 5 }}" class="text-right">Total mostrado:</th>
                         <th>${{ number_format($payments->sum('amount'), 0, ',', '.') }}</th>
                         <th colspan="4"></th>
                     </tr>
@@ -264,7 +271,7 @@
 
                 // Orden inicial: por fecha de pago (columna 6) descendente.
                 // Se corrió un puesto al agregar la columna de contrato.
-                order: [[7, 'desc']],
+                order: [[8, 'desc']],
 
                 columnDefs: [
                     // La sucursal se pinta siempre para que los indices de
@@ -272,7 +279,7 @@
                     // la esconde cuando no hay varias sedes que distinguir.
                     { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     // La columna del recibo son botones: no se ordena
-                    { orderable: false, targets: 9 },
+                    { orderable: false, targets: 10 },
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }
                 ]

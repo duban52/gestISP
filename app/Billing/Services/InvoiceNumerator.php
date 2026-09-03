@@ -2,6 +2,9 @@
 
 namespace App\Billing\Services;
 
+use App\Models\NumberingRange;
+use App\Models\Branch;
+use App\Services\Numbering\DocumentNumberService;
 use App\Models\Invoice;
 use App\Models\InvoiceNumberingSequence;
 use RuntimeException;
@@ -32,6 +35,27 @@ class InvoiceNumerator
      */
     private function defaultPrefix(int $branchId): string
     {
+        // Se mantiene FAC, que es lo que ya usan las series en
+        // produccion.
+        //
+        // Se intento cambiarlo a DOC —para que un documento interno no
+        // pareciera una factura electronica— y estaba mal pensado por
+        // dos motivos:
+        //
+        //   1. Este metodo solo actua al CREAR una serie. Las
+        //      sucursales que ya existen conservarian FAC y solo las
+        //      nuevas recibirian DOC: una inconsistencia peor que
+        //      cualquiera de las dos opciones.
+        //
+        //   2. Cambiar el prefijo de una serie viva crea una
+        //      discontinuidad en la numeracion que hay que justificar.
+        //
+        // La distincion que de verdad protege esta en otro sitio: la
+        // electronica lleva el prefijo que autorizo la resolucion —uno
+        // completamente distinto— y, sobre todo, en que la
+        // representacion impresa del documento interno no imita a una
+        // factura electronica. Cambiar esto seria una decision
+        // deliberada con su migracion, no un efecto secundario.
         return 'FAC' . $branchId;
     }
 
@@ -40,27 +64,92 @@ class InvoiceNumerator
      */
     public function assign(Invoice $invoice): Invoice
     {
-        $sequence = $this->lockActiveSequence($invoice->branch_id);
+        // De donde sale el numero depende del TIPO de la factura, que
+        // ya viene decidido y congelado:
+        //
+        //   · Electronica -> del RANGO AUTORIZADO por la resolucion.
+        //     Es el unico numero legitimo que puede llevar.
+        //   · Interna     -> de su propia serie, que no consume ningun
+        //     consecutivo autorizado.
+        //
+        // Que sean dos tablas distintas no es un detalle de
+        // implementacion: es lo que hace imposible que un documento
+        // interno gaste un consecutivo de la DIAN.
+        $sequence = $invoice->document_kind === ElectronicInvoicingDecider::ELECTRONICO
+            ? $this->lockAuthorizedRange($invoice)
+            : $this->lockActiveSequence($invoice->branch_id);
 
-        $next = max($sequence->current_number + 1, $sequence->range_start);
-
-        if ($sequence->range_end !== null && $next > $sequence->range_end) {
-            throw new RuntimeException(
-                "La secuencia de numeración {$sequence->prefix} agotó su rango autorizado " .
-                "({$sequence->range_start}-{$sequence->range_end}). Registre una nueva resolución/secuencia."
-            );
-        }
-
-        $sequence->update(['current_number' => $next]);
+        // Sumar uno, comprobar el rango y formatear los hace
+        // DocumentNumberService, el mismo que numera contratos y notas.
+        // Aqui solo se decide QUE serie y se escribe el resultado en la
+        // factura. La comprobacion de rango es lo que mas importa que
+        // sea comun: emitir pasado el rango autorizado es emitir con
+        // numeros que nadie autorizo, y esa regla no puede tener dos
+        // versiones que se separen con el tiempo.
+        $numero = app(DocumentNumberService::class)->reservarEn($sequence);
 
         $invoice->update([
             'prefix' => $sequence->prefix,
-            'number' => $next,
-            'full_number' => $sequence->prefix . '-' . $next,
-            'numbering_sequence_id' => $sequence->id,
+            'number' => $numero->consecutivo,
+            'full_number' => $numero->completo,
+            // Solo para las internas: la columna apunta a
+            // invoice_numbering_sequences. De que RANGO salio una
+            // electronica queda en su electronic_document, junto con la
+            // resolucion que lo autorizo.
+            'numbering_sequence_id' => $sequence instanceof InvoiceNumberingSequence
+                ? $sequence->id
+                : null,
         ]);
 
         return $invoice;
+    }
+
+    /**
+     * El rango autorizado con el que numerar una factura electronica.
+     *
+     * SI NO HAY, FALLA
+     * ----------------
+     * No se crea uno ni se cae a la serie interna. Un rango de
+     * numeracion no se inventa: lo autoriza la DIAN en una resolucion,
+     * y emitir con numeros de fuera de ese rango es emitir con numeros
+     * que nadie autorizo — que es peor que no emitir.
+     *
+     * Falla en voz alta, con el motivo, para que se vea al primer
+     * intento y no el dia que la DIAN rechace el lote.
+     *
+     * SE PREFIERE EL RANGO DE LA SUCURSAL
+     * -----------------------------------
+     * La resolucion se le da al NIT, pero se puede repartir por sede.
+     * Si la sucursal tiene el suyo, se usa ese; si no, el de la
+     * empresa. Nunca el de OTRA sucursal.
+     */
+    private function lockAuthorizedRange(Invoice $invoice): NumberingRange
+    {
+        $companyId = (int) Branch::withoutGlobalScopes()
+            ->whereKey($invoice->branch_id)
+            ->value('company_id');
+
+        $buscar = fn (?int $branchId) => NumberingRange::withoutGlobalScopes()
+            ->where('company_id', $companyId)
+            ->where('branch_id', $branchId)
+            ->where('active', true)
+            ->whereHas('resolution', fn ($q) => $q
+                ->where('active', true)
+                ->whereDate('valid_from', '<=', now())
+                ->whereDate('valid_until', '>=', now()))
+            ->lockForUpdate()
+            ->first();
+
+        $rango = $buscar((int) $invoice->branch_id) ?? $buscar(null);
+
+        if (!$rango) {
+            throw new RuntimeException(
+                'No hay ningun rango de numeracion autorizado y vigente para emitir esta factura '
+                . 'electronica. Registre la resolucion de la DIAN y su rango antes de emitir.'
+            );
+        }
+
+        return $rango;
     }
 
     /**
@@ -69,22 +158,32 @@ class InvoiceNumerator
      */
     private function lockActiveSequence(int $branchId): InvoiceNumberingSequence
     {
-        $sequence = InvoiceNumberingSequence::where('branch_id', $branchId)
+        $kind = ElectronicInvoicingDecider::INTERNO;
+
+        $buscar = fn () => InvoiceNumberingSequence::where('branch_id', $branchId)
+            ->where('kind', $kind)
             ->where('active', true)
             ->lockForUpdate()
             ->first();
 
-        if ($sequence) {
+        if ($sequence = $buscar()) {
             return $sequence;
         }
 
+        // La serie interna SI se crea sola: es de la empresa y no la
+        // autoriza nadie. Es justo lo contrario del rango fiscal.
         InvoiceNumberingSequence::firstOrCreate(
-            ['branch_id' => $branchId, 'active' => true],
-            ['prefix' => $this->defaultPrefix($branchId), 'range_start' => 1, 'current_number' => 0]
+            ['branch_id' => $branchId, 'kind' => $kind, 'active' => true],
+            [
+                'prefix' => $this->defaultPrefix($branchId),
+                'range_start' => 1,
+                'current_number' => 0,
+            ],
         );
 
         // Releer con lock (firstOrCreate no bloquea)
-        return InvoiceNumberingSequence::where('branch_id', $branchId)
+        return $buscar() ?? InvoiceNumberingSequence::where('branch_id', $branchId)
+            ->where('kind', $kind)
             ->where('active', true)
             ->lockForUpdate()
             ->firstOrFail();

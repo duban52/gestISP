@@ -251,7 +251,7 @@ class ConsolidatedModeTest extends TestCase
         ]);
 
         $this->post(route('clients.store'), [
-            'type_document' => 'Cedula de ciudadania',
+            'document_type_code' => '13',
             'identity_number' => '1234567890',
             'name' => 'Juan',
             'last_name' => 'Perez',

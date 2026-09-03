@@ -1,6 +1,9 @@
 @extends('adminlte::page')
 
 @section('title', 'Editar servicio')
+{{-- Activa el Select2 de AdminLTE: lo usa la unidad de medida del
+     componente de datos fiscales, que tiene 1.093 códigos. --}}
+@section('plugins.Select2', true)
 
 @section('content_header')
     <div class="card p-3">
@@ -53,6 +56,10 @@
                 </span>
                     @enderror
 
+                </div>
+
+                <div class="col-12 mb-3">
+                    <x-campos-fiscales-servicio :servicio="$service" />
                 </div>
 
                 <div class="col-12 text-center">

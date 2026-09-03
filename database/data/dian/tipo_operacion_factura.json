@@ -1,0 +1,37 @@
+[
+    {
+        "code": "10",
+        "name": "Estandar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "09",
+        "name": "AIU",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "11",
+        "name": "Mandatos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "12",
+        "name": "Transporte",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "13",
+        "name": "Cambiario",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    }
+]

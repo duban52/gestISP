@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\AffinityGroup;
 use App\Models\Company;
+use App\Models\FiscalCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -63,6 +65,8 @@ class CompanyController extends Controller
         $datos['logo'] = $this->guardarLogo($request) ?? null;
 
         $empresa = Company::create($datos);
+
+        $this->guardarResponsabilidades($empresa, $request);
 
         // Toda empresa nace con un grupo de afinidad predeterminado.
         //
@@ -138,9 +142,36 @@ class CompanyController extends Controller
 
         $company->update($datos);
 
+        $this->guardarResponsabilidades($company, $request);
+
         return redirect()
             ->route('companies.show', $company)
             ->with('success', 'Empresa actualizada.');
+    }
+
+    /**
+     * Guarda las responsabilidades fiscales marcadas.
+     *
+     * Misma forma que ClientController::guardarResponsabilidades(): se
+     * borran y se vuelven a crear en vez de comparar una a una, y solo
+     * se tocan si el formulario las mandó -el checkbox ausente no debe
+     * borrar lo que ya había-.
+     */
+    private function guardarResponsabilidades(Company $empresa, Request $request): void
+    {
+        if (!$request->has('tax_responsibilities')) {
+            return;
+        }
+
+        $codigos = array_filter((array) $request->input('tax_responsibilities', []));
+
+        DB::transaction(function () use ($empresa, $codigos) {
+            $empresa->taxResponsibilities()->delete();
+
+            foreach (array_unique($codigos) as $codigo) {
+                $empresa->taxResponsibilities()->create(['responsibility_code' => $codigo]);
+            }
+        });
     }
 
     /**
@@ -167,7 +198,15 @@ class CompanyController extends Controller
         return $request->validate([
             'legal_name' => 'required|string|max:255',
             'trade_name' => 'nullable|string|max:255',
-            'document_type_code' => 'required|string|max:5',
+            // Sale del catalogo y no de una lista escrita a mano -es el
+            // mismo fallo que ya se corrigio en el cliente-, asi que se
+            // valida contra el, igual que alla.
+            'document_type_code' => [
+                'required', 'string', 'max:5',
+                Rule::exists('fiscal_catalogs', 'code')
+                    ->where('catalog', FiscalCatalog::TIPO_DOCUMENTO)
+                    ->where('active', true),
+            ],
             // Dos empresas no pueden compartir identificacion fiscal:
             // serian el mismo contribuyente por duplicado.
             'document_number' => [
@@ -180,6 +219,18 @@ class CompanyController extends Controller
             'address' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:30',
+
+            // ---- Datos fiscales adicionales (deuda de la fase 8):
+            // existian en la tabla pero el formulario nunca los pidio,
+            // asi que el informe de completitud los exigia sin que
+            // hubiera manera de completarlos. Opcionales y sin validar
+            // contra el catalogo, la misma decision que ya se tomo para
+            // los campos equivalentes del cliente. ----
+            'organization_type_code' => 'nullable|string|max:5',
+            'department_dane_code' => 'nullable|string|max:5',
+            'municipality_dane_code' => 'nullable|string|max:5',
+            'postal_code' => 'nullable|string|max:10',
+
             'operation_mode' => ['required', Rule::in([
                 Company::MODO_INDEPENDIENTE,
                 Company::MODO_CONSOLIDADO,

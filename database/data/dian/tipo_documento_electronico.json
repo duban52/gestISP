@@ -1,0 +1,56 @@
+[
+    {
+        "code": "01",
+        "name": "Factura electrónica de Venta",
+        "parent_code": null,
+        "extra": {
+            "description": "Tipos de factura"
+        },
+        "sort_order": 0
+    },
+    {
+        "code": "02",
+        "name": "Factura electrónica de venta con propósito de exportación",
+        "parent_code": null,
+        "extra": {
+            "description": "Tipos de factura"
+        },
+        "sort_order": 1
+    },
+    {
+        "code": "03",
+        "name": "Factura de talonario o papel con numeración de contingencia.",
+        "parent_code": null,
+        "extra": {
+            "description": "Tipos de factura"
+        },
+        "sort_order": 2
+    },
+    {
+        "code": "04",
+        "name": "Factura electrónica de Venta  por Contingencia DIAN",
+        "parent_code": null,
+        "extra": {
+            "description": "Tipos de factura"
+        },
+        "sort_order": 3
+    },
+    {
+        "code": "91",
+        "name": "Nota Crédito",
+        "parent_code": null,
+        "extra": {
+            "description": "Exclusivo en referencias a documentos (elementos DocumentReference)"
+        },
+        "sort_order": 4
+    },
+    {
+        "code": "92",
+        "name": "Nota Débito",
+        "parent_code": null,
+        "extra": {
+            "description": "Exclusivo en referencias a documentos (elementos DocumentReference)"
+        },
+        "sort_order": 5
+    }
+]

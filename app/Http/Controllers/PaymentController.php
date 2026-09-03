@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use App\Tenancy\CurrentContext;
+use App\Support\BranchFilter;
 
 /**
  * Controlador de Pagos
@@ -83,7 +84,9 @@ class PaymentController extends Controller
             // porque los anticipos no pasan por una factura
             ->with([
                 'invoice.contract.client', 'invoice.contract.branch',
-                'contract.client', 'contract.branch', 'user',
+                'invoice.contract.affinityGroup',
+                'contract.client', 'contract.branch', 'contract.affinityGroup',
+                'user',
             ])
             ->orderByDesc('payment_date')
             ->get();
@@ -161,6 +164,24 @@ class PaymentController extends Controller
             $query->where(function ($q) use ($branchIds) {
                 $q->whereHas('invoice.contract', fn ($c) => $c->whereIn('branch_id', $branchIds))
                     ->orWhereHas('contract', fn ($c) => $c->whereIn('branch_id', $branchIds));
+            });
+        }
+
+        // Por grupo de afinidad. El pago no lo tiene: lo hereda del
+        // contrato que paga, y se llega por los dos caminos porque no
+        // todo pago tiene factura —los anticipos cuelgan del contrato
+        // directamente—. Es el mismo motivo por el que el filtro de
+        // alcance de arriba mira los dos.
+        //
+        // Se aplica ADEMAS del alcance, nunca en su lugar: pedir un
+        // grupo de otra empresa cruza las dos condiciones y da cero
+        // resultados en vez de abrir nada.
+        $gruposPedidos = BranchFilter::normalizar($request->query('affinity_group_id'));
+
+        if ($gruposPedidos !== []) {
+            $query->where(function ($q) use ($gruposPedidos) {
+                $q->whereHas('invoice.contract', fn ($c) => $c->whereIn('affinity_group_id', $gruposPedidos))
+                    ->orWhereHas('contract', fn ($c) => $c->whereIn('affinity_group_id', $gruposPedidos));
             });
         }
 

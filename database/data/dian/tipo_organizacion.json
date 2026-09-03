@@ -1,0 +1,16 @@
+[
+    {
+        "code": "1",
+        "name": "Persona Jurídica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "2",
+        "name": "Persona Natural",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    }
+]

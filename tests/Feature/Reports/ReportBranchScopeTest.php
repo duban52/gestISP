@@ -9,7 +9,7 @@ use App\Models\Contract;
 use App\Models\Plan;
 use App\Models\User;
 use App\Reports\GrowthReport;
-use App\Reports\Support\BranchFilter;
+use App\Support\BranchFilter;
 use App\Reports\Support\ReportPeriod;
 use App\Tenancy\CurrentContext;
 use Database\Seeders\ManagementReportsPermissionSeeder;

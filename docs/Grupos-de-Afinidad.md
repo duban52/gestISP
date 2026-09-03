@@ -133,6 +133,39 @@ En el catálogo de columnas hay dos nuevas, `Grupo` y `Facturación`, que se
 pueden activar desde el selector de columnas y salen igual en el Excel. Ninguna
 viene marcada de serie: mientras una empresa tenga un solo grupo no aportan.
 
+## El grupo en los documentos que salen del contrato
+
+Facturas, pagos y notas heredan la clasificación del contrato. En los tres el
+grupo es ahora **columna**, y en facturas, pagos y notas hay **filtro**.
+
+Es información nueva: sin ella no había forma de contestar «cuáles son del grupo
+corporativo» salvo abriendo los contratos uno a uno.
+
+### Por qué no hay filtro de sucursal en todos
+
+Al implantarlo se comprobó cómo funcionan de verdad esos listados: **ninguno
+pagina en el servidor**. Todos cargan la colección completa del alcance y
+DataTables busca del lado del cliente. Con la columna «Sucursal» puesta en la
+fase 4, su propio buscador ya filtra por sede.
+
+Añadir un desplegable de sucursal a cada uno sería la misma pregunta por otro
+camino, y dos filtros que dicen lo mismo se acaban contradiciendo.
+
+**La excepción es facturas**, que crece sin límite: ahí el filtro sí aporta,
+porque reduce lo que se **carga** y no solo lo que se muestra. Por eso ese
+listado —que no tenía buscador— tiene ahora uno con sucursal y grupo.
+
+### «Empresa» no es un filtro
+
+El contexto fija exactamente una empresa, así que un desplegable de empresa solo
+podría tener un valor. El plan lo listaba; no tiene dónde aplicarse.
+
+### Los filtros se cruzan con el alcance
+
+Nunca lo sustituyen. Pedir por URL un grupo o una sucursal que no corresponden
+cruza las dos condiciones y da **cero resultados** — no abre nada, y tampoco da
+403, que confirmaría que existen.
+
 ## Qué no se puede borrar
 
 Un grupo **no se borra** si tiene contratos —se perdería la clasificación de

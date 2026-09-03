@@ -43,6 +43,8 @@ class InvoiceGenerator
 {
     public function __construct(
         private readonly InvoiceNumerator $numerator,
+        // El UNICO sitio que decide si una factura es electronica.
+        private readonly ElectronicInvoicingDecider $decider,
         private readonly CreditBalanceService $creditBalance,
     ) {
     }
@@ -91,6 +93,11 @@ class InvoiceGenerator
             $invoice = Invoice::create([
                 'contract_id' => $contract->id,
                 'branch_id' => $contract->branch_id,
+                // La decision se toma UNA vez, aqui, y se congela.
+                // Despues lo que vale es lo que quedo guardado: si el
+                // contrato cambia de grupo, esta factura no se entera.
+                'affinity_group_id' => $contract->affinity_group_id,
+                'document_kind' => $this->decider->tipoPara($contract),
                 // Corrida que la generó (null si se creó por otra vía)
                 'billing_run_id' => $billingRunId,
                 'type' => InvoiceType::Mensualidad->value,

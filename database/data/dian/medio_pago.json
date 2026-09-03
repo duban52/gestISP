@@ -1,0 +1,527 @@
+[
+    {
+        "code": "1",
+        "name": "Instrumento no definido",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "2",
+        "name": "Crédito ACH",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "3",
+        "name": "Débito ACH",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "4",
+        "name": "Reversión débito de demanda ACH",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "5",
+        "name": "Reversión crédito de demanda ACH",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    },
+    {
+        "code": "6",
+        "name": "Crédito de demanda ACH",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 5
+    },
+    {
+        "code": "7",
+        "name": "Débito de demanda ACH",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 6
+    },
+    {
+        "code": "8",
+        "name": "Mantener",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 7
+    },
+    {
+        "code": "9",
+        "name": "Clearing Nacional o Regional",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 8
+    },
+    {
+        "code": "10",
+        "name": "Efectivo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 9
+    },
+    {
+        "code": "11",
+        "name": "Reversión Crédito Ahorro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 10
+    },
+    {
+        "code": "12",
+        "name": "Reversión Débito Ahorro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 11
+    },
+    {
+        "code": "13",
+        "name": "Crédito Ahorro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 12
+    },
+    {
+        "code": "14",
+        "name": "Débito Ahorro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 13
+    },
+    {
+        "code": "15",
+        "name": "Bookentry Crédito",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 14
+    },
+    {
+        "code": "16",
+        "name": "Bookentry Débito",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 15
+    },
+    {
+        "code": "17",
+        "name": "Concentración de la demanda en efectivo \/Desembolso Crédito (CCD)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 16
+    },
+    {
+        "code": "18",
+        "name": "Concentración de la demanda en efectivo \/ Desembolso (CCD) débito",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 17
+    },
+    {
+        "code": "19",
+        "name": "Crédito Pago negocio corporativo (CTP)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 18
+    },
+    {
+        "code": "20",
+        "name": "Cheque",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 19
+    },
+    {
+        "code": "21",
+        "name": "Poyecto bancario",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 20
+    },
+    {
+        "code": "22",
+        "name": "Proyecto bancario certificado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 21
+    },
+    {
+        "code": "23",
+        "name": "Cheque bancario",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 22
+    },
+    {
+        "code": "24",
+        "name": "Nota cambiaria esperando aceptación",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 23
+    },
+    {
+        "code": "25",
+        "name": "Cheque certificado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 24
+    },
+    {
+        "code": "26",
+        "name": "Cheque Local",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 25
+    },
+    {
+        "code": "27",
+        "name": "Débito Pago Neogcio Corporativo (CTP)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 26
+    },
+    {
+        "code": "28",
+        "name": "Crédito Negocio Intercambio Corporativo (CTX)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 27
+    },
+    {
+        "code": "29",
+        "name": "Débito Negocio Intercambio Corporativo (CTX)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 28
+    },
+    {
+        "code": "30",
+        "name": "Transferecia Crédito",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 29
+    },
+    {
+        "code": "31",
+        "name": "Transferencia Débito",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 30
+    },
+    {
+        "code": "32",
+        "name": "Concentración Efectivo \/ Desembolso Crédito plus (CCD+)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 31
+    },
+    {
+        "code": "33",
+        "name": "Concentración Efectivo \/ Desembolso Débito plus (CCD+)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 32
+    },
+    {
+        "code": "34",
+        "name": "Pago y depósito pre acordado (PPD)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 33
+    },
+    {
+        "code": "35",
+        "name": "Concentración efectivo ahorros \/ Desembolso Crédito (CCD)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 34
+    },
+    {
+        "code": "36",
+        "name": "Concentración efectivo ahorros \/ Desembolso Drédito (CCD)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 35
+    },
+    {
+        "code": "37",
+        "name": "Pago Negocio Corporativo Ahorros Crédito (CTP)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 36
+    },
+    {
+        "code": "38",
+        "name": "Pago Neogcio Corporativo Ahorros Débito (CTP)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 37
+    },
+    {
+        "code": "39",
+        "name": "Crédito Negocio Intercambio Corporativo (CTX)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 38
+    },
+    {
+        "code": "40",
+        "name": "Débito Negocio Intercambio Corporativo (CTX)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 39
+    },
+    {
+        "code": "41",
+        "name": "Concentración efectivo\/Desembolso Crédito plus (CCD+)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 40
+    },
+    {
+        "code": "42",
+        "name": "Consiganción bancaria",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 41
+    },
+    {
+        "code": "43",
+        "name": "Concentración efectivo \/ Desembolso Débito plus (CCD+)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 42
+    },
+    {
+        "code": "44",
+        "name": "Nota cambiaria",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 43
+    },
+    {
+        "code": "45",
+        "name": "Transferencia Crédito Bancario",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 44
+    },
+    {
+        "code": "46",
+        "name": "Transferencia Débito Interbancario",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 45
+    },
+    {
+        "code": "47",
+        "name": "Transferencia Débito Bancaria",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 46
+    },
+    {
+        "code": "48",
+        "name": "Tarjeta Crédito",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 47
+    },
+    {
+        "code": "49",
+        "name": "Tarjeta Débito",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 48
+    },
+    {
+        "code": "50",
+        "name": "Postgiro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 49
+    },
+    {
+        "code": "51",
+        "name": "Telex estándar bancario francés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 50
+    },
+    {
+        "code": "52",
+        "name": "Pago comercial urgente",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 51
+    },
+    {
+        "code": "53",
+        "name": "Pago Tesorería Urgente",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 52
+    },
+    {
+        "code": "60",
+        "name": "Nota promisoria",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 53
+    },
+    {
+        "code": "61",
+        "name": "Nota promisoria firmada por el acreedor",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 54
+    },
+    {
+        "code": "62",
+        "name": "Nota promisoria firmada por el acreedor, avalada por el banco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 55
+    },
+    {
+        "code": "63",
+        "name": "Nota promisoria firmada por el acreedor, avalada por un tercero",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 56
+    },
+    {
+        "code": "64",
+        "name": "Nota promisoria firmada pro el banco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 57
+    },
+    {
+        "code": "65",
+        "name": "Nota promisoria firmada por un banco avalada por otro banco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 58
+    },
+    {
+        "code": "66",
+        "name": "Nota promisoria firmada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 59
+    },
+    {
+        "code": "67",
+        "name": "Nota promisoria firmada por un tercero avalada por un banco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 60
+    },
+    {
+        "code": "70",
+        "name": "Retiro de nota por el por el acreedor",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 61
+    },
+    {
+        "code": "74",
+        "name": "Retiro de nota por el por el acreedor sobre un banco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 62
+    },
+    {
+        "code": "75",
+        "name": "Retiro de nota por el acreedor, avalada por otro banco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 63
+    },
+    {
+        "code": "76",
+        "name": "Retiro de nota por el acreedor, sobre un banco avalada por un tercero",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 64
+    },
+    {
+        "code": "77",
+        "name": "Retiro de una nota por el acreedor sobre un tercero",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 65
+    },
+    {
+        "code": "78",
+        "name": "Retiro de una nota por el acreedor sobre un tercero avalada por un banco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 66
+    },
+    {
+        "code": "91",
+        "name": "Nota bancaria tranferible",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 67
+    },
+    {
+        "code": "92",
+        "name": "Cheque local traferible",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 68
+    },
+    {
+        "code": "93",
+        "name": "Giro referenciado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 69
+    },
+    {
+        "code": "94",
+        "name": "Giro urgente",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 70
+    },
+    {
+        "code": "95",
+        "name": "Giro formato abierto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 71
+    },
+    {
+        "code": "96",
+        "name": "Método de pago solicitado no usuado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 72
+    },
+    {
+        "code": "97",
+        "name": "Clearing entre partners",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 73
+    },
+    {
+        "code": "ZZZ",
+        "name": "Acuerdo mutuo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 74
+    }
+]

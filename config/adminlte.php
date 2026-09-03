@@ -394,6 +394,13 @@ return [
                     'can' => 'companies.index',
                 ],
                 [
+                    'text' => 'Completitud fiscal',
+                    'route' => 'fiscal.completeness',
+                    'active' => ['informes/completitud-fiscal*'],
+                    'icon' => 'fas fa-clipboard-check',
+                    'can' => 'fiscal.completeness',
+                ],
+                [
                     'text' => 'Grupos de afinidad',
                     'route' => 'affinity_groups.index',
                     'active' => ['grupos-de-afinidad*'],

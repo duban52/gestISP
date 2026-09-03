@@ -163,6 +163,21 @@ Route::resource('empresas', App\Http\Controllers\CompanyController::class)
     ->parameters(['empresas' => 'company'])
     ->except(['destroy']);
 
+// Informe de completitud fiscal: que falta para poder emitir factura
+// electronica. Se consulta ANTES de que haga falta.
+Route::middleware('auth')->get(
+    'informes/completitud-fiscal',
+    [App\Http\Controllers\FiscalCompletenessController::class, 'index'],
+)->name('fiscal.completeness');
+
+// Catalogos fiscales de la DIAN, para los desplegables dependientes.
+// Solo requiere estar autenticado: son codigos publicos y no dicen
+// nada de ninguna empresa.
+Route::middleware('auth')->get(
+    'catalogos/municipios',
+    [App\Http\Controllers\FiscalCatalogController::class, 'municipios'],
+)->name('fiscal.municipios');
+
 // Grupos de afinidad. Clasifican los contratos de la empresa y
 // deciden por que camino sale su factura: electronico o interno.
 // Cuelgan de la EMPRESA, no de la sucursal, porque son una

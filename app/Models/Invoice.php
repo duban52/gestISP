@@ -31,6 +31,17 @@ class Invoice extends Model
     use HasFactory, Auditable;
 
     protected $fillable = [
+        // ---- La decision de facturacion, CONGELADA al emitir ----
+        //
+        // El grupo que tenia el contrato en ese momento y el tipo de
+        // documento que le correspondio. No se recalculan: si manana
+        // el contrato cambia de grupo, esta factura se queda como
+        // estaba. Una factura emitida no cambia de naturaleza porque
+        // alguien edite otra cosa despues.
+        'affinity_group_id',
+        'document_kind',
+        'payment_means_code',
+        'payment_method_code',
         'contract_id',
         'branch_id',
         'billing_run_id',

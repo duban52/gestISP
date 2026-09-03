@@ -19,8 +19,13 @@ class Client extends Model
         // en panel consolidado no hay una activa. NO acota quien lo
         // ve: eso lo hace company_id.
         'branch_id',
+        // Texto libre historico. Se conserva como red de seguridad
+        // durante la transicion, igual que branches.nit; lo que vale
+        // para la DIAN es document_type_code.
         'type_document',
+        'document_type_code',
         'identity_number',
+        'verification_digit',
         'name',
         'last_name',
         'type_client',
@@ -29,7 +34,40 @@ class Client extends Model
         'email',
         'birthday',
         'user_id',
+
+        // ---- Datos fiscales (fase 8) ----
+        'organization_type_code',
+        // La direccion FISCAL, que no es la del contrato: esa es la
+        // del servicio —donde esta instalada la antena— y un cliente
+        // con tres contratos tiene tres de esas y una sola de esta.
+        'fiscal_address',
+        'department_dane_code',
+        'municipality_dane_code',
+        'postal_code',
+        'country_code',
     ];
+
+    /**
+     * Responsabilidades fiscales del cliente.
+     *
+     * Tabla aparte y no una columna con comas: puede tener varias, el
+     * XML las lista una a una, y una columna con separadores es lo que
+     * hace que dentro de un año nadie sepa si el separador era coma o
+     * punto y coma.
+     */
+    public function taxResponsibilities()
+    {
+        return $this->hasMany(ClientTaxResponsibility::class);
+    }
+
+    /** El nombre legible del tipo de documento, del catalogo. */
+    public function tipoDocumento(): ?string
+    {
+        return \App\Models\FiscalCatalog::nombre(
+            \App\Models\FiscalCatalog::TIPO_DOCUMENTO,
+            $this->document_type_code,
+        ) ?? $this->type_document;
+    }
 
     //Relación con la tabla sucursales
     public function branch(){

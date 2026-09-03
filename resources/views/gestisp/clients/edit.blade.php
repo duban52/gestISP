@@ -29,9 +29,35 @@
 
                     <div class="mb-3  col-md-6">
                         <label for="type_client" class="form-label">Tipo de documento</label>
-                        <select class="form-select form-control" aria-label="Default select example" id="type_document" name="type_document" disabled="disabled">
-                            <option selected>{{$client->type_document}}</option>
-                        </select>
+                        @if($client->document_type_code)
+                            {{-- Deshabilitado a proposito: el tipo de documento y el
+                                 numero identifican al cliente, y cambiarlos es crear
+                                 otro. Se muestra el nombre del catalogo, con el texto
+                                 historico de respaldo. --}}
+                            <select class="form-select form-control" aria-label="Default select example" id="type_document" name="type_document" disabled="disabled">
+                                <option selected>{{ $client->tipoDocumento() }}</option>
+                            </select>
+                        @else
+                            {{-- Cliente de antes de la fase 8: nunca tuvo codigo.
+                                 Se deja completar UNA vez -hoy no hay ningun otro
+                                 sitio donde hacerlo, y el informe de completitud
+                                 fiscal lo exige-. En cuanto se guarde, este mismo
+                                 campo pasa a mostrarse bloqueado como arriba. --}}
+                            <select class="form-select form-control @error('document_type_code') is-invalid @enderror"
+                                    id="document_type_code" name="document_type_code">
+                                <option value="">Sin especificar</option>
+                                @foreach(\App\Models\FiscalCatalog::opciones(\App\Models\FiscalCatalog::TIPO_DOCUMENTO) as $codigo => $nombre)
+                                    <option value="{{ $codigo }}" @selected(old('document_type_code') === $codigo)>
+                                        {{ $nombre }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('document_type_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <small class="form-text text-muted">
+                                Este cliente no tiene tipo de documento registrado. Selecciónelo:
+                                no podrá cambiarlo después.
+                            </small>
+                        @endif
                     </div>
 
 
@@ -60,6 +86,8 @@
                         <input type="email" class="form-control" id="email" name="email" value="{{ $client->email }}">
                     </div>
                     <div class="col-12 text-center">
+                        <x-campos-fiscales-cliente :cliente="$client" />
+
                         <input type="submit" value="Actualizar cliente" class="btn btn-primary">
                         <form action="{{ route('clients.destroy', $client) }}" method="POST">
                             @csrf

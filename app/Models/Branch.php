@@ -92,6 +92,32 @@ class Branch extends Model
                 }
             }
         });
+
+        /**
+         * El prefijo de contratos se sigue editando desde la ficha de
+         * la sucursal, aunque el contador viva ahora en la serie.
+         *
+         * Sin esto, cambiar el prefijo dejaria de tener efecto: se
+         * guardaria en la columna y los contratos nuevos seguirian
+         * saliendo con el prefijo viejo, que es la serie quien lo
+         * decide. Un cambio que no hace nada y no avisa.
+         *
+         * Va en `saved` y no en `saving` porque hay que escribir en
+         * otra tabla, y eso solo tiene sentido cuando la sucursal ya
+         * quedo guardada.
+         */
+        static::saved(function (self $sucursal) {
+            if (!$sucursal->wasChanged('contract_prefix') || !$sucursal->company_id) {
+                return;
+            }
+
+            DocumentSequence::withoutGlobalScope('empresa')
+                ->where('company_id', $sucursal->company_id)
+                ->where('branch_id', $sucursal->id)
+                ->where('document_type', DocumentSequence::CONTRATO)
+                ->where('active', true)
+                ->update(['prefix' => $sucursal->contract_prefix ?: 'CTR']);
+        });
     }
 
     /**

@@ -39,7 +39,11 @@ class Plan extends Model
 
     //Relación con sucursales
     public function branch(){
-        return $this->hasMany(Branch::class);
+        // Es belongsTo y no hasMany: el plan tiene branch_id, no al
+        // reves. El hasMany buscaba branches.plan_id -que no existe- y
+        // reventaba en cuanto algo hacia eager load de esta relacion
+        // (PlanController::index la usa con ->with(['services', 'branch'])).
+        return $this->belongsTo(Branch::class);
     }
 
 

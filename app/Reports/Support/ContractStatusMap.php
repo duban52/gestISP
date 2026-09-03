@@ -2,6 +2,7 @@
 
 namespace App\Reports\Support;
 
+use App\Support\BranchFilter;
 use App\Billing\Enums\ContractStatus;
 use App\Models\Contract;
 use Illuminate\Support\Facades\DB;

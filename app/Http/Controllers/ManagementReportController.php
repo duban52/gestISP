@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Reports\Support\BranchFilter;
+use App\Support\BranchFilter;
 use App\Models\Branch;
 use App\Reports\BillingReport;
 use App\Reports\Enums\Granularity;

@@ -31,16 +31,33 @@
                         </select>
                     </div>
 
+                    {{-- ============================================================
+                         TIPO DE DOCUMENTO
+
+                         Sale del catalogo de la DIAN (TipoIdFiscal), no de
+                         una lista escrita a mano. Dos motivos:
+
+                         1. Los codigos cambian por resolucion, y una lista
+                            en el codigo exige un despliegue para
+                            actualizarla.
+                         2. La lista que habia tenia un fallo silencioso:
+                            una opcion decia «Pasaporte» y guardaba
+                            «Persona Juridica».
+                         ============================================================ --}}
                     <div class="mb-3  col-md-6">
-                        <label for="type_client" class="form-label">Tipo de documento</label>
-                        <select class="form-select form-control" aria-label="Default select example" id="type_document" name="type_document">
-                            <option selected>Seleccione una opción</option>
-                            <option value="Cédula de ciudadanía">Cédula de ciudadanía</option>
-                            <option value="Cédula de extrangería">Cédula de extrangería</option>
-                            <option value="Persona Jurídica">Pasaporte</option>
-                            <option value="Permiso especial de permanencia">Permiso especial de permanencia</option>
-                            <option value="NIT">NIT</option>
+                        <label for="document_type_code" class="form-label">
+                            Tipo de documento <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select form-control @error('document_type_code') is-invalid @enderror"
+                                id="document_type_code" name="document_type_code" required>
+                            <option value="">Seleccione una opción</option>
+                            @foreach(\App\Models\FiscalCatalog::opciones(\App\Models\FiscalCatalog::TIPO_DOCUMENTO) as $codigo => $nombre)
+                                <option value="{{ $codigo }}" @selected(old('document_type_code') === $codigo)>
+                                    {{ $nombre }}
+                                </option>
+                            @endforeach
                         </select>
+                        @error('document_type_code')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
 
@@ -73,6 +90,8 @@
                         <input type="date" class="form-control" id="birthday" name="birthday">
                     </div>
                     <div class="col-12 text-center">
+                        <x-campos-fiscales-cliente />
+
                         <input type="submit" value="Agregar cliente" class="btn btn-primary">
                     </div>
 

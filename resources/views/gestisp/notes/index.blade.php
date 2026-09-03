@@ -34,12 +34,42 @@
         <div class="card-header">
             <h3 class="card-title"><i class="fas fa-list mr-1"></i> {{ $notas->count() }} nota(s)</h3>
         </div>
+
+        {{-- El grupo del contrato que corrige la nota. No es columna en
+             ningun otro sitio, asi que sin este filtro no hay forma de
+             acotar por el. La sucursal no se filtra aqui: ya es columna
+             y esta tabla busca del lado del cliente. --}}
+        @if(\App\Models\AffinityGroup::exists())
+            <div class="card-body border-bottom pb-0">
+                <form method="GET" action="{{ route('notes.index') }}">
+                    <div class="row align-items-end">
+                        @if(request()->filled('tipo'))
+                            <input type="hidden" name="tipo" value="{{ request('tipo') }}">
+                        @endif
+
+                        <x-filtro-grupo-afinidad :filtros="$filtros" clase="col-md-4" />
+
+                        <div class="col-md-4 form-group">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter mr-1"></i> Filtrar
+                            </button>
+                            @if(!empty(array_filter($filtros ?? [])))
+                                <a href="{{ route('notes.index') }}" class="btn btn-outline-secondary">
+                                    Limpiar
+                                </a>
+                            @endif
+                        </div>
+                    </div>
+                </form>
+            </div>
+        @endif
         <div class="card-body">
             <div class="table-responsive">
                 <table id="notesTable" class="table table-hover table-sm w-100">
                     <thead class="thead-light">
                     <tr>
                         <th>Sucursal</th>
+                        <th>Grupo</th>
                         <th>Número</th>
                         <th>Tipo</th>
                         <th>Fecha</th>
@@ -61,6 +91,8 @@
                                  mas abajo). Se pinta siempre para que los
                                  indices de columna no cambien segun el modo. --}}
                             <td>{{ $nota->branch?->name ?: '—' }}</td>
+                            {{-- El grupo del contrato que corrige la nota. --}}
+                            <td>{{ $nota->contract?->affinityGroup?->etiqueta() ?: '—' }}</td>
                             <td><strong>{{ $nota->full_number }}</strong></td>
                             <td>
                                 <span class="badge badge-{{ $nota->tipo()->disminuye() ? 'success' : 'warning' }}">
@@ -118,13 +150,13 @@
                     emptyTable: 'Todavía no se ha emitido ninguna nota.'
                 },
                 pageLength: 25,
-                order: [[3, 'desc']],
+                order: [[4, 'desc']],
                 columnDefs: [
                     // La sucursal se pinta siempre para que los indices de
                     // columna no cambien con el modo de trabajo; DataTables
                     // la esconde cuando no hay varias sedes que distinguir.
                     { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
-                    { orderable: false, targets: 11 },
+                    { orderable: false, targets: 12 },
                     { defaultContent: '—', targets: '_all' }
                 ]
             });

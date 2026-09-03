@@ -91,12 +91,48 @@
             @endif
         </div>
 
+        {{-- ============================================================
+             BUSCADOR
+
+             Este listado no tenia ninguno: se cargaban todas las
+             facturas del alcance y se buscaba con la caja de
+             DataTables. Eso sirve para buscar un texto, no para
+             acotar QUE se carga — y las facturas crecen sin limite.
+
+             Van los dos filtros que la caja de busqueda no puede
+             contestar: el grupo, que no es columna en ningun sitio, y
+             la sucursal, que en una empresa con varias sedes reduce de
+             verdad el volumen.
+             ============================================================ --}}
+        @if(app(\App\Tenancy\CurrentContext::class)->mostrarSucursal() || \App\Models\AffinityGroup::exists())
+            <div class="card-body border-bottom pb-0">
+                <form method="GET" action="{{ route('invoices.index') }}">
+                    <div class="row align-items-end">
+                        <x-filtro-sucursal :filtros="$filtros" clase="col-md-3" />
+                        <x-filtro-grupo-afinidad :filtros="$filtros" clase="col-md-3" />
+
+                        <div class="col-md-3 form-group">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter mr-1"></i> Filtrar
+                            </button>
+                            @if(!empty(array_filter($filtros ?? [])))
+                                <a href="{{ route('invoices.index') }}" class="btn btn-outline-secondary">
+                                    Limpiar
+                                </a>
+                            @endif
+                        </div>
+                    </div>
+                </form>
+            </div>
+        @endif
+
         <div class="card-body">
             <div class="table-responsive">
                 <table id="invoicesTable" class="table table-hover table-striped">
                     <thead>
                     <tr>
                         <th>Sucursal</th>
+                        <th>Grupo</th>
                         <th>ID</th>
                         <th>N.º contrato</th>
                         <th>Identificación</th>
@@ -117,6 +153,11 @@
                                  mas abajo). Se pinta siempre para que los
                                  indices de columna no cambien segun el modo. --}}
                             <td>{{ $invoice->branch?->name ?: '—' }}</td>
+                            {{-- El grupo del contrato del que sale esta factura.
+                                 Es informacion que no esta en ninguna otra
+                                 columna: sin ella no hay forma de saber a que
+                                 grupo pertenece sin abrir el contrato. --}}
+                            <td>{{ $invoice->contract?->affinityGroup?->etiqueta() ?: '—' }}</td>
                             {{-- Número formal (prefijo-consecutivo); las facturas
                                  históricas sin numerar muestran su id --}}
                             <td>{{ $invoice->displayNumber() }}</td>
@@ -317,7 +358,7 @@
                 "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
 
                 // Configuración de ordenamiento
-                "order": [[1, "desc"]], // Ordenar por ID descendente por defecto
+                "order": [[2, "desc"]], // Ordenar por ID descendente por defecto
 
                 // Configuración de columnas
                 // Los índices se corrieron dos posiciones al agregar
@@ -328,23 +369,23 @@
                     // la esconde cuando no hay varias sedes que distinguir.
                     { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     {
-                        "targets": [8], // Columna Total
+                        "targets": [9], // Columna Total
                         "type": "num-fmt", // Para ordenamiento numérico
                         "className": "text-right"
                     },
                     {
-                        "targets": [10], // Columna Acciones
+                        "targets": [11], // Columna Acciones
                         "orderable": false,
                         "searchable": false,
                         "className": "text-center"
                     },
                     {
-                        "targets": [6, 7], // Columnas de fechas
+                        "targets": [7, 8], // Columnas de fechas
                         "type": "date",
                         "className": "text-center"
                     },
                     {
-                        "targets": [9], // Columna Estado
+                        "targets": [10], // Columna Estado
                         "className": "text-center"
                     }
                 ],

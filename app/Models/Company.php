@@ -91,6 +91,24 @@ class Company extends Model
         return AffinityGroup::porDefectoDe($this->id);
     }
 
+    /** Configuracion DIAN: ambiente, software autorizado y su PIN. */
+    public function dianConfiguration()
+    {
+        return $this->hasOne(DianConfiguration::class);
+    }
+
+    /** Certificados de firma. */
+    public function dianCertificates()
+    {
+        return $this->hasMany(DianCertificate::class);
+    }
+
+    /** Resoluciones de numeracion autorizadas. */
+    public function dianResolutions()
+    {
+        return $this->hasMany(DianResolution::class);
+    }
+
     public function branches()
     {
         return $this->hasMany(Branch::class);

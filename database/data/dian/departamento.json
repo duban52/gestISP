@@ -1,0 +1,233 @@
+[
+    {
+        "code": "91",
+        "name": "Amazonas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "05",
+        "name": "Antioquia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "81",
+        "name": "Arauca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "08",
+        "name": "Atlántico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "11",
+        "name": "Bogotá",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    },
+    {
+        "code": "13",
+        "name": "Bolívar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 5
+    },
+    {
+        "code": "15",
+        "name": "Boyacá",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 6
+    },
+    {
+        "code": "17",
+        "name": "Caldas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 7
+    },
+    {
+        "code": "18",
+        "name": "Caquetá",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 8
+    },
+    {
+        "code": "85",
+        "name": "Casanare",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 9
+    },
+    {
+        "code": "19",
+        "name": "Cauca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 10
+    },
+    {
+        "code": "20",
+        "name": "Cesar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 11
+    },
+    {
+        "code": "27",
+        "name": "Chocó",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 12
+    },
+    {
+        "code": "23",
+        "name": "Córdoba",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 13
+    },
+    {
+        "code": "25",
+        "name": "Cundinamarca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 14
+    },
+    {
+        "code": "94",
+        "name": "Guainía",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 15
+    },
+    {
+        "code": "95",
+        "name": "Guaviare",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 16
+    },
+    {
+        "code": "41",
+        "name": "Huila",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 17
+    },
+    {
+        "code": "44",
+        "name": "La Guajira",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 18
+    },
+    {
+        "code": "47",
+        "name": "Magdalena",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 19
+    },
+    {
+        "code": "50",
+        "name": "Meta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 20
+    },
+    {
+        "code": "52",
+        "name": "Nariño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 21
+    },
+    {
+        "code": "54",
+        "name": "Norte de Santander",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 22
+    },
+    {
+        "code": "86",
+        "name": "Putumayo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 23
+    },
+    {
+        "code": "63",
+        "name": "Quindío",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 24
+    },
+    {
+        "code": "66",
+        "name": "Risaralda",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 25
+    },
+    {
+        "code": "88",
+        "name": "San Andrés y Providencia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 26
+    },
+    {
+        "code": "68",
+        "name": "Santander",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 27
+    },
+    {
+        "code": "70",
+        "name": "Sucre",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 28
+    },
+    {
+        "code": "73",
+        "name": "Tolima",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 29
+    },
+    {
+        "code": "76",
+        "name": "Valle del Cauca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 30
+    },
+    {
+        "code": "97",
+        "name": "Vaupés",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 31
+    },
+    {
+        "code": "99",
+        "name": "Vichada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 32
+    }
+]

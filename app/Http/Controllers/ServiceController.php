@@ -69,6 +69,10 @@ class ServiceController extends Controller
             'name'           => $validated['name'],
             'base_price'     => $validated['base_price'],
             'tax_percentage' => $validated['tax_percentage'],
+            'product_code'       => $validated['product_code'] ?? null,
+            'product_code_type'  => $validated['product_code_type'] ?? null,
+            'unit_measure_code'  => $validated['unit_measure_code'] ?? null,
+            'tax_code'           => $validated['tax_code'] ?? null,
             'user_id'        => Auth::id(),
             'branch_id'      => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
         ]);
@@ -97,6 +101,10 @@ class ServiceController extends Controller
             'name'           => $validated['name'],
             'base_price'     => $validated['base_price'],
             'tax_percentage' => $validated['tax_percentage'],
+            'product_code'       => $validated['product_code'] ?? null,
+            'product_code_type'  => $validated['product_code_type'] ?? null,
+            'unit_measure_code'  => $validated['unit_measure_code'] ?? null,
+            'tax_code'           => $validated['tax_code'] ?? null,
         ]);
 
         return redirect()
@@ -133,6 +141,13 @@ class ServiceController extends Controller
      *
      * - base_price: valor numérico positivo
      * - tax_percentage: porcentaje entre 0 y 100
+     *
+     * Los datos fiscales son opcionales -se completan cuando el
+     * servicio vaya a facturarse electrónicamente-, y no se validan
+     * contra el catálogo: es la misma decisión que ya se tomó para los
+     * campos equivalentes del cliente (solo `document_type_code` se
+     * valida así). El informe de completitud fiscal es quien avisa si
+     * un código quedó mal escrito o dejó de estar vigente.
      */
     private function validateService(Request $request): array
     {
@@ -140,6 +155,10 @@ class ServiceController extends Controller
             'name'           => 'required|string|max:255',
             'base_price'     => 'required|numeric|min:0',
             'tax_percentage' => 'required|numeric|min:0|max:100',
+            'product_code'       => 'nullable|string|max:40',
+            'product_code_type'  => 'nullable|string|max:5',
+            'unit_measure_code'  => 'nullable|string|max:10',
+            'tax_code'           => 'nullable|string|max:5',
         ]);
     }
 }

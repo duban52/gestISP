@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use App\Tenancy\CurrentContext;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
@@ -153,16 +154,38 @@ class ClientController extends Controller
 
 
         $request->validate([
-            'type_document' => 'required|string|max:50',
+            // El CODIGO es lo que vale para la DIAN. Se valida contra
+            // el catalogo y no contra una lista en el codigo: los
+            // catalogos cambian por resolucion.
+            'document_type_code' => [
+                'required', 'string', 'max:5',
+                Rule::exists('fiscal_catalogs', 'code')
+                    ->where('catalog', \App\Models\FiscalCatalog::TIPO_DOCUMENTO)
+                    ->where('active', true),
+            ],
+            // El texto libre se sigue guardando durante la transicion.
+            'type_document' => 'nullable|string|max:50',
+            'verification_digit' => 'nullable|string|size:1',
+            'organization_type_code' => 'nullable|string|max:5',
+            'fiscal_address' => 'nullable|string|max:255',
+            'department_dane_code' => 'nullable|string|max:5',
+            'municipality_dane_code' => 'nullable|string|max:5',
+            'postal_code' => 'nullable|string|max:10',
+            'country_code' => 'nullable|string|max:5',
             // El mismo documento no puede repetirse DENTRO de la
             // empresa: seria la misma persona dos veces. En OTRA
             // empresa si puede existir, y de hecho debe: son
             // contribuyentes distintos con datos aislados.
             'identity_number' => [
                 'required', 'string', 'max:20',
+                // Por el CODIGO y no por el texto: dos clientes con el
+                // mismo numero y el mismo tipo son la misma persona, y
+                // el texto libre podia escribirse de varias formas —
+                // «Cedula de ciudadania» y «Cédula de ciudadanía» eran
+                // dos tipos distintos para este unique.
                 Rule::unique('clients', 'identity_number')
                     ->where('company_id', $contexto->companyId())
-                    ->where('type_document', $request->input('type_document')),
+                    ->where('document_type_code', $request->input('document_type_code')),
             ],
             'name' => 'required|string|max:40',
             'last_name' => 'required|string|max:40',
@@ -177,11 +200,52 @@ class ClientController extends Controller
                 . 'Búsquelo en el listado en vez de crearlo otra vez.',
         ]);
 
-        Client::create($request->all());
+        // El texto libre se sigue rellenando desde el catalogo durante
+        // la transicion: hay pantallas y exportaciones que todavia lo
+        // imprimen, y dejarlo vacio las dejaria en blanco. Es la misma
+        // red de seguridad que branches.nit.
+        $request->merge([
+            'type_document' => \App\Models\FiscalCatalog::nombre(
+                \App\Models\FiscalCatalog::TIPO_DOCUMENTO,
+                $request->input('document_type_code'),
+            ),
+        ]);
+
+        $cliente = Client::create($request->all());
+
+        $this->guardarResponsabilidades($cliente, $request);
 
         return redirect()->action([ClientController::class, 'create'])
             ->with('success-create', 'Cliente creado con éxito');
 
+    }
+
+    /**
+     * Guarda las responsabilidades fiscales marcadas.
+     *
+     * Se borran y se vuelven a crear en vez de comparar una a una:
+     * son cuatro o cinco filas por cliente y la comparacion seria mas
+     * codigo que valor. Va en transaccion para que no quede a medias.
+     *
+     * Solo se tocan si el formulario las mando: otros formularios
+     * comparten este controlador y no las incluyen; sin esta
+     * comprobacion se las borraria sin que nadie lo pidiera.
+     */
+    private function guardarResponsabilidades(Client $cliente, Request $request): void
+    {
+        if (!$request->has('tax_responsibilities')) {
+            return;
+        }
+
+        $codigos = array_filter((array) $request->input('tax_responsibilities', []));
+
+        DB::transaction(function () use ($cliente, $codigos) {
+            $cliente->taxResponsibilities()->delete();
+
+            foreach (array_unique($codigos) as $codigo) {
+                $cliente->taxResponsibilities()->create(['responsibility_code' => $codigo]);
+            }
+        });
     }
 
     /**
@@ -206,12 +270,76 @@ class ClientController extends Controller
      */
     public function update(Request $request, Client $client)
     {
+        // Los datos fiscales se validan aparte: son opcionales, asi
+        // que quien solo viene a corregir un telefono no tiene que
+        // rellenarlos. El numero de documento NO se edita — identifica
+        // al cliente, y cambiarlo es crear otro.
+        //
+        // El TIPO de documento es distinto: si el cliente todavia no lo
+        // tiene -uno de antes de la fase 8, que nacio sin codigo- se
+        // puede fijar UNA vez, porque hasta ahora no habia ningun sitio
+        // donde hacerlo y el informe de completitud fiscal lo exigia
+        // sin que hubiera manera de resolverlo. En cuanto se guarda,
+        // queda igual de bloqueado que el numero.
+        $request->validate([
+            'document_type_code' => [
+                $client->document_type_code === null ? 'nullable' : 'prohibited',
+                'string', 'max:5',
+                Rule::exists('fiscal_catalogs', 'code')
+                    ->where('catalog', \App\Models\FiscalCatalog::TIPO_DOCUMENTO)
+                    ->where('active', true),
+            ],
+            'verification_digit' => 'nullable|string|size:1',
+            'organization_type_code' => 'nullable|string|max:5',
+            'fiscal_address' => 'nullable|string|max:255',
+            'department_dane_code' => 'nullable|string|max:5',
+            'municipality_dane_code' => 'nullable|string|max:5',
+            'postal_code' => 'nullable|string|max:10',
+            'country_code' => 'nullable|string|max:5',
+        ]);
+
         //Actualizar datos
         $client->update([
            'number_phone' => $request->number_phone,
             'aditional_phone' => $request->aditional_phone,
             'email' => $request->email,
         ]);
+
+        // Cada campo fiscal solo se toca si vino en la peticion: hay
+        // formularios que comparten esta accion y no los incluyen, y
+        // ponerlos a null borraria datos que nadie pidio borrar.
+        $camposFiscales = [
+            'verification_digit', 'organization_type_code', 'fiscal_address',
+            'department_dane_code', 'municipality_dane_code', 'postal_code', 'country_code',
+        ];
+
+        // document_type_code entra en la misma lista, pero SOLO si el
+        // cliente todavia no lo tenia: se completa una vez, no se edita.
+        if ($client->document_type_code === null) {
+            $camposFiscales[] = 'document_type_code';
+        }
+
+        $fiscales = array_filter(
+            $request->only($camposFiscales),
+            fn ($campo) => $request->has($campo),
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        if ($fiscales !== []) {
+            // El texto libre se rellena tambien aqui cuando se fija el
+            // tipo por primera vez, por la misma razon que en store():
+            // hay pantallas y exportaciones que todavia lo imprimen.
+            if (isset($fiscales['document_type_code'])) {
+                $fiscales['type_document'] = \App\Models\FiscalCatalog::nombre(
+                    \App\Models\FiscalCatalog::TIPO_DOCUMENTO,
+                    $fiscales['document_type_code'],
+                );
+            }
+
+            $client->update($fiscales);
+        }
+
+        $this->guardarResponsabilidades($client, $request);
 
         return redirect()->back()->with('success', 'Datos del cliente actualizados');
     }

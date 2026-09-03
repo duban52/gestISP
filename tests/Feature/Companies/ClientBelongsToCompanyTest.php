@@ -90,7 +90,9 @@ class ClientBelongsToCompanyTest extends TestCase
     private function datos(array $extra = []): array
     {
         return array_merge([
-            'type_document' => 'Cédula de ciudadanía',
+            // Desde la fase 8 se manda el CODIGO del catalogo de la
+            // DIAN, no el texto libre: 13 es cedula de ciudadania.
+            'document_type_code' => '13',
             'identity_number' => '1042772330',
             'name' => 'Juan',
             'last_name' => 'Pérez',

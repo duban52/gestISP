@@ -1,0 +1,7653 @@
+[
+    {
+        "code": "04",
+        "name": "spray pequeño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 0
+    },
+    {
+        "code": "05",
+        "name": "levantar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1
+    },
+    {
+        "code": "08",
+        "name": "Lote calor",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 2
+    },
+    {
+        "code": "10",
+        "name": "grupo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 3
+    },
+    {
+        "code": "11",
+        "name": "equipar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 4
+    },
+    {
+        "code": "13",
+        "name": "ración",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 5
+    },
+    {
+        "code": "14",
+        "name": "Disparo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 6
+    },
+    {
+        "code": "15",
+        "name": "palo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 7
+    },
+    {
+        "code": "16",
+        "name": "tambor de ciento quince kg",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 8
+    },
+    {
+        "code": "17",
+        "name": "tambor de cien libras",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 9
+    },
+    {
+        "code": "18",
+        "name": "tambor de cincuenta y cinco galones (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 10
+    },
+    {
+        "code": "19",
+        "name": "camión cisterna",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 11
+    },
+    {
+        "code": "20",
+        "name": "contenedor de veinte pies",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 12
+    },
+    {
+        "code": "21",
+        "name": "contenedor de cuarenta pies",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 13
+    },
+    {
+        "code": "22",
+        "name": "decilitro por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 14
+    },
+    {
+        "code": "23",
+        "name": "gramo por centímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 15
+    },
+    {
+        "code": "24",
+        "name": "libra teórica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 16
+    },
+    {
+        "code": "25",
+        "name": "gramo por centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 17
+    },
+    {
+        "code": "26",
+        "name": "tonelada real",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 18
+    },
+    {
+        "code": "27",
+        "name": "tonelada teórica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 19
+    },
+    {
+        "code": "28",
+        "name": "kilogramo por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 20
+    },
+    {
+        "code": "29",
+        "name": "libra por mil pies cuadrados",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 21
+    },
+    {
+        "code": "30",
+        "name": "Día de potencia del caballo por tonelada métrica seca al aire.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 22
+    },
+    {
+        "code": "31",
+        "name": "coger peso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 23
+    },
+    {
+        "code": "32",
+        "name": "kilogramo por aire seco tonelada métrica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 24
+    },
+    {
+        "code": "33",
+        "name": "kilopascales metros cuadrados por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 25
+    },
+    {
+        "code": "34",
+        "name": "kilopascales por milímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 26
+    },
+    {
+        "code": "35",
+        "name": "mililitros por centímetro cuadrado segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 27
+    },
+    {
+        "code": "36",
+        "name": "pies cúbicos por minuto por pie cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 28
+    },
+    {
+        "code": "37",
+        "name": "onza por pie cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 29
+    },
+    {
+        "code": "38",
+        "name": "onzas por pie cuadrado por 0,01 pulgadas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 30
+    },
+    {
+        "code": "40",
+        "name": "mililitro por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 31
+    },
+    {
+        "code": "41",
+        "name": "mililitro por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 32
+    },
+    {
+        "code": "43",
+        "name": "bolsa súper a granel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 33
+    },
+    {
+        "code": "44",
+        "name": "bolsa a granel de quinientos kg",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 34
+    },
+    {
+        "code": "45",
+        "name": "bolsa a granel de trescientos kg",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 35
+    },
+    {
+        "code": "46",
+        "name": "bolsa a granel de cincuenta libras",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 36
+    },
+    {
+        "code": "47",
+        "name": "bolsa de cincuenta libras",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 37
+    },
+    {
+        "code": "48",
+        "name": "carga de automóviles a granel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 38
+    },
+    {
+        "code": "53",
+        "name": "kilogramos teóricos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 39
+    },
+    {
+        "code": "54",
+        "name": "tonelada teórica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 40
+    },
+    {
+        "code": "56",
+        "name": "sitas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 41
+    },
+    {
+        "code": "57",
+        "name": "malla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 42
+    },
+    {
+        "code": "58",
+        "name": "kilogramo neto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 43
+    },
+    {
+        "code": "59",
+        "name": "parte por millón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 44
+    },
+    {
+        "code": "60",
+        "name": "porcentaje de peso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 45
+    },
+    {
+        "code": "61",
+        "name": "parte por billón (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 46
+    },
+    {
+        "code": "62",
+        "name": "porcentaje por 1000 horas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 47
+    },
+    {
+        "code": "63",
+        "name": "tasa de fracaso en el tiempo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 48
+    },
+    {
+        "code": "64",
+        "name": "libra por pulgada cuadrada, calibre",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 49
+    },
+    {
+        "code": "66",
+        "name": "Oersted",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 50
+    },
+    {
+        "code": "69",
+        "name": "prueba de escala específica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 51
+    },
+    {
+        "code": "71",
+        "name": "voltio amperio por libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 52
+    },
+    {
+        "code": "72",
+        "name": "vatio por libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 53
+    },
+    {
+        "code": "73",
+        "name": "amperio tum por centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 54
+    },
+    {
+        "code": "74",
+        "name": "milipascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 55
+    },
+    {
+        "code": "76",
+        "name": "gauss",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 56
+    },
+    {
+        "code": "77",
+        "name": "mili pulgadas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 57
+    },
+    {
+        "code": "78",
+        "name": "kilogauss",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 58
+    },
+    {
+        "code": "80",
+        "name": "libras por pulgada cuadrada absoluta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 59
+    },
+    {
+        "code": "81",
+        "name": "Enrique",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 60
+    },
+    {
+        "code": "84",
+        "name": "kilopound por pulgada cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 61
+    },
+    {
+        "code": "85",
+        "name": "fuerza libra pie",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 62
+    },
+    {
+        "code": "87",
+        "name": "libra por pie cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 63
+    },
+    {
+        "code": "89",
+        "name": "equilibrio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 64
+    },
+    {
+        "code": "90",
+        "name": "Saybold segundo universal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 65
+    },
+    {
+        "code": "91",
+        "name": "alimenta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 66
+    },
+    {
+        "code": "92",
+        "name": "calorías por centímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 67
+    },
+    {
+        "code": "93",
+        "name": "calorías por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 68
+    },
+    {
+        "code": "94",
+        "name": "unidad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 69
+    },
+    {
+        "code": "95",
+        "name": "veinte mil galones (US) de carros",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 70
+    },
+    {
+        "code": "96",
+        "name": "diez mil galones (US) de carros",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 71
+    },
+    {
+        "code": "97",
+        "name": "tambor de diez kg",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 72
+    },
+    {
+        "code": "98",
+        "name": "tambor de quince kg",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 73
+    },
+    {
+        "code": "1ª",
+        "name": "milla de coche",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 74
+    },
+    {
+        "code": "1B",
+        "name": "recuento de coches",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 75
+    },
+    {
+        "code": "1C",
+        "name": "recuento de locomotoras",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 76
+    },
+    {
+        "code": "1D",
+        "name": "recuento de cabos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 77
+    },
+    {
+        "code": "1E",
+        "name": "carro vacio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 78
+    },
+    {
+        "code": "1F",
+        "name": "millas de tren",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 79
+    },
+    {
+        "code": "1G",
+        "name": "uso de combustible galón (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 80
+    },
+    {
+        "code": "1H",
+        "name": "milla del caboose",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 81
+    },
+    {
+        "code": "1I",
+        "name": "tipo de interés fijo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 82
+    },
+    {
+        "code": "1J",
+        "name": "tonelada milla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 83
+    },
+    {
+        "code": "1K",
+        "name": "milla locomotora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 84
+    },
+    {
+        "code": "1L",
+        "name": "recuento total de coches",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 85
+    },
+    {
+        "code": "1M",
+        "name": "milla de coche total",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 86
+    },
+    {
+        "code": "1X",
+        "name": "cuarto de milla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 87
+    },
+    {
+        "code": "2ª",
+        "name": "radianes por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 88
+    },
+    {
+        "code": "2B",
+        "name": "radianes por segundo al cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 89
+    },
+    {
+        "code": "2C",
+        "name": "Röntgen",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 90
+    },
+    {
+        "code": "2I",
+        "name": "Unidad térmica británica por hora.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 91
+    },
+    {
+        "code": "2J",
+        "name": "centímetro cúbico por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 92
+    },
+    {
+        "code": "2K",
+        "name": "pie cúbico por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 93
+    },
+    {
+        "code": "2L",
+        "name": "pie cúbico por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 94
+    },
+    {
+        "code": "2M",
+        "name": "centímetro por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 95
+    },
+    {
+        "code": "2N",
+        "name": "decibel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 96
+    },
+    {
+        "code": "2P",
+        "name": "kilobyte",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 97
+    },
+    {
+        "code": "2Q",
+        "name": "kilobecquerel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 98
+    },
+    {
+        "code": "2R",
+        "name": "kilocurie",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 99
+    },
+    {
+        "code": "2U",
+        "name": "megagramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 100
+    },
+    {
+        "code": "2V",
+        "name": "megagramo por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 101
+    },
+    {
+        "code": "2W",
+        "name": "compartimiento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 102
+    },
+    {
+        "code": "2X",
+        "name": "metro por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 103
+    },
+    {
+        "code": "2Y",
+        "name": "milliröntgen",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 104
+    },
+    {
+        "code": "2Z",
+        "name": "milivoltios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 105
+    },
+    {
+        "code": "3B",
+        "name": "megajulio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 106
+    },
+    {
+        "code": "3C",
+        "name": "manmonth",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 107
+    },
+    {
+        "code": "3E",
+        "name": "libra por libra de producto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 108
+    },
+    {
+        "code": "3G",
+        "name": "libra por pieza de producto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 109
+    },
+    {
+        "code": "3H",
+        "name": "kilogramo por kilogramo de producto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 110
+    },
+    {
+        "code": "3I",
+        "name": "kilogramo por pieza de producto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 111
+    },
+    {
+        "code": "4ª",
+        "name": "bobina",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 112
+    },
+    {
+        "code": "4B",
+        "name": "gorra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 113
+    },
+    {
+        "code": "4C",
+        "name": "centistokes",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 114
+    },
+    {
+        "code": "4E",
+        "name": "paquete de veinte",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 115
+    },
+    {
+        "code": "4G",
+        "name": "microlitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 116
+    },
+    {
+        "code": "4H",
+        "name": "micrometro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 117
+    },
+    {
+        "code": "4K",
+        "name": "miliamperio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 118
+    },
+    {
+        "code": "4L",
+        "name": "megabyte",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 119
+    },
+    {
+        "code": "4M",
+        "name": "miligramo por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 120
+    },
+    {
+        "code": "4N",
+        "name": "megabecquerel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 121
+    },
+    {
+        "code": "4º",
+        "name": "microfarad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 122
+    },
+    {
+        "code": "4P",
+        "name": "newton por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 123
+    },
+    {
+        "code": "4Q",
+        "name": "onza pulgada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 124
+    },
+    {
+        "code": "4R",
+        "name": "pie onza",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 125
+    },
+    {
+        "code": "4T",
+        "name": "picofarad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 126
+    },
+    {
+        "code": "4U",
+        "name": "libra por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 127
+    },
+    {
+        "code": "4W",
+        "name": "tonelada (US) por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 128
+    },
+    {
+        "code": "4X",
+        "name": "kilolitro por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 129
+    },
+    {
+        "code": "5ª",
+        "name": "barril por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 130
+    },
+    {
+        "code": "5B",
+        "name": "lote",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 131
+    },
+    {
+        "code": "5C",
+        "name": "galón (US) por mil",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 132
+    },
+    {
+        "code": "5E",
+        "name": "MMSCF \/ día",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 133
+    },
+    {
+        "code": "5F",
+        "name": "libras por mil",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 134
+    },
+    {
+        "code": "5G",
+        "name": "bomba",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 135
+    },
+    {
+        "code": "5H",
+        "name": "escenario",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 136
+    },
+    {
+        "code": "5I",
+        "name": "pie cúbico estándar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 137
+    },
+    {
+        "code": "5J",
+        "name": "potencia hidráulica de caballos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 138
+    },
+    {
+        "code": "5K",
+        "name": "contar por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 139
+    },
+    {
+        "code": "5P",
+        "name": "nivel sismico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 140
+    },
+    {
+        "code": "5Q",
+        "name": "nfor sismica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 141
+    },
+    {
+        "code": "A1",
+        "name": "15 calorías C",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 142
+    },
+    {
+        "code": "A10",
+        "name": "amperio metro cuadrado por joule segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 143
+    },
+    {
+        "code": "A11",
+        "name": "Ã ¥ ngström",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 144
+    },
+    {
+        "code": "A12",
+        "name": "unidad astronómica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 145
+    },
+    {
+        "code": "A13",
+        "name": "attojoule",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 146
+    },
+    {
+        "code": "A14",
+        "name": "granero",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 147
+    },
+    {
+        "code": "A15",
+        "name": "granero por electrón voltio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 148
+    },
+    {
+        "code": "A16",
+        "name": "granero por voltio de electrones esteradiano,",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 149
+    },
+    {
+        "code": "A17",
+        "name": "granero por sterdian",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 150
+    },
+    {
+        "code": "A18",
+        "name": "becquerel por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 151
+    },
+    {
+        "code": "A19",
+        "name": "becquerel por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 152
+    },
+    {
+        "code": "A2",
+        "name": "amperio por centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 153
+    },
+    {
+        "code": "A20",
+        "name": "Unidad térmica británica por segundo pie cuadrado grado Rankin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 154
+    },
+    {
+        "code": "A21",
+        "name": "Unidad térmica británica por libra grado Rankin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 155
+    },
+    {
+        "code": "A22",
+        "name": "Unidad térmica británica por segundo pie grado Rankin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 156
+    },
+    {
+        "code": "A23",
+        "name": "Unidad térmica británica por hora pie cuadrado grado Rankin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 157
+    },
+    {
+        "code": "A24",
+        "name": "candela por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 158
+    },
+    {
+        "code": "A25",
+        "name": "cheval vapeur",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 159
+    },
+    {
+        "code": "A26",
+        "name": "medidor de culombio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 160
+    },
+    {
+        "code": "A27",
+        "name": "medidor de culombio al cuadrado por voltio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 161
+    },
+    {
+        "code": "A28",
+        "name": "Coulomb por centímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 162
+    },
+    {
+        "code": "A29",
+        "name": "Coulomb por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 163
+    },
+    {
+        "code": "A3",
+        "name": "amperio por milímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 164
+    },
+    {
+        "code": "A30",
+        "name": "Coulomb por milímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 165
+    },
+    {
+        "code": "A31",
+        "name": "Coulomb por kilogramo segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 166
+    },
+    {
+        "code": "A32",
+        "name": "Coulomb por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 167
+    },
+    {
+        "code": "A33",
+        "name": "Coulomb por centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 168
+    },
+    {
+        "code": "A34",
+        "name": "Coulomb por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 169
+    },
+    {
+        "code": "A35",
+        "name": "Coulomb por milímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 170
+    },
+    {
+        "code": "A36",
+        "name": "centímetro cúbico por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 171
+    },
+    {
+        "code": "A37",
+        "name": "nformaci cúbico por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 172
+    },
+    {
+        "code": "A38",
+        "name": "metro cúbico por coulomb",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 173
+    },
+    {
+        "code": "A39",
+        "name": "metro cúbico por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 174
+    },
+    {
+        "code": "A4",
+        "name": "amperio por centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 175
+    },
+    {
+        "code": "A40",
+        "name": "metro cúbico por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 176
+    },
+    {
+        "code": "A41",
+        "name": "amperio por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 177
+    },
+    {
+        "code": "A42",
+        "name": "curie por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 178
+    },
+    {
+        "code": "A43",
+        "name": "tonelaje de peso muerto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 179
+    },
+    {
+        "code": "A44",
+        "name": "decalitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 180
+    },
+    {
+        "code": "A45",
+        "name": "decámetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 181
+    },
+    {
+        "code": "A47",
+        "name": "decitex",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 182
+    },
+    {
+        "code": "A48",
+        "name": "grado Rankin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 183
+    },
+    {
+        "code": "A49",
+        "name": "negador",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 184
+    },
+    {
+        "code": "A5",
+        "name": "amperio metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 185
+    },
+    {
+        "code": "A50",
+        "name": "dyn segundo por centímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 186
+    },
+    {
+        "code": "A51",
+        "name": "dina segundo por centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 187
+    },
+    {
+        "code": "A52",
+        "name": "dina segundo por centímetro al quinto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 188
+    },
+    {
+        "code": "A53",
+        "name": "electronvolt",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 189
+    },
+    {
+        "code": "A54",
+        "name": "electronvoltio por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 190
+    },
+    {
+        "code": "A55",
+        "name": "metro electronvolt cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 191
+    },
+    {
+        "code": "A56",
+        "name": "electronvoltio de metro cuadrado por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 192
+    },
+    {
+        "code": "A57",
+        "name": "ergio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 193
+    },
+    {
+        "code": "A58",
+        "name": "erg por centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 194
+    },
+    {
+        "code": "A6",
+        "name": "amperio por metro cuadrado kelvin al cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 195
+    },
+    {
+        "code": "A60",
+        "name": "erg por centímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 196
+    },
+    {
+        "code": "A61",
+        "name": "erg por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 197
+    },
+    {
+        "code": "A62",
+        "name": "erg por gramo de segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 198
+    },
+    {
+        "code": "A63",
+        "name": "erg por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 199
+    },
+    {
+        "code": "A64",
+        "name": "erg por segundo centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 200
+    },
+    {
+        "code": "A65",
+        "name": "erg por centímetro cuadrado segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 201
+    },
+    {
+        "code": "A66",
+        "name": "erg centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 202
+    },
+    {
+        "code": "A67",
+        "name": "ergímetro cuadrado por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 203
+    },
+    {
+        "code": "A68",
+        "name": "exajulio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 204
+    },
+    {
+        "code": "A69",
+        "name": "faradio por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 205
+    },
+    {
+        "code": "A7",
+        "name": "amperio por milímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 206
+    },
+    {
+        "code": "A70",
+        "name": "femtojoule",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 207
+    },
+    {
+        "code": "A71",
+        "name": "femtometro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 208
+    },
+    {
+        "code": "A73",
+        "name": "pie por segundo al cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 209
+    },
+    {
+        "code": "A74",
+        "name": "pie-fuerza de la libra por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 210
+    },
+    {
+        "code": "A75",
+        "name": "tonelada de carga",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 211
+    },
+    {
+        "code": "A76",
+        "name": "galón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 212
+    },
+    {
+        "code": "A77",
+        "name": "Unidad de desplazamiento CGS gaussiana",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 213
+    },
+    {
+        "code": "A78",
+        "name": "Unidad gaussiana CGS de corriente eléctrica.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 214
+    },
+    {
+        "code": "A79",
+        "name": "Unidad Gaussian CGS de carga eléctrica.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 215
+    },
+    {
+        "code": "A8",
+        "name": "amperio segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 216
+    },
+    {
+        "code": "A80",
+        "name": "Unidad Gaussian CGS de intensidad de campo eléctrico.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 217
+    },
+    {
+        "code": "A81",
+        "name": "Unidad Gaussian CGS de polarización eléctrica.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 218
+    },
+    {
+        "code": "A82",
+        "name": "Unidad Gaussian CGS de potencial eléctrico.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 219
+    },
+    {
+        "code": "A83",
+        "name": "Unidad Gaussiana CGS de magnetización.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 220
+    },
+    {
+        "code": "A84",
+        "name": "gigacoulomb por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 221
+    },
+    {
+        "code": "A85",
+        "name": "Gigaelectronvolt",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 222
+    },
+    {
+        "code": "A86",
+        "name": "gigahercios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 223
+    },
+    {
+        "code": "A87",
+        "name": "gigaohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 224
+    },
+    {
+        "code": "A88",
+        "name": "medidor de gigaohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 225
+    },
+    {
+        "code": "A89",
+        "name": "gigapascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 226
+    },
+    {
+        "code": "A9",
+        "name": "tarifa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 227
+    },
+    {
+        "code": "A90",
+        "name": "gigavatios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 228
+    },
+    {
+        "code": "A91",
+        "name": "gon",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 229
+    },
+    {
+        "code": "A93",
+        "name": "gramo por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 230
+    },
+    {
+        "code": "A94",
+        "name": "gramo por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 231
+    },
+    {
+        "code": "A95",
+        "name": "gris",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 232
+    },
+    {
+        "code": "A96",
+        "name": "gris por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 233
+    },
+    {
+        "code": "A97",
+        "name": "hectopascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 234
+    },
+    {
+        "code": "A98",
+        "name": "Henry por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 235
+    },
+    {
+        "code": "AA",
+        "name": "bola",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 236
+    },
+    {
+        "code": "AB",
+        "name": "paquete a granel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 237
+    },
+    {
+        "code": "ACR",
+        "name": "acre",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 238
+    },
+    {
+        "code": "AD",
+        "name": "byte",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 239
+    },
+    {
+        "code": "AE",
+        "name": "amperio por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 240
+    },
+    {
+        "code": "AH",
+        "name": "minuto adicional",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 241
+    },
+    {
+        "code": "AI",
+        "name": "minuto promedio por llamada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 242
+    },
+    {
+        "code": "AJ",
+        "name": "policía",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 243
+    },
+    {
+        "code": "AK",
+        "name": "braza",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 244
+    },
+    {
+        "code": "AL",
+        "name": "nfor de acceso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 245
+    },
+    {
+        "code": "AM",
+        "name": "ampolla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 246
+    },
+    {
+        "code": "AMH",
+        "name": "hora amperio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 247
+    },
+    {
+        "code": "AMP",
+        "name": "amperio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 248
+    },
+    {
+        "code": "ANA",
+        "name": "año",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 249
+    },
+    {
+        "code": "AP",
+        "name": "solo libra de aluminio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 250
+    },
+    {
+        "code": "APZ",
+        "name": "onza troy o onza de boticarios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 251
+    },
+    {
+        "code": "AQ",
+        "name": "Unidad de factor antihemofílico (AHF)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 252
+    },
+    {
+        "code": "AR",
+        "name": "supositorio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 253
+    },
+    {
+        "code": "SON",
+        "name": "son",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 254
+    },
+    {
+        "code": "COMO",
+        "name": "surtido",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 255
+    },
+    {
+        "code": "ASM",
+        "name": "fuerza alcohólica en masa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 256
+    },
+    {
+        "code": "ASU",
+        "name": "fuerza alcohólica por volumen",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 257
+    },
+    {
+        "code": "ATM",
+        "name": "ambiente estándar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 258
+    },
+    {
+        "code": "ATT",
+        "name": "ambiente técnico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 259
+    },
+    {
+        "code": "AV",
+        "name": "cápsula",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 260
+    },
+    {
+        "code": "AW",
+        "name": "vial lleno de polvo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 261
+    },
+    {
+        "code": "SÍ",
+        "name": "montaje",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 262
+    },
+    {
+        "code": "AZ",
+        "name": "Unidad térmica británica por libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 263
+    },
+    {
+        "code": "B0",
+        "name": "Btu por pie cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 264
+    },
+    {
+        "code": "B1",
+        "name": "barril (US) por día",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 265
+    },
+    {
+        "code": "B11",
+        "name": "julios por kilogramo kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 266
+    },
+    {
+        "code": "B12",
+        "name": "julios por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 267
+    },
+    {
+        "code": "B13",
+        "name": "julios por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 268
+    },
+    {
+        "code": "B14",
+        "name": "julios por metro a la cuarta potencia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 269
+    },
+    {
+        "code": "B15",
+        "name": "julios por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 270
+    },
+    {
+        "code": "B16",
+        "name": "julios por mol kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 271
+    },
+    {
+        "code": "B18",
+        "name": "joule segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 272
+    },
+    {
+        "code": "B2",
+        "name": "litera",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 273
+    },
+    {
+        "code": "B20",
+        "name": "joule metro cuadrado por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 274
+    },
+    {
+        "code": "B21",
+        "name": "kelvin por vatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 275
+    },
+    {
+        "code": "B22",
+        "name": "Kiloampere",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 276
+    },
+    {
+        "code": "B23",
+        "name": "kiloampere por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 277
+    },
+    {
+        "code": "B24",
+        "name": "kiloampere por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 278
+    },
+    {
+        "code": "B25",
+        "name": "kilobecquerel por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 279
+    },
+    {
+        "code": "B26",
+        "name": "kilocoulomb",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 280
+    },
+    {
+        "code": "B27",
+        "name": "kilocoulomb por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 281
+    },
+    {
+        "code": "B28",
+        "name": "kilocoulomb por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 282
+    },
+    {
+        "code": "B29",
+        "name": "kiloelectronvolt",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 283
+    },
+    {
+        "code": "B3",
+        "name": "libra de bateo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 284
+    },
+    {
+        "code": "B31",
+        "name": "kilogramo metro por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 285
+    },
+    {
+        "code": "B32",
+        "name": "kilogramo metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 286
+    },
+    {
+        "code": "B33",
+        "name": "kilogramo metro cuadrado por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 287
+    },
+    {
+        "code": "B34",
+        "name": "kilogramo por decímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 288
+    },
+    {
+        "code": "B35",
+        "name": "kilogramo por litro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 289
+    },
+    {
+        "code": "B36",
+        "name": "caloría termoquímica por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 290
+    },
+    {
+        "code": "B37",
+        "name": "kilogramo de fuerza",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 291
+    },
+    {
+        "code": "B38",
+        "name": "metro de fuerza de kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 292
+    },
+    {
+        "code": "B39",
+        "name": "metro de fuerza de kilogramo por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 293
+    },
+    {
+        "code": "B4",
+        "name": "barril, imperial",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 294
+    },
+    {
+        "code": "B40",
+        "name": "kilogramo de fuerza por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 295
+    },
+    {
+        "code": "B41",
+        "name": "kilojoule per kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 296
+    },
+    {
+        "code": "B42",
+        "name": "kilojoule por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 297
+    },
+    {
+        "code": "B43",
+        "name": "kilojoule por kilogramo kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 298
+    },
+    {
+        "code": "B44",
+        "name": "kilojoule por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 299
+    },
+    {
+        "code": "B45",
+        "name": "kilomol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 300
+    },
+    {
+        "code": "B46",
+        "name": "kilomol por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 301
+    },
+    {
+        "code": "B47",
+        "name": "Kilonewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 302
+    },
+    {
+        "code": "B48",
+        "name": "medidor de kilonewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 303
+    },
+    {
+        "code": "B49",
+        "name": "kiloohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 304
+    },
+    {
+        "code": "B5",
+        "name": "palanquilla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 305
+    },
+    {
+        "code": "B50",
+        "name": "medidor de kiloohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 306
+    },
+    {
+        "code": "B51",
+        "name": "kilopond",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 307
+    },
+    {
+        "code": "B52",
+        "name": "kilosegundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 308
+    },
+    {
+        "code": "B53",
+        "name": "kilosiemens",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 309
+    },
+    {
+        "code": "B54",
+        "name": "kilosiemens por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 310
+    },
+    {
+        "code": "B55",
+        "name": "kilovoltios por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 311
+    },
+    {
+        "code": "B56",
+        "name": "kiloveber por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 312
+    },
+    {
+        "code": "B57",
+        "name": "año luz",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 313
+    },
+    {
+        "code": "B58",
+        "name": "litro por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 314
+    },
+    {
+        "code": "B59",
+        "name": "hora lumen",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 315
+    },
+    {
+        "code": "B6",
+        "name": "bollo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 316
+    },
+    {
+        "code": "B60",
+        "name": "lumen por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 317
+    },
+    {
+        "code": "B61",
+        "name": "lumen por vatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 318
+    },
+    {
+        "code": "B62",
+        "name": "lumen segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 319
+    },
+    {
+        "code": "B63",
+        "name": "hora de lux",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 320
+    },
+    {
+        "code": "B64",
+        "name": "lux segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 321
+    },
+    {
+        "code": "B65",
+        "name": "Maxwell",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 322
+    },
+    {
+        "code": "B66",
+        "name": "megaamperios por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 323
+    },
+    {
+        "code": "B67",
+        "name": "megabecquerel por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 324
+    },
+    {
+        "code": "B69",
+        "name": "megacoulomb por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 325
+    },
+    {
+        "code": "B7",
+        "name": "ciclo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 326
+    },
+    {
+        "code": "B70",
+        "name": "megacoulomb por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 327
+    },
+    {
+        "code": "B71",
+        "name": "megaelectronvolt",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 328
+    },
+    {
+        "code": "B72",
+        "name": "megagramo por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 329
+    },
+    {
+        "code": "B73",
+        "name": "meganewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 330
+    },
+    {
+        "code": "B74",
+        "name": "medidor de meganewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 331
+    },
+    {
+        "code": "B75",
+        "name": "megaohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 332
+    },
+    {
+        "code": "B76",
+        "name": "metro megaohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 333
+    },
+    {
+        "code": "B77",
+        "name": "megasiemens por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 334
+    },
+    {
+        "code": "B78",
+        "name": "megavoltio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 335
+    },
+    {
+        "code": "B79",
+        "name": "megavolt por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 336
+    },
+    {
+        "code": "B8",
+        "name": "julios por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 337
+    },
+    {
+        "code": "B81",
+        "name": "metro recíproco cuadrado recíproco segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 338
+    },
+    {
+        "code": "B83",
+        "name": "metro a la cuarta potencia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 339
+    },
+    {
+        "code": "B84",
+        "name": "microamperios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 340
+    },
+    {
+        "code": "B85",
+        "name": "microbar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 341
+    },
+    {
+        "code": "B86",
+        "name": "microcoulomb",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 342
+    },
+    {
+        "code": "B87",
+        "name": "microcoulomb por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 343
+    },
+    {
+        "code": "B88",
+        "name": "microcoulomb por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 344
+    },
+    {
+        "code": "B89",
+        "name": "microfarada por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 345
+    },
+    {
+        "code": "B9",
+        "name": "batt",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 346
+    },
+    {
+        "code": "B90",
+        "name": "microhenry",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 347
+    },
+    {
+        "code": "B91",
+        "name": "microhenry por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 348
+    },
+    {
+        "code": "B92",
+        "name": "micronewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 349
+    },
+    {
+        "code": "B93",
+        "name": "medidor de micronewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 350
+    },
+    {
+        "code": "B94",
+        "name": "microohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 351
+    },
+    {
+        "code": "B95",
+        "name": "medidor de microohmios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 352
+    },
+    {
+        "code": "B96",
+        "name": "micropascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 353
+    },
+    {
+        "code": "B97",
+        "name": "microradiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 354
+    },
+    {
+        "code": "B98",
+        "name": "microsegundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 355
+    },
+    {
+        "code": "B99",
+        "name": "microsiemens",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 356
+    },
+    {
+        "code": "BAR",
+        "name": "bar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 357
+    },
+    {
+        "code": "BB",
+        "name": "caja base",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 358
+    },
+    {
+        "code": "BD",
+        "name": "tablero",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 359
+    },
+    {
+        "code": "SER",
+        "name": "haz",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 360
+    },
+    {
+        "code": "BFT",
+        "name": "pie de tabla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 361
+    },
+    {
+        "code": "BG",
+        "name": "bolso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 362
+    },
+    {
+        "code": "BH",
+        "name": "cepillo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 363
+    },
+    {
+        "code": "BHP",
+        "name": "potencia al freno",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 364
+    },
+    {
+        "code": "BIL",
+        "name": "trillón de dólares",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 365
+    },
+    {
+        "code": "BJ",
+        "name": "cangilón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 366
+    },
+    {
+        "code": "BK",
+        "name": "cesta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 367
+    },
+    {
+        "code": "BL",
+        "name": "bala",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 368
+    },
+    {
+        "code": "BLD",
+        "name": "barril seco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 369
+    },
+    {
+        "code": "BLL",
+        "name": "barril (EE. UU.) (petróleo, etc.)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 370
+    },
+    {
+        "code": "BO",
+        "name": "botella",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 371
+    },
+    {
+        "code": "BP",
+        "name": "cien pies de tabla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 372
+    },
+    {
+        "code": "BQL",
+        "name": "becquerel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 373
+    },
+    {
+        "code": "BR",
+        "name": "bar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 374
+    },
+    {
+        "code": "BT",
+        "name": "tornillo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 375
+    },
+    {
+        "code": "BTU",
+        "name": "Unidad Térmica Británica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 376
+    },
+    {
+        "code": "BUA",
+        "name": "bushel (EE. UU.)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 377
+    },
+    {
+        "code": "BUI",
+        "name": "bushel (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 378
+    },
+    {
+        "code": "BW",
+        "name": "peso base",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 379
+    },
+    {
+        "code": "BX",
+        "name": "caja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 380
+    },
+    {
+        "code": "BZ",
+        "name": "millones de BTUs",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 381
+    },
+    {
+        "code": "C0",
+        "name": "llamada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 382
+    },
+    {
+        "code": "C1",
+        "name": "producto compuesto libra (peso total)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 383
+    },
+    {
+        "code": "C10",
+        "name": "millifarad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 384
+    },
+    {
+        "code": "C11",
+        "name": "miligal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 385
+    },
+    {
+        "code": "C12",
+        "name": "miligramo por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 386
+    },
+    {
+        "code": "C13",
+        "name": "miligray",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 387
+    },
+    {
+        "code": "C14",
+        "name": "milihenry",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 388
+    },
+    {
+        "code": "C15",
+        "name": "milijoule",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 389
+    },
+    {
+        "code": "C16",
+        "name": "milímetro por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 390
+    },
+    {
+        "code": "C17",
+        "name": "milímetro cuadrado por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 391
+    },
+    {
+        "code": "C18",
+        "name": "milimol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 392
+    },
+    {
+        "code": "C19",
+        "name": "mol por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 393
+    },
+    {
+        "code": "C2",
+        "name": "carset",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 394
+    },
+    {
+        "code": "C20",
+        "name": "millinewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 395
+    },
+    {
+        "code": "C22",
+        "name": "millinewton por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 396
+    },
+    {
+        "code": "C23",
+        "name": "medidor de miliohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 397
+    },
+    {
+        "code": "C24",
+        "name": "segundo milipascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 398
+    },
+    {
+        "code": "C25",
+        "name": "miliradian",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 399
+    },
+    {
+        "code": "C26",
+        "name": "milisegundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 400
+    },
+    {
+        "code": "C27",
+        "name": "milisiemens",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 401
+    },
+    {
+        "code": "C28",
+        "name": "milisievert",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 402
+    },
+    {
+        "code": "C29",
+        "name": "millitesla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 403
+    },
+    {
+        "code": "C3",
+        "name": "microvoltios por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 404
+    },
+    {
+        "code": "C30",
+        "name": "milivoltios por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 405
+    },
+    {
+        "code": "C31",
+        "name": "milivatios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 406
+    },
+    {
+        "code": "C32",
+        "name": "milivatios por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 407
+    },
+    {
+        "code": "C33",
+        "name": "milliweber",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 408
+    },
+    {
+        "code": "C34",
+        "name": "Topo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 409
+    },
+    {
+        "code": "C35",
+        "name": "mol por decímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 410
+    },
+    {
+        "code": "C36",
+        "name": "mol por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 411
+    },
+    {
+        "code": "C38",
+        "name": "mol por litro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 412
+    },
+    {
+        "code": "C39",
+        "name": "Nanoampere",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 413
+    },
+    {
+        "code": "C4",
+        "name": "partido de carga",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 414
+    },
+    {
+        "code": "C40",
+        "name": "nanocoulomb",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 415
+    },
+    {
+        "code": "C41",
+        "name": "nanofarad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 416
+    },
+    {
+        "code": "C42",
+        "name": "nanofarad por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 417
+    },
+    {
+        "code": "C43",
+        "name": "nanohenry",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 418
+    },
+    {
+        "code": "C44",
+        "name": "nanohenry por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 419
+    },
+    {
+        "code": "C45",
+        "name": "nanometro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 420
+    },
+    {
+        "code": "C46",
+        "name": "medidor de nanoohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 421
+    },
+    {
+        "code": "C47",
+        "name": "nanosegundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 422
+    },
+    {
+        "code": "C48",
+        "name": "nanotesla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 423
+    },
+    {
+        "code": "C49",
+        "name": "nanovatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 424
+    },
+    {
+        "code": "C5",
+        "name": "costo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 425
+    },
+    {
+        "code": "C50",
+        "name": "neper",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 426
+    },
+    {
+        "code": "C51",
+        "name": "neper por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 427
+    },
+    {
+        "code": "C52",
+        "name": "picometro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 428
+    },
+    {
+        "code": "C53",
+        "name": "metro de newton segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 429
+    },
+    {
+        "code": "C54",
+        "name": "newton metro cuadrado kilogramo cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 430
+    },
+    {
+        "code": "C55",
+        "name": "newton por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 431
+    },
+    {
+        "code": "C56",
+        "name": "newton por milímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 432
+    },
+    {
+        "code": "C57",
+        "name": "newton segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 433
+    },
+    {
+        "code": "C58",
+        "name": "newton segundo por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 434
+    },
+    {
+        "code": "C59",
+        "name": "octava",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 435
+    },
+    {
+        "code": "C6",
+        "name": "célula",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 436
+    },
+    {
+        "code": "C60",
+        "name": "ohm centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 437
+    },
+    {
+        "code": "C61",
+        "name": "ohm metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 438
+    },
+    {
+        "code": "C62",
+        "name": "uno",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 439
+    },
+    {
+        "code": "C63",
+        "name": "parsec",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 440
+    },
+    {
+        "code": "C64",
+        "name": "pascal por kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 441
+    },
+    {
+        "code": "C65",
+        "name": "segundo pascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 442
+    },
+    {
+        "code": "C66",
+        "name": "segundo pascal por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 443
+    },
+    {
+        "code": "C67",
+        "name": "segundo pascal por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 444
+    },
+    {
+        "code": "C68",
+        "name": "petajoule",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 445
+    },
+    {
+        "code": "C69",
+        "name": "telefono",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 446
+    },
+    {
+        "code": "C7",
+        "name": "centipoise",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 447
+    },
+    {
+        "code": "C70",
+        "name": "picoampere",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 448
+    },
+    {
+        "code": "C71",
+        "name": "picocoulomb",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 449
+    },
+    {
+        "code": "C72",
+        "name": "picofarad por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 450
+    },
+    {
+        "code": "C73",
+        "name": "picohenry",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 451
+    },
+    {
+        "code": "C75",
+        "name": "picowatt",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 452
+    },
+    {
+        "code": "C76",
+        "name": "picowatt por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 453
+    },
+    {
+        "code": "C77",
+        "name": "medidor de libras",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 454
+    },
+    {
+        "code": "C78",
+        "name": "fuerza de libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 455
+    },
+    {
+        "code": "C8",
+        "name": "Millicoulomb por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 456
+    },
+    {
+        "code": "C80",
+        "name": "rad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 457
+    },
+    {
+        "code": "C81",
+        "name": "radián",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 458
+    },
+    {
+        "code": "C82",
+        "name": "medidor de radianes al cuadrado por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 459
+    },
+    {
+        "code": "C83",
+        "name": "medidor de radianes al cuadrado por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 460
+    },
+    {
+        "code": "C84",
+        "name": "radian por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 461
+    },
+    {
+        "code": "C85",
+        "name": "â € ngstr recíproco “m",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 462
+    },
+    {
+        "code": "C86",
+        "name": "metro cúbico recíproco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 463
+    },
+    {
+        "code": "C87",
+        "name": "metro cúbico recíproco por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 464
+    },
+    {
+        "code": "C88",
+        "name": "voltios de electrones recíprocos por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 465
+    },
+    {
+        "code": "C89",
+        "name": "Henry Recíproco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 466
+    },
+    {
+        "code": "C9",
+        "name": "grupo de bobina",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 467
+    },
+    {
+        "code": "C90",
+        "name": "Joule recíproco por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 468
+    },
+    {
+        "code": "C91",
+        "name": "kelvin recíproco o kelvin al poder menos uno",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 469
+    },
+    {
+        "code": "C92",
+        "name": "medidor recíproco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 470
+    },
+    {
+        "code": "C93",
+        "name": "metro cuadrado recíproco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 471
+    },
+    {
+        "code": "C94",
+        "name": "minuto recíproco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 472
+    },
+    {
+        "code": "C95",
+        "name": "mole recíproco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 473
+    },
+    {
+        "code": "C96",
+        "name": "Pascal recíproco o pascal a la potencia menos uno.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 474
+    },
+    {
+        "code": "C97",
+        "name": "segundo recíproco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 475
+    },
+    {
+        "code": "C98",
+        "name": "segundo recíproco por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 476
+    },
+    {
+        "code": "C99",
+        "name": "segundo recíproco por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 477
+    },
+    {
+        "code": "CA",
+        "name": "Caja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 478
+    },
+    {
+        "code": "CCT",
+        "name": "Capacidad de carga en toneladas métricas.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 479
+    },
+    {
+        "code": "CDL",
+        "name": "candela",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 480
+    },
+    {
+        "code": "CEL",
+        "name": "grado Celsius",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 481
+    },
+    {
+        "code": "CEN",
+        "name": "cien",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 482
+    },
+    {
+        "code": "CG",
+        "name": "tarjeta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 483
+    },
+    {
+        "code": "CGM",
+        "name": "centigramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 484
+    },
+    {
+        "code": "CH",
+        "name": "envase",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 485
+    },
+    {
+        "code": "CJ",
+        "name": "cono",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 486
+    },
+    {
+        "code": "CK",
+        "name": "conector",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 487
+    },
+    {
+        "code": "CKG",
+        "name": "Coulomb por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 488
+    },
+    {
+        "code": "CL",
+        "name": "bobina",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 489
+    },
+    {
+        "code": "CLF",
+        "name": "cientos de licencia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 490
+    },
+    {
+        "code": "CLT",
+        "name": "centilitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 491
+    },
+    {
+        "code": "CMK",
+        "name": "centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 492
+    },
+    {
+        "code": "CMQ",
+        "name": "centímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 493
+    },
+    {
+        "code": "CMT",
+        "name": "centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 494
+    },
+    {
+        "code": "CNP",
+        "name": "paquete de cien",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 495
+    },
+    {
+        "code": "CNT",
+        "name": "Cental (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 496
+    },
+    {
+        "code": "CO",
+        "name": "garrafón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 497
+    },
+    {
+        "code": "COU",
+        "name": "culombio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 498
+    },
+    {
+        "code": "CQ",
+        "name": "cartucho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 499
+    },
+    {
+        "code": "CR",
+        "name": "caja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 500
+    },
+    {
+        "code": "CS",
+        "name": "caso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 501
+    },
+    {
+        "code": "CT",
+        "name": "caja de cartón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 502
+    },
+    {
+        "code": "CTM",
+        "name": "quilate métrico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 503
+    },
+    {
+        "code": "CU",
+        "name": "vaso",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 504
+    },
+    {
+        "code": "CUR",
+        "name": "curie",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 505
+    },
+    {
+        "code": "CV",
+        "name": "cubrir",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 506
+    },
+    {
+        "code": "CWA",
+        "name": "cien libras (quintales) \/ cien pesos (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 507
+    },
+    {
+        "code": "CWI",
+        "name": "cien pesos (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 508
+    },
+    {
+        "code": "CY",
+        "name": "cilindro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 509
+    },
+    {
+        "code": "CZ",
+        "name": "combo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 510
+    },
+    {
+        "code": "D1",
+        "name": "segundo recíproco por esteradiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 511
+    },
+    {
+        "code": "D10",
+        "name": "siemens por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 512
+    },
+    {
+        "code": "D12",
+        "name": "siemens metro cuadrado por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 513
+    },
+    {
+        "code": "D13",
+        "name": "sievert",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 514
+    },
+    {
+        "code": "D14",
+        "name": "mil yardas lineales",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 515
+    },
+    {
+        "code": "D15",
+        "name": "sone",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 516
+    },
+    {
+        "code": "D16",
+        "name": "centímetro cuadrado por ergio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 517
+    },
+    {
+        "code": "D17",
+        "name": "centímetro cuadrado por erg esterlina",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 518
+    },
+    {
+        "code": "D18",
+        "name": "metro kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 519
+    },
+    {
+        "code": "D19",
+        "name": "kelvin metro cuadrado por vatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 520
+    },
+    {
+        "code": "D2",
+        "name": "segundo recíproco por metros cuadrados esteradianos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 521
+    },
+    {
+        "code": "D20",
+        "name": "metro cuadrado por julio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 522
+    },
+    {
+        "code": "D21",
+        "name": "metro cuadrado por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 523
+    },
+    {
+        "code": "D22",
+        "name": "metro cuadrado por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 524
+    },
+    {
+        "code": "D23",
+        "name": "pluma gramo (proteína)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 525
+    },
+    {
+        "code": "D24",
+        "name": "metro cuadrado por esterilizador",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 526
+    },
+    {
+        "code": "D25",
+        "name": "metro cuadrado por julios esteradianos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 527
+    },
+    {
+        "code": "D26",
+        "name": "metro cuadrado por voltio segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 528
+    },
+    {
+        "code": "D27",
+        "name": "esteradiano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 529
+    },
+    {
+        "code": "D28",
+        "name": "sifón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 530
+    },
+    {
+        "code": "D29",
+        "name": "terahercios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 531
+    },
+    {
+        "code": "D30",
+        "name": "terajulio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 532
+    },
+    {
+        "code": "D31",
+        "name": "teravatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 533
+    },
+    {
+        "code": "D32",
+        "name": "hora de teravatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 534
+    },
+    {
+        "code": "D33",
+        "name": "tesla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 535
+    },
+    {
+        "code": "D34",
+        "name": "Texas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 536
+    },
+    {
+        "code": "D35",
+        "name": "caloría termoquímica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 537
+    },
+    {
+        "code": "D37",
+        "name": "caloría termoquímica por gramo kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 538
+    },
+    {
+        "code": "D38",
+        "name": "calorías termoquímicas por segundo centímetro kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 539
+    },
+    {
+        "code": "D39",
+        "name": "calorías termoquímicas por segundo centímetro cuadrado kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 540
+    },
+    {
+        "code": "D40",
+        "name": "mil litros",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 541
+    },
+    {
+        "code": "D41",
+        "name": "tonelada por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 542
+    },
+    {
+        "code": "D42",
+        "name": "año tropical",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 543
+    },
+    {
+        "code": "D43",
+        "name": "unidad de masa atómica unificada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 544
+    },
+    {
+        "code": "D44",
+        "name": "var",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 545
+    },
+    {
+        "code": "D45",
+        "name": "voltios al cuadrado por kelvin al cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 546
+    },
+    {
+        "code": "D46",
+        "name": "voltio – amperio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 547
+    },
+    {
+        "code": "D47",
+        "name": "voltio por centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 548
+    },
+    {
+        "code": "D48",
+        "name": "voltio por kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 549
+    },
+    {
+        "code": "D49",
+        "name": "milivoltios por kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 550
+    },
+    {
+        "code": "D5",
+        "name": "kilogramo por centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 551
+    },
+    {
+        "code": "D50",
+        "name": "voltios por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 552
+    },
+    {
+        "code": "D51",
+        "name": "voltios por milímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 553
+    },
+    {
+        "code": "D52",
+        "name": "vatios por kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 554
+    },
+    {
+        "code": "D53",
+        "name": "vatios por metro kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 555
+    },
+    {
+        "code": "D54",
+        "name": "vatios por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 556
+    },
+    {
+        "code": "D55",
+        "name": "vatios por metro cuadrado kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 557
+    },
+    {
+        "code": "D56",
+        "name": "vatios por metro cuadrado de kelvin a la cuarta potencia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 558
+    },
+    {
+        "code": "D57",
+        "name": "vatios por steradian",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 559
+    },
+    {
+        "code": "D58",
+        "name": "vatios por metro cuadrado esterlino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 560
+    },
+    {
+        "code": "D59",
+        "name": "weber por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 561
+    },
+    {
+        "code": "D6",
+        "name": "röntgen por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 562
+    },
+    {
+        "code": "D60",
+        "name": "weber por milímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 563
+    },
+    {
+        "code": "D61",
+        "name": "minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 564
+    },
+    {
+        "code": "D62",
+        "name": "segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 565
+    },
+    {
+        "code": "D63",
+        "name": "libro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 566
+    },
+    {
+        "code": "D64",
+        "name": "bloquear",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 567
+    },
+    {
+        "code": "D65",
+        "name": "redondo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 568
+    },
+    {
+        "code": "D66",
+        "name": "casete",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 569
+    },
+    {
+        "code": "D67",
+        "name": "dólar por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 570
+    },
+    {
+        "code": "D69",
+        "name": "pulgada a la cuarta potencia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 571
+    },
+    {
+        "code": "D7",
+        "name": "Sandwich",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 572
+    },
+    {
+        "code": "D70",
+        "name": "Tabla Internacional (IT) caloría",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 573
+    },
+    {
+        "code": "D71",
+        "name": "Tabla Internacional (IT) calorías por segundo centímetro kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 574
+    },
+    {
+        "code": "D72",
+        "name": "Tabla Internacional (IT) calorías por segundo centímetro cuadrado kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 575
+    },
+    {
+        "code": "D73",
+        "name": "joule metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 576
+    },
+    {
+        "code": "D74",
+        "name": "kilogramo por mol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 577
+    },
+    {
+        "code": "D75",
+        "name": "Tabla Internacional (IT) calorías por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 578
+    },
+    {
+        "code": "D76",
+        "name": "Tabla Internacional (IT) calorías por gramo kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 579
+    },
+    {
+        "code": "D77",
+        "name": "megacoulomb",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 580
+    },
+    {
+        "code": "D79",
+        "name": "haz",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 581
+    },
+    {
+        "code": "D8",
+        "name": "puntaje de drenaje",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 582
+    },
+    {
+        "code": "D80",
+        "name": "microwatt",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 583
+    },
+    {
+        "code": "D81",
+        "name": "microtesla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 584
+    },
+    {
+        "code": "D82",
+        "name": "microvoltio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 585
+    },
+    {
+        "code": "D83",
+        "name": "medidor de millinewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 586
+    },
+    {
+        "code": "D85",
+        "name": "microwatt por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 587
+    },
+    {
+        "code": "D86",
+        "name": "Millicoulomb",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 588
+    },
+    {
+        "code": "D87",
+        "name": "milimol por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 589
+    },
+    {
+        "code": "D88",
+        "name": "millicoulomb por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 590
+    },
+    {
+        "code": "D89",
+        "name": "millicoulomb por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 591
+    },
+    {
+        "code": "D9",
+        "name": "dina por centímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 592
+    },
+    {
+        "code": "D90",
+        "name": "metro cúbico (neto)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 593
+    },
+    {
+        "code": "D91",
+        "name": "movimiento rápido del ojo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 594
+    },
+    {
+        "code": "D92",
+        "name": "banda",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 595
+    },
+    {
+        "code": "D93",
+        "name": "segundo por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 596
+    },
+    {
+        "code": "D94",
+        "name": "segundo por metro cúbico radianes",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 597
+    },
+    {
+        "code": "D95",
+        "name": "julios por gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 598
+    },
+    {
+        "code": "D96",
+        "name": "libra bruta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 599
+    },
+    {
+        "code": "D97",
+        "name": "carga de palet \/ unidad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 600
+    },
+    {
+        "code": "D98",
+        "name": "libra de masa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 601
+    },
+    {
+        "code": "D99",
+        "name": "manga",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 602
+    },
+    {
+        "code": "DAA",
+        "name": "despreciar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 603
+    },
+    {
+        "code": "DAD",
+        "name": "diez dias",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 604
+    },
+    {
+        "code": "DAY",
+        "name": "día",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 605
+    },
+    {
+        "code": "DB",
+        "name": "libra seca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 606
+    },
+    {
+        "code": "DC",
+        "name": "disco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 607
+    },
+    {
+        "code": "DD",
+        "name": "la licenciatura",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 608
+    },
+    {
+        "code": "DE",
+        "name": "acuerdo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 609
+    },
+    {
+        "code": "DEC",
+        "name": "década",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 610
+    },
+    {
+        "code": "DG",
+        "name": "decigramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 611
+    },
+    {
+        "code": "DI",
+        "name": "dispensador",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 612
+    },
+    {
+        "code": "DJ",
+        "name": "decagramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 613
+    },
+    {
+        "code": "DLT",
+        "name": "decilitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 614
+    },
+    {
+        "code": "DMK",
+        "name": "nformaci cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 615
+    },
+    {
+        "code": "DMQ",
+        "name": "decímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 616
+    },
+    {
+        "code": "DMT",
+        "name": "decímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 617
+    },
+    {
+        "code": "DN",
+        "name": "medidor de decinewton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 618
+    },
+    {
+        "code": "DPC",
+        "name": "docena pieza",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 619
+    },
+    {
+        "code": "DPR",
+        "name": "docena par",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 620
+    },
+    {
+        "code": "DPT",
+        "name": "tonelaje de desplazamiento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 621
+    },
+    {
+        "code": "DQ",
+        "name": "registro de datos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 622
+    },
+    {
+        "code": "DR",
+        "name": "tambor",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 623
+    },
+    {
+        "code": "DRA",
+        "name": "dram (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 624
+    },
+    {
+        "code": "DRI",
+        "name": "dram (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 625
+    },
+    {
+        "code": "DRL",
+        "name": "docena rollo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 626
+    },
+    {
+        "code": "DRM",
+        "name": "dracma (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 627
+    },
+    {
+        "code": "DS",
+        "name": "monitor",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 628
+    },
+    {
+        "code": "DT",
+        "name": "tonelada seca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 629
+    },
+    {
+        "code": "DTN",
+        "name": "Decitonne",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 630
+    },
+    {
+        "code": "DU",
+        "name": "dina",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 631
+    },
+    {
+        "code": "DWT",
+        "name": "pennyweight",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 632
+    },
+    {
+        "code": "DX",
+        "name": "dina por centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 633
+    },
+    {
+        "code": "DY",
+        "name": "libro de directorio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 634
+    },
+    {
+        "code": "DZN",
+        "name": "docena",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 635
+    },
+    {
+        "code": "DZP",
+        "name": "paquete de doce",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 636
+    },
+    {
+        "code": "E2",
+        "name": "cinturón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 637
+    },
+    {
+        "code": "E3",
+        "name": "remolque",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 638
+    },
+    {
+        "code": "E4",
+        "name": "kilogramo bruto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 639
+    },
+    {
+        "code": "E5",
+        "name": "tonelada métrica larga",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 640
+    },
+    {
+        "code": "EA",
+        "name": "cada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 641
+    },
+    {
+        "code": "EB",
+        "name": "casilla de correo electrónico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 642
+    },
+    {
+        "code": "CE",
+        "name": "cada uno por mes",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 643
+    },
+    {
+        "code": "EP",
+        "name": "paquete de once",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 644
+    },
+    {
+        "code": "EQ",
+        "name": "galón equivalente",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 645
+    },
+    {
+        "code": "EV",
+        "name": "sobre",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 646
+    },
+    {
+        "code": "F1",
+        "name": "mil pies cúbicos por día",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 647
+    },
+    {
+        "code": "F9",
+        "name": "Fibra por centímetro cúbico de aire",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 648
+    },
+    {
+        "code": "FAH",
+        "name": "grado Fahrenheit",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 649
+    },
+    {
+        "code": "FAR",
+        "name": "faradio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 650
+    },
+    {
+        "code": "FB",
+        "name": "campo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 651
+    },
+    {
+        "code": "FC",
+        "name": "mil pies cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 652
+    },
+    {
+        "code": "FD",
+        "name": "millón de partículas por pie cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 653
+    },
+    {
+        "code": "FE",
+        "name": "pie de pista",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 654
+    },
+    {
+        "code": "FF",
+        "name": "cien metros cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 655
+    },
+    {
+        "code": "FG",
+        "name": "parche transdérmico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 656
+    },
+    {
+        "code": "FH",
+        "name": "micromol",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 657
+    },
+    {
+        "code": "FL",
+        "name": "tonelada en escamas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 658
+    },
+    {
+        "code": "FM",
+        "name": "millones de pies cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 659
+    },
+    {
+        "code": "FOT",
+        "name": "pie",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 660
+    },
+    {
+        "code": "FP",
+        "name": "libra por pie cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 661
+    },
+    {
+        "code": "FR",
+        "name": "pie por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 662
+    },
+    {
+        "code": "FS",
+        "name": "pie por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 663
+    },
+    {
+        "code": "FTK",
+        "name": "pie cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 664
+    },
+    {
+        "code": "FTQ",
+        "name": "pie cubico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 665
+    },
+    {
+        "code": "G2",
+        "name": "US galones por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 666
+    },
+    {
+        "code": "G3",
+        "name": "Galon imperial por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 667
+    },
+    {
+        "code": "G7",
+        "name": "hoja de microficha",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 668
+    },
+    {
+        "code": "GB",
+        "name": "galón (US) por día",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 669
+    },
+    {
+        "code": "GBQ",
+        "name": "gigabecquerel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 670
+    },
+    {
+        "code": "GC",
+        "name": "gramo por 100 gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 671
+    },
+    {
+        "code": "GD",
+        "name": "barril bruto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 672
+    },
+    {
+        "code": "GE",
+        "name": "libra por galón (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 673
+    },
+    {
+        "code": "GF",
+        "name": "gramo por metro (gramo por 100 centímetros)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 674
+    },
+    {
+        "code": "GFI",
+        "name": "gramo de isótopo fisionable",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 675
+    },
+    {
+        "code": "GGR",
+        "name": "gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 676
+    },
+    {
+        "code": "GH",
+        "name": "medio galón (EE. UU.)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 677
+    },
+    {
+        "code": "GIA",
+        "name": "branquias",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 678
+    },
+    {
+        "code": "GII",
+        "name": "Gill (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 679
+    },
+    {
+        "code": "GJ",
+        "name": "gramo por mililitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 680
+    },
+    {
+        "code": "G K",
+        "name": "gramo por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 681
+    },
+    {
+        "code": "GL",
+        "name": "gramo por litro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 682
+    },
+    {
+        "code": "GLD",
+        "name": "galón seco (EE. UU.)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 683
+    },
+    {
+        "code": "GLI",
+        "name": "galón (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 684
+    },
+    {
+        "code": "GLL",
+        "name": "galón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 685
+    },
+    {
+        "code": "GM",
+        "name": "gramo por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 686
+    },
+    {
+        "code": "GN",
+        "name": "galón bruto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 687
+    },
+    {
+        "code": "GO",
+        "name": "miligramos por metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 688
+    },
+    {
+        "code": "GP",
+        "name": "miligramo por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 689
+    },
+    {
+        "code": "GQ",
+        "name": "microgramos por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 690
+    },
+    {
+        "code": "GRM",
+        "name": "gramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 691
+    },
+    {
+        "code": "GRN",
+        "name": "grano",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 692
+    },
+    {
+        "code": "GRO",
+        "name": "bruto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 693
+    },
+    {
+        "code": "GRT",
+        "name": "tonelada de registro bruto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 694
+    },
+    {
+        "code": "GT",
+        "name": "tonelada bruta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 695
+    },
+    {
+        "code": "GV",
+        "name": "gigajoule",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 696
+    },
+    {
+        "code": "GW",
+        "name": "galón por mil pies cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 697
+    },
+    {
+        "code": "GWH",
+        "name": "hora de gigavatios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 698
+    },
+    {
+        "code": "GY",
+        "name": "patio bruto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 699
+    },
+    {
+        "code": "GZ",
+        "name": "sistema de medición",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 700
+    },
+    {
+        "code": "H1",
+        "name": "media página – electrónica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 701
+    },
+    {
+        "code": "H2",
+        "name": "medio litro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 702
+    },
+    {
+        "code": "HA",
+        "name": "madeja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 703
+    },
+    {
+        "code": "HAR",
+        "name": "hectárea",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 704
+    },
+    {
+        "code": "HBA",
+        "name": "hectobar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 705
+    },
+    {
+        "code": "HBX",
+        "name": "cien cajas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 706
+    },
+    {
+        "code": "HC",
+        "name": "cien cuentas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 707
+    },
+    {
+        "code": "HD",
+        "name": "media docena",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 708
+    },
+    {
+        "code": "ÉL",
+        "name": "centésima de quilate",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 709
+    },
+    {
+        "code": "HF",
+        "name": "cien pies",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 710
+    },
+    {
+        "code": "HGM",
+        "name": "hectogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 711
+    },
+    {
+        "code": "HH",
+        "name": "cien pies cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 712
+    },
+    {
+        "code": "HI",
+        "name": "cien hojas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 713
+    },
+    {
+        "code": "HIU",
+        "name": "cien unidades internacionales",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 714
+    },
+    {
+        "code": "HJ",
+        "name": "caballo métrico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 715
+    },
+    {
+        "code": "HK",
+        "name": "cien kilogramos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 716
+    },
+    {
+        "code": "HL",
+        "name": "cien pies (lineales)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 717
+    },
+    {
+        "code": "HLT",
+        "name": "hectolitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 718
+    },
+    {
+        "code": "HM",
+        "name": "milla por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 719
+    },
+    {
+        "code": "HMQ",
+        "name": "millones de metros cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 720
+    },
+    {
+        "code": "HMT",
+        "name": "hectómetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 721
+    },
+    {
+        "code": "HN",
+        "name": "milímetro convencional de mercurio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 722
+    },
+    {
+        "code": "HO",
+        "name": "cien onzas troy",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 723
+    },
+    {
+        "code": "HP",
+        "name": "milímetro convencional de agua",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 724
+    },
+    {
+        "code": "HPA",
+        "name": "hectolitro de alcohol puro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 725
+    },
+    {
+        "code": "HS",
+        "name": "cien pies cuadrados",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 726
+    },
+    {
+        "code": "HT",
+        "name": "media hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 727
+    },
+    {
+        "code": "HTZ",
+        "name": "hertz",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 728
+    },
+    {
+        "code": "HUR",
+        "name": "hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 729
+    },
+    {
+        "code": "HY",
+        "name": "cien yardas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 730
+    },
+    {
+        "code": "IA",
+        "name": "pulgada libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 731
+    },
+    {
+        "code": "IC",
+        "name": "contar por pulgada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 732
+    },
+    {
+        "code": "IE",
+        "name": "persona",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 733
+    },
+    {
+        "code": "IF",
+        "name": "pulgadas de agua",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 734
+    },
+    {
+        "code": "II",
+        "name": "columna pulgada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 735
+    },
+    {
+        "code": "IL",
+        "name": "pulgada por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 736
+    },
+    {
+        "code": "IM",
+        "name": "impresión",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 737
+    },
+    {
+        "code": "INH",
+        "name": "pulgada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 738
+    },
+    {
+        "code": "INK",
+        "name": "pulgada cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 739
+    },
+    {
+        "code": "INQ",
+        "name": "pulgada en cubos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 740
+    },
+    {
+        "code": "IP",
+        "name": "póliza de seguros",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 741
+    },
+    {
+        "code": "IT",
+        "name": "conteo por centímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 742
+    },
+    {
+        "code": "IU",
+        "name": "pulgada por segundo (velocidad lineal)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 743
+    },
+    {
+        "code": "IV",
+        "name": "pulgada por segundo al cuadrado (aceleración)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 744
+    },
+    {
+        "code": "J2",
+        "name": "julios por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 745
+    },
+    {
+        "code": "JB",
+        "name": "jumbo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 746
+    },
+    {
+        "code": "JE",
+        "name": "joule por kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 747
+    },
+    {
+        "code": "JG",
+        "name": "jarra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 748
+    },
+    {
+        "code": "JK",
+        "name": "megajulio por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 749
+    },
+    {
+        "code": "JM",
+        "name": "megajulio por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 750
+    },
+    {
+        "code": "JO",
+        "name": "articulación",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 751
+    },
+    {
+        "code": "JOU",
+        "name": "joule",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 752
+    },
+    {
+        "code": "JR",
+        "name": "tarro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 753
+    },
+    {
+        "code": "K1",
+        "name": "demanda de kilovatios",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 754
+    },
+    {
+        "code": "K2",
+        "name": "kilovoltios amperios reactivos de demanda",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 755
+    },
+    {
+        "code": "K3",
+        "name": "kilovoltio amperio hora reactiva",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 756
+    },
+    {
+        "code": "K5",
+        "name": "amperios kilovoltios (reactivos)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 757
+    },
+    {
+        "code": "K6",
+        "name": "kilolitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 758
+    },
+    {
+        "code": "KA",
+        "name": "pastel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 759
+    },
+    {
+        "code": "KB",
+        "name": "kilocharacter",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 760
+    },
+    {
+        "code": "KBA",
+        "name": "kilobar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 761
+    },
+    {
+        "code": "KD",
+        "name": "kilogramo decimal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 762
+    },
+    {
+        "code": "KEL",
+        "name": "kelvin",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 763
+    },
+    {
+        "code": "KF",
+        "name": "kilopacket",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 764
+    },
+    {
+        "code": "KG",
+        "name": "barrilete",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 765
+    },
+    {
+        "code": "KGM",
+        "name": "kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 766
+    },
+    {
+        "code": "KGS",
+        "name": "kilogramo por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 767
+    },
+    {
+        "code": "KHZ",
+        "name": "kilohercio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 768
+    },
+    {
+        "code": "KI",
+        "name": "Kilogramo por milímetro de ancho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 769
+    },
+    {
+        "code": "KJ",
+        "name": "kilosegmento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 770
+    },
+    {
+        "code": "KJO",
+        "name": "kilojoule",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 771
+    },
+    {
+        "code": "KL",
+        "name": "kilogramo por metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 772
+    },
+    {
+        "code": "KMH",
+        "name": "kilómetro por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 773
+    },
+    {
+        "code": "KMK",
+        "name": "kilometro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 774
+    },
+    {
+        "code": "KMQ",
+        "name": "kilogramo por metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 775
+    },
+    {
+        "code": "KNI",
+        "name": "kilogramo de nitrógeno",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 776
+    },
+    {
+        "code": "KNS",
+        "name": "kilogramo de sustancia nombrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 777
+    },
+    {
+        "code": "KNT",
+        "name": "nudo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 778
+    },
+    {
+        "code": "KO",
+        "name": "Milliequivalencia de potasa cáustica por gramo de producto.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 779
+    },
+    {
+        "code": "KPA",
+        "name": "kilopascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 780
+    },
+    {
+        "code": "KPH",
+        "name": "kilogramo de hidróxido de potasio (potasa cáustica)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 781
+    },
+    {
+        "code": "KPO",
+        "name": "kilogramo de óxido de potasio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 782
+    },
+    {
+        "code": "KPP",
+        "name": "kilogramo de pentóxido de fósforo (anhídrido fosfórico)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 783
+    },
+    {
+        "code": "KR",
+        "name": "KilorÃ¶ntgen",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 784
+    },
+    {
+        "code": "KS",
+        "name": "mil libras por pulgada cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 785
+    },
+    {
+        "code": "KSD",
+        "name": "kilogramo de sustancia 90% seca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 786
+    },
+    {
+        "code": "KSH",
+        "name": "kilogramo de hidróxido de sodio (soda cáustica)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 787
+    },
+    {
+        "code": "KT",
+        "name": "equipo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 788
+    },
+    {
+        "code": "KTM",
+        "name": "kilómetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 789
+    },
+    {
+        "code": "KTN",
+        "name": "kilotonne",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 790
+    },
+    {
+        "code": "KUR",
+        "name": "kilogramo de uranio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 791
+    },
+    {
+        "code": "KVA",
+        "name": "kilovoltio – ampere",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 792
+    },
+    {
+        "code": "KVR",
+        "name": "kilovar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 793
+    },
+    {
+        "code": "KVT",
+        "name": "kilovoltio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 794
+    },
+    {
+        "code": "KW",
+        "name": "kilogramos por milímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 795
+    },
+    {
+        "code": "KWH",
+        "name": "kilovatios hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 796
+    },
+    {
+        "code": "KWT",
+        "name": "kilovatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 797
+    },
+    {
+        "code": "KX",
+        "name": "mililitro por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 798
+    },
+    {
+        "code": "L2",
+        "name": "litro por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 799
+    },
+    {
+        "code": "LA",
+        "name": "libra por pulgada cúbica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 800
+    },
+    {
+        "code": "LBR",
+        "name": "libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 801
+    },
+    {
+        "code": "LBT",
+        "name": "libra troy",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 802
+    },
+    {
+        "code": "LC",
+        "name": "centímetro lineal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 803
+    },
+    {
+        "code": "LD",
+        "name": "litro por día",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 804
+    },
+    {
+        "code": "LE",
+        "name": "lite",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 805
+    },
+    {
+        "code": "LEF",
+        "name": "hoja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 806
+    },
+    {
+        "code": "LF",
+        "name": "pie lineal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 807
+    },
+    {
+        "code": "LH",
+        "name": "hora de trabajo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 808
+    },
+    {
+        "code": "LI",
+        "name": "pulgada lineal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 809
+    },
+    {
+        "code": "LJ",
+        "name": "spray grande",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 810
+    },
+    {
+        "code": "LK",
+        "name": "enlazar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 811
+    },
+    {
+        "code": "LM",
+        "name": "metro lineal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 812
+    },
+    {
+        "code": "LN",
+        "name": "longitud",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 813
+    },
+    {
+        "code": "LO",
+        "name": "mucho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 814
+    },
+    {
+        "code": "LP",
+        "name": "libra liquida",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 815
+    },
+    {
+        "code": "LPA",
+        "name": "litro de alcohol puro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 816
+    },
+    {
+        "code": "LR",
+        "name": "capa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 817
+    },
+    {
+        "code": "LS",
+        "name": "Suma global",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 818
+    },
+    {
+        "code": "LTN",
+        "name": "ton (Reino Unido) o longton (EE. UU.)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 819
+    },
+    {
+        "code": "LTR",
+        "name": "litro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 820
+    },
+    {
+        "code": "LUM",
+        "name": "lumen",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 821
+    },
+    {
+        "code": "LUX",
+        "name": "lux",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 822
+    },
+    {
+        "code": "LX",
+        "name": "yarda lineal por libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 823
+    },
+    {
+        "code": "LY",
+        "name": "yarda lineal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 824
+    },
+    {
+        "code": "M0",
+        "name": "cinta magnética",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 825
+    },
+    {
+        "code": "M1",
+        "name": "miligramos por litro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 826
+    },
+    {
+        "code": "M4",
+        "name": "valor monetario",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 827
+    },
+    {
+        "code": "M5",
+        "name": "microcurie",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 828
+    },
+    {
+        "code": "M7",
+        "name": "micropulgada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 829
+    },
+    {
+        "code": "M9",
+        "name": "millones de Btu por 1000 pies cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 830
+    },
+    {
+        "code": "MA",
+        "name": "máquina por unidad",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 831
+    },
+    {
+        "code": "MAL",
+        "name": "mega litro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 832
+    },
+    {
+        "code": "MAM",
+        "name": "megametro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 833
+    },
+    {
+        "code": "MAW",
+        "name": "megavatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 834
+    },
+    {
+        "code": "MBE",
+        "name": "mil equivalentes de ladrillo estándar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 835
+    },
+    {
+        "code": "MBF",
+        "name": "mil pies de tabla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 836
+    },
+    {
+        "code": "MBR",
+        "name": "milibar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 837
+    },
+    {
+        "code": "MC",
+        "name": "microgramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 838
+    },
+    {
+        "code": "MCU",
+        "name": "milicurie",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 839
+    },
+    {
+        "code": "MD",
+        "name": "aire seco tonelada métrica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 840
+    },
+    {
+        "code": "MF",
+        "name": "miligramo por pie cuadrado por lado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 841
+    },
+    {
+        "code": "MG",
+        "name": "miligramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 842
+    },
+    {
+        "code": "MHZ",
+        "name": "megahercio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 843
+    },
+    {
+        "code": "MIK",
+        "name": "milla cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 844
+    },
+    {
+        "code": "MIL",
+        "name": "mil",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 845
+    },
+    {
+        "code": "MIN",
+        "name": "minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 846
+    },
+    {
+        "code": "MIO",
+        "name": "millón",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 847
+    },
+    {
+        "code": "MIU",
+        "name": "millones de unidades internacionales",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 848
+    },
+    {
+        "code": "MK",
+        "name": "miligramo por pulgada cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 849
+    },
+    {
+        "code": "MLD",
+        "name": "mil millones",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 850
+    },
+    {
+        "code": "MLT",
+        "name": "mililitro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 851
+    },
+    {
+        "code": "MMK",
+        "name": "milímetro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 852
+    },
+    {
+        "code": "MMQ",
+        "name": "milímetro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 853
+    },
+    {
+        "code": "MMT",
+        "name": "milímetro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 854
+    },
+    {
+        "code": "LUN",
+        "name": "mes",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 855
+    },
+    {
+        "code": "MPA",
+        "name": "megapascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 856
+    },
+    {
+        "code": "MQ",
+        "name": "mil metros",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 857
+    },
+    {
+        "code": "MQH",
+        "name": "metro cúbico por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 858
+    },
+    {
+        "code": "MQS",
+        "name": "metro cúbico por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 859
+    },
+    {
+        "code": "MSK",
+        "name": "metro por segundo al cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 860
+    },
+    {
+        "code": "MT",
+        "name": "estera",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 861
+    },
+    {
+        "code": "MTK",
+        "name": "metro cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 862
+    },
+    {
+        "code": "MTQ",
+        "name": "Metro cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 863
+    },
+    {
+        "code": "MTR",
+        "name": "metro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 864
+    },
+    {
+        "code": "MTS",
+        "name": "metro por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 865
+    },
+    {
+        "code": "MV",
+        "name": "numero de mults",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 866
+    },
+    {
+        "code": "MVA",
+        "name": "megavolt – ampere",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 867
+    },
+    {
+        "code": "MWH",
+        "name": "megavatios hora (1000 kW.h)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 868
+    },
+    {
+        "code": "N1",
+        "name": "calorías de la pluma",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 869
+    },
+    {
+        "code": "N2",
+        "name": "número de líneas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 870
+    },
+    {
+        "code": "N3",
+        "name": "punto de impresión",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 871
+    },
+    {
+        "code": "NA",
+        "name": "miligramo por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 872
+    },
+    {
+        "code": "NAR",
+        "name": "número de artículos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 873
+    },
+    {
+        "code": "NB",
+        "name": "barcaza",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 874
+    },
+    {
+        "code": "NBB",
+        "name": "número de bobinas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 875
+    },
+    {
+        "code": "NC",
+        "name": "coche",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 876
+    },
+    {
+        "code": "NCL",
+        "name": "número de celdas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 877
+    },
+    {
+        "code": "ND",
+        "name": "barril neto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 878
+    },
+    {
+        "code": "NE",
+        "name": "litro neto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 879
+    },
+    {
+        "code": "NEW",
+        "name": "newton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 880
+    },
+    {
+        "code": "NF",
+        "name": "mensaje",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 881
+    },
+    {
+        "code": "NG",
+        "name": "galón neto (nosotros)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 882
+    },
+    {
+        "code": "NH",
+        "name": "hora del mensaje",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 883
+    },
+    {
+        "code": "NI",
+        "name": "galón imperial neto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 884
+    },
+    {
+        "code": "NIU",
+        "name": "número de unidades internacionales",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 885
+    },
+    {
+        "code": "NJ",
+        "name": "número de pantallas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 886
+    },
+    {
+        "code": "NL",
+        "name": "carga",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 887
+    },
+    {
+        "code": "MNI",
+        "name": "milla nautica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 888
+    },
+    {
+        "code": "NMP",
+        "name": "número de paquetes",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 889
+    },
+    {
+        "code": "NN",
+        "name": "entrenar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 890
+    },
+    {
+        "code": "NPL",
+        "name": "número de parcelas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 891
+    },
+    {
+        "code": "NPR",
+        "name": "numero de pares",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 892
+    },
+    {
+        "code": "TNP",
+        "name": "numero de partes",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 893
+    },
+    {
+        "code": "NQ",
+        "name": "mho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 894
+    },
+    {
+        "code": "NR",
+        "name": "micromho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 895
+    },
+    {
+        "code": "NRL",
+        "name": "número de rollos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 896
+    },
+    {
+        "code": "NT",
+        "name": "tonelada neta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 897
+    },
+    {
+        "code": "NTT",
+        "name": "registro neto de toneladas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 898
+    },
+    {
+        "code": "NU",
+        "name": "medidor de newton",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 899
+    },
+    {
+        "code": "NV",
+        "name": "vehículo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 900
+    },
+    {
+        "code": "NX",
+        "name": "parte por mil",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 901
+    },
+    {
+        "code": "NY",
+        "name": "libra por aire seco tonelada métrica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 902
+    },
+    {
+        "code": "OA",
+        "name": "panel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 903
+    },
+    {
+        "code": "OHM",
+        "name": "ohm",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 904
+    },
+    {
+        "code": "EN",
+        "name": "onza por yarda cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 905
+    },
+    {
+        "code": "ONZ",
+        "name": "onza",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 906
+    },
+    {
+        "code": "OP",
+        "name": "Dos paquetes",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 907
+    },
+    {
+        "code": "OT",
+        "name": "hora extra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 908
+    },
+    {
+        "code": "ONZ",
+        "name": "onza av",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 909
+    },
+    {
+        "code": "OZA",
+        "name": "onza líquida (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 910
+    },
+    {
+        "code": "OZI",
+        "name": "onza líquida (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 911
+    },
+    {
+        "code": "P0",
+        "name": "pagina – electronica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 912
+    },
+    {
+        "code": "P1",
+        "name": "por ciento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 913
+    },
+    {
+        "code": "P2",
+        "name": "libra por pie",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 914
+    },
+    {
+        "code": "P3",
+        "name": "paquete de tres",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 915
+    },
+    {
+        "code": "P4",
+        "name": "paquete de cuatro",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 916
+    },
+    {
+        "code": "P5",
+        "name": "paquete de cinco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 917
+    },
+    {
+        "code": "P6",
+        "name": "paquete de seis",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 918
+    },
+    {
+        "code": "P7",
+        "name": "paquete de siete",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 919
+    },
+    {
+        "code": "P8",
+        "name": "paquete de ocho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 920
+    },
+    {
+        "code": "P9",
+        "name": "paquete de nueve",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 921
+    },
+    {
+        "code": "PA",
+        "name": "paquete",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 922
+    },
+    {
+        "code": "PAL",
+        "name": "pascal",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 923
+    },
+    {
+        "code": "PB",
+        "name": "par de pulgadas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 924
+    },
+    {
+        "code": "PD",
+        "name": "almohadilla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 925
+    },
+    {
+        "code": "PE",
+        "name": "equivalente en libras",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 926
+    },
+    {
+        "code": "PF",
+        "name": "palet (ascensor)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 927
+    },
+    {
+        "code": "PG",
+        "name": "plato",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 928
+    },
+    {
+        "code": "PGL",
+        "name": "galón de prueba",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 929
+    },
+    {
+        "code": "Pi",
+        "name": "tono",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 930
+    },
+    {
+        "code": "PK",
+        "name": "paquete",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 931
+    },
+    {
+        "code": "PL",
+        "name": "cubo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 932
+    },
+    {
+        "code": "PM",
+        "name": "porcentaje de libra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 933
+    },
+    {
+        "code": "PN",
+        "name": "libra neta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 934
+    },
+    {
+        "code": "PO",
+        "name": "libra por pulgada de longitud",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 935
+    },
+    {
+        "code": "PQ",
+        "name": "página por pulgada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 936
+    },
+    {
+        "code": "PR",
+        "name": "par",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 937
+    },
+    {
+        "code": "PD",
+        "name": "fuerza de libra por pulgada cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 938
+    },
+    {
+        "code": "PT",
+        "name": "pinta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 939
+    },
+    {
+        "code": "PTD",
+        "name": "pinta seca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 940
+    },
+    {
+        "code": "PTI",
+        "name": "pinta (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 941
+    },
+    {
+        "code": "PTL",
+        "name": "pinta liquida (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 942
+    },
+    {
+        "code": "PU",
+        "name": "bandeja \/ paquete de bandeja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 943
+    },
+    {
+        "code": "PV",
+        "name": "media pinta (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 944
+    },
+    {
+        "code": "PW",
+        "name": "libra por pulgada de ancho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 945
+    },
+    {
+        "code": "PY",
+        "name": "Peck Dry (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 946
+    },
+    {
+        "code": "PZ",
+        "name": "Peck Dry (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 947
+    },
+    {
+        "code": "Q3",
+        "name": "comida",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 948
+    },
+    {
+        "code": "QA",
+        "name": "página – facsímil",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 949
+    },
+    {
+        "code": "QAN",
+        "name": "cuarto (de un año)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 950
+    },
+    {
+        "code": "QB",
+        "name": "página – copia impresa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 951
+    },
+    {
+        "code": "QD",
+        "name": "cuarto de docena",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 952
+    },
+    {
+        "code": "QH",
+        "name": "un cuarto de hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 953
+    },
+    {
+        "code": "QK",
+        "name": "cuarto de kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 954
+    },
+    {
+        "code": "QR",
+        "name": "mano de papel",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 955
+    },
+    {
+        "code": "QT",
+        "name": "cuarto de galón (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 956
+    },
+    {
+        "code": "QTD",
+        "name": "cuarto seco (EE. UU.)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 957
+    },
+    {
+        "code": "QTI",
+        "name": "cuarto de galón (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 958
+    },
+    {
+        "code": "QTL",
+        "name": "cuarto líquido (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 959
+    },
+    {
+        "code": "QTR",
+        "name": "cuarto (UK)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 960
+    },
+    {
+        "code": "R1",
+        "name": "pica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 961
+    },
+    {
+        "code": "R4",
+        "name": "caloría",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 962
+    },
+    {
+        "code": "R9",
+        "name": "mil metros cúbicos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 963
+    },
+    {
+        "code": "RA",
+        "name": "estante",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 964
+    },
+    {
+        "code": "RD",
+        "name": "barra",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 965
+    },
+    {
+        "code": "RG",
+        "name": "anillo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 966
+    },
+    {
+        "code": "RH",
+        "name": "hora de funcionamiento o de funcionamiento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 967
+    },
+    {
+        "code": "RK",
+        "name": "medida métrica rollo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 968
+    },
+    {
+        "code": "RL",
+        "name": "carrete",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 969
+    },
+    {
+        "code": "RM",
+        "name": "resma",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 970
+    },
+    {
+        "code": "RN",
+        "name": "medida métrica de resma",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 971
+    },
+    {
+        "code": "RO",
+        "name": "rodar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 972
+    },
+    {
+        "code": "RP",
+        "name": "libra por resma",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 973
+    },
+    {
+        "code": "RPM",
+        "name": "revoluciones por minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 974
+    },
+    {
+        "code": "RPS",
+        "name": "revoluciones por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 975
+    },
+    {
+        "code": "RS",
+        "name": "Reiniciar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 976
+    },
+    {
+        "code": "RT",
+        "name": "ingreso tonelada milla",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 977
+    },
+    {
+        "code": "RU",
+        "name": "correr",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 978
+    },
+    {
+        "code": "S3",
+        "name": "pie cuadrado por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 979
+    },
+    {
+        "code": "S4",
+        "name": "metro cuadrado por segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 980
+    },
+    {
+        "code": "S5",
+        "name": "sesenta cuartos de pulgada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 981
+    },
+    {
+        "code": "S6",
+        "name": "sesión",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 982
+    },
+    {
+        "code": "S7",
+        "name": "unidad de almacenamiento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 983
+    },
+    {
+        "code": "S8",
+        "name": "unidad de publicidad estándar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 984
+    },
+    {
+        "code": "SA",
+        "name": "saco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 985
+    },
+    {
+        "code": "SAN",
+        "name": "medio año (6 meses)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 986
+    },
+    {
+        "code": "OCS",
+        "name": "Puntuación",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 987
+    },
+    {
+        "code": "SCR",
+        "name": "escrúpulo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 988
+    },
+    {
+        "code": "SD",
+        "name": "libra solida",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 989
+    },
+    {
+        "code": "SE",
+        "name": "sección",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 990
+    },
+    {
+        "code": "SEC",
+        "name": "segundo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 991
+    },
+    {
+        "code": "SET",
+        "name": "conjunto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 992
+    },
+    {
+        "code": "SG",
+        "name": "segmento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 993
+    },
+    {
+        "code": "SHT",
+        "name": "tonelada de envío",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 994
+    },
+    {
+        "code": "SIE",
+        "name": "siemens",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 995
+    },
+    {
+        "code": "SK",
+        "name": "camión cisterna dividido",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 996
+    },
+    {
+        "code": "SL",
+        "name": "hoja de deslizamiento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 997
+    },
+    {
+        "code": "SMI",
+        "name": "milla (milla estatutaria)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 998
+    },
+    {
+        "code": "SN",
+        "name": "varilla cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 999
+    },
+    {
+        "code": "SO",
+        "name": "carrete",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1000
+    },
+    {
+        "code": "SP",
+        "name": "paquete de estante",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1001
+    },
+    {
+        "code": "SQ",
+        "name": "cuadrado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1002
+    },
+    {
+        "code": "SR",
+        "name": "tira",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1003
+    },
+    {
+        "code": "SS",
+        "name": "hoja métrica medida",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1004
+    },
+    {
+        "code": "SST",
+        "name": "corto estándar (7200 partidos)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1005
+    },
+    {
+        "code": "ST",
+        "name": "hoja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1006
+    },
+    {
+        "code": "ITS",
+        "name": "piedra (Reino Unido)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1007
+    },
+    {
+        "code": "STN",
+        "name": "tonelada (US) o tonelada corta (UK \/ US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1008
+    },
+    {
+        "code": "SV",
+        "name": "patinar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1009
+    },
+    {
+        "code": "SO",
+        "name": "madeja",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1010
+    },
+    {
+        "code": "SX",
+        "name": "envío",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1011
+    },
+    {
+        "code": "T0",
+        "name": "Línea de telecomunicaciones en servicio.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1012
+    },
+    {
+        "code": "T1",
+        "name": "mil libras brutas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1013
+    },
+    {
+        "code": "T3",
+        "name": "mil piezas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1014
+    },
+    {
+        "code": "T4",
+        "name": "bolsa de mil",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1015
+    },
+    {
+        "code": "T5",
+        "name": "caja de mil",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1016
+    },
+    {
+        "code": "T6",
+        "name": "mil galones (US)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1017
+    },
+    {
+        "code": "T7",
+        "name": "mil impresiones",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1018
+    },
+    {
+        "code": "T8",
+        "name": "mil pulgadas lineales",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1019
+    },
+    {
+        "code": "TA",
+        "name": "décimo pie cúbico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1020
+    },
+    {
+        "code": "TAH",
+        "name": "Kiloampere hora (mil amperios hora)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1021
+    },
+    {
+        "code": "TC",
+        "name": "camion",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1022
+    },
+    {
+        "code": "TD",
+        "name": "termia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1023
+    },
+    {
+        "code": "TE",
+        "name": "totalizador",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1024
+    },
+    {
+        "code": "TF",
+        "name": "diez metros cuadrados",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1025
+    },
+    {
+        "code": "TI",
+        "name": "mil pulgadas cuadradas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1026
+    },
+    {
+        "code": "TJ",
+        "name": "mil centímetros cuadrados",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1027
+    },
+    {
+        "code": "TK",
+        "name": "tanque, rectangular",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1028
+    },
+    {
+        "code": "TL",
+        "name": "mil pies (lineales)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1029
+    },
+    {
+        "code": "TN",
+        "name": "estaño",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1030
+    },
+    {
+        "code": "TNE",
+        "name": "tonelada (tonelada métrica)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1031
+    },
+    {
+        "code": "TP",
+        "name": "paquete de diez",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1032
+    },
+    {
+        "code": "TPR",
+        "name": "diez pares",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1033
+    },
+    {
+        "code": "TQ",
+        "name": "mil pies",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1034
+    },
+    {
+        "code": "TQD",
+        "name": "mil metros cúbicos por día",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1035
+    },
+    {
+        "code": "TR",
+        "name": "diez pies cuadrados",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1036
+    },
+    {
+        "code": "TRL",
+        "name": "trillón (EUR)",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1037
+    },
+    {
+        "code": "TS",
+        "name": "mil pies cuadrados",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1038
+    },
+    {
+        "code": "TSD",
+        "name": "tonelada de sustancia 90% seca",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1039
+    },
+    {
+        "code": "TSH",
+        "name": "tonelada de vapor por hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1040
+    },
+    {
+        "code": "TT",
+        "name": "mil metros lineales",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1041
+    },
+    {
+        "code": "TU",
+        "name": "tubo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1042
+    },
+    {
+        "code": "TV",
+        "name": "mil kilogramos",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1043
+    },
+    {
+        "code": "TW",
+        "name": "mil hojas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1044
+    },
+    {
+        "code": "TY",
+        "name": "tanque, cilíndrico",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1045
+    },
+    {
+        "code": "U1",
+        "name": "tratamiento",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1046
+    },
+    {
+        "code": "U2",
+        "name": "tableta",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1047
+    },
+    {
+        "code": "UA",
+        "name": "torr",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1048
+    },
+    {
+        "code": "UB",
+        "name": "Línea de telecomunicaciones en servicio promedio.",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1049
+    },
+    {
+        "code": "UC",
+        "name": "puerto de telecomunicaciones",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1050
+    },
+    {
+        "code": "UD",
+        "name": "décimo minuto",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1051
+    },
+    {
+        "code": "UE",
+        "name": "décima hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1052
+    },
+    {
+        "code": "UF",
+        "name": "uso por línea de telecomunicación promedio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1053
+    },
+    {
+        "code": "UH",
+        "name": "diez mil yardas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1054
+    },
+    {
+        "code": "UM",
+        "name": "millones de unidades",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1055
+    },
+    {
+        "code": "VA",
+        "name": "voltio amperio por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1056
+    },
+    {
+        "code": "VI",
+        "name": "frasco",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1057
+    },
+    {
+        "code": "VLT",
+        "name": "voltio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1058
+    },
+    {
+        "code": "VQ",
+        "name": "abultar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1059
+    },
+    {
+        "code": "VS",
+        "name": "visitar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1060
+    },
+    {
+        "code": "W2",
+        "name": "kilo mojado",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1061
+    },
+    {
+        "code": "W4",
+        "name": "dos semanas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1062
+    },
+    {
+        "code": "WA",
+        "name": "vatio por kilogramo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1063
+    },
+    {
+        "code": "WB",
+        "name": "libra mojada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1064
+    },
+    {
+        "code": "WCD",
+        "name": "cable",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1065
+    },
+    {
+        "code": "WE",
+        "name": "tonelada mojada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1066
+    },
+    {
+        "code": "WEB",
+        "name": "weber",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1067
+    },
+    {
+        "code": "WEE",
+        "name": "semana",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1068
+    },
+    {
+        "code": "WG",
+        "name": "galon de vino",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1069
+    },
+    {
+        "code": "WH",
+        "name": "rueda",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1070
+    },
+    {
+        "code": "WHR",
+        "name": "vatios hora",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1071
+    },
+    {
+        "code": "WI",
+        "name": "peso por pulgada cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1072
+    },
+    {
+        "code": "WM",
+        "name": "mes de trabajo",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1073
+    },
+    {
+        "code": "WR",
+        "name": "envolver",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1074
+    },
+    {
+        "code": "WSD",
+        "name": "estándar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1075
+    },
+    {
+        "code": "WTT",
+        "name": "vatio",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1076
+    },
+    {
+        "code": "WW",
+        "name": "mililitro de agua",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1077
+    },
+    {
+        "code": "X1",
+        "name": "cadena",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1078
+    },
+    {
+        "code": "YDK",
+        "name": "yarda cuadrada",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1079
+    },
+    {
+        "code": "YDQ",
+        "name": "Yarda cúbica",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1080
+    },
+    {
+        "code": "YL",
+        "name": "cien yardas lineales",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1081
+    },
+    {
+        "code": "YRD",
+        "name": "yarda",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1082
+    },
+    {
+        "code": "YT",
+        "name": "diez yardas",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1083
+    },
+    {
+        "code": "Z1",
+        "name": "van de elevación",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1084
+    },
+    {
+        "code": "Z2",
+        "name": "pecho",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1085
+    },
+    {
+        "code": "Z3",
+        "name": "barril",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1086
+    },
+    {
+        "code": "Z4",
+        "name": "pipa",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1087
+    },
+    {
+        "code": "Z5",
+        "name": "arrastrar",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1088
+    },
+    {
+        "code": "Z6",
+        "name": "punto de conferencia",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1089
+    },
+    {
+        "code": "Z8",
+        "name": "línea de noticias de ágata",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1090
+    },
+    {
+        "code": "ZP",
+        "name": "página",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1091
+    },
+    {
+        "code": "ZZ",
+        "name": "mutuamente definido",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 1092
+    }
+]

@@ -25,6 +25,7 @@ class PermissionLabels
         'clients' => 'Clientes',
         'contracts' => 'Contratos',
         'affinity_groups' => 'Grupos de afinidad',
+        'fiscal' => 'Datos fiscales',
         'invoices' => 'Facturas',
         'notes' => 'Notas crédito/débito',
         'billing_runs' => 'Reportes de facturación',

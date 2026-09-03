@@ -21,6 +21,9 @@ class ClientFactory extends Factory
             //creación de clientes de prueba
             'branch_id' => fake()->randomElement([1 , 2, 3]),
             'type_document' => 'Cédula de ciudadanía',
+            // El codigo es lo que vale desde la fase 8; el texto se
+            // conserva como respaldo durante la transicion.
+            'document_type_code' => '13',
             'identity_number' => fake()->unique()->numerify('##########'),
             'name' => fake()->name(),
             'last_name' => fake()->lastName(),

@@ -2,6 +2,10 @@
 
 namespace App\Billing\Services;
 
+use App\Services\Numbering\NumeroReservado;
+use App\Services\Numbering\DocumentNumberService;
+use App\Models\DocumentSequence;
+use App\Models\Branch;
 use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Enums\NoteType;
 use App\Models\CreditDebitNote;
@@ -57,10 +61,10 @@ class NoteIssuer
         $this->validar($invoice, $tipo, $total, $datos['concept_code']);
 
         return DB::transaction(function () use ($invoice, $tipo, $datos, $subtotal, $impuesto, $total) {
-            $secuencia = $this->secuenciaBloqueada($invoice->branch_id, $tipo);
-            $consecutivo = $secuencia->current_number + 1;
-
-            $secuencia->update(['current_number' => $consecutivo]);
+            // El consecutivo lo reserva DocumentNumberService, el
+            // mismo que numera los contratos: un unico sitio con el
+            // bloqueo, el incremento y la comprobacion de rango.
+            $numero = $this->numeroDeNota($invoice, $tipo);
 
             $nota = CreditDebitNote::create([
                 'branch_id' => $invoice->branch_id,
@@ -68,9 +72,9 @@ class NoteIssuer
                 'contract_id' => $invoice->contract_id,
                 'user_id' => Auth::id(),
                 'type' => $tipo->value,
-                'prefix' => $secuencia->prefix,
-                'number' => $consecutivo,
-                'full_number' => $secuencia->prefix . '-' . $consecutivo,
+                'prefix' => $numero->serie->prefix,
+                'number' => $numero->consecutivo,
+                'full_number' => $numero->completo,
                 'concept_code' => $datos['concept_code'],
                 // Se guarda también el texto del concepto: si mañana
                 // cambia la tabla de la DIAN, el documento emitido
@@ -260,28 +264,44 @@ class NoteIssuer
     }
 
     /**
-     * Secuencia de numeración de la sucursal, con la fila bloqueada.
+     * Reserva el consecutivo de la nota.
+     *
+     * QUE CAMBIO EN LA FASE 6
+     * -----------------------
+     * El bloqueo y el incremento estaban escritos aqui, otra vez, con
+     * la misma forma que en contratos y facturas. Ahora los hace
+     * DocumentNumberService y este metodo solo dice QUE serie quiere.
+     *
+     * El formato no cambia —NC-1, ND-1—, pero el separador pasa a ir
+     * dentro del propio prefijo ("NC-") en vez de concatenarse a mano
+     * al construir el numero completo: asi el formato entero es un dato
+     * de la serie y no codigo repartido por los servicios.
+     *
+     * LA SEMILLA
+     * ----------
+     * Al crear la serie se arranca desde el mayor consecutivo ya
+     * emitido de ese tipo en esa sucursal. Sin eso, la primera nota
+     * despues de la migracion repetiria el numero 1 y chocaria con el
+     * UNIQUE de full_number.
      */
-    private function secuenciaBloqueada(int $branchId, NoteType $tipo): NoteNumberingSequence
+    private function numeroDeNota(Invoice $invoice, NoteType $tipo): NumeroReservado
     {
-        $secuencia = NoteNumberingSequence::where('branch_id', $branchId)
-            ->where('type', $tipo->value)
-            ->lockForUpdate()
-            ->first();
+        $branchId = (int) $invoice->branch_id;
+        $companyId = (int) Branch::withoutGlobalScopes()->whereKey($branchId)->value('company_id');
 
-        if ($secuencia) {
-            return $secuencia;
-        }
+        $documentType = $tipo === NoteType::Credito
+            ? DocumentSequence::NOTA_CREDITO
+            : DocumentSequence::NOTA_DEBITO;
 
-        NoteNumberingSequence::firstOrCreate(
-            ['branch_id' => $branchId, 'type' => $tipo->value],
-            ['prefix' => $tipo->prefijo(), 'current_number' => 0],
+        return app(DocumentNumberService::class)->siguiente(
+            $documentType,
+            $companyId,
+            $branchId,
+            ['prefix' => $tipo->prefijo() . '-', 'padding' => 0],
+            semilla: fn () => (int) CreditDebitNote::withoutGlobalScopes()
+                ->where('branch_id', $branchId)
+                ->where('type', $tipo->value)
+                ->max('number'),
         );
-
-        // Se relee con bloqueo: firstOrCreate no bloquea la fila
-        return NoteNumberingSequence::where('branch_id', $branchId)
-            ->where('type', $tipo->value)
-            ->lockForUpdate()
-            ->firstOrFail();
     }
 }

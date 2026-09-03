@@ -1,0 +1,38 @@
+[
+    {
+        "code": "0.00",
+        "name": "IVA",
+        "parent_code": null,
+        "extra": {
+            "description": "Exento"
+        },
+        "sort_order": 0
+    },
+    {
+        "code": "5.00",
+        "name": "IVA",
+        "parent_code": null,
+        "extra": {
+            "description": "Bienes \/ Servicios al 5"
+        },
+        "sort_order": 1
+    },
+    {
+        "code": "16.00",
+        "name": "IVA",
+        "parent_code": null,
+        "extra": {
+            "description": "Contratos firmados con el estado antes de ley 1819"
+        },
+        "sort_order": 2
+    },
+    {
+        "code": "19.00",
+        "name": "IVA",
+        "parent_code": null,
+        "extra": {
+            "description": "Tarifa general"
+        },
+        "sort_order": 3
+    }
+]
