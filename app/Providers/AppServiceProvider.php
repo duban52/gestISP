@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Billing\Dian\Transport\DianTransport;
+use App\Billing\Dian\Transport\FakeDianTransport;
+use App\Billing\Dian\Transport\SoapDianTransport;
 use App\Models\Branch;
 use App\Notifications\WhatsApp\LogGateway;
 use App\Notifications\WhatsApp\MetaCloudGateway;
@@ -31,6 +34,28 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(OltSshService::class, function ($app) {
             return new OltSshService();
+        });
+
+        // Como se le manda un documento a la DIAN.
+        //
+        // Por defecto el SIMULADO, y a proposito: mientras no haya una
+        // URL configurada -la expone la propia DIAN en el catalogo del
+        // facturador- no hay a donde mandar nada. Un transporte que
+        // dijera «aceptado» sin haber hablado con nadie dejaria
+        // documentos marcados como validados por la DIAN que la DIAN no
+        // ha visto nunca.
+        //
+        // Con 'fake' se fuerza el simulado aunque haya endpoint, que es
+        // lo que se quiere en un entorno de pruebas apuntando a una
+        // copia de la base de produccion.
+        $this->app->bind(DianTransport::class, function () {
+            $forzado = config('dian.transport', 'auto');
+
+            if ($forzado === 'fake' || blank(config('dian.endpoint'))) {
+                return new FakeDianTransport();
+            }
+
+            return new SoapDianTransport();
         });
 
         // Proveedor de WhatsApp según la configuración: el conector

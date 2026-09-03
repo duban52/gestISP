@@ -42,11 +42,14 @@ class ElectronicDocument extends Model
         'company_id', 'invoice_id', 'dian_resolution_id', 'dian_certificate_id',
         'environment_code', 'cufe', 'signed_xml', 'qr_content',
         'status', 'last_error', 'generated_at', 'signed_at',
+        'dian_track_id', 'accepted_at', 'attempts',
     ];
 
     protected $casts = [
         'generated_at' => 'datetime',
         'signed_at' => 'datetime',
+        'accepted_at' => 'datetime',
+        'attempts' => 'integer',
     ];
 
     protected $attributes = ['status' => self::BORRADOR];
@@ -64,6 +67,30 @@ class ElectronicDocument extends Model
     public function certificate(): BelongsTo
     {
         return $this->belongsTo(DianCertificate::class, 'dian_certificate_id');
+    }
+
+    /** Los intentos de transmision, del mas reciente al mas antiguo. */
+    public function transmissions()
+    {
+        return $this->hasMany(DocumentTransmission::class)->orderByDesc('attempt');
+    }
+
+    /**
+     * Ya no hay nada mas que hacer con este documento.
+     *
+     * Aceptado o rechazado: los dos son definitivos. Reintentar un
+     * documento que la DIAN rechazo por su contenido da el mismo
+     * rechazo; lo que hay que hacer es corregir y emitir otro.
+     */
+    public function estaCerrado(): bool
+    {
+        return in_array($this->status, [self::ACEPTADO, self::RECHAZADO], true);
+    }
+
+    /** ¿Esta listo para mandarse? */
+    public function sePuedeTransmitir(): bool
+    {
+        return $this->status === self::FIRMADO && !empty($this->signed_xml);
     }
 
     /** ¿Se emitio en pruebas? */

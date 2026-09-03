@@ -200,6 +200,50 @@ class ElectronicDocumentGenerationTest extends BillingTestCase
         $this->assertStringNotContainsString('<ds:Signature', $documento->signed_xml);
     }
 
+    // ==================== La transmision ====================
+
+    public function test_sin_endpoint_configurado_no_se_encola_nada(): void
+    {
+        // Sin URL no hay a donde transmitir: encolar llenaria la cola de
+        // trabajos que solo pueden fallar. La expone la propia DIAN en
+        // el catalogo del facturador.
+        \Illuminate\Support\Facades\Queue::fake();
+        config(['dian.endpoint' => '']);
+
+        $this->certificadoVigente();
+        $this->emitir($this->contratoElectronico());
+
+        // Se mira ESTE job y no «nada»: las notificaciones al cliente
+        // tambien pasan por la cola y no tienen que ver con esto.
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Jobs\TransmitElectronicDocument::class);
+    }
+
+    public function test_con_endpoint_el_documento_firmado_se_encola(): void
+    {
+        // Con la URL puesta, la cadena queda automatica de punta a
+        // punta: emitir -> generar -> firmar -> transmitir.
+        \Illuminate\Support\Facades\Queue::fake();
+        config(['dian.endpoint' => 'https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc']);
+
+        $this->certificadoVigente();
+        $this->emitir($this->contratoElectronico());
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\TransmitElectronicDocument::class);
+    }
+
+    public function test_lo_que_no_se_firmo_no_se_encola(): void
+    {
+        // Transmitir un XML sin firma es gastar un intento para que lo
+        // rechacen.
+        \Illuminate\Support\Facades\Queue::fake();
+        config(['dian.endpoint' => 'https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc']);
+
+        // Sin certificado: el documento queda GENERADO, no FIRMADO.
+        $this->emitir($this->contratoElectronico());
+
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Jobs\TransmitElectronicDocument::class);
+    }
+
     // ==================== Cuando algo falla ====================
 
     public function test_un_fallo_no_impide_emitir_la_factura(): void

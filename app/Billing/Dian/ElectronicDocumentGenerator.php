@@ -4,6 +4,7 @@ namespace App\Billing\Dian;
 
 use App\Billing\Services\ElectronicInvoicingDecider;
 use App\Models\Branch;
+use App\Jobs\TransmitElectronicDocument;
 use App\Models\DianCertificate;
 use App\Models\DianConfiguration;
 use App\Models\ElectronicDocument;
@@ -104,7 +105,7 @@ class ElectronicDocumentGenerator
                 $firmado = true;
             }
 
-            return $this->guardar($factura, $empresaId, $rango, $configuracion, [
+            $documento = $this->guardar($factura, $empresaId, $rango, $configuracion, [
                 'cufe' => $resultado['cufe'],
                 'signed_xml' => $xml,
                 'qr_content' => $resultado['qr'],
@@ -116,6 +117,10 @@ class ElectronicDocumentGenerator
                 'last_error' => null,
                 'generated_at' => now(),
             ]);
+
+            $this->encolarTransmision($documento);
+
+            return $documento;
         } catch (Throwable $error) {
             // La factura YA está emitida. Esto no puede tumbarla ni
             // reventar la corrida mensual: se anota y se sigue.
@@ -130,6 +135,33 @@ class ElectronicDocumentGenerator
                 'last_error' => $error->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Encola la transmision, si hay a donde mandarla.
+     *
+     * SE MIRA SI HAY ENDPOINT, Y NO ES UN DETALLE
+     * -------------------------------------------
+     * Sin URL configurada no hay ningun sitio al que transmitir: la
+     * DIAN la expone dentro de la cuenta del catalogo de cada
+     * facturador, no en su documentacion. Encolar igualmente llenaria
+     * la cola de trabajos que solo pueden fallar.
+     *
+     * Cuando la empresa tenga su URL, la transmision pasa a ser
+     * automatica sin tocar nada mas: emitir -> generar -> firmar ->
+     * transmitir.
+     */
+    private function encolarTransmision(ElectronicDocument $documento): void
+    {
+        if ($documento->status !== ElectronicDocument::FIRMADO) {
+            return;
+        }
+
+        if (blank(config('dian.endpoint'))) {
+            return;
+        }
+
+        TransmitElectronicDocument::dispatch($documento->id);
     }
 
     /**
