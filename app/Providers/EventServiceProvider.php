@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Billing\Events\InvoiceIssued;
+use App\Listeners\GenerateElectronicDocument;
 use App\Listeners\NotifyClientInvoiceIssued;
 use App\Listeners\PersistDarkModePreference;
 use App\Listeners\RecordFailedLogin;
@@ -30,6 +31,10 @@ class EventServiceProvider extends ServiceProvider
         ],
         // Notificación al cliente cuando se emite su factura
         InvoiceIssued::class => [
+            // Primero el documento electronico: si la factura va a la
+            // DIAN, su XML y su CUFE tienen que existir antes de que
+            // nadie le mande nada al cliente.
+            GenerateElectronicDocument::class,
             NotifyClientInvoiceIssued::class,
         ],
         // Tema claro/oscuro: se guarda en el usuario para que no se

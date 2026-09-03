@@ -219,6 +219,14 @@ class InvoiceGenerator
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
                     'description' => $service->name,
+                    // Los datos fiscales se COPIAN aqui, no se leen
+                    // despues del servicio: si manana se corrige el
+                    // UNSPSC, esta factura tiene que seguir diciendo lo
+                    // que decia cuando se emitio. Ademas su XML ya se
+                    // habra transmitido a la DIAN.
+                    'product_code' => $service->product_code,
+                    'product_code_type' => $service->product_code_type,
+                    'unit_measure_code' => $service->unit_measure_code,
                     'quantity' => 1,
                     'unit_price' => $service->base_price,
                     'percentage_tax' => $service->tax_percentage,

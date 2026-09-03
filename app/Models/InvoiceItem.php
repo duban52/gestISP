@@ -12,6 +12,12 @@ class InvoiceItem extends Model
     protected $fillable = [
         'invoice_id',
         'description',
+        // Copiados del servicio AL EMITIR, no leidos al vuelo: una
+        // factura emitida tiene que seguir diciendo lo que decia
+        // aunque manana se corrija el codigo del servicio.
+        'product_code',
+        'product_code_type',
+        'unit_measure_code',
         'quantity',
         'unit_price',
         'percentage_tax',
