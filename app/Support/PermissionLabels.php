@@ -25,6 +25,7 @@ class PermissionLabels
         'clients' => 'Clientes',
         'contracts' => 'Contratos',
         'affinity_groups' => 'Grupos de afinidad',
+        'dian' => 'Facturación electrónica DIAN',
         'fiscal' => 'Datos fiscales',
         'invoices' => 'Facturas',
         'notes' => 'Notas crédito/débito',
@@ -78,6 +79,7 @@ class PermissionLabels
         'searchView' => 'Buscar en',
         'receipt' => 'Imprimir el recibo de',
         'cutoff' => 'Ejecutar cortes masivos de',
+        'manage' => 'Configurar',
     ];
 
     /**

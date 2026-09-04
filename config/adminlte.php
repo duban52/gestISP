@@ -401,6 +401,13 @@ return [
                     'can' => 'fiscal.completeness',
                 ],
                 [
+                    'text' => 'Facturación DIAN',
+                    'route' => 'dian.actual',
+                    'active' => ['facturacion-dian', 'empresas/*/dian*'],
+                    'icon' => 'fas fa-file-invoice-dollar',
+                    'can' => 'dian.index',
+                ],
+                [
                     'text' => 'Grupos de afinidad',
                     'route' => 'affinity_groups.index',
                     'active' => ['grupos-de-afinidad*'],

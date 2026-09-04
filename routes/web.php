@@ -163,6 +163,48 @@ Route::resource('empresas', App\Http\Controllers\CompanyController::class)
     ->parameters(['empresas' => 'company'])
     ->except(['destroy']);
 
+// Administracion de la facturacion electronica DIAN.
+//
+// Cuelga de la EMPRESA y no del contexto de sucursal a proposito: todo
+// esto es del contribuyente —la resolucion se la da la DIAN al NIT, el
+// certificado identifica al NIT—, y colgarlo del contexto haria posible
+// configurar la empresa equivocada sin darse cuenta.
+// Atajo del menu: lleva a la empresa del contexto activo. Sin el, el
+// menu no podria enlazar a ningun sitio, porque el panel necesita saber
+// de que empresa se trata.
+Route::middleware('auth')
+    ->get('facturacion-dian', [App\Http\Controllers\DianAdminController::class, 'actual'])
+    ->name('dian.actual');
+
+Route::middleware('auth')->prefix('empresas/{company}/dian')->group(function () {
+    Route::get('/', [App\Http\Controllers\DianAdminController::class, 'panel'])
+        ->name('dian.panel');
+
+    Route::put('configuracion', [App\Http\Controllers\DianAdminController::class, 'guardarConfiguracion'])
+        ->name('dian.configuracion');
+
+    Route::post('certificados', [App\Http\Controllers\DianCertificateController::class, 'store'])
+        ->name('dian.certificados.store');
+    // Desactivar, no borrar: con el se firmaron documentos ya
+    // transmitidos y hay que poder decir con cual se firmo cada uno.
+    Route::delete('certificados/{certificate}', [App\Http\Controllers\DianCertificateController::class, 'destroy'])
+        ->name('dian.certificados.destroy');
+
+    Route::post('resoluciones', [App\Http\Controllers\DianAdminController::class, 'guardarResolucion'])
+        ->name('dian.resoluciones.store');
+    Route::get('resoluciones/{resolution}', [App\Http\Controllers\DianAdminController::class, 'resolucion'])
+        ->name('dian.resolucion');
+    Route::put('resoluciones/{resolution}', [App\Http\Controllers\DianAdminController::class, 'guardarResolucion'])
+        ->name('dian.resoluciones.update');
+
+    Route::post('resoluciones/{resolution}/rangos', [App\Http\Controllers\DianAdminController::class, 'guardarRango'])
+        ->name('dian.rangos.store');
+    Route::put('resoluciones/{resolution}/rangos/{range}', [App\Http\Controllers\DianAdminController::class, 'guardarRango'])
+        ->name('dian.rangos.update');
+    Route::post('resoluciones/{resolution}/rangos/{range}/alternar', [App\Http\Controllers\DianAdminController::class, 'alternarRango'])
+        ->name('dian.rangos.alternar');
+});
+
 // Informe de completitud fiscal: que falta para poder emitir factura
 // electronica. Se consulta ANTES de que haga falta.
 Route::middleware('auth')->get(

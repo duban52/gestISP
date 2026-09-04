@@ -319,8 +319,14 @@ class ReportBranchScopeTest extends TestCase
     public function test_el_selector_aparece_en_consolidado_con_varias(): void
     {
         $empresa = Company::factory()->consolidada()->create();
-        $norte = Branch::factory()->create(['company_id' => $empresa->id]);
-        $sur = Branch::factory()->create(['company_id' => $empresa->id]);
+
+        // Nombres explicitos y sin apostrofos a proposito: el factory
+        // los saca de fake()->city(), que a veces devuelve cosas como
+        // «O'Konborough». El HTML lo escapa a &#039; y la busqueda
+        // literal de abajo falla — un fallo intermitente que solo
+        // aparece cuando Faker acierta con uno de esos.
+        $norte = Branch::factory()->create(['company_id' => $empresa->id, 'name' => 'Sede Norte']);
+        $sur = Branch::factory()->create(['company_id' => $empresa->id, 'name' => 'Sede Sur']);
 
         $this->entrarEn($empresa, [$norte, $sur], consolidado: true);
 

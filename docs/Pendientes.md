@@ -10,28 +10,7 @@ Ordenado por lo que **bloquea** primero.
 
 ## 1. Bloquean facturar electrónicamente
 
-### 1.1 · No hay pantallas de administración DIAN 🔴
-
-Hoy la configuración DIAN, el certificado, las resoluciones y los rangos
-de numeración **solo se pueden crear por consola** (`tinker` o un
-seeder). No hay ninguna interfaz.
-
-Sin esto nadie puede poner el sistema a facturar electrónicamente sin un
-programador delante.
-
-**Qué hace falta:** CRUD de `DianConfiguration` (ambiente, SoftwareID,
-PIN), `DianCertificate` (con subida del `.p12` **fuera del directorio
-público** y contraseña cifrada), `DianResolution` y sus
-`NumberingRange`.
-
-**Cuidado con:** el certificado es una clave privada. Va como ARCHIVO
-con su ruta en la base, nunca como columna — en una columna acabaría
-también en cada copia de seguridad y en cada volcado. Y hay que
-verificar que **no viaje** en el backup general (ver §4.3).
-
----
-
-### 1.2 · La URL del servicio de la DIAN 🔴
+### 1.1 · La URL del servicio de la DIAN 🔴
 
 No la publica la DIAN en su documentación: la expone dentro de la cuenta
 del catálogo de cada facturador (**Participants → Facturador**), y es
@@ -45,7 +24,7 @@ transporte simulado.
 
 ---
 
-### 1.3 · Confirmar la política de firma 🔴
+### 1.2 · Confirmar la política de firma 🔴
 
 `XadesSigner` declara el identificador de la política y su resumen con
 los valores de los XML de ejemplo de la DIAN
@@ -61,7 +40,7 @@ comparar con las constantes `POLITICA_URL` y `POLITICA_RESUMEN` de
 
 ---
 
-### 1.4 · IVA exento y excluido 🔴
+### 1.3 · IVA exento y excluido 🔴
 
 Un ISP colombiano factura internet residencial de **estratos 1, 2 y 3
 sin IVA**. En el XML eso NO es «porcentaje cero»: son estructuras
@@ -79,7 +58,7 @@ ISP suele ser la mayor parte de la base de clientes.
 
 ---
 
-### 1.5 · La firma, contra un certificado real ⚠️
+### 1.4 · La firma, contra un certificado real ⚠️
 
 `XadesSigner` está probado con un certificado autofirmado: la firma
 verifica, los resúmenes se recalculan y el documento sigue validando
@@ -180,17 +159,6 @@ comando por su cuenta.
 la guardamos en la trazabilidad pero no consultamos el resultado: hay
 que entrar al portal de la DIAN a mirarlo.
 
----
-
-### 3.4 · Pantalla del diagnóstico
-
-`dian:diagnostico` solo existe por consola. Una pantalla de solo lectura
-con el mismo contenido —qué falta para emitir, qué está por caducar— la
-podría mirar quien lleva la facturación sin pedirle nada a un
-programador. Va con las pantallas de administración (§1.1).
-
----
-
 ## 4. Deuda anterior a todo esto
 
 ### 4.1 · La tabla `audits` sin política de retención 🔴
@@ -228,10 +196,11 @@ en el backup general.
 | Diagnóstico de preparación e interruptor guardado | ✅ |
 | Alertas de certificado y rango (en el planificador) | ✅ |
 | Envío del set de pruebas | ✅ |
-| Pantallas de administración DIAN | ❌ |
+| Pantallas de administración DIAN | ✅ |
 | Notas electrónicas | ❌ |
 | IVA exento/excluido | ❌ |
 
-**En una frase:** el sistema produce documentos electrónicos correctos y
-sabe qué hacer con las respuestas; lo que falta es poder configurarlo
-sin un programador, y las credenciales para probarlo de verdad.
+**En una frase:** el sistema produce documentos electrónicos correctos,
+ya se puede configurar sin un programador, y sabe qué hacer con las
+respuestas. Lo que falta son las credenciales de la DIAN para probarlo
+de verdad, y el IVA exento para poder facturarle a los estratos 1-3.

@@ -34,6 +34,14 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'affinity_groups.edit', 'description' => 'Editar grupos de afinidad']);
         Permission::create(['name' => 'affinity_groups.destroy', 'description' => 'Eliminar grupos de afinidad']);
 
+        // Facturacion electronica: dos permisos y no cuatro, porque la
+        // division que importa aqui no es crear/editar/borrar sino MIRAR
+        // frente a TOCAR. Quien lleva la facturacion necesita ver que
+        // falta para poder emitir; cambiar el certificado o una
+        // resolucion es otra cosa muy distinta.
+        Permission::create(['name' => 'dian.index', 'description' => 'Ver la configuración DIAN de una empresa']);
+        Permission::create(['name' => 'dian.manage', 'description' => 'Configurar la facturación electrónica DIAN']);
+
         Permission::create(['name' => 'companies.index', 'description' => 'Ver empresas']);
         Permission::create(['name' => 'companies.create', 'description' => 'Crear empresas']);
         Permission::create(['name' => 'companies.edit', 'description' => 'Editar empresas']);

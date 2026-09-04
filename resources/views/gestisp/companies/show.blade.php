@@ -8,6 +8,11 @@
             <small class="text-muted">{{ $empresa->identificacion() }}</small>
         </h1>
         <div class="acciones-movil">
+            @can('dian.index')
+                <a href="{{ route('dian.panel', $empresa) }}" class="btn btn-outline-primary">
+                    <i class="fas fa-file-invoice-dollar"></i> Facturación DIAN
+                </a>
+            @endcan
             <a href="{{ route('companies.edit', $empresa) }}" class="btn btn-primary">
                 <i class="fas fa-edit"></i> Editar
             </a>
