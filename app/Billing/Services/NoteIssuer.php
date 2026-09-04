@@ -7,6 +7,7 @@ use App\Services\Numbering\DocumentNumberService;
 use App\Models\DocumentSequence;
 use App\Models\Branch;
 use App\Billing\Enums\InvoiceStatus;
+use App\Billing\Services\ElectronicInvoicingDecider;
 use App\Billing\Enums\NoteType;
 use App\Models\CreditDebitNote;
 use App\Models\Invoice;
@@ -60,7 +61,7 @@ class NoteIssuer
 
         $this->validar($invoice, $tipo, $total, $datos['concept_code']);
 
-        return DB::transaction(function () use ($invoice, $tipo, $datos, $subtotal, $impuesto, $total) {
+        $nota = DB::transaction(function () use ($invoice, $tipo, $datos, $subtotal, $impuesto, $total) {
             // El consecutivo lo reserva DocumentNumberService, el
             // mismo que numera los contratos: un unico sitio con el
             // bloqueo, el incremento y la comprobacion de rango.
@@ -72,6 +73,16 @@ class NoteIssuer
                 'contract_id' => $invoice->contract_id,
                 'user_id' => Auth::id(),
                 'type' => $tipo->value,
+                // Una nota que corrige una factura ELECTRONICA tiene
+                // que ser tambien electronica: si no, se estaria
+                // ajustando ante la DIAN un documento que ella valido
+                // sin decirselo.
+                //
+                // Se lee de la factura y no se vuelve a decidir: su
+                // tipo ya quedo congelado cuando se emitio.
+                'document_kind' => $invoice->document_kind === ElectronicInvoicingDecider::ELECTRONICO
+                    ? ElectronicInvoicingDecider::ELECTRONICO
+                    : ElectronicInvoicingDecider::INTERNO,
                 'prefix' => $numero->serie->prefix,
                 'number' => $numero->consecutivo,
                 'full_number' => $numero->completo,
@@ -114,6 +125,13 @@ class NoteIssuer
 
             return $nota;
         });
+
+        // Fuera de la transaccion, a proposito: la nota ya esta emitida
+        // y ya ajusto el saldo. Que no se pueda armar su XML no puede
+        // deshacer eso — el generador se traga sus errores y los anota.
+        app(\App\Billing\Dian\NoteDocumentGenerator::class)->generar($nota->refresh());
+
+        return $nota;
     }
 
     /**

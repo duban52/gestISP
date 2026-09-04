@@ -4,7 +4,6 @@ namespace App\Billing\Dian;
 
 use App\Billing\Services\ElectronicInvoicingDecider;
 use App\Models\DianConfiguration;
-use App\Models\FiscalCatalog;
 use App\Models\Invoice;
 use App\Models\NumberingRange;
 use Illuminate\Support\Carbon;
@@ -47,17 +46,8 @@ use RuntimeException;
  * que la DIAN espera para lo exento. Hace falta antes de facturar
  * electrónicamente a esos estratos.
  */
-class InvoiceXmlBuilder
+class InvoiceXmlBuilder extends UblBuilder
 {
-    /** El NIT de la DIAN, que es quien autoriza. Constante del anexo. */
-    private const NIT_DIAN = '800197268';
-
-    /** Literales que el anexo fija palabra por palabra. */
-    private const AGENCIA_ID = '195';
-    private const AGENCIA_NOMBRE = 'CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)';
-    private const PAIS = 'CO';
-    private const MONEDA = 'COP';
-
     /** Factura electrónica de venta. */
     private const TIPO_FACTURA = '01';
 
@@ -157,7 +147,7 @@ class InvoiceXmlBuilder
 
         $this->extensiones($doc, $raiz, $factura, $rango, $configuracion, $cufe, $produccion);
         $this->cabecera($doc, $raiz, $factura, $momento, $cufe, $ambiente);
-        $this->emisor($doc, $raiz, $empresa, $rango);
+        $this->emisor($doc, $raiz, $empresa, (string) $rango->prefix);
         $this->adquiriente($doc, $raiz, $cliente);
         $this->formaDePago($doc, $raiz, $factura);
         $this->impuestos($doc, $raiz, $factura);
@@ -178,22 +168,7 @@ class InvoiceXmlBuilder
      */
     public function erroresDeEsquema(string $xml): array
     {
-        $anterior = libxml_use_internal_errors(true);
-        libxml_clear_errors();
-
-        $doc = new \DOMDocument();
-        $doc->loadXML($xml);
-        $doc->schemaValidate(resource_path('dian/xsd/maindoc/UBL-Invoice-2.1.xsd'));
-
-        $errores = array_map(
-            fn (\LibXMLError $error) => trim($error->message),
-            libxml_get_errors(),
-        );
-
-        libxml_clear_errors();
-        libxml_use_internal_errors($anterior);
-
-        return $errores;
+        return $this->validarContra($xml, 'UBL-Invoice-2.1.xsd');
     }
 
     // ==================== Los bloques ====================
@@ -308,72 +283,9 @@ class InvoiceXmlBuilder
         $this->hijo($doc, $raiz, 'cbc:LineCountNumeric', (string) $factura->invoice_items->count());
     }
 
-    private function emisor(\DOMDocument $doc, \DOMElement $raiz, $empresa, NumberingRange $rango): void
-    {
-        $nodo = $this->hijo($doc, $raiz, 'cac:AccountingSupplierParty');
-        $this->hijo($doc, $nodo, 'cbc:AdditionalAccountID', (string) $empresa->organization_type_code);
 
-        $parte = $this->hijo($doc, $nodo, 'cac:Party');
 
-        $nombre = $this->hijo($doc, $parte, 'cac:PartyName');
-        $this->hijo($doc, $nombre, 'cbc:Name', $empresa->nombreVisible());
 
-        $ubicacion = $this->hijo($doc, $parte, 'cac:PhysicalLocation');
-        $this->direccion($doc, $ubicacion, 'cac:Address', $empresa->municipality_dane_code, $empresa->department_dane_code, (string) $empresa->address);
-
-        $tributario = $this->hijo($doc, $parte, 'cac:PartyTaxScheme');
-        $this->hijo($doc, $tributario, 'cbc:RegistrationName', (string) $empresa->legal_name);
-        $this->identificacion($doc, $tributario, $empresa->document_number, $empresa->verification_digit, $empresa->document_type_code);
-        $this->hijo($doc, $tributario, 'cbc:TaxLevelCode', $this->responsabilidades($empresa));
-        $this->direccion($doc, $tributario, 'cac:RegistrationAddress', $empresa->municipality_dane_code, $empresa->department_dane_code, (string) $empresa->address);
-        $this->esquemaIva($doc, $tributario);
-
-        $legal = $this->hijo($doc, $parte, 'cac:PartyLegalEntity');
-        $this->hijo($doc, $legal, 'cbc:RegistrationName', (string) $empresa->legal_name);
-        $this->identificacion($doc, $legal, $empresa->document_number, $empresa->verification_digit, $empresa->document_type_code);
-
-        // El prefijo autorizado va aquí: ante la DIAN es parte de la
-        // identidad del emisor, no del número de la factura.
-        $registro = $this->hijo($doc, $legal, 'cac:CorporateRegistrationScheme');
-        $this->hijo($doc, $registro, 'cbc:ID', (string) $rango->prefix);
-
-        $contacto = $this->hijo($doc, $parte, 'cac:Contact');
-        if ($empresa->phone) {
-            $this->hijo($doc, $contacto, 'cbc:Telephone', (string) $empresa->phone);
-        }
-        $this->hijo($doc, $contacto, 'cbc:ElectronicMail', (string) $empresa->email);
-    }
-
-    private function adquiriente(\DOMDocument $doc, \DOMElement $raiz, $cliente): void
-    {
-        $nodo = $this->hijo($doc, $raiz, 'cac:AccountingCustomerParty');
-        $this->hijo($doc, $nodo, 'cbc:AdditionalAccountID', (string) $cliente->organization_type_code);
-
-        $parte = $this->hijo($doc, $nodo, 'cac:Party');
-
-        $nombre = $this->hijo($doc, $parte, 'cac:PartyName');
-        $this->hijo($doc, $nombre, 'cbc:Name', $cliente->fullName());
-
-        $ubicacion = $this->hijo($doc, $parte, 'cac:PhysicalLocation');
-        $this->direccion($doc, $ubicacion, 'cac:Address', $cliente->municipality_dane_code, $cliente->department_dane_code, (string) $cliente->fiscal_address);
-
-        $tributario = $this->hijo($doc, $parte, 'cac:PartyTaxScheme');
-        $this->hijo($doc, $tributario, 'cbc:RegistrationName', $cliente->fullName());
-        $this->identificacion($doc, $tributario, $cliente->identity_number, $cliente->verification_digit, $cliente->document_type_code);
-        $this->hijo($doc, $tributario, 'cbc:TaxLevelCode', $this->responsabilidades($cliente));
-        $this->direccion($doc, $tributario, 'cac:RegistrationAddress', $cliente->municipality_dane_code, $cliente->department_dane_code, (string) $cliente->fiscal_address);
-        $this->esquemaIva($doc, $tributario);
-
-        $legal = $this->hijo($doc, $parte, 'cac:PartyLegalEntity');
-        $this->hijo($doc, $legal, 'cbc:RegistrationName', $cliente->fullName());
-        $this->identificacion($doc, $legal, $cliente->identity_number, $cliente->verification_digit, $cliente->document_type_code);
-
-        $contacto = $this->hijo($doc, $parte, 'cac:Contact');
-        if ($cliente->number_phone) {
-            $this->hijo($doc, $contacto, 'cbc:Telephone', (string) $cliente->number_phone);
-        }
-        $this->hijo($doc, $contacto, 'cbc:ElectronicMail', (string) $cliente->email);
-    }
 
     private function formaDePago(\DOMDocument $doc, \DOMElement $raiz, Invoice $factura): void
     {
@@ -483,165 +395,15 @@ class InvoiceXmlBuilder
 
     // ==================== Apoyo ====================
 
-    private function hijo(\DOMDocument $doc, \DOMElement $padre, string $nombre, ?string $valor = null): \DOMElement
-    {
-        // El texto se añade como nodo y no como segundo argumento de
-        // createElement: así se escapan &, < y > en vez de romper el XML
-        // con el nombre de una empresa que lleve «&».
-        $nodo = $doc->createElement($nombre);
 
-        if ($valor !== null && $valor !== '') {
-            $nodo->appendChild($doc->createTextNode($valor));
-        }
 
-        $padre->appendChild($nodo);
 
-        return $nodo;
-    }
 
-    private function importe(\DOMDocument $doc, \DOMElement $padre, string $nombre, float $valor): \DOMElement
-    {
-        $nodo = $this->hijo($doc, $padre, $nombre, number_format($valor, 2, '.', ''));
-        $nodo->setAttribute('currencyID', self::MONEDA);
 
-        return $nodo;
-    }
 
-    private function esquemaIva(\DOMDocument $doc, \DOMElement $padre): void
-    {
-        $esquema = $this->hijo($doc, $padre, 'cac:TaxScheme');
-        $this->hijo($doc, $esquema, 'cbc:ID', '01');
-        $this->hijo($doc, $esquema, 'cbc:Name', 'IVA');
-    }
 
-    private function identificacion(
-        \DOMDocument $doc,
-        \DOMElement $padre,
-        ?string $numero,
-        ?string $digito,
-        ?string $tipo,
-    ): void {
-        $id = $this->hijo($doc, $padre, 'cbc:CompanyID', (string) $numero);
-        $id->setAttribute('schemeID', (string) ($digito ?? '0'));
-        $id->setAttribute('schemeName', (string) $tipo);
-        $id->setAttribute('schemeAgencyID', self::AGENCIA_ID);
-        $id->setAttribute('schemeAgencyName', self::AGENCIA_NOMBRE);
-    }
 
-    /**
-     * Una dirección, igual para el emisor y para el adquiriente.
-     *
-     * El `cbc:ID` de la dirección es el código DANE del MUNICIPIO, no un
-     * identificador interno. Es el dato que más se equivoca, y el que la
-     * DIAN usa para ubicar la operación.
-     */
-    private function direccion(
-        \DOMDocument $doc,
-        \DOMElement $padre,
-        string $etiqueta,
-        ?string $municipio,
-        ?string $departamento,
-        string $calle,
-    ): void {
-        $nodo = $this->hijo($doc, $padre, $etiqueta);
 
-        $this->hijo($doc, $nodo, 'cbc:ID', (string) $municipio);
-        $this->hijo($doc, $nodo, 'cbc:CityName', FiscalCatalog::nombre(FiscalCatalog::MUNICIPIO, $municipio) ?? '');
-        $this->hijo($doc, $nodo, 'cbc:CountrySubentity', FiscalCatalog::nombre(FiscalCatalog::DEPARTAMENTO, $departamento) ?? '');
-        $this->hijo($doc, $nodo, 'cbc:CountrySubentityCode', (string) $departamento);
 
-        $linea = $this->hijo($doc, $nodo, 'cac:AddressLine');
-        $this->hijo($doc, $linea, 'cbc:Line', $calle);
 
-        $pais = $this->hijo($doc, $nodo, 'cac:Country');
-        $this->hijo($doc, $pais, 'cbc:IdentificationCode', self::PAIS);
-        $nombrePais = $this->hijo($doc, $pais, 'cbc:Name', 'Colombia');
-        $nombrePais->setAttribute('languageID', 'es');
-    }
-
-    /**
-     * Las responsabilidades fiscales, separadas por punto y coma.
-     *
-     * Sin ninguna se informa `R-99-PN` («no aplica»), que es lo que
-     * corresponde a quien no tiene responsabilidades especiales — y no
-     * dejarlo vacío, que la DIAN rechaza.
-     */
-    private function responsabilidades($parte): string
-    {
-        $codigos = $parte->taxResponsibilities->pluck('responsibility_code')->all();
-
-        return $codigos === [] ? 'R-99-PN' : implode(';', $codigos);
-    }
-
-    /**
-     * La fecha y hora de emisión, en la zona horaria de Colombia.
-     *
-     * El huso NO es opcional: entra en el CUFE. Y tiene que ser el de
-     * Colombia aunque el servidor esté en UTC, o el CUFE saldría
-     * distinto del que espera la DIAN.
-     */
-    private function momentoDe(Invoice $factura): Carbon
-    {
-        $creada = $factura->created_at ? Carbon::parse($factura->created_at) : Carbon::now();
-        $fecha = $factura->issue_date ? Carbon::parse($factura->issue_date) : $creada;
-
-        return $fecha->copy()
-            ->setTime((int) $creada->format('H'), (int) $creada->format('i'), (int) $creada->format('s'))
-            ->setTimezone('America/Bogota');
-    }
-
-    /**
-     * Comprueba que están los datos sin los que el XML no vale.
-     *
-     * Falla nombrando lo que falta. Un XML incompleto lo rechaza la DIAN
-     * con un código que no explica nada, y el informe de completitud
-     * fiscal existe justamente para no llegar hasta aquí a ciegas.
-     */
-    private function exigirDatos($empresa, $cliente): void
-    {
-        if (!$empresa) {
-            throw new RuntimeException('La factura no tiene empresa emisora.');
-        }
-
-        if (!$cliente) {
-            throw new RuntimeException('La factura no tiene cliente: no se puede identificar al adquiriente.');
-        }
-
-        $faltan = [];
-
-        foreach ([
-            'document_number' => 'NIT de la empresa',
-            'legal_name' => 'razón social de la empresa',
-            'organization_type_code' => 'tipo de organización de la empresa',
-            'municipality_dane_code' => 'municipio (DANE) de la empresa',
-            'department_dane_code' => 'departamento (DANE) de la empresa',
-            'address' => 'dirección de la empresa',
-            'email' => 'correo de la empresa',
-        ] as $campo => $etiqueta) {
-            if (blank($empresa->{$campo})) {
-                $faltan[] = $etiqueta;
-            }
-        }
-
-        foreach ([
-            'identity_number' => 'documento del cliente',
-            'document_type_code' => 'tipo de documento del cliente',
-            'organization_type_code' => 'tipo de organización del cliente',
-            'municipality_dane_code' => 'municipio (DANE) del cliente',
-            'department_dane_code' => 'departamento (DANE) del cliente',
-            'fiscal_address' => 'dirección fiscal del cliente',
-            'email' => 'correo del cliente',
-        ] as $campo => $etiqueta) {
-            if (blank($cliente->{$campo})) {
-                $faltan[] = $etiqueta;
-            }
-        }
-
-        if ($faltan !== []) {
-            throw new RuntimeException(
-                'Faltan datos fiscales para armar el XML: ' . implode(', ', $faltan)
-                . '. Complételos antes de emitir (informe de completitud fiscal).'
-            );
-        }
-    }
 }

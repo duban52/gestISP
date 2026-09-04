@@ -68,26 +68,7 @@ porque rechazaría el autofirmado por política, no por mecánica.
 **Qué hacer:** cargar el `.p12` real y emitir un documento contra el
 ambiente de habilitación.
 
----
-
-## 2. Quedaron a medias, por decisión
-
-### 2.1 · Notas crédito y débito electrónicas
-
-`NoteIssuer` numera **siempre** por la serie interna
-(`DocumentSequence`), incluso cuando la nota corrige una factura
-electrónica. La decisión **D6** del plan maestro dice que deberían
-seguir el mismo camino que la factura que corrigen.
-
-**Dónde:** `App\Billing\Services\NoteIssuer::numeroDeNota()`.
-
-**Además hace falta:** el **CUDE** (el equivalente del CUFE para notas,
-§11.4 del anexo) y el XML de `CreditNote`/`DebitNote`, cuyos XSD ya
-están en `resources/dian/xsd/maindoc/`.
-
----
-
-### 2.2 · Contingencia tipo 04
+### 2.1 · Contingencia tipo 04
 
 El anexo (§12.2) manda que, agotados los reintentos, se expida el
 documento **sin validación previa**, con `InvoiceTypeCode = 04`, y se
@@ -99,7 +80,7 @@ ni se lleva el plazo de 48 horas.
 
 ---
 
-### 2.3 · Consultar el estado de un documento ya enviado
+### 2.2 · Consultar el estado de un documento ya enviado
 
 `SendBillSync` valida en el momento, pero la DIAN también expone
 consulta por `trackId` (que ya se guarda en
@@ -108,7 +89,7 @@ respuesta se pierde, el documento se queda «firmado» para siempre.
 
 ---
 
-### 2.4 · Los valores exactos de WS-Security
+### 2.3 · Los valores exactos de WS-Security
 
 La guía de consumo de servicios web muestra el tipo de identificador de
 clave y los algoritmos **en una imagen**, que no se puede leer del PDF.
@@ -197,10 +178,10 @@ en el backup general.
 | Alertas de certificado y rango (en el planificador) | ✅ |
 | Envío del set de pruebas | ✅ |
 | Pantallas de administración DIAN | ✅ |
-| Notas electrónicas | ❌ |
+| Notas electrónicas | ✅ |
 | IVA exento/excluido | ❌ |
 
-**En una frase:** el sistema produce documentos electrónicos correctos,
+**En una frase:** el sistema produce facturas y notas electrónicos correctos,
 ya se puede configurar sin un programador, y sabe qué hacer con las
 respuestas. Lo que falta son las credenciales de la DIAN para probarlo
 de verdad, y el IVA exento para poder facturarle a los estratos 1-3.

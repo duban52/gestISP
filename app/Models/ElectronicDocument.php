@@ -39,7 +39,8 @@ class ElectronicDocument extends Model
     public const RECHAZADO = 'rejected';
 
     protected $fillable = [
-        'company_id', 'invoice_id', 'dian_resolution_id', 'dian_certificate_id',
+        'company_id', 'invoice_id', 'credit_debit_note_id',
+        'dian_resolution_id', 'dian_certificate_id',
         'environment_code', 'cufe', 'signed_xml', 'qr_content',
         'status', 'last_error', 'generated_at', 'signed_at',
         'dian_track_id', 'accepted_at', 'attempts',
@@ -57,6 +58,12 @@ class ElectronicDocument extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    /** La nota que documenta, si es de una nota y no de una factura. */
+    public function note(): BelongsTo
+    {
+        return $this->belongsTo(CreditDebitNote::class, 'credit_debit_note_id');
     }
 
     public function resolution(): BelongsTo

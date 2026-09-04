@@ -27,6 +27,9 @@ class CreditDebitNote extends Model
         'contract_id',
         'user_id',
         'type',
+        // Interno o electronico, CONGELADO al emitir: una nota emitida
+        // no cambia de naturaleza porque despues cambie otra cosa.
+        'document_kind',
         'prefix',
         'number',
         'full_number',
