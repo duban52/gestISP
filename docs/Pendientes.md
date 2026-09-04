@@ -163,17 +163,31 @@ tocar nada.
 
 ---
 
-### 3.2 · Fase 12 — Habilitación y producción gradual
+### 3.2 · Producir el set de pruebas que exige la DIAN
 
-El proceso ante la DIAN: pasar el set de pruebas, obtener la
-habilitación y encender la facturación electrónica poco a poco en vez de
-de golpe.
+La fase 12 dejó hecho el envío (`dian:set-de-pruebas`), pero **qué
+documentos van dentro sigue siendo manual**: la DIAN asigna un set con
+una mezcla concreta —con descuento, con varios impuestos, exento…— y hay
+que producirla emitiendo en el ambiente de pruebas.
 
-Nota: hoy `ElectronicInvoicingDecider` exige ambiente de **producción**
-para emitir electrónicamente, así que el set de pruebas de habilitación
-no puede correr por el camino normal. Eso es deliberado —impide emitir
-documentos sin validar a clientes reales— pero hay que resolverlo en
-esta fase.
+No se automatizó a propósito: generar facturas sintéticas dentro de una
+base de producción es exactamente la clase de cosa que no debe hacer un
+comando por su cuenta.
+
+### 3.3 · Consultar el resultado del set de pruebas
+
+`SendTestSetAsync` devuelve una `ZipKey` de acuse y valida después. Hoy
+la guardamos en la trazabilidad pero no consultamos el resultado: hay
+que entrar al portal de la DIAN a mirarlo.
+
+---
+
+### 3.4 · Pantalla del diagnóstico
+
+`dian:diagnostico` solo existe por consola. Una pantalla de solo lectura
+con el mismo contenido —qué falta para emitir, qué está por caducar— la
+podría mirar quien lleva la facturación sin pedirle nada a un
+programador. Va con las pantallas de administración (§1.1).
 
 ---
 
@@ -211,6 +225,9 @@ en el backup general.
 | Firma XAdES (mecánica verificada) | ✅ |
 | Transmisión: reintentos, estados, idempotencia, registro | ✅ |
 | Transporte SOAP real | ⚠️ escrito, sin verificar |
+| Diagnóstico de preparación e interruptor guardado | ✅ |
+| Alertas de certificado y rango (en el planificador) | ✅ |
+| Envío del set de pruebas | ✅ |
 | Pantallas de administración DIAN | ❌ |
 | Notas electrónicas | ❌ |
 | IVA exento/excluido | ❌ |

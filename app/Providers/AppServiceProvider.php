@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Billing\Dian\Transport\DianTestSetTransport;
 use App\Billing\Dian\Transport\DianTransport;
 use App\Billing\Dian\Transport\FakeDianTransport;
 use App\Billing\Dian\Transport\SoapDianTransport;
@@ -57,6 +58,13 @@ class AppServiceProvider extends ServiceProvider
 
             return new SoapDianTransport();
         });
+
+        // El set de pruebas de la habilitacion va por su propia
+        // interfaz: es otra conversacion —varios documentos en un ZIP,
+        // con acuse diferido— y se hace UNA vez en la vida de una
+        // empresa. Se resuelve al mismo transporte, que las implementa
+        // las dos.
+        $this->app->bind(DianTestSetTransport::class, fn ($app) => $app->make(DianTransport::class));
 
         // Proveedor de WhatsApp según la configuración: el conector
         // es intercambiable (log/simulado por defecto, meta en

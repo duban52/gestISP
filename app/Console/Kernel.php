@@ -96,6 +96,28 @@ class Kernel extends ConsoleKernel
             ->dailyAt('08:00')
             ->withoutOverlapping();
 
+        // Avisos de facturacion electronica: certificado por caducar y
+        // rango de numeracion por agotarse.
+        //
+        // Son las dos cosas que caducan sin avisar y paran la
+        // facturacion de golpe. Renovar un certificado ante una entidad
+        // acreditada no es inmediato, y un rango agotado deja sin poder
+        // emitir ni una factura mas hasta que la DIAN autorice el
+        // siguiente — normalmente a mitad de la corrida mensual.
+        //
+        // A las 7:00 para que se vea antes de empezar el dia.
+        $schedule->command('dian:alertas')
+            ->dailyAt('07:00')
+            ->withoutOverlapping();
+
+        // Barrido de documentos electronicos firmados sin transmitir.
+        // Recoge lo que se quedo atras porque la cola se cayo o porque
+        // el servicio de la DIAN estuvo caido. Es idempotente: no
+        // reenvia nada que ya este aceptado o rechazado.
+        $schedule->command('dian:transmitir')
+            ->hourly()
+            ->withoutOverlapping();
+
         // ---- Copias de seguridad ----
         // NO van aquí, y es a propósito. Las lanza el cron del sistema
         // llamando a deploy/backup/gestisp-backup.sh dos veces al día

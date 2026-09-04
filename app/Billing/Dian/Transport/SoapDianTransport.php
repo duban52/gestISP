@@ -43,11 +43,12 @@ use RuntimeException;
  * interceptar y reescribir el sobre igual. Se arma a mano sobre HTTP,
  * que además deja ver exactamente qué se envía.
  */
-class SoapDianTransport implements DianTransport
+class SoapDianTransport implements DianTransport, DianTestSetTransport
 {
     private const NS_SOAP = 'http://www.w3.org/2003/05/soap-envelope';
     private const NS_WCF = 'http://wcf.dian.colombia';
     private const ACCION_ENVIO = 'http://wcf.dian.colombia/IWcfDianCustomerServices/SendBillSync';
+    private const ACCION_SET = 'http://wcf.dian.colombia/IWcfDianCustomerServices/SendTestSetAsync';
 
     public function __construct(
         private readonly XmlSecuritySigner $seguridad = new XmlSecuritySigner(),
@@ -98,6 +99,176 @@ class SoapDianTransport implements DianTransport
         }
 
         return $this->interpretar($respuesta->status(), $respuesta->body());
+    }
+
+    /**
+     * Manda el set de pruebas de la habilitacion.
+     *
+     * Es otra operacion (`SendTestSetAsync`) y otra forma: van VARIOS
+     * documentos en un mismo ZIP, con el identificador del set, y la
+     * DIAN no contesta si estan bien — contesta una `ZipKey` con la que
+     * se consulta el resultado despues. Por eso aqui un «aceptado»
+     * significa «recibido», no «aprobado».
+     *
+     * @param  array<string, string>  $documentos  nombre => XML firmado
+     */
+    public function enviarSetDePruebas(array $documentos, string $testSetId): TransmissionResult
+    {
+        $url = (string) config('dian.endpoint');
+
+        if ($url === '') {
+            return TransmissionResult::error([
+                'No hay URL del servicio de la DIAN configurada (DIAN_ENDPOINT).',
+            ]);
+        }
+
+        if ($documentos === []) {
+            return TransmissionResult::error(['No hay ningún documento que mandar al set de pruebas.']);
+        }
+
+        $certificado = $this->certificadoDe($documentos);
+
+        if (!$certificado) {
+            return TransmissionResult::error([
+                'No hay certificado con el que autenticar el envío del set de pruebas.',
+            ]);
+        }
+
+        $doc = new \DOMDocument('1.0', 'UTF-8');
+
+        $sobre = $doc->createElementNS(self::NS_SOAP, 'soap:Envelope');
+        $sobre->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:wcf', self::NS_WCF);
+        $doc->appendChild($sobre);
+
+        $cabecera = $doc->createElementNS(self::NS_SOAP, 'soap:Header');
+        $sobre->appendChild($cabecera);
+
+        $direccionamiento = 'http://www.w3.org/2005/08/addressing';
+        $cabecera->appendChild($doc->createElementNS($direccionamiento, 'wsa:Action', self::ACCION_SET));
+        $cabecera->appendChild($doc->createElementNS($direccionamiento, 'wsa:To', $url));
+
+        $cuerpo = $doc->createElementNS(self::NS_SOAP, 'soap:Body');
+        $sobre->appendChild($cuerpo);
+
+        $envio = $doc->createElementNS(self::NS_WCF, 'wcf:SendTestSetAsync');
+        $cuerpo->appendChild($envio);
+
+        $envio->appendChild($doc->createElementNS(self::NS_WCF, 'wcf:fileName', 'set-de-pruebas.zip'));
+
+        $contenido = $doc->createElementNS(self::NS_WCF, 'wcf:contentFile');
+        $contenido->appendChild($doc->createTextNode($this->comprimirVarios($documentos)));
+        $envio->appendChild($contenido);
+
+        $envio->appendChild($doc->createElementNS(self::NS_WCF, 'wcf:testSetId', $testSetId));
+
+        $sobreFirmado = $this->seguridad->firmar($doc, $certificado);
+
+        try {
+            $tipo = 'application/soap+xml;charset=UTF-8;action="' . self::ACCION_SET . '"';
+
+            $respuesta = Http::timeout((int) config('dian.timeout', 60))
+                ->withBody($sobreFirmado, $tipo)
+                ->post($url);
+        } catch (\Illuminate\Http\Client\ConnectionException $error) {
+            return TransmissionResult::demora();
+        }
+
+        return $this->interpretarSet($respuesta->status(), $respuesta->body());
+    }
+
+    /**
+     * La respuesta del set de pruebas.
+     *
+     * Aqui «aceptado» quiere decir RECIBIDO: la DIAN devuelve una
+     * ZipKey y valida despues. Confundirlo con «aprobado» haria creer
+     * que la habilitacion esta hecha cuando solo esta entregada.
+     */
+    private function interpretarSet(int $estado, string $cuerpo): TransmissionResult
+    {
+        if ($estado >= 400) {
+            return TransmissionResult::error(
+                ['La DIAN respondió ' . $estado . ' al set de pruebas.'],
+                httpStatus: $estado,
+                respuesta: $cuerpo,
+            );
+        }
+
+        $anterior = libxml_use_internal_errors(true);
+        $doc = new \DOMDocument();
+        $leido = $doc->loadXML($cuerpo);
+        libxml_clear_errors();
+        libxml_use_internal_errors($anterior);
+
+        if (!$leido) {
+            return TransmissionResult::error(['La respuesta de la DIAN no es un XML válido.'], respuesta: $cuerpo);
+        }
+
+        $xpath = new \DOMXPath($doc);
+        $zipKey = $xpath->query("//*[local-name()='ZipKey']")->item(0)?->nodeValue;
+
+        $errores = [];
+
+        foreach ($xpath->query("//*[local-name()='ErrorMessageList']//*[local-name()='string']") as $nodo) {
+            $errores[] = trim($nodo->nodeValue);
+        }
+
+        if (blank($zipKey)) {
+            return TransmissionResult::error(
+                $errores ?: ['La DIAN no devolvió ninguna ZipKey: el set no quedó recibido.'],
+                httpStatus: $estado,
+                respuesta: $cuerpo,
+            );
+        }
+
+        return new TransmissionResult(
+            TransmissionResult::ACEPTADO,
+            trackId: $zipKey,
+            errores: $errores,
+            httpStatus: $estado,
+            respuesta: $cuerpo,
+        );
+    }
+
+    /**
+     * Todos los documentos del set en un solo ZIP.
+     *
+     * @param  array<string, string>  $documentos
+     */
+    private function comprimirVarios(array $documentos): string
+    {
+        $temporal = tempnam(sys_get_temp_dir(), 'dianset');
+
+        try {
+            $zip = new \ZipArchive();
+
+            if ($zip->open($temporal, \ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException('No se pudo preparar el ZIP del set de pruebas.');
+            }
+
+            foreach ($documentos as $nombre => $xml) {
+                $zip->addFromString($nombre, $xml);
+            }
+
+            $zip->close();
+
+            return base64_encode((string) file_get_contents($temporal));
+        } finally {
+            @unlink($temporal);
+        }
+    }
+
+    /**
+     * El certificado con el que autenticar el envio del set.
+     *
+     * Se busca uno vigente de la empresa: los documentos del set ya
+     * estan firmados, pero la PETICION tambien hay que firmarla.
+     */
+    private function certificadoDe(array $documentos): ?DianCertificate
+    {
+        return DianCertificate::query()
+            ->where('active', true)
+            ->get()
+            ->first(fn (DianCertificate $certificado) => $certificado->vigente());
     }
 
     /**

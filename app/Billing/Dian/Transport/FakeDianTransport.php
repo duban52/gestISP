@@ -29,7 +29,7 @@ use App\Models\ElectronicDocument;
  * exactamente la clase de mentira que no puede vivir en una tabla
  * fiscal.
  */
-class FakeDianTransport implements DianTransport
+class FakeDianTransport implements DianTransport, DianTestSetTransport
 {
     /** @var array<int, TransmissionResult> */
     private array $respuestas = [];
@@ -54,6 +54,19 @@ class FakeDianTransport implements DianTransport
         return array_shift($this->respuestas) ?? TransmissionResult::error([
             'No hay ningún transporte a la DIAN configurado: '
             . 'falta la URL del servicio, que la DIAN expone en el catálogo del facturador.',
+        ]);
+    }
+
+    /** @var array<int, array{documentos: array<string, string>, testSetId: string}> */
+    public array $setsEnviados = [];
+
+    /** @param array<string, string> $documentos */
+    public function enviarSetDePruebas(array $documentos, string $testSetId): TransmissionResult
+    {
+        $this->setsEnviados[] = ['documentos' => $documentos, 'testSetId' => $testSetId];
+
+        return array_shift($this->respuestas) ?? TransmissionResult::error([
+            'No hay ningún transporte a la DIAN configurado: no se puede mandar el set de pruebas.',
         ]);
     }
 
