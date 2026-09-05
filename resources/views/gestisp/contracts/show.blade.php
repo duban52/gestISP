@@ -80,6 +80,13 @@
                         <h3><i class="far fa-user"></i> Datos personales</h3>
                     </div>
 
+                    {{-- Sin cliente visible no hay nada que editar, y el
+                         formulario ni siquiera se puede armar: route() necesita
+                         su id. Pasa cuando el cliente quedó sin `company_id` —
+                         el alcance de empresa lo esconde aunque la fila exista.
+                         Se repara con `php artisan gestisp:empresas-migrar
+                         --aplicar`. --}}
+                    @if($contract?->client)
                     <div class="col-4 col-md-3 text-right">
                         <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#editPersonalData">
                             <i class="fas fa-edit"></i>
@@ -94,20 +101,20 @@
                                     <button type="button" class="btn-danger" data-bs-dismiss="modal" aria-label="Close"><i class="far fa-window-close"></i></button>
                                 </div>
                                 <div class="modal-body">
-                                    <form action="{{ route('clients.update', $contract->client->id) }}" method="post">
+                                    <form action="{{ route('clients.update', $contract?->client?->id) }}" method="post">
                                         @csrf
                                         @method('put')
                                         <div class="form-group">
                                             <label for="">Número de teléfono principal:</label>
-                                            <input type="text" name="number_phone" class="form-control" value="{{ $contract->client->number_phone }}">
+                                            <input type="text" name="number_phone" class="form-control" value="{{ $contract?->client?->number_phone }}">
                                         </div>
                                         <div class="form-group">
                                             <label for="">Número de teléfono adicional:</label>
-                                            <input type="text" name="aditional_phone" class="form-control" value="{{ $contract->client->aditional_phone }}">
+                                            <input type="text" name="aditional_phone" class="form-control" value="{{ $contract?->client?->aditional_phone }}">
                                         </div>
                                         <div class="form-group">
                                             <label for="">Correo electrónico:</label>
-                                            <input type="text" name="email" class="form-control" value="{{ $contract->client->email }}">
+                                            <input type="text" name="email" class="form-control" value="{{ $contract?->client?->email }}">
                                         </div>
                                         <div class="text-center">
                                             <hr>
@@ -119,18 +126,25 @@
                             </div>
                         </div>
                     </div>
-
+                    @endif
 
                 </div>
                 <div class="card-body row">
-                    <p class="col-6"><strong>Número de Documento:</strong> {{ $contract->client->identity_number }}</p>
-                    <p class="col-6"><strong>Nombre completo:</strong> {{ $contract->client->name }} {{ $contract->client->last_name }}</p>
-                    <p class="col-6"><strong>Tipo de cliente:</strong> {{ $contract->client->type_client }}</p>
-                    <p class="col-6"><strong>Teléfono:</strong> {{ $contract->client->number_phone }}</p>
-                    <p class="col-6"><strong>Teléfono adicional:</strong> {{ $contract->client->aditional_phone }}</p>
-                    <p class="col-6"><strong>Email:</strong> {{ $contract->client->email }}</p>
-                    <p class="col-6"><strong>Fecha de nacimiento:</strong> {{ $contract->client->birthday }}</p>
-                    <p class="col-6"><strong>Creado por:</strong> {{ $contract->client->user->name }}</p>
+                    @unless($contract?->client)
+                        <p class="col-12 text-danger">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            El cliente de este contrato no está visible: quedó sin empresa asignada.
+                            Ejecute <code>php artisan gestisp:empresas-migrar --aplicar</code>.
+                        </p>
+                    @endunless
+                    <p class="col-6"><strong>Número de Documento:</strong> {{ $contract?->client?->identity_number }}</p>
+                    <p class="col-6"><strong>Nombre completo:</strong> {{ $contract?->client?->name }} {{ $contract?->client?->last_name }}</p>
+                    <p class="col-6"><strong>Tipo de cliente:</strong> {{ $contract?->client?->type_client }}</p>
+                    <p class="col-6"><strong>Teléfono:</strong> {{ $contract?->client?->number_phone }}</p>
+                    <p class="col-6"><strong>Teléfono adicional:</strong> {{ $contract?->client?->aditional_phone }}</p>
+                    <p class="col-6"><strong>Email:</strong> {{ $contract?->client?->email }}</p>
+                    <p class="col-6"><strong>Fecha de nacimiento:</strong> {{ $contract?->client?->birthday }}</p>
+                    <p class="col-6"><strong>Creado por:</strong> {{ $contract?->client?->user?->name }}</p>
                 </div>
             </div>
 
@@ -310,7 +324,7 @@
                                     · {{ $contract->located_at->format('Y-m-d H:i') }}
                                 @endif
                                 @if($contract->locatedBy)
-                                    · {{ trim($contract->locatedBy->name . ' ' . $contract->locatedBy->last_name) }}
+                                    · {{ trim($contract->locatedBy?->name . ' ' . $contract->locatedBy?->last_name) }}
                                 @endif
                                 <br>
                                 <span class="text-monospace">{{ $contract->latitude }}, {{ $contract->longitude }}</span>
@@ -421,7 +435,7 @@
                     <p class="col-12 mb-0">
                         <strong>Grupo de afinidad:</strong>
                         @if($contract->affinityGroup)
-                            {{ $contract->affinityGroup->etiqueta() }}
+                            {{ $contract?->affinityGroup?->etiqueta() }}
                         @else
                             <span class="badge badge-warning">
                                 <i class="fas fa-exclamation-triangle mr-1"></i>Sin grupo asignado
@@ -567,7 +581,7 @@
                     <p class="col-6"><strong>Contraseña PPPoE:</strong> {{ $contract->password_pppoe }}</p>
                     <p class="col-6"><strong>SSID del Wifi:</strong> {{ $contract->ssid_wifi }}</p>
                     <p class="col-6"><strong>Contraseña del Wifi:</strong> {{ $contract->password_wifi }}</p>
-                    <p class="col-6"><strong>Contrato realizado por:</strong> {{ $contract->user->name }} {{ $contract->user->last_name }} </p>
+                    <p class="col-6"><strong>Contrato realizado por:</strong> {{ $contract->user?->name }} {{ $contract->user?->last_name }} </p>
                     <p class="col-6"><strong>Fecha de creación:</strong> {{ $contract->created_at }} </p>
                     <p class="col-6"><strong>Fecha de activación:</strong> {{ $contract->activation_date ?? 'N/A'}} </p>
                     <p class="col-6"><strong>Última actualización:</strong> {{ $contract->updated_at }} </p>
@@ -912,7 +926,7 @@
 
                                                     <td><span class="badge badge-{{ $badgeFor($addionalChrage->status) }}">{{ $addionalChrage->status }}</span></td>
                                                     <td data-order="{{ $addionalChrage->created_at?->timestamp }}">{{ $addionalChrage->created_at?->format('Y-m-d H:i') }}</td>
-                                                    <td>{{ $addionalChrage->user->name ?? '—' }} {{ $addionalChrage->user->last_name ?? '' }}</td>
+                                                    <td>{{ $addionalChrage->user?->name ?? '—' }} {{ $addionalChrage->user?->last_name ?? '' }}</td>
                                                 </tr>
                                             @endforeach
                                         </tbody>
@@ -944,9 +958,9 @@
                                                     <td>{{ $technicalOrder->type }}</td>
                                                     <td>{{ $technicalOrder->detail }}</td>
                                                     <td>{{ \Illuminate\Support\Str::limit($technicalOrder->initial_comment, 40) ?: '—' }}</td>
-                                                    <td>{{ $technicalOrder->assignedUser->name ?? '—' }} {{ $technicalOrder->assignedUser->last_name ?? '' }}</td>
+                                                    <td>{{ $technicalOrder->assignedUser?->name ?? '—' }} {{ $technicalOrder->assignedUser?->last_name ?? '' }}</td>
                                                     <td data-order="{{ $technicalOrder->created_at?->timestamp }}">{{ $technicalOrder->created_at?->format('Y-m-d H:i') }}</td>
-                                                    <td>{{ $technicalOrder->createdBy->name ?? 'Sistema' }} {{ $technicalOrder->createdBy->last_name ?? '' }}</td>
+                                                    <td>{{ $technicalOrder->createdBy?->name ?? 'Sistema' }} {{ $technicalOrder->createdBy?->last_name ?? '' }}</td>
                                                     <td><span class="badge badge-{{ $orderBadge($technicalOrder->status) }}">{{ $technicalOrder->status }}</span></td>
                                                     <td class="text-center nowrap">
                                                         <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#detailModal{{ $technicalOrder->id }}" title="Ver detalles">
@@ -1027,7 +1041,7 @@
                                             @foreach($comments as $comment)
                                                 <tr>
                                                     <td data-order="{{ $comment->created_at?->timestamp }}">{{ $comment->created_at?->format('Y-m-d H:i') }}</td>
-                                                    <td>{{ $comment->user->name ?? 'Sistema' }} {{ $comment->user->last_name ?? '' }}</td>
+                                                    <td>{{ $comment->user?->name ?? 'Sistema' }} {{ $comment->user?->last_name ?? '' }}</td>
                                                     <td style="white-space: pre-line;">{{ $comment->body }}</td>
                                                     <td class="text-center">
                                                         <form action="{{ route('contractComments.destroy', $comment) }}" method="POST"
