@@ -51,6 +51,31 @@ porque rechazaría el autofirmado por política, no por mecánica.
 **Qué hacer:** cargar el `.p12` real y emitir un documento contra el
 ambiente de habilitación.
 
+### 2.0 · Entregar el XML al adquirente (AttachedDocument) 🔴
+
+Encontrado en la auditoría del 2026-09-05.
+
+El emisor tiene que **entregarle al cliente la factura electrónica en
+XML**, no solo su representación gráfica. Y no el XML suelto: dentro de
+un `AttachedDocument`, que envuelve la factura firmada junto con la
+respuesta de la DIAN.
+
+Hoy no existe ninguna de las dos cosas:
+
+- **No hay constructor de `AttachedDocument`.** El XSD está versionado
+  en `resources/dian/xsd/maindoc/UBL-AttachedDocument-2.1.xsd` desde la
+  fase 10, pero nadie lo usa.
+- **El correo de factura no adjunta nada.**
+  `App\Notifications\InvoiceGenerated` manda el aviso con el número y el
+  valor, sin el XML ni el PDF.
+
+**Qué hacer:** un `AttachedDocumentBuilder` hermano de
+`InvoiceXmlBuilder`, y adjuntar su salida —más el PDF— en
+`InvoiceGenerated`. Depende de tener la respuesta de la DIAN, así que va
+después de 2.2.
+
+---
+
 ### 2.1 · Contingencia tipo 04
 
 El anexo (§12.2) manda que, agotados los reintentos, se expida el
