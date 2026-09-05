@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Billing\Enums\InvoiceStatus;
+use App\Billing\Services\InvoiceGenerator;
 use App\Billing\Services\InvoiceVoider;
 use App\Billing\Services\MonthlyBillingRun;
 use App\Billing\Services\OverdueProcessor;
 use App\Jobs\GeneratePendingInvoicesPdf;
 use App\Models\BillingRun;
+use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\PdfReport;
 use Illuminate\Http\Request;
@@ -15,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Milon\Barcode\Facades\DNS1DFacade;
+use App\Services\Audit\AuditLogger;
 use App\Tenancy\CurrentContext;
 use App\Support\BranchFilter;
 
@@ -36,7 +39,7 @@ class InvoiceController extends Controller
         $this->middleware('check.permission:invoices.edit')->only('edit', 'update');
         $this->middleware('check.permission:invoices.show')->only('show');
         $this->middleware('check.permission:invoices.destroy')->only('destroy', 'voidInvoice');
-        $this->middleware('check.permission:invoices.generate')->only('generateInvoices');
+        $this->middleware('check.permission:invoices.generate')->only('generateInvoices', 'generateForContract');
         $this->middleware('check.permission:invoices.download-pdf')->only('downloadInvoicePdf');
         $this->middleware('check.permission:invoices.generate_max_pdf')->only('generatePendingInvoicesPdf');
         $this->middleware('check.permission:invoices.check-pdf-status')->only('checkPdfStatus');
@@ -217,6 +220,115 @@ class InvoiceController extends Controller
 
         return redirect()->route('invoices.index')
             ->with('success', $message);
+    }
+
+    /**
+     * Factura UN contrato, desde su ficha.
+     *
+     * POR QUÉ EXISTE, SI YA ESTÁ LA CORRIDA MENSUAL
+     * ---------------------------------------------
+     * Porque la corrida es de toda la sucursal y hay casos sueltos que
+     * no esperan al mes: un contrato que se instaló ayer, uno que quedó
+     * fuera del lote porque estaba suspendido y ya se reconectó, o el
+     * cliente que viene al mostrador a pagar y todavía no tiene factura.
+     *
+     * Hasta ahora la única salida era lanzar la corrida entera de la
+     * sucursal, que factura a todo el mundo, o crear la factura a mano
+     * — que es exactamente como se gasta un consecutivo autorizado sin
+     * las reglas que lo protegen.
+     *
+     * ES EL MISMO CAMINO, NO UNO PARALELO
+     * -----------------------------------
+     * Llama a `InvoiceGenerator::generateForContract()`, que es el mismo
+     * método que usa la corrida en su bucle. Eso importa: la decisión de
+     * si la factura es electrónica, el rango del que sale su número, el
+     * congelado del grupo de afinidad y el evento `InvoiceIssued` —que
+     * dispara el documento DIAN y el aviso al cliente— son idénticos.
+     *
+     * Un segundo camino con sus propias reglas es como se acaba
+     * emitiendo una factura electrónica sin CUFE.
+     *
+     * LA ÚNICA DIFERENCIA: NO HAY CORRIDA
+     * -----------------------------------
+     * Va con `billing_run_id` en null, que es lo que el generador ya
+     * contemplaba («null si se creó por otra vía»). Por eso se anota
+     * explícitamente en la trazabilidad: sin corrida a la que
+     * pertenecer, esta es la única huella de quién la emitió y por qué
+     * apareció una factura fuera del lote del mes.
+     */
+    public function generateForContract(
+        Contract $contract,
+        InvoiceGenerator $generator,
+        AuditLogger $auditor,
+    ) {
+        // Un contrato de otra sucursal no se factura desde aquí, ni
+        // aunque alguien ponga su id en la URL: emitir en una sede
+        // ajena consume SU consecutivo autorizado.
+        abort_unless(
+            app(CurrentContext::class)->permiteSucursal($contract->branch_id),
+            403,
+            'Este contrato no es de una sucursal a la que tenga acceso.',
+        );
+
+        $resultado = $generator->generateForContract($contract, now(), Auth::id());
+
+        if (!($resultado['generated'] ?? false)) {
+            return back()->with('error', $this->motivoDeNoFacturar($resultado, $contract));
+        }
+
+        $factura = Invoice::findOrFail($resultado['invoice_id']);
+
+        $auditor->action(
+            'created',
+            sprintf('Factura %s emitida individualmente desde el contrato %s',
+                $factura->displayNumber(), $contract->numero_visible ?? $contract->id),
+            [
+                'contrato_id' => $contract->id,
+                'factura_id' => $factura->id,
+                'tipo' => $factura->document_kind,
+                'total' => $factura->total,
+            ],
+            $factura,
+            'facturacion',
+        );
+
+        return redirect()
+            ->route('invoices.show', $factura)
+            ->with('success', sprintf(
+                'Factura %s generada por $%s.',
+                $factura->displayNumber(),
+                number_format((float) $factura->total, 2, ',', '.'),
+            ));
+    }
+
+    /**
+     * Por qué no se facturó, en español y con salida.
+     *
+     * El generador devuelve motivos en inglés pensados para el log de
+     * la corrida. Aquí los ve una persona delante de la pantalla, así
+     * que además de traducirlos hay que decirle qué hacer: el caso más
+     * frecuente —ya está facturado este mes— se resuelve enseñándole la
+     * factura que ya existe, no repitiendo que no se pudo.
+     *
+     * @param  array<string, mixed>  $resultado
+     */
+    private function motivoDeNoFacturar(array $resultado, Contract $contract): string
+    {
+        return match ($resultado['reason'] ?? null) {
+            'Contract suspended' =>
+                'El contrato está suspendido: no se le factura hasta reconectarlo.',
+
+            'Invoice already exists for this period' => sprintf(
+                'Este contrato ya tiene factura del período %s (%s). '
+                . 'Una segunda gastaría otro consecutivo por el mismo servicio.',
+                now()->format('m/Y'),
+                Invoice::where('contract_id', $contract->id)
+                    ->where('billed_year_month', now()->format('Ym'))
+                    ->value('full_number') ?? 'sin número',
+            ),
+
+            default => 'No se pudo generar la factura de este contrato.',
+        };
     }
 
     /**

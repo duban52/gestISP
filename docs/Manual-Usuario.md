@@ -291,6 +291,23 @@ La corrida mensual recorre los contratos activos de la sucursal y emite una fact
 
 Cada corrida queda registrada: qué día se hizo, cuántas facturas salieron, por cuánto, y quién la lanzó.
 
+## Facturar un solo contrato
+
+A veces no se puede esperar al lote: un contrato que se instaló ayer, uno que quedó fuera de la corrida por estar suspendido y ya se reconectó, o el cliente que llega al mostrador a pagar y todavía no tiene factura.
+
+Desde la ficha del contrato, pestaña **Estado de cuenta**, botón **Generar factura del mes**.
+
+Sale exactamente igual que si la hubiera hecho la corrida: mismo número de la misma serie, mismo tipo de documento, y si es electrónica se reporta a la DIAN y se le avisa al cliente igual que a las demás. Lo único que cambia es que no pertenece a ninguna corrida.
+
+El sistema se niega en dos casos, y los dos son a propósito:
+
+- **El contrato ya tiene factura de este mes.** Le dice cuál es. Una segunda gastaría otro consecutivo por el mismo servicio.
+- **El contrato está suspendido.** No se factura hasta reconectarlo.
+
+> Pide confirmación antes de emitir. Si la factura es electrónica, gasta un número de un rango autorizado por la DIAN y ese número no se recupera: una factura de más solo se puede anular, no borrar.
+
+Requiere el mismo permiso que la corrida mensual (`invoices.generate`). Cada emisión individual queda registrada en la trazabilidad con quién la hizo, porque al no haber corrida esa es la única forma de explicar por qué apareció una factura fuera del lote del mes.
+
 ## El detalle de una corrida
 
 Menú **Facturas → Corridas**. Al abrir una corrida se ve qué se facturó y a quién, con las descargas del lote en PDF.

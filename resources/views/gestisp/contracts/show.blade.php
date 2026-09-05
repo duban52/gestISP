@@ -762,11 +762,30 @@
                                             <a href="{{ route('advance.movements', $contract) }}" class="ml-1">ver movimientos</a>
                                         @endif
                                     </div>
-                                    @can('payments.create')
-                                        <a href="{{ route('advance.create', $contract) }}" class="btn btn-success btn-sm">
-                                            <i class="fas fa-piggy-bank mr-1"></i> Recibir pago por adelantado
-                                        </a>
-                                    @endcan
+                                    <div>
+                                        {{-- Facturar solo este contrato, sin lanzar la corrida
+                                             de toda la sucursal. Pasa por el mismo generador,
+                                             así que la factura sale idéntica a las del lote.
+
+                                             Va con confirmación porque gasta un consecutivo:
+                                             si la factura es electrónica, ese número es de un
+                                             rango autorizado por la DIAN y no se recupera. --}}
+                                        @can('invoices.generate')
+                                            <form method="POST" action="{{ route('contracts.invoice', $contract) }}"
+                                                  class="d-inline"
+                                                  onsubmit="return confirm('Se generará la factura del período actual para este contrato. Gasta un consecutivo y no se puede deshacer (solo anular). ¿Continuar?');">
+                                                @csrf
+                                                <button class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-file-invoice-dollar mr-1"></i> Generar factura del mes
+                                                </button>
+                                            </form>
+                                        @endcan
+                                        @can('payments.create')
+                                            <a href="{{ route('advance.create', $contract) }}" class="btn btn-success btn-sm">
+                                                <i class="fas fa-piggy-bank mr-1"></i> Recibir pago por adelantado
+                                            </a>
+                                        @endcan
+                                    </div>
                                 </div>
 
                                 {{-- Resumen: saldo pendiente del contrato --}}

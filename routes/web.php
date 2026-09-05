@@ -283,6 +283,16 @@ Route::delete('/perfil/foto', [ProfileController::class, 'destroyPhoto'])->name(
 // Generación de facturas
 Route::post('/invoices/generate', [InvoiceController::class, 'generateInvoices'])->name('invoices.generate');
 
+// Facturar UN contrato desde su ficha, sin lanzar la corrida de toda
+// la sucursal. Pasa por el mismo InvoiceGenerator que la corrida, así
+// que la factura sale idéntica —mismo rango, mismo tipo, mismo evento—;
+// lo único que cambia es que no pertenece a ninguna corrida.
+//
+// Lleva el permiso invoices.generate, el mismo que la corrida: la
+// autoridad que hace falta es la misma —crear un documento fiscal que
+// gasta un consecutivo— y no una menor por ser de a uno.
+Route::post('/contracts/{contract}/facturar', [InvoiceController::class, 'generateForContract'])->name('contracts.invoice');
+
 // Anulación de facturas (nunca se eliminan: cambian a estado Anulada)
 Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'voidInvoice'])->name('invoices.void');
 
