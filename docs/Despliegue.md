@@ -287,7 +287,7 @@ al paso "Si algo falla" del final.
 
 ```bash
 php artisan permissions:sync
-php artisan dian:catalogos
+php artisan dian:importar-catalogos
 ```
 
 `permissions:sync` es **obligatorio**: sin él los permisos nuevos
@@ -519,7 +519,7 @@ git pull origin master
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan permissions:sync
-php artisan dian:catalogos
+php artisan dian:importar-catalogos
 php artisan numeracion:migrar
 php artisan gestisp:empresas-migrar
 php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan event:cache
