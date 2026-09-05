@@ -71,26 +71,38 @@
 </head>
 <body>
 @foreach($invoices as $invoice)
+    {{-- Los datos DIAN de ESTA factura del lote. El encabezado los usa
+         para el emisor y para decidir si se llama «factura electrónica»;
+         el bloque del pie los usa para el CUFE y el QR. Null en las
+         internas, y entonces no sale nada de eso.
+
+         Se usa la forma de BLOQUE y no la corta de una línea: es la
+         única de las dos que hay en este archivo, y mezclarlas rompe la
+         vista (el emparejador de Blade no es ávido y se traga todo lo
+         que hay entre una forma corta y el cierre de un bloque). --}}
+    @php
+        $dian = $dianes[$invoice->id] ?? null;
+    @endphp
     <div class="container">
         <div class="info-company">
             <table width="100%">
                 <tr>
                     <td style="padding-right: 20px;">
-                        <img width="100px" src="{{ asset('storage/'.$invoice->contract->branch->image) }}" alt="Logo"/>
+                        <img width="100px" src="{{ asset('storage/'.$invoice->contract?->branch?->image) }}" alt="Logo"/>
                     </td>
                     <td style="padding-right: 55px; padding-left: 50px;">
-                        <p class="interline">EASYNET GROUP S.A.S</p>
-                        <p class="interline">Nit: {{ $invoice->contract->branch->nit }}</p>
-                        <p class="interline">Tels: {{ $invoice->contract->branch->number_phone }}</p>
-                        <p class="interline">{{ $invoice->contract->branch->address }}</p>
-                        <p class="interline">{{ $invoice->contract->branch->municipality ?? 'N/A' }}-{{ $invoice->contract->branch->department ?? 'N/A' }} - {{ $invoice->contract->branch->country }}</p>
+                        <p class="interline">{{ $dian['emisor']['nombre'] ?? $invoice->contract?->branch?->name ?? '' }}</p>
+                        <p class="interline">Nit: {{ $invoice->contract?->branch?->nit }}</p>
+                        <p class="interline">Tels: {{ $invoice->contract?->branch?->number_phone }}</p>
+                        <p class="interline">{{ $invoice->contract?->branch?->address }}</p>
+                        <p class="interline">{{ $invoice->contract?->branch?->municipality ?? 'N/A' }}-{{ $invoice->contract?->branch?->department ?? 'N/A' }} - {{ $invoice->contract?->branch?->country }}</p>
                     </td>
                     <td>
                         <table class="table-border-rounded">
                             <tbody>
                             <tr>
                                 <td colspan="4" class="border-bottom text-center" style="padding-top: 4px; padding-bottom: 4px;">
-                                    <strong>FACTURA DE VENTA No {{ $invoice->displayNumber() }}</strong>
+                                    <strong>{{ !empty($dian) ? 'FACTURA ELECTRÓNICA DE VENTA' : 'FACTURA DE VENTA' }} No {{ $invoice->displayNumber() }}</strong>
                                 </td>
                             </tr>
                             <tr>
@@ -113,7 +125,7 @@
                             </tr>
                             <tr>
                                 <td colspan="4" style="font-size: 8px;">
-                                    <strong>Fecha/Hora emisión: {{ $invoice->created_at }} Fecha/Hora Validación: {{ $invoice->created_at }}</strong>
+                                    <strong>Fecha/Hora emisión: {{ $invoice->created_at }}</strong>
                                 </td>
                             </tr>
                             </tbody>
@@ -130,15 +142,15 @@
                     <td colspan="8" class="border-bottom text-center"><strong>DATOS DEL SUSCRIPTOR</strong></td>
                 </tr>
                 <tr>
-                    <td colspan="2">C.C/NIT {{ $invoice->contract->client->identity_number }}</td>
-                    <td colspan="3">SUSCRIPTOR {{ $invoice->contract->client->name }} {{ $invoice->contract->client->last_name }}</td>
+                    <td colspan="2">C.C/NIT {{ $invoice->contract?->client?->identity_number }}</td>
+                    <td colspan="3">SUSCRIPTOR {{ trim(($invoice->contract?->client?->name ?? '') . ' ' . ($invoice->contract?->client?->last_name ?? '')) ?: '—' }}</td>
                     <td>CODIGO {{ $invoice->contract->numero_visible }}</td>
-                    <td colspan="2">CORREO {{ $invoice->contract->client->email }}</td>
+                    <td colspan="2">CORREO {{ $invoice->contract?->client?->email }}</td>
                 </tr>
                 <tr>
                     <td colspan="5" class="border-bottom">DIRECCIÓN {{ $invoice->contract->address }} Barrio: {{ $invoice->contract->neighborhood }}</td>
                     <td colspan="2" class="border-bottom">{{ $invoice->contract->municipality ?? 'N/A' }}-{{ $invoice->contract->department ?? 'N/A' }}</td>
-                    <td class="border-bottom">TELÉFONO {{ $invoice->contract->client->number_phone }}</td>
+                    <td class="border-bottom">TELÉFONO {{ $invoice->contract?->client?->number_phone }}</td>
                 </tr>
                 </tbody>
             </table>
@@ -168,7 +180,7 @@
                     </tr>
                 @endforeach
                 <tr>
-                    <td colspan="4"><p>Descripción del servicio: {{ $invoice->contract->plan->name }}</p></td>
+                    <td colspan="4"><p>Descripción del servicio: {{ $invoice->contract?->plan?->name ?? '—' }}</p></td>
                     <td colspan="3">
                         @if($invoice->service_suspension_warning)
                             <p style="color: red; font-weight: bold; margin-left: 20px; text-align: left;">
@@ -179,7 +191,7 @@
                     <td colspan="1" class="border-left"></td>
                 </tr>
                 <tr>
-                    <td colspan="6" rowspan="2" class="text-center border-top"><p>{{ $invoice->contract->branch->message_custom_invoice }}</p></td>
+                    <td colspan="6" rowspan="2" class="text-center border-top"><p>{{ $invoice->contract?->branch?->message_custom_invoice }}</p></td>
                     <td class="border-top border-left"><p><strong>SUBTOTAL</strong></p></td>
                     <td class="border-top border-left" style="text-align: right;"><p>{{ $invoice->total - $invoice->tax }}</p></td>
                 </tr>
@@ -190,7 +202,7 @@
                 <tr>
                     <td colspan="6" rowspan="2" class="text-center border-top">
                         <p><strong>Quejas y reclamos</strong></p>
-                        <p>Tel: {{ $invoice->contract->branch->number_phone }} - Cel: Dirección: {{ $invoice->contract->branch->address }}</p>
+                        <p>Tel: {{ $invoice->contract?->branch?->number_phone }} - Cel: Dirección: {{ $invoice->contract?->branch?->address }}</p>
                     </td>
                     <td class="border-left"><strong>TOTAL DEL MES</strong></td>
                     <td class="border-left" style="text-align: right;">{{ $invoice->total }}</td>
@@ -207,7 +219,7 @@
             <table style="width: 100%;">
                 <tbody>
                 <tr>
-                    <td colspan="4">A la primera cuota vencida se le suspende la señal, la reconexión tiene un costo de $ {{ $invoice->contract->branch->reconnection_price }}</td>
+                    <td colspan="4">A la primera cuota vencida se le suspende la señal, la reconexión tiene un costo de $ {{ $invoice->contract?->branch?->reconnection_price }}</td>
                     <td>suscriptor</td>
                     <td colspan="2"><strong>TOTAL A PAGAR</strong></td>
                     <td><strong>{{ $invoice->total }}</strong></td>
@@ -238,7 +250,7 @@
                 <tbody>
                 <tr>
                     <td style="padding-right: 80px">
-                        <img width="80px" src="{{ asset('storage/'.$invoice->contract->branch->image) }}" alt="Logo"/>
+                        <img width="80px" src="{{ asset('storage/'.$invoice->contract?->branch?->image) }}" alt="Logo"/>
                     </td>
                     <td style="padding-right: 50px; margin-bottom: 0;">
                         <img src="{{ $barcodeUrls[$invoice->id] }}" alt="Código de barras" width="250px">
@@ -252,7 +264,7 @@
                         <p style="text-align: right; padding-right: 15px;">Señal empaquetada</p>
                         <table class="table-border-rounded">
                             <td style="padding-right: 5px; padding-bottom: 10px; padding-left: 5px;">
-                                <p><strong>FACTURA DE VENTA No {{ $invoice->displayNumber() }}</strong></p>
+                                <p><strong>{{ !empty($dian) ? 'FACTURA ELECTRÓNICA DE VENTA' : 'FACTURA DE VENTA' }} No {{ $invoice->displayNumber() }}</strong></p>
                             </td>
                         </table>
                     </td>
@@ -270,10 +282,10 @@
                             <tbody>
                             <tr>
                                 <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;">
-                                    <p>C.C <strong>{{ $invoice->contract->client->identity_number }}</strong></p>
+                                    <p>C.C <strong>{{ $invoice->contract?->client?->identity_number }}</strong></p>
                                 </td>
                                 <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;" colspan="3">
-                                    <p>SUSCRIPTOR <strong>{{ $invoice->contract->client->name }} {{ $invoice->contract->client->last_name }}</strong></p>
+                                    <p>SUSCRIPTOR <strong>{{ trim(($invoice->contract?->client?->name ?? '') . ' ' . ($invoice->contract?->client?->last_name ?? '')) ?: '—' }}</strong></p>
                                 </td>
                                 <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;">
                                     <p>PERIODO <strong>{{ $invoice->billed_year_month }}</strong></p>
@@ -287,7 +299,7 @@
                                     <p>DIRECCIÓN <strong>{{ $invoice->contract->address }} Barrio {{ $invoice->contract->neighborhood }}</strong></p>
                                 </td>
                                 <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;">
-                                    <p>TELÉFONO <strong>{{ $invoice->contract->client->number_phone }}</strong></p>
+                                    <p>TELÉFONO <strong>{{ $invoice->contract?->client?->number_phone }}</strong></p>
                                 </td>
                                 <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;">
                                     <p>CÓDIGO {{ $invoice->contract->numero_visible }}</p>
@@ -325,12 +337,12 @@
                 <tbody>
                 <tr>
                     <td colspan="2">
-                        <p style="margin: 0;">Costo traslado servicios ${{ $invoice->contract->branch->moving_price }}</p>
+                        <p style="margin: 0;">Costo traslado servicios ${{ $invoice->contract?->branch?->moving_price }}</p>
                     </td>
                 </tr>
                 <tr>
                     <td colspan="2">
-                        <p style="margin: 0;">Costo reconexión servicio ${{ $invoice->contract->branch->reconnection_price }}</p>
+                        <p style="margin: 0;">Costo reconexión servicio ${{ $invoice->contract?->branch?->reconnection_price }}</p>
                     </td>
                 </tr>
                 </tbody>
@@ -339,7 +351,7 @@
 
         {{-- Cada factura del lote lleva SU bloque DIAN, no uno común:
              el CUFE y el QR son de ese documento concreto. --}}
-        @include('gestisp.invoices.partials.dian', ['dian' => $dianes[$invoice->id] ?? null])
+        @include('gestisp.invoices.partials.dian', ['dian' => $dian])
     </div>
     @if(!$loop->last)
         <div class="page-break"></div>

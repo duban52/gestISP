@@ -165,8 +165,8 @@
                                  identificación: son los datos por los que se
                                  busca a un cliente en el mostrador --}}
                             <td>{{ $invoice->contract->contract_number ?? '—' }}</td>
-                            <td>{{ $invoice->contract->client->identity_number ?? '—' }}</td>
-                            <td>{{ $invoice->contract->client->name }} {{ $invoice->contract->client->last_name }}</td>
+                            <td>{{ $invoice->contract?->client?->identity_number ?? '—' }}</td>
+                            <td>{{ trim(($invoice->contract?->client?->name ?? '') . ' ' . ($invoice->contract?->client?->last_name ?? '')) ?: '—' }}</td>
                             <td>{{ $invoice->billed_period_short ?? 'N/A' }}</td>
                             <td>{{ \Carbon\Carbon::parse($invoice->issue_date)->format('d/m/Y') }}</td>
                             <td>{{ \Carbon\Carbon::parse($invoice->due_date)->format('d/m/Y') }}</td>
