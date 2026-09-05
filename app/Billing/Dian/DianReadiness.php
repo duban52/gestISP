@@ -61,7 +61,7 @@ class DianReadiness
             $this->resolucion($empresa),
             $this->rango($empresa),
             $this->setDePruebas($empresa),
-            $this->transporte(),
+            $this->transporte($empresa),
         ];
     }
 
@@ -253,14 +253,22 @@ class DianReadiness
                 : 'El set de pruebas todavía no está aprobado.');
     }
 
-    private function transporte(): array
+    private function transporte(Company $empresa): array
     {
-        $hayEndpoint = filled(config('dian.endpoint'));
+        // La URL sale del ambiente de la empresa y viene puesta de
+        // fabrica: son las dos direcciones publicas de la DIAN, una para
+        // habilitacion y otra para produccion. Solo falta si alguien las
+        // vacio a proposito.
+        $configuracion = $empresa->dianConfiguration;
+        $endpoints = new \App\Billing\Dian\Transport\DianEndpoints();
+
+        $url = $endpoints->para($configuracion?->environment_code, $configuracion?->endpoint_override);
+        $personalizada = $endpoints->esPersonalizada($configuracion?->endpoint_override);
         $forzadoSimulado = config('dian.transport') === 'fake';
 
-        if (!$hayEndpoint) {
+        if ($url === null) {
             return $this->paso('transporte', 'Servicio de la DIAN', false, true,
-                'No hay URL configurada (DIAN_ENDPOINT). La expone la propia DIAN en el catálogo del facturador.');
+                'No hay URL del servicio configurada para este ambiente (config/dian.php).');
         }
 
         if ($forzadoSimulado) {
@@ -268,7 +276,16 @@ class DianReadiness
                 'Hay URL, pero el transporte está forzado a simulado (DIAN_TRANSPORT=fake): no sale nada.');
         }
 
-        return $this->paso('transporte', 'Servicio de la DIAN', true, true, 'Configurado.');
+        // Si alguien la puso a mano, que se vea: una URL personalizada
+        // que apunte al ambiente equivocado manda documentos de prueba
+        // a produccion, o al reves.
+        return $this->paso(
+            'transporte',
+            'Servicio de la DIAN',
+            true,
+            true,
+            $personalizada ? $url . '  (personalizada)' : $url,
+        );
     }
 
     // ==================== Apoyo ====================

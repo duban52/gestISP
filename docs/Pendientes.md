@@ -6,25 +6,7 @@ construyendo, no algo que se nos ocurrió que estaría bien.
 
 Ordenado por lo que **bloquea** primero.
 
----
-
-## 1. Bloquean facturar electrónicamente
-
-### 1.1 · La URL del servicio de la DIAN 🔴
-
-No la publica la DIAN en su documentación: la expone dentro de la cuenta
-del catálogo de cada facturador (**Participants → Facturador**), y es
-distinta en habilitación y en producción.
-
-Sin ella `SoapDianTransport` no tiene a dónde enviar y el sistema usa el
-transporte simulado.
-
-**Qué hacer:** entrar al catálogo de la DIAN, copiar la URL y ponerla en
-`DIAN_ENDPOINT`.
-
----
-
-### 1.2 · Confirmar la política de firma 🔴
+### 1.1 · Confirmar la política de firma 🔴
 
 `XadesSigner` declara el identificador de la política y su resumen con
 los valores de los XML de ejemplo de la DIAN
@@ -38,27 +20,7 @@ Si el identificador o el resumen no coinciden con la política publicada,
 comparar con las constantes `POLITICA_URL` y `POLITICA_RESUMEN` de
 [XadesSigner](../app/Billing/Dian/XadesSigner.php).
 
----
-
-### 1.3 · IVA exento y excluido 🔴
-
-Un ISP colombiano factura internet residencial de **estratos 1, 2 y 3
-sin IVA**. En el XML eso NO es «porcentaje cero»: son estructuras
-propias, con su código de motivo de exención.
-
-Hoy las líneas sin impuesto simplemente no suman al `TaxTotal` —
-correcto para lo gravado, **incorrecto para lo exento**.
-
-**Dónde:** `InvoiceXmlBuilder::impuestos()` y `::lineas()`. Los ejemplos
-`Exento de IVA.xml` y `Excluido de IVA.xml` del paquete oficial traen la
-estructura exacta.
-
-**Bloquea:** facturar electrónicamente a los estratos 1-3, que para un
-ISP suele ser la mayor parte de la base de clientes.
-
----
-
-### 1.4 · La firma, contra un certificado real ⚠️
+### 1.2 · La firma, contra un certificado real ⚠️
 
 `XadesSigner` está probado con un certificado autofirmado: la firma
 verifica, los resúmenes se recalculan y el documento sigue validando
@@ -179,9 +141,11 @@ en el backup general.
 | Envío del set de pruebas | ✅ |
 | Pantallas de administración DIAN | ✅ |
 | Notas electrónicas | ✅ |
-| IVA exento/excluido | ❌ |
+| IVA gravado / excluido / exento | ✅ |
 
-**En una frase:** el sistema produce facturas y notas electrónicos correctos,
-ya se puede configurar sin un programador, y sabe qué hacer con las
-respuestas. Lo que falta son las credenciales de la DIAN para probarlo
-de verdad, y el IVA exento para poder facturarle a los estratos 1-3.
+**En una frase:** el sistema produce facturas y notas electrónicas
+correctas, se configura sin un programador, sabe a qué servicio de la
+DIAN hablarle según el ambiente de cada empresa, y sabe qué hacer con
+las respuestas. Lo que falta es **probarlo contra la DIAN de verdad**:
+cargar el certificado, confirmar la política de firma y correr el set de
+pruebas.

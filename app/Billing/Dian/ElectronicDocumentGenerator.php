@@ -157,7 +157,20 @@ class ElectronicDocumentGenerator
             return;
         }
 
-        if (blank(config('dian.endpoint'))) {
+        // Segun el AMBIENTE del documento —habilitacion y produccion
+        // son servicios distintos, y en multiempresa conviven— y el
+        // override que tenga puesto SU empresa.
+        //
+        // El override se lee del documento y no de una variable de mas
+        // arriba: este metodo solo recibe el documento, y colar aqui
+        // una variable de otro ambito es como se cuela un error que la
+        // excepcion se traga y deja el documento en borrador.
+        $hayDonde = (new \App\Billing\Dian\Transport\DianEndpoints())->hayPara(
+            $documento->environment_code,
+            $documento->company?->dianConfiguration?->endpoint_override,
+        );
+
+        if (!$hayDonde) {
             return;
         }
 

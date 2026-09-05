@@ -27,7 +27,24 @@ class Service extends Model
         'product_code_type',
         'unit_measure_code',
         'tax_code',
+        'tax_classification',
         ];
+
+    protected $casts = [
+        'tax_classification' => \App\Billing\Enums\TaxClassification::class,
+    ];
+
+    /**
+     * Como trata el IVA este servicio.
+     *
+     * Nunca null: los servicios anteriores a la clasificacion quedaron
+     * migrados a partir de su tarifa, y el valor por defecto es
+     * gravado.
+     */
+    public function clasificacion(): \App\Billing\Enums\TaxClassification
+    {
+        return $this->tax_classification ?? \App\Billing\Enums\TaxClassification::Gravado;
+    }
 
     //Relación con usuarios
     public function user()

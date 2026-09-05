@@ -41,13 +41,6 @@ class TransmitPendingDocuments extends Command
 
     public function handle(): int
     {
-        if (blank(config('dian.endpoint'))) {
-            $this->warn('No hay URL del servicio de la DIAN configurada (DIAN_ENDPOINT).');
-            $this->line('La expone la propia DIAN en el catálogo del facturador. Sin ella no hay a dónde transmitir.');
-
-            return self::FAILURE;
-        }
-
         $pendientes = ElectronicDocument::withoutGlobalScopes()
             ->where('status', ElectronicDocument::FIRMADO)
             ->when($this->option('empresa'), fn ($q, $empresa) => $q->where('company_id', $empresa))

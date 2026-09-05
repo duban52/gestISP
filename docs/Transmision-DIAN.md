@@ -10,10 +10,10 @@ qué casi todo esto se pudo construir y probar sin tener credenciales.
 La fase 10 dejó documentos electrónicos correctos: XML válido contra el
 XSD de la DIAN, con su CUFE y su firma. Pero no salían a ninguna parte.
 
-Y para hacerlos salir hacía falta algo que **no teníamos y no podíamos
-conseguir leyendo**: la URL del servicio. La DIAN no la publica en su
-documentación — la expone dentro de la cuenta del catálogo de cada
-facturador (Participants → Facturador).
+Y para hacerlos salir faltaba algo que en ese momento no teníamos: la
+URL del servicio y un certificado con el que autenticarse. *(La URL
+resultó ser pública y ya viene puesta — ver más abajo. Lo que sigue
+faltando es probarlo contra la DIAN de verdad.)*
 
 ## La decisión: una interfaz
 
@@ -32,8 +32,8 @@ alrededor, y **eso sí se puede construir y probar hoy**: 16 pruebas
 cubren reintentos, estados, idempotencia y registro de intentos, sin
 tocar la red.
 
-El día que haya URL y certificado, se configura `DIAN_ENDPOINT` y la
-implementación real entra en su sitio sin cambiar nada más.
+El día que haya certificado y habilitación, la implementación real
+entra en su sitio sin cambiar nada más.
 
 ## Las cuatro respuestas posibles
 
@@ -99,13 +99,11 @@ minutos no ocupa un trabajador durante 2 minutos.
 
 ## Cuándo se transmite
 
-Automáticamente al firmar, **pero solo si hay `DIAN_ENDPOINT`
-configurado**. Sin URL no hay a dónde mandar nada, y encolar igualmente
-llenaría la cola de trabajos que solo pueden fallar.
+Automáticamente al firmar, si hay URL para el ambiente del documento
+—que la hay, porque vienen puestas de fábrica—.
 
-Para barrer lo que quedó pendiente —porque la cola se cayó, porque la
-URL se configuró después de emitir un lote, o porque el servicio de la
-DIAN estuvo caído:
+Para barrer lo que quedó pendiente —porque la cola se cayó, o porque el
+servicio de la DIAN estuvo caído:
 
 ```bash
 php artisan dian:transmitir --dry-run
@@ -159,12 +157,33 @@ firma con WS-Security: habría que interceptar y reescribir el sobre
 igual. Se arma a mano sobre HTTP, que además deja ver exactamente qué se
 envía.
 
-## Configuración
+## A qué URL se le habla
+
+**No hay que configurarla.** Son dos —habilitación y producción—, son
+públicas, iguales para todos los contribuyentes, y vienen puestas de
+fábrica en `config/dian.php`.
+
+Cuál se usa lo decide el **ambiente del documento**, que quedó congelado
+al emitirlo. Eso es lo que hace que esto funcione en multiempresa: la
+empresa A puede estar pasando su set de pruebas mientras la B ya factura
+de verdad. Con una sola URL global, encender la producción de una habría
+mandado a producción los documentos de prueba de la otra.
+
+El **set de pruebas** va siempre a habilitación, aunque la empresa ya
+esté en producción: es el trámite de habilitación.
+
+### El `?wsdl` no es el endpoint
+
+La dirección que publica la DIAN suele terminar en `?wsdl`. Esa devuelve
+la *definición* del servicio, para que una herramienta la lea; los
+documentos se mandan a la URL **sin** ese sufijo. Se limpia sola, pero
+conviene saberlo: mandarlo ahí no falla de forma evidente —contesta con
+el WSDL— y el error resultante no dice nada de esto.
 
 ```dotenv
-DIAN_ENDPOINT=          # vacío = transporte simulado
+DIAN_ENDPOINT=          # solo para apuntar a un intermediario
 DIAN_TIMEOUT=60
-DIAN_TRANSPORT=auto     # 'fake' fuerza el simulado aunque haya endpoint
+DIAN_TRANSPORT=auto     # 'fake' fuerza el simulado
 ```
 
 `DIAN_TRANSPORT=fake` es para un entorno de pruebas que apunta a una

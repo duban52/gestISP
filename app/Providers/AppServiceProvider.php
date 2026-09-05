@@ -52,7 +52,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(DianTransport::class, function () {
             $forzado = config('dian.transport', 'auto');
 
-            if ($forzado === 'fake' || blank(config('dian.endpoint'))) {
+            if ($forzado === 'fake') {
                 return new FakeDianTransport();
             }
 

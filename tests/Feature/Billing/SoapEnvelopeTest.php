@@ -174,7 +174,7 @@ class SoapEnvelopeTest extends TestCase
 
     public function test_sin_endpoint_no_intenta_salir(): void
     {
-        config(['dian.endpoint' => '']);
+        config(['dian.endpoint' => '', 'dian.endpoints.habilitacion' => '', 'dian.endpoints.produccion' => '']);
         Http::fake();
 
         $resultado = $this->transmitir();
@@ -192,6 +192,82 @@ class SoapEnvelopeTest extends TestCase
         $this->assertSame(TransmissionResult::ERROR, $resultado->resultado);
         $this->assertStringContainsString('certificado', $resultado->errores[0]);
         Http::assertNothingSent();
+    }
+
+    // ==================== La URL, por ambiente ====================
+
+    public function test_habilitacion_y_produccion_son_servicios_distintos(): void
+    {
+        // ES LO QUE HACE QUE ESTO FUNCIONE EN MULTIEMPRESA: la empresa A
+        // puede estar pasando su set de pruebas mientras la B ya factura
+        // de verdad. Con una sola URL global, encender la produccion de
+        // una habria mandado a produccion los documentos de prueba de la
+        // otra.
+        config(['dian.endpoint' => '']);
+
+        $endpoints = new \App\Billing\Dian\Transport\DianEndpoints();
+
+        $habilitacion = $endpoints->para(\App\Models\DianConfiguration::PRUEBAS);
+        $produccion = $endpoints->para(\App\Models\DianConfiguration::PRODUCCION);
+
+        $this->assertNotSame($habilitacion, $produccion);
+        $this->assertStringContainsString('vpfe-hab', $habilitacion);
+        $this->assertStringNotContainsString('vpfe-hab', $produccion);
+    }
+
+    public function test_el_wsdl_se_quita_de_la_url(): void
+    {
+        // Es la direccion que publica la DIAN y la que uno copia sin
+        // pensarlo, pero apunta a la DEFINICION del servicio. Mandar el
+        // documento ahi no falla de forma evidente: contesta con el
+        // WSDL, y el error resultante no dice nada de esto.
+        config(['dian.endpoint' => 'https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc?wsdl']);
+
+        $url = (new \App\Billing\Dian\Transport\DianEndpoints())->para('2');
+
+        $this->assertSame('https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc', $url);
+    }
+
+    public function test_viene_puesta_de_fabrica(): void
+    {
+        // Son URL publicas, iguales para todos los contribuyentes: nadie
+        // tiene que copiarlas de ningun sitio para empezar.
+        config(['dian.endpoint' => '']);
+
+        $this->assertTrue(
+            (new \App\Billing\Dian\Transport\DianEndpoints())->hayPara('2'),
+        );
+    }
+
+    public function test_el_override_global_gana(): void
+    {
+        // El escape para apuntar a un intermediario o a un entorno
+        // propio de pruebas.
+        config(['dian.endpoint' => 'https://mi-intermediario.example/servicio']);
+
+        $endpoints = new \App\Billing\Dian\Transport\DianEndpoints();
+
+        $this->assertSame('https://mi-intermediario.example/servicio', $endpoints->para('1'));
+        $this->assertSame('https://mi-intermediario.example/servicio', $endpoints->para('2'));
+    }
+
+    public function test_el_documento_sale_a_la_url_de_su_ambiente(): void
+    {
+        // No a la del ambiente actual de la empresa: al del DOCUMENTO,
+        // que quedo congelado al emitirlo.
+        config(['dian.endpoint' => '']);
+
+        $capturada = null;
+        Http::fake(function (Request $peticion) use (&$capturada) {
+            $capturada = $peticion->url();
+
+            return Http::response($this->respuestaAceptada(), 200);
+        });
+
+        (new SoapDianTransport())->enviar($this->documento());
+
+        // El documento de $this->documento() es de ambiente '2'.
+        $this->assertStringContainsString('vpfe-hab', $capturada);
     }
 
     // ==================== Apoyo ====================

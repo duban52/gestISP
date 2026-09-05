@@ -227,6 +227,11 @@ class InvoiceGenerator
                     'product_code' => $service->product_code,
                     'product_code_type' => $service->product_code_type,
                     'unit_measure_code' => $service->unit_measure_code,
+                    // Como se trato el IVA, congelado igual que el
+                    // codigo de producto: la factura emitida tiene que
+                    // seguir diciendolo aunque manana se reclasifique el
+                    // servicio. Su XML ya se transmitio.
+                    'tax_classification' => $service->clasificacion()->value,
                     'quantity' => 1,
                     'unit_price' => $service->base_price,
                     'percentage_tax' => $service->tax_percentage,

@@ -28,7 +28,7 @@ class DianConfiguration extends Model
 
     protected $fillable = [
         'company_id', 'environment_code', 'software_id', 'software_pin',
-        'test_set_id', 'enabled_at',
+        'test_set_id', 'endpoint_override', 'enabled_at',
     ];
 
     protected $casts = [

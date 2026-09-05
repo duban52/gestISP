@@ -194,6 +194,89 @@ class DianAdminScreensTest extends TestCase
         );
     }
 
+    // ==================== La URL del servicio ====================
+
+    public function test_la_url_se_puede_ver_y_corregir_desde_la_pantalla(): void
+    {
+        // Viene puesta de fabrica, pero «viene puesta» y «no se puede
+        // ver ni corregir» no son lo mismo. Si la DIAN la mueve, esto
+        // evita un despliegue.
+        $this->get(route('dian.panel', $this->empresa))
+            ->assertOk()
+            ->assertSee('name="endpoint_override"', false)
+            ->assertSee('vpfe-hab.dian.gov.co', false);
+    }
+
+    public function test_se_guarda_la_url_de_la_empresa(): void
+    {
+        $this->put(route('dian.configuracion', $this->empresa), [
+            'endpoint_override' => 'https://mi-proveedor.example/servicio',
+        ])->assertRedirect();
+
+        $this->assertSame(
+            'https://mi-proveedor.example/servicio',
+            DianConfiguration::withoutGlobalScopes()
+                ->where('company_id', $this->empresa->id)->first()->endpoint_override,
+        );
+    }
+
+    public function test_la_url_de_una_empresa_no_afecta_a_la_otra(): void
+    {
+        // ES EL MOTIVO DE QUE SEA POR EMPRESA. Una puede pasar por un
+        // proveedor tecnologico mientras la otra emite directo.
+        $otra = Company::factory()->create();
+
+        DianConfiguration::withoutGlobalScopes()->create([
+            'company_id' => $otra->id,
+            'environment_code' => DianConfiguration::PRUEBAS,
+            'endpoint_override' => 'https://otra-empresa.example/servicio',
+        ]);
+
+        $this->put(route('dian.configuracion', $this->empresa), [
+            'endpoint_override' => 'https://mi-empresa.example/servicio',
+        ]);
+
+        $endpoints = new \App\Billing\Dian\Transport\DianEndpoints();
+
+        $this->assertSame(
+            'https://mi-empresa.example/servicio',
+            $endpoints->para('2', $this->empresa->fresh()->dianConfiguration->endpoint_override),
+        );
+        $this->assertSame(
+            'https://otra-empresa.example/servicio',
+            $endpoints->para('2', $otra->fresh()->dianConfiguration->endpoint_override),
+        );
+    }
+
+    public function test_una_url_invalida_se_rechaza(): void
+    {
+        $this->put(route('dian.configuracion', $this->empresa), [
+            'endpoint_override' => 'esto no es una url',
+        ])->assertSessionHasErrors('endpoint_override');
+    }
+
+    public function test_dejarla_vacia_vuelve_a_la_de_fabrica(): void
+    {
+        DianConfiguration::withoutGlobalScopes()->create([
+            'company_id' => $this->empresa->id,
+            'environment_code' => DianConfiguration::PRUEBAS,
+            'endpoint_override' => 'https://algo.example/servicio',
+        ]);
+
+        $this->put(route('dian.configuracion', $this->empresa), ['endpoint_override' => '']);
+
+        $configuracion = DianConfiguration::withoutGlobalScopes()
+            ->where('company_id', $this->empresa->id)->first();
+
+        $this->assertNull($configuracion->endpoint_override);
+
+        // Y vuelve a resolver a la publica del ambiente.
+        $url = (new \App\Billing\Dian\Transport\DianEndpoints())
+            ->para($configuracion->environment_code, $configuracion->endpoint_override);
+
+        $this->assertStringContainsString('vpfe-hab.dian.gov.co', $url);
+    }
+
     // ==================== El certificado ====================
 
     public function test_el_certificado_se_guarda_fuera_del_directorio_publico(): void

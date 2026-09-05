@@ -58,6 +58,27 @@
 
                 </div>
 
+
+                <div class="form-group">
+                    <label for="tax_classification">Tratamiento del IVA</label>
+                    <select class="form-control" id="tax_classification" name="tax_classification">
+                        @foreach(\App\Billing\Enums\TaxClassification::opciones() as $valor => $etiqueta)
+                            <option value="{{ $valor }}" @selected(old('tax_classification', $service->clasificacion()->value) === $valor)>
+                                {{ $etiqueta }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('tax_classification')
+                    <span class="text-danger"><span>* {{ $message }}</span></span>
+                    @enderror
+                    <small class="form-text text-muted">
+                        <strong>Excluido</strong>: la ley no lo sujeta a IVA — es el caso del internet
+                        residencial de estratos 1, 2 y 3. En el XML no lleva bloque de impuestos.<br>
+                        <strong>Exento</strong>: sujeto pero a tarifa 0%. Sí lleva el bloque, en ceros,
+                        y el IVA de las compras sí se puede descontar.<br>
+                        Si no es gravado, deje el porcentaje en 0.
+                    </small>
+                </div>
                 <div class="col-12 mb-3">
                     <x-campos-fiscales-servicio :servicio="$service" />
                 </div>

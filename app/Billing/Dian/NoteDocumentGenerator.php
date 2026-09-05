@@ -85,7 +85,7 @@ class NoteDocumentGenerator
                 'generated_at' => now(),
             ]);
 
-            if ($firmado && filled(config('dian.endpoint'))) {
+            if ($firmado && (new \App\Billing\Dian\Transport\DianEndpoints())->hayPara($configuracion->environment_code, $configuracion->endpoint_override)) {
                 TransmitElectronicDocument::dispatch($documento->id);
             }
 

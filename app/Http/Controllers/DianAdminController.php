@@ -93,6 +93,11 @@ class DianAdminController extends Controller
             'revision' => $revision->revisar($company),
             'listo' => $revision->puedeEmitir($company),
             'configuracion' => $company->dianConfiguration,
+            // La que se usaria HOY, para poder enseñarla de ejemplo en
+            // el campo: asi se ve cual es sin tener que buscarla.
+            'urlEnUso' => (new \App\Billing\Dian\Transport\DianEndpoints())->para(
+                $company->dianConfiguration?->environment_code,
+            ),
             'certificados' => DianCertificate::withoutGlobalScopes()
                 ->where('company_id', $company->id)
                 ->orderByDesc('active')
@@ -143,10 +148,18 @@ class DianAdminController extends Controller
             'software_id' => 'nullable|string|max:100',
             'software_pin' => 'nullable|string|max:100',
             'test_set_id' => 'nullable|string|max:60',
-        ], [], [
+            // Opcional a proposito: lo normal es dejarla vacia y que el
+            // sistema use la URL publica del ambiente. Esto es el
+            // escape para cuando la DIAN la mueva o para una empresa
+            // que pase por un proveedor tecnologico.
+            'endpoint_override' => 'nullable|url|max:255',
+        ], [
+            'endpoint_override.url' => 'La dirección del servicio no parece una URL válida.',
+        ], [
             'software_id' => 'identificador del software',
             'software_pin' => 'PIN del software',
             'test_set_id' => 'identificador del set de pruebas',
+            'endpoint_override' => 'dirección del servicio',
         ]);
 
         $configuracion = DianConfiguration::withoutGlobalScopes()->firstOrNew([
@@ -158,6 +171,7 @@ class DianAdminController extends Controller
         // revienta en cuanto alguien manda el formulario incompleto.
         $configuracion->software_id = ($datos['software_id'] ?? null) ?: null;
         $configuracion->test_set_id = ($datos['test_set_id'] ?? null) ?: null;
+        $configuracion->endpoint_override = ($datos['endpoint_override'] ?? null) ?: null;
 
         // Vacío significa «no lo cambies», no «bórralo»: el campo llega
         // siempre en blanco porque el PIN no se devuelve nunca.

@@ -104,12 +104,28 @@
                             </small>
                         </div>
 
-                        <div class="form-group mb-0">
+                        <div class="form-group">
                             <label>Identificador del set de pruebas</label>
                             <input type="text" name="test_set_id" class="form-control"
                                    value="{{ old('test_set_id', $configuracion?->test_set_id) }}">
                             <small class="form-text text-muted">
                                 Lo asigna la DIAN para la habilitación.
+                            </small>
+                        </div>
+
+                        <div class="form-group mb-0">
+                            <label>Dirección del servicio de la DIAN</label>
+                            <input type="url" name="endpoint_override" class="form-control @error('endpoint_override') is-invalid @enderror"
+                                   value="{{ old('endpoint_override', $configuracion?->endpoint_override) }}"
+                                   placeholder="{{ $urlEnUso }}">
+                            @error('endpoint_override')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            <small class="form-text text-muted">
+                                <strong>Normalmente se deja vacía.</strong> El sistema usa sola la dirección
+                                pública que corresponde al ambiente de la empresa —hoy sería
+                                <code>{{ $urlEnUso }}</code>.
+                                <br>
+                                Solo hace falta ponerla si la DIAN la cambia, o si esta empresa transmite
+                                a través de un proveedor tecnológico.
                             </small>
                         </div>
                     </div>

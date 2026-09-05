@@ -208,7 +208,7 @@ class ElectronicDocumentGenerationTest extends BillingTestCase
         // trabajos que solo pueden fallar. La expone la propia DIAN en
         // el catalogo del facturador.
         \Illuminate\Support\Facades\Queue::fake();
-        config(['dian.endpoint' => '']);
+        config(['dian.endpoint' => '', 'dian.endpoints.habilitacion' => '', 'dian.endpoints.produccion' => '']);
 
         $this->certificadoVigente();
         $this->emitir($this->contratoElectronico());

@@ -52,6 +52,7 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
 
     public function __construct(
         private readonly XmlSecuritySigner $seguridad = new XmlSecuritySigner(),
+        private readonly DianEndpoints $endpoints = new DianEndpoints(),
     ) {
     }
 
@@ -62,12 +63,20 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
 
     public function enviar(ElectronicDocument $documento): TransmissionResult
     {
-        $url = (string) config('dian.endpoint');
+        // La URL sale del AMBIENTE DEL DOCUMENTO, que quedo congelado
+        // al emitirlo. Con una sola URL global, encender la produccion
+        // de una empresa habria mandado a produccion tambien los
+        // documentos de prueba de otra.
+        // El ambiente sale del DOCUMENTO (congelado al emitir); el
+        // override, de la EMPRESA que lo emitio.
+        $url = $this->endpoints->para(
+            $documento->environment_code,
+            $documento->company?->dianConfiguration?->endpoint_override,
+        );
 
-        if ($url === '') {
+        if ($url === null) {
             return TransmissionResult::error([
-                'No hay URL del servicio de la DIAN configurada (DIAN_ENDPOINT). '
-                . 'La expone la propia DIAN en el catálogo del facturador.',
+                'No hay URL del servicio de la DIAN para el ambiente de este documento.',
             ]);
         }
 
@@ -114,11 +123,13 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
      */
     public function enviarSetDePruebas(array $documentos, string $testSetId): TransmissionResult
     {
-        $url = (string) config('dian.endpoint');
+        // El set de pruebas va SIEMPRE a habilitacion, aunque la
+        // empresa ya este en produccion: es el tramite de habilitacion.
+        $url = $this->endpoints->habilitacion($this->overrideDe($documentos));
 
-        if ($url === '') {
+        if ($url === null) {
             return TransmissionResult::error([
-                'No hay URL del servicio de la DIAN configurada (DIAN_ENDPOINT).',
+                'No hay URL del servicio de habilitación de la DIAN configurada.',
             ]);
         }
 
@@ -269,6 +280,22 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
             ->where('active', true)
             ->get()
             ->first(fn (DianCertificate $certificado) => $certificado->vigente());
+    }
+
+    /**
+     * El override de la empresa que manda el set de pruebas.
+     *
+     * Los documentos del set son todos de la misma empresa —el set es
+     * de un contribuyente—, asi que basta con mirar el primero.
+     */
+    private function overrideDe(array $documentos): ?string
+    {
+        $nombre = array_key_first($documentos);
+        $cufe = $nombre === null ? null : pathinfo($nombre, PATHINFO_FILENAME);
+
+        return ElectronicDocument::withoutGlobalScopes()
+            ->where('cufe', $cufe)
+            ->first()?->company?->dianConfiguration?->endpoint_override;
     }
 
     /**

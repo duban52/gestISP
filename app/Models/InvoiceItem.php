@@ -18,6 +18,7 @@ class InvoiceItem extends Model
         'product_code',
         'product_code_type',
         'unit_measure_code',
+        'tax_classification',
         'quantity',
         'unit_price',
         'percentage_tax',

@@ -14,6 +14,26 @@
         </div>
     @endif
 
+    {{-- Aviso de clasificacion fiscal: el IVA del servicio no cuadra
+         con el estrato del contrato. AVISA, no bloquea — puede haber
+         razones legitimas, como un contrato empresarial en una
+         direccion de estrato bajo. --}}
+    @if(session('avisos_fiscales') && count(session('avisos_fiscales')))
+        <div class="alert alert-warning">
+            <h5 class="mb-2"><i class="fas fa-exclamation-triangle mr-1"></i> Revise el IVA de este contrato</h5>
+            <ul class="mb-1">
+                @foreach(session('avisos_fiscales') as $aviso)
+                    <li>{{ $aviso }}</li>
+                @endforeach
+            </ul>
+            <small class="text-muted">
+                El internet residencial de estratos 1, 2 y 3 está excluido de IVA; para los demás se
+                grava a la tarifa general. Si la clasificación está mal, corríjala en el servicio.
+            </small>
+        </div>
+    @endif
+
+
     @if(session('error'))
         <div class="alert alert-danger">
             {{ session('error') }}

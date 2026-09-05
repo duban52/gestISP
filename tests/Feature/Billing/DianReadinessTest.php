@@ -140,7 +140,10 @@ class DianReadinessTest extends TestCase
     public function test_sin_endpoint_bloquea(): void
     {
         $this->completarTodo();
-        config(['dian.endpoint' => '']);
+        // Vaciar tambien los de cada ambiente: la URL ya no hay que
+        // configurarla —viene puesta de fabrica—, asi que para
+        // probar «sin servicio» hay que quitarlas todas.
+        config(['dian.endpoint' => '', 'dian.endpoints.habilitacion' => '', 'dian.endpoints.produccion' => '']);
 
         $this->assertFalse($this->revision()->puedeEmitir($this->empresa->fresh()));
     }

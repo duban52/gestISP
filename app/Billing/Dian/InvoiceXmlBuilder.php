@@ -305,19 +305,34 @@ class InvoiceXmlBuilder extends UblBuilder
         }
     }
 
+    /**
+     * El bloque de impuestos del documento.
+     *
+     * Lo que decide si va o no es la CLASIFICACION de cada linea, no su
+     * tarifa. Un servicio EXCLUIDO no lleva bloque de impuestos —la ley
+     * no lo sujeta a IVA—, mientras que uno EXENTO si lo lleva, en
+     * ceros. Decir «cero impuesto» y «no hay impuesto» son cosas
+     * distintas para la DIAN, y se comprobo en sus propios ejemplos.
+     */
     private function impuestos(\DOMDocument $doc, \DOMElement $raiz, Invoice $factura): void
     {
-        $gravadas = $factura->invoice_items->filter(fn ($item) => (float) $item->percentage_tax > 0);
+        // Entran las gravadas y las exentas; las excluidas no.
+        $conImpuesto = $factura->invoice_items->filter(
+            fn ($item) => $this->clasificacionDe($item)->llevaBloqueDeImpuestos(),
+        );
 
-        if ($gravadas->isEmpty()) {
+        if ($conImpuesto->isEmpty()) {
             return;
         }
+
+        $gravadas = $conImpuesto;
 
         $nodo = $this->hijo($doc, $raiz, 'cac:TaxTotal');
         $this->importe($doc, $nodo, 'cbc:TaxAmount', (float) $factura->tax);
 
         // Un subtotal por cada tarifa distinta: la DIAN los quiere
-        // agrupados por porcentaje, no línea a línea.
+        // agrupados por porcentaje, no línea a línea. Las exentas
+        // forman su propio grupo al 0,00.
         foreach ($gravadas->groupBy('percentage_tax') as $porcentaje => $lineas) {
             $subtotal = $this->hijo($doc, $nodo, 'cac:TaxSubtotal');
 
@@ -362,7 +377,8 @@ class InvoiceXmlBuilder extends UblBuilder
             $this->importe($doc, $nodo, 'cbc:LineExtensionAmount', (float) $item->unit_price * (float) $item->quantity);
             $this->hijo($doc, $nodo, 'cbc:FreeOfChargeIndicator', 'false');
 
-            if ((float) $item->percentage_tax > 0) {
+            // Igual que arriba: manda la clasificacion, no la tarifa.
+            if ($this->clasificacionDe($item)->llevaBloqueDeImpuestos()) {
                 $impuesto = $this->hijo($doc, $nodo, 'cac:TaxTotal');
                 $this->importe($doc, $impuesto, 'cbc:TaxAmount', (float) $item->tax);
 
@@ -391,6 +407,24 @@ class InvoiceXmlBuilder extends UblBuilder
             $base = $this->hijo($doc, $precio, 'cbc:BaseQuantity', number_format((float) $item->quantity, 6, '.', ''));
             $base->setAttribute('unitCode', $unidad);
         }
+    }
+
+    /**
+     * Como se trato el IVA en una linea.
+     *
+     * Se lee de lo que se CONGELO al emitir. Las lineas anteriores a la
+     * clasificacion no la tienen: se deduce de la tarifa, que es lo que
+     * habia entonces.
+     */
+    private function clasificacionDe($item): \App\Billing\Enums\TaxClassification
+    {
+        if ($item->tax_classification) {
+            return \App\Billing\Enums\TaxClassification::from($item->tax_classification);
+        }
+
+        return (float) $item->percentage_tax > 0
+            ? \App\Billing\Enums\TaxClassification::Gravado
+            : \App\Billing\Enums\TaxClassification::Excluido;
     }
 
     // ==================== Apoyo ====================

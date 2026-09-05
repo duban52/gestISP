@@ -7,6 +7,7 @@ use App\Exports\ContractsExport;
 use App\Models\AditionalCharge;
 use App\Models\Branch;
 use App\Models\Client;
+use App\Billing\Services\TaxClassificationAdvisor;
 use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Plan;
@@ -337,7 +338,12 @@ class ContractController extends Controller
 
         // Redirigir con un mensaje de éxito
         return redirect()->route('contracts.index')
-            ->with('success', 'Contrato creado exitosamente.' . $locationWarning);
+            ->with('success', 'Contrato creado exitosamente.' . $locationWarning)
+            // Avisa, no bloquea: puede haber razones legitimas para que
+            // el IVA no siga al estrato —un contrato empresarial en una
+            // direccion de estrato bajo—, y quien decide la
+            // clasificacion es quien lleva la contabilidad.
+            ->with('avisos_fiscales', app(TaxClassificationAdvisor::class)->avisos($contract));
     }
 
     /**
@@ -501,7 +507,9 @@ class ContractController extends Controller
         }
 
 
-        return redirect()->back()->with('success', 'Datos del contrato actualizados');
+        return redirect()->back()
+            ->with('success', 'Datos del contrato actualizados')
+            ->with('avisos_fiscales', app(TaxClassificationAdvisor::class)->avisos($contract->fresh()));
     }
 
     /**

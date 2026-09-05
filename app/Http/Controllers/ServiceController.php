@@ -69,6 +69,8 @@ class ServiceController extends Controller
             'name'           => $validated['name'],
             'base_price'     => $validated['base_price'],
             'tax_percentage' => $validated['tax_percentage'],
+            'tax_classification' => $validated['tax_classification']
+                ?? \App\Billing\Enums\TaxClassification::Gravado->value,
             'product_code'       => $validated['product_code'] ?? null,
             'product_code_type'  => $validated['product_code_type'] ?? null,
             'unit_measure_code'  => $validated['unit_measure_code'] ?? null,
@@ -101,6 +103,8 @@ class ServiceController extends Controller
             'name'           => $validated['name'],
             'base_price'     => $validated['base_price'],
             'tax_percentage' => $validated['tax_percentage'],
+            'tax_classification' => $validated['tax_classification']
+                ?? \App\Billing\Enums\TaxClassification::Gravado->value,
             'product_code'       => $validated['product_code'] ?? null,
             'product_code_type'  => $validated['product_code_type'] ?? null,
             'unit_measure_code'  => $validated['unit_measure_code'] ?? null,
@@ -155,6 +159,10 @@ class ServiceController extends Controller
             'name'           => 'required|string|max:255',
             'base_price'     => 'required|numeric|min:0',
             'tax_percentage' => 'required|numeric|min:0|max:100',
+            // La clasificacion es un DATO, no se deduce de la tarifa:
+            // un 0% puede ser excluido o exento, y en el XML de la DIAN
+            // no se escriben igual.
+            'tax_classification' => ['nullable', \Illuminate\Validation\Rule::enum(\App\Billing\Enums\TaxClassification::class)],
             'product_code'       => 'nullable|string|max:40',
             'product_code_type'  => 'nullable|string|max:5',
             'unit_measure_code'  => 'nullable|string|max:10',
