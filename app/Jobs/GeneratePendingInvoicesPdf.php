@@ -70,6 +70,13 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
             // fallaba justo cuando no habia nada que imprimir.
             $barcodeCodes = [];
 
+            // CUFE, QR y resolucion de cada factura electronica del
+            // lote. Van indexados por id igual que los codigos de
+            // barras: un solo bloque comun imprimiria el CUFE de una
+            // factura en todas las demas.
+            $dianes = [];
+            $representacion = app(\App\Billing\Dian\GraphicRepresentation::class);
+
             // Generar y almacenar los códigos de barras para cada factura
             foreach ($invoices as $invoice) {
                 $code = '0100' . $invoice->id . '000000' . $invoice->total; // Generar código único
@@ -82,12 +89,16 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
                 // Guardar la URL del código de barras para su uso en la vista
                 $barcodeUrls[$invoice->id] = asset("storage/{$barcodePath}");
                 $barcodeCodes[$invoice->id] = $code;
+
+                // Los datos DIAN de ESTA factura. Null en las internas,
+                // y entonces su bloque no se pinta.
+                $dianes[$invoice->id] = $representacion->para($invoice);
             }
 
             // Generar el PDF con la vista y los datos necesarios
             $pdf = Pdf::loadView(
                 'gestisp.invoices.pending_invoices_pdf',
-                compact('invoices', 'barcodeUrls', 'barcodeCodes'),
+                compact('invoices', 'barcodeUrls', 'barcodeCodes', 'dianes'),
             );
 
             // Configurar tamaño media carta (5.5" x 8.5") en puntos

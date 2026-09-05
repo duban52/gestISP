@@ -300,6 +300,76 @@ class ElectronicDocumentGenerationTest extends BillingTestCase
         $this->assertSame(96, strlen($documentos->first()->cufe));
     }
 
+    // ==================== La representación gráfica ====================
+
+    public function test_el_pdf_lleva_el_cufe_de_su_propia_factura(): void
+    {
+        // El CUFE venía ESCRITO A MANO en la plantilla: el mismo en
+        // todas las facturas del sistema. Un CUFE que no es el del
+        // documento no identifica nada — y es lo que el cliente usa
+        // para consultarla en el catálogo de la DIAN.
+        $factura = $this->emitir($this->contratoElectronico());
+
+        $documento = ElectronicDocument::withoutGlobalScopes()
+            ->where('invoice_id', $factura->id)->firstOrFail();
+
+        $dian = app(\App\Billing\Dian\GraphicRepresentation::class)->para($factura);
+
+        $this->assertNotNull($dian);
+        $this->assertSame($documento->cufe, $dian['cufe']);
+    }
+
+    public function test_el_pdf_lleva_qr_y_los_datos_de_la_resolucion(): void
+    {
+        $factura = $this->emitir($this->contratoElectronico());
+
+        $dian = app(\App\Billing\Dian\GraphicRepresentation::class)->para($factura);
+
+        $this->assertStringStartsWith('data:image/png;base64,', (string) $dian['qr']);
+        $this->assertSame('18760000001', $dian['resolucion']['numero']);
+        $this->assertSame('SETP', $dian['resolucion']['prefijo']);
+        $this->assertSame(990000000, $dian['resolucion']['desde']);
+    }
+
+    public function test_el_nit_impreso_es_el_de_la_empresa(): void
+    {
+        // El contribuyente es la EMPRESA. La plantilla venía de cuando
+        // sucursal y contribuyente eran lo mismo e imprimía el NIT de
+        // la sucursal — que en multiempresa puede no ser el del emisor.
+        $factura = $this->emitir($this->contratoElectronico());
+
+        $dian = app(\App\Billing\Dian\GraphicRepresentation::class)->para($factura);
+
+        $this->assertSame('900374637-9', $dian['emisor']['nit']);
+        $this->assertSame('Fibra Andina S.A.S.', $dian['emisor']['nombre']);
+    }
+
+    public function test_no_dice_validada_mientras_la_dian_no_conteste(): void
+    {
+        // Aquí se imprimía la fecha de CREACIÓN de la factura como si
+        // fuera la de validación: afirmaba una validación que podía no
+        // haber ocurrido nunca.
+        $factura = $this->emitir($this->contratoElectronico());
+
+        $dian = app(\App\Billing\Dian\GraphicRepresentation::class)->para($factura);
+
+        $this->assertNull($dian['validado_en']);
+    }
+
+    public function test_una_factura_interna_no_lleva_bloque_dian(): void
+    {
+        // Que una factura interna se parezca a una electrónica induce a
+        // error sobre su valor fiscal.
+        $grupo = AffinityGroup::factory()->create(['company_id' => $this->branch->company_id]);
+
+        $contrato = $this->createBillableContract();
+        $contrato->update(['affinity_group_id' => $grupo->id]);
+
+        $factura = $this->emitir($contrato->fresh());
+
+        $this->assertNull(app(\App\Billing\Dian\GraphicRepresentation::class)->para($factura));
+    }
+
     // ==================== Apoyo ====================
 
     private function empresa(): Company

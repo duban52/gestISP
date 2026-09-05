@@ -324,16 +324,6 @@
             <table width="100%">
                 <tbody>
                 <tr>
-                    <td colspan="4">
-                        <p style="margin: 0;">CUFE:d57b1f09fa4a0145379ee0e06db51efa66fb89ed93a5946cf5b9f5ff0d072e35a64e76c2499b38cba85a0d4e4eb05deb</p>
-                    </td>
-                    <td></td>
-                    <td></td>
-                    <td>
-                        <p style="margin: 0;">SISTEMA</p>
-                    </td>
-                </tr>
-                <tr>
                     <td colspan="2">
                         <p style="margin: 0;">Costo traslado servicios ${{ $invoice->contract->branch->moving_price }}</p>
                     </td>
@@ -346,6 +336,10 @@
                 </tbody>
             </table>
         </div>
+
+        {{-- Cada factura del lote lleva SU bloque DIAN, no uno común:
+             el CUFE y el QR son de ese documento concreto. --}}
+        @include('gestisp.invoices.partials.dian', ['dian' => $dianes[$invoice->id] ?? null])
     </div>
     @if(!$loop->last)
         <div class="page-break"></div>

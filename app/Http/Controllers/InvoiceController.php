@@ -254,8 +254,13 @@ class InvoiceController extends Controller
 
             $barcodeUrl = asset('storage/' . $barcodePath);
 
+            // Los datos DIAN (CUFE, QR, resolucion). Null si la factura
+            // es interna, que es la mayoria: entonces el bloque no se
+            // pinta y el PDF queda como siempre.
+            $dian = app(\App\Billing\Dian\GraphicRepresentation::class)->para($invoice);
+
             // Generar el PDF usando la vista
-            $pdf = Pdf::loadView('gestisp.invoices.pdf', compact('invoice', 'barcodeUrl', 'codeString'));
+            $pdf = Pdf::loadView('gestisp.invoices.pdf', compact('invoice', 'barcodeUrl', 'codeString', 'dian'));
             $pdf->setPaper([0, 0, 612.00, 419.53], 'portrait');
             $pdf->getDomPDF()->set_option('isRemoteEnabled', true);
 

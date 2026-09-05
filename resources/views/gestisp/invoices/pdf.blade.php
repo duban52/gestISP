@@ -84,7 +84,10 @@
                     <table class="table-border-rounded">
                         <tbody>
                         <tr>
-                            <td colspan="4" class="border-bottom text-center" style="padding-top: 4px; padding-bottom: 4px;"><strong>FACTURA DE VENTA No {{ $invoice->displayNumber() }}</strong></td>
+                            {{-- Electrónica e interna no se llaman igual: una factura
+                                 interna que se anuncie como electrónica induce a error
+                                 sobre su valor fiscal. --}}
+                            <td colspan="4" class="border-bottom text-center" style="padding-top: 4px; padding-bottom: 4px;"><strong>{{ !empty($dian) ? 'FACTURA ELECTRÓNICA DE VENTA' : 'FACTURA DE VENTA' }} No {{ $invoice->displayNumber() }}</strong></td>
                         </tr>
                         <tr>
                             <td>FECHA DE FACTURA</td>
@@ -105,7 +108,12 @@
                             <td>EFECTIVO</td>
                         </tr>
                         <tr>
-                            <td colspan="4" style="font-size: 8px;"><strong>Fecha/Hora emisión: {{ $invoice->created_at }} Fecha/Hora Validación: {{ $invoice->created_at }}</strong></td>
+                            {{-- La fecha de validación la pone la DIAN, no nosotros.
+                                 Aquí venía impresa la de creación de la factura: una
+                                 fecha inventada que afirmaba una validación que podía
+                                 no haber ocurrido. Ahora sale en el bloque DIAN, y
+                                 solo cuando existe de verdad. --}}
+                            <td colspan="4" style="font-size: 8px;"><strong>Fecha/Hora emisión: {{ $invoice->created_at }}</strong></td>
                         </tr>
                         </tbody>
                     </table>
@@ -295,12 +303,6 @@
         <table width="100%">
             <tbody>
             <tr>
-                <td colspan="4"><p style="margin: 0;">CUFE:d57b1f09fa4a0145379ee0e06db51efa66fb89ed93a5946cf5b9f5ff0d072e35a64e76c2499b38cba85a0d4e4eb05deb</p></td>
-                <td></td>
-                <td></td>
-                <td><p style="margin: 0;">SISTEMA</p></td>
-            </tr>
-            <tr>
                 <td colspan="2"><p style="margin: 0;">Costo traslado servicios ${{ $invoice->contract->branch->moving_price }}</p></td>
             </tr>
             <tr>
@@ -309,6 +311,8 @@
             </tbody>
         </table>
     </div>
+
+    @include('gestisp.invoices.partials.dian', ['dian' => $dian ?? null])
 </div>
 </body>
 </html>
