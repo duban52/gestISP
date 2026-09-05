@@ -287,8 +287,19 @@ al paso "Si algo falla" del final.
 
 ```bash
 php artisan permissions:sync
-php artisan dian:importar-catalogos
+php artisan db:seed --class=FiscalCatalogSeeder --force
 ```
+
+`dian:importar-catalogos` **no va aquí**. Ese comando convierte los
+`.gc` que publica la DIAN en los JSON de `database/data/dian`, y necesita
+el paquete del anexo técnico, que está en `.gitignore` y no viaja al
+servidor. Es una herramienta de desarrollo, para cuando la DIAN publique
+una versión nueva de sus listas.
+
+Lo que va en el servidor es el **seeder**, que lee esos JSON ya
+versionados. Es idempotente: vuelve a correrse sin problema, y lo que
+deja de venir en el archivo lo **desactiva** en vez de borrarlo, porque
+puede estar referenciado por un documento ya emitido.
 
 `permissions:sync` es **obligatorio**: sin él los permisos nuevos
 (`dian.index`, `dian.manage`, `retentions.*`, y los demás de estas
@@ -519,7 +530,7 @@ git pull origin master
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan permissions:sync
-php artisan dian:importar-catalogos
+php artisan db:seed --class=FiscalCatalogSeeder --force
 php artisan numeracion:migrar
 php artisan gestisp:empresas-migrar
 php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan event:cache
