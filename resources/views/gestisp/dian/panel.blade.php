@@ -168,7 +168,18 @@
                                 <tbody>
                                 @foreach($certificados as $certificado)
                                     <tr class="{{ $certificado->active ? '' : 'text-muted' }}">
-                                        <td>{{ $certificado->name }}</td>
+                                        <td>
+                                            {{ $certificado->name }}
+                                            {{-- Autofirmado: se dice aquí y en grande. Uno de
+                                                 pruebas olvidado hace que se firme todo un mes
+                                                 con algo que la DIAN rechaza. --}}
+                                            @if($certificado->self_signed)
+                                                <span class="badge badge-danger ml-1"
+                                                      title="Autofirmado: la DIAN no lo acepta. Solo sirve para probar el flujo.">
+                                                    Pruebas
+                                                </span>
+                                            @endif
+                                        </td>
                                         <td>
                                             {{ optional($certificado->valid_until)->format('d/m/Y') ?: '—' }}
                                             @php($dias = $certificado->diasParaCaducar())

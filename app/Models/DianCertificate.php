@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,9 +18,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class DianCertificate extends Model
 {
+    // Quien carga o retira un certificado de firma cambia quien puede
+    // firmar en nombre del contribuyente. Eso tiene que quedar anotado.
+    use Auditable;
+
     protected $fillable = [
         'company_id', 'name', 'path', 'password',
-        'valid_from', 'valid_until', 'active',
+        'valid_from', 'valid_until', 'active', 'self_signed',
     ];
 
     protected $casts = [
@@ -27,6 +32,7 @@ class DianCertificate extends Model
         'valid_from' => 'date',
         'valid_until' => 'date',
         'active' => 'boolean',
+        'self_signed' => 'boolean',
     ];
 
     protected $attributes = ['active' => true];
@@ -39,6 +45,19 @@ class DianCertificate extends Model
     public function scopeActivos(Builder $query): Builder
     {
         return $query->where('active', true);
+    }
+
+    /**
+     * ¿La DIAN lo va a aceptar?
+     *
+     * Un certificado autofirmado firma igual de bien —la mecánica es
+     * la misma— pero la DIAN lo rechaza: exige que encadene contra una
+     * entidad acreditada por la ONAC. Sirve para probar el flujo
+     * completo, no para emitir.
+     */
+    public function sirveParaLaDian(): bool
+    {
+        return !$this->self_signed;
     }
 
     /** ¿Sirve hoy? */

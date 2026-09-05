@@ -162,6 +162,23 @@ class DianReadiness
                     : 'No hay ningún certificado cargado: sin él no se puede firmar.');
         }
 
+        // Autofirmado: firma bien, pero la DIAN lo rechaza. Es
+        // BLOQUEANTE aunque el certificado esté ahí y vigente, porque
+        // la pregunta que contesta esta revisión no es «¿se puede
+        // firmar?» sino «¿se puede emitir?».
+        //
+        // Y va aquí, después de la vigencia, porque uno de pruebas
+        // caducado es las dos cosas y lo primero que hay que decir es
+        // que no sirve.
+        if (!$vigente->sirveParaLaDian()) {
+            return $this->paso('certificado', 'Certificado digital', false, true,
+                sprintf(
+                    '«%s» está AUTOFIRMADO: sirve para probar el flujo, pero la DIAN lo rechaza. '
+                    . 'Hace falta uno de una entidad acreditada por la ONAC.',
+                    $vigente->name,
+                ));
+        }
+
         // Está y sirve. Pero si le quedan pocos días hay que avisarlo:
         // renovar ante una entidad acreditada lleva tiempo.
         $dias = $vigente->diasParaCaducar();

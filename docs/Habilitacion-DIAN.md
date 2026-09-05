@@ -159,7 +159,7 @@ ambiente de pruebas. Eso sigue siendo manual (ver
 ```
 1. Completar datos fiscales de la empresa      → informe de completitud
 2. Registrar configuración DIAN, certificado,
-   resolución y rango                          → por consola (sin UI aún)
+   resolución y rango                          → panel DIAN
 3. php artisan dian:diagnostico                → ¿qué falta?
 4. Emitir facturas en ambiente de pruebas      → produce los documentos
 5. php artisan dian:set-de-pruebas             → se los manda a la DIAN
@@ -168,8 +168,15 @@ ambiente de pruebas. Eso sigue siendo manual (ver
 8. php artisan dian:alertas                    → ya en el planificador
 ```
 
-El paso 2 sigue siendo lo más incómodo: no hay pantallas. Está en
-[Pendientes](Pendientes.md) como el primer bloqueante.
+Lo único del paso 2 que no se resuelve dentro de gestISP es el
+**certificado**: hay que comprárselo a una entidad acreditada por la
+ONAC y exigirlo en archivo `.p12`. Ver
+[Certificado-Digital.md](Certificado-Digital.md) — incluye qué pedir y
+por qué el `.crt` que suelen entregar no sirve.
+
+Mientras llega, `php artisan dian:certificado-de-pruebas` genera uno
+autofirmado que permite recorrer los pasos 3 a 5 y ver el flujo entero
+funcionando. La DIAN no lo acepta, y el diagnóstico lo dice.
 
 ## Producción gradual
 
@@ -190,6 +197,8 @@ los contratos que se quieran mover.
 | `dian:habilitar` | `app/Console/Commands/EnableDianProduction.php` |
 | `dian:alertas` | `app/Console/Commands/CheckDianAlerts.php` |
 | `dian:set-de-pruebas` | `app/Console/Commands/SendDianTestSet.php` |
+| `dian:certificado-de-pruebas` | `app/Console/Commands/GenerateTestCertificate.php` |
 | El transporte del set | `app/Billing/Dian/Transport/DianTestSetTransport.php` |
 
-Pruebas: `tests/Feature/Billing/DianReadinessTest.php` (24).
+Pruebas: `tests/Feature/Billing/DianReadinessTest.php` (24) y
+`tests/Feature/Billing/TestCertificateTest.php` (10).

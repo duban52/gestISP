@@ -107,6 +107,11 @@ return [
         'secret',
         'read_snmp_comunity',
         'write_snmp_comunity',
+        // Los secretos de la DIAN. El PIN entra en el CUDE y la clave
+        // tecnica en el CUFE: con ellos se puede fabricar el codigo de
+        // un documento que la empresa nunca emitio.
+        'software_pin',
+        'technical_key',
         '_token',
     ],
 

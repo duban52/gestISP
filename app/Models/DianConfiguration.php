@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -22,6 +23,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class DianConfiguration extends Model
 {
+    // Cambiar el identificador del software, el PIN o el ambiente
+    // cambia lo que la empresa le presenta a la DIAN.
+    use Auditable;
+
     /** Catalogo TipoAmbiente. */
     public const PRODUCCION = '1';
     public const PRUEBAS = '2';

@@ -20,7 +20,28 @@ Si el identificador o el resumen no coinciden con la política publicada,
 comparar con las constantes `POLITICA_URL` y `POLITICA_RESUMEN` de
 [XadesSigner](../app/Billing/Dian/XadesSigner.php).
 
-### 1.2 · La firma, contra un certificado real ⚠️
+### 1.2 · Conseguir el certificado en archivo `.p12` 🔴
+
+Es **el único bloqueante que no depende de programar**. Sin clave privada
+no hay firma, y sin firma no hay factura electrónica.
+
+El archivo `.crt` que entregan las entidades de certificación cuando el
+certificado se contrata "en la nube" **no sirve**: es solo la mitad
+pública. La clave privada se queda en el HSM del proveedor, que es quien
+firma por el facturador gratuito de la DIAN. Un servidor propio necesita
+el `.p12`.
+
+**Qué hacer:** pedirle a la entidad acreditada el certificado **en
+archivo `.p12`/`.pfx`, con la clave privada exportable** — ni en la nube
+ni en token de hardware. Ver
+[Certificado-Digital.md](Certificado-Digital.md) para el texto exacto de
+la solicitud.
+
+**Mientras tanto** hay `php artisan dian:certificado-de-pruebas`, que
+genera uno autofirmado y deja recorrer todo el flujo menos la aceptación
+de la DIAN.
+
+### 1.3 · La firma, contra un certificado real ⚠️
 
 `XadesSigner` está probado con un certificado autofirmado: la firma
 verifica, los resúmenes se recalculan y el documento sigue validando

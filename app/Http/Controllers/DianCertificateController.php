@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Dian\SelfSignedCertificate;
 use App\Models\Company;
 use App\Models\DianCertificate;
 use Illuminate\Http\RedirectResponse;
@@ -97,6 +98,12 @@ class DianCertificateController extends Controller
             $company->id . '-' . bin2hex(random_bytes(16)) . '.p12',
         );
 
+        // Autofirmado: se anota al cargarlo, no cada vez que se
+        // pregunta. Lo comprueba el sistema y no quien sube el archivo
+        // porque es precisamente lo que quien lo sube puede no saber —
+        // un autofirmado y uno real se ven igual desde fuera.
+        $autofirmado = (new SelfSignedCertificate())->esAutofirmado($datos);
+
         $certificado = DianCertificate::create([
             'company_id' => $company->id,
             'name' => $request->input('name') ?: $this->nombreDe($datos),
@@ -106,6 +113,7 @@ class DianCertificateController extends Controller
             'valid_from' => Carbon::createFromTimestamp($datos['validFrom_time_t'] ?? now()->timestamp),
             'valid_until' => Carbon::createFromTimestamp($datos['validTo_time_t'] ?? now()->timestamp),
             'active' => true,
+            'self_signed' => $autofirmado,
         ]);
 
         // Solo uno activo: dos certificados activos dejarian sin decidir
@@ -117,11 +125,24 @@ class DianCertificateController extends Controller
 
         $dias = $certificado->diasParaCaducar();
 
+        if ($dias !== null && $dias <= 0) {
+            return back()->with('success', 'Certificado cargado, pero está CADUCADO: no sirve para firmar.');
+        }
+
+        // Se avisa aquí y no solo en el diagnóstico: quien acaba de
+        // subirlo cree que ya está, y descubrirlo el día de emitir es
+        // descubrirlo tarde.
+        if ($autofirmado) {
+            return back()->with(
+                'success',
+                'Certificado cargado, pero está AUTOFIRMADO: sirve para probar la firma, '
+                . 'no para emitir. La DIAN solo acepta certificados de entidades acreditadas por la ONAC.',
+            );
+        }
+
         return back()->with(
             'success',
-            $dias !== null && $dias <= 0
-                ? 'Certificado cargado, pero está CADUCADO: no sirve para firmar.'
-                : sprintf('Certificado cargado. Vigente hasta el %s.', $certificado->valid_until->format('d/m/Y')),
+            sprintf('Certificado cargado. Vigente hasta el %s.', $certificado->valid_until->format('d/m/Y')),
         );
     }
 
