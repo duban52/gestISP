@@ -64,7 +64,10 @@ class ContractController extends Controller
             'contracts' => $contracts,
             'columnas' => ContractQuery::columnas(),
             'columnasActivas' => ContractQuery::columnasValidas($request->input('columnas')),
-            'planes' => Plan::whereIn('branch_id', app(CurrentContext::class)->branchIds())->orderBy('name')->get(),
+            // Solo los planes que todavia se venden: dar de alta con
+            // uno retirado es como se repuebla un plan que se queria
+            // dejar morir.
+            'planes' => Plan::activos()->disponibles()->orderBy('name')->get(),
             // Los grupos son de la EMPRESA: el global scope ya los
             // acota, no hay que filtrar por sucursal. Se ofrecen todos
             // —incluidos los inactivos— porque este es un filtro de
@@ -149,7 +152,12 @@ class ContractController extends Controller
         // sucursales alcanzables y la vista los filtra segun la que se
         // elija: con session('branch_id') a null —panel consolidado— el
         // desplegable salia vacio y no se podia crear ni un contrato.
-        $plans = Plan::whereIn('branch_id', $contexto->branchIds())
+        // `disponibles()` trae los de la EMPRESA mas los propios de
+        // las sedes alcanzables. La regla vive en SharedAcrossBranches:
+        // repetirla aqui es como una pantalla se queda sin el catalogo
+        // compartido y nadie se entera.
+        $plans = Plan::activos()
+            ->disponiblesEn($contexto->branchIds())
             ->orderBy('name')
             ->get();
 
@@ -246,14 +254,23 @@ class ContractController extends Controller
         // asi que el cliente quedaba con servicio y sin factura, y solo
         // se notaba al cuadrar el mes.
         //
-        // Ademas tiene que ser DE ESA sucursal. La pantalla ya esconde
-        // los demas, pero eso es ayuda visual: sin esta comprobacion se
-        // podria asignar a un contrato de Bogota un plan de Medellin, y
-        // el precio saldria del sitio equivocado.
+        // Ademas tiene que estar DISPONIBLE en esa sucursal: o es del
+        // catalogo de la empresa (`branch_id` nulo) o es propio de esa
+        // sede. La pantalla ya esconde los demas, pero eso es ayuda
+        // visual: sin esta comprobacion se podria asignar por POST a un
+        // contrato de Bogota un plan exclusivo de Medellin.
+        //
+        // Los dos `where` anidados NO sobran. Sin el de fuera, el
+        // `orWhere` se saldria del parentesis y anularia la condicion
+        // de la sucursal — cualquier plan valdria.
         $request->validate([
             'plan_id' => [
                 'required',
-                Rule::exists('plans', 'id')->where('branch_id', $branchId),
+                Rule::exists('plans', 'id')->where(
+                    fn ($q) => $q->where(
+                        fn ($w) => $w->whereNull('branch_id')->orWhere('branch_id', $branchId),
+                    ),
+                ),
             ],
         ], [
             'plan_id.required' => 'Elija el plan de servicio: sin plan el contrato no tiene precio '
@@ -355,7 +372,21 @@ class ContractController extends Controller
         // Obtener los datos
         $branches = Branch::all(); // Todas las sucursales
         $clients = Client::all(); // Todos los clientes
-        $plans = Plan::all(); // Todos los planes disponibles
+        // Planes ACTIVOS para el desplegable de cambio. El plan actual
+        // se añade aunque este retirado: si no, al abrir el modal
+        // apareceria seleccionado otro distinto y guardar sin querer le
+        // cambiaria el plan —y con el, lo que se le factura cada mes—.
+        // Es el mismo cuidado que con los grupos de afinidad, unas
+        // lineas mas abajo.
+        $plans = Plan::activos()->orderBy('name')->get();
+
+        if ($contract->plan_id && !$plans->contains('id', $contract->plan_id)) {
+            $plans = $plans
+                ->push($contract->plan)
+                ->filter()
+                ->sortBy('name')
+                ->values();
+        }
         // Grupos ACTIVOS para el desplegable de cambio. El grupo actual
         // se añade aunque este inactivo: si no, al abrir el modal
         // apareceria seleccionado otro distinto y guardar sin querer le

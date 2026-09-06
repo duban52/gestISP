@@ -60,6 +60,13 @@ Route::namespace('App\Http\Controllers')->prefix('gestisp')->group(function () {
     // Planes
     Route::resource('plans', 'PlanController')->names('plans');
 
+    // Retirar un plan del catalogo, o devolverlo. Sustituye al borrado
+    // cuando el plan tiene contratos: desde la fase 13 la clave foranea
+    // impide borrarlo, porque un contrato sin plan no tiene nada que
+    // facturar —y si su factura es electronica, gasta un consecutivo
+    // autorizado en un XML que la DIAN rechaza—.
+    Route::patch('plans/{plan}/retirar', [App\Http\Controllers\PlanController::class, 'toggle'])->name('plans.toggle');
+
     // Contratos
     //
     // Se excluye "create" del resource: más abajo se declara

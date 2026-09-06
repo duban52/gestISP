@@ -40,7 +40,7 @@ class ServiceController extends Controller
      */
     public function index(): View
     {
-        $services = Service::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+        $services = Service::disponibles()
             ->with('branch')
             ->get();
 
@@ -76,7 +76,7 @@ class ServiceController extends Controller
             'unit_measure_code'  => $validated['unit_measure_code'] ?? null,
             'tax_code'           => $validated['tax_code'] ?? null,
             'user_id'        => Auth::id(),
-            'branch_id'      => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+            'branch_id'      => $this->ambitoDe($request),
         ]);
 
         return redirect()
@@ -168,5 +168,32 @@ class ServiceController extends Controller
             'unit_measure_code'  => 'nullable|string|max:10',
             'tax_code'           => 'nullable|string|max:5',
         ]);
+    }
+
+    /**
+     * En que ambito vive el servicio: la empresa, o una sucursal.
+     *
+     * POR DEFECTO, DE LA EMPRESA — Y AQUI IMPORTA MAS QUE EN EL PLAN
+     * --------------------------------------------------------------
+     * Un servicio lleva UNSPSC, unidad de medida y clasificacion de
+     * IVA. Eso es del CONTRIBUYENTE, no de la sede, y el precio es
+     * igual en todas. Tenerlo repetido por sucursal no aporta nada y si
+     * permite que diverja: ya paso, con «Servicio de TV» al 19%
+     * conviviendo con «Television» al 0%.
+     *
+     * Que un servicio sea exclusivo de una sede deberia ser raro y
+     * deliberado.
+     */
+    private function ambitoDe(Request $request): ?int
+    {
+        if ($request->boolean('de_la_empresa', true)) {
+            return null;
+        }
+
+        return rescue(
+            fn () => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+            null,
+            report: false,
+        );
     }
 }

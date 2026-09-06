@@ -49,6 +49,7 @@
                     <tr>
                         <th>Sucursal</th>
                         <th>Nombre</th>
+                        <th>Estado</th>
                         <th>Servicios incluidos</th>
                         <th>Precio Total</th>
                         <th>Acciones</th>
@@ -72,6 +73,16 @@
                                  indices de columna no cambien segun el modo. --}}
                             <td>{{ $plan->branch?->name ?: '—' }}</td>
                             <td>{{ $plan->name }}</td>
+                            <td>
+                                @if($plan->active)
+                                    <span class="badge badge-success">Se ofrece</span>
+                                @else
+                                    <span class="badge badge-secondary" title="No aparece al dar de alta contratos nuevos. Los que ya lo tienen lo conservan.">Retirado</span>
+                                @endif
+                                @if($plan->contracts_count)
+                                    <small class="text-muted d-block">{{ $plan->contracts_count }} contrato(s)</small>
+                                @endif
+                            </td>
 
                             {{-- Servicios del plan como badges --}}
                             <td>
@@ -95,14 +106,33 @@
                                     <i class="fas fa-pencil-alt"></i> Modificar
                                 </a>
 
-                                {{-- Eliminar plan (abre modal de confirmación) --}}
-                                <button
-                                    class="btn btn-danger btn-sm btn-eliminar-plan"
-                                    data-id="{{ $plan->id }}"
-                                    data-nombre="{{ $plan->name }}"
-                                    title="Eliminar">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                {{-- Retirar del catálogo, o devolverlo.
+                                     Es lo que sustituye al borrado cuando el plan
+                                     tiene contratos: desde la fase 13 la clave
+                                     foránea impide borrarlo, porque un contrato sin
+                                     plan no tiene nada que facturar. --}}
+                                @can('plans.edit')
+                                    <form method="POST" action="{{ route('plans.toggle', $plan) }}" class="d-inline">
+                                        @csrf @method('PATCH')
+                                        <button class="btn btn-sm {{ $plan->active ? 'btn-outline-secondary' : 'btn-outline-success' }}"
+                                                title="{{ $plan->active ? 'Dejar de ofrecerlo en contratos nuevos' : 'Volver a ofrecerlo' }}">
+                                            <i class="fas {{ $plan->active ? 'fa-box-open' : 'fa-undo' }}"></i>
+                                            {{ $plan->active ? 'Retirar' : 'Reactivar' }}
+                                        </button>
+                                    </form>
+                                @endcan
+
+                                {{-- Eliminar solo si NO tiene contratos: con ellos, la
+                                     base lo rechaza y el botón solo produce un error. --}}
+                                @if(!$plan->contracts_count)
+                                    <button
+                                        class="btn btn-danger btn-sm btn-eliminar-plan"
+                                        data-id="{{ $plan->id }}"
+                                        data-nombre="{{ $plan->name }}"
+                                        title="Eliminar">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

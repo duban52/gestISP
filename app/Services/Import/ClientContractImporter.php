@@ -444,18 +444,22 @@ class ClientContractImporter
             return null;
         }
 
-        $consulta = Plan::where('branch_id', $branchId);
+        // Busca entre lo DISPONIBLE en esa sede: el catalogo de la
+        // empresa mas lo propio de la sucursal. Antes miraba solo
+        // `branch_id = $branchId`, y desde la fase 13 eso dejaria fuera
+        // todo el catalogo compartido — que es el caso normal.
+        $consulta = fn () => Plan::activos()->disponiblesEn([$branchId]);
 
         if (ctype_digit($valor)) {
-            $porId = (clone $consulta)->find((int) $valor);
+            $porId = $consulta()->find((int) $valor);
 
             if ($porId) {
                 return $porId;
             }
         }
 
-        return $consulta->whereRaw('LOWER(name) = ?', [mb_strtolower($valor)])->first()
-            ?? Plan::where('branch_id', $branchId)->where('name', 'like', '%' . $valor . '%')->first();
+        return $consulta()->whereRaw('LOWER(name) = ?', [mb_strtolower($valor)])->first()
+            ?? $consulta()->where('name', 'like', '%' . $valor . '%')->first();
     }
 
     /**

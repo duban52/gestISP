@@ -3,20 +3,42 @@
 namespace App\Models;
 
 use App\Tenancy\BelongsToCompany;
+use App\Tenancy\SharedAcrossBranches;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Plan extends Model
 {
     use BelongsToCompany;
+    use SharedAcrossBranches;
 
     use HasFactory;
 
     protected $fillable = [
         'name',
+        'active',
         'user_id',
         'branch_id',
     ];
+
+    protected $casts = [
+        'active' => 'boolean',
+    ];
+
+    protected $attributes = ['active' => true];
+
+    /**
+     * Los planes que todavia se venden.
+     *
+     * Un plan con contratos vivos NO se puede borrar —la clave foranea
+     * lo impide— asi que retirarlo del catalogo es desactivarlo. Los
+     * contratos que ya lo tienen lo conservan y se siguen facturando
+     * igual: lo unico que desaparece es la opcion de elegirlo.
+     */
+    public function scopeActivos($query)
+    {
+        return $query->where('active', true);
+    }
 
     //Relación con usuarios
     public function user()

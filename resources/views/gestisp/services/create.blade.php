@@ -23,6 +23,8 @@
                 <x-selector-sucursal titulo="Sucursal del servicio"
                                      ayuda="El servicio queda en esta sucursal y solo se podra anadir a sus planes." />
 
+                <x-ambito-catalogo que="servicio" />
+
                 <div class="form-group">
                     <label for="name">Nombre del servicio</label>
                     <input type="text" class="form-control" id="name" name='name'

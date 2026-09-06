@@ -15,6 +15,8 @@
             <form method="POST" action="{{ route('plans.update', $plan->id) }}">
                 @csrf
                 @method('PUT')
+                <x-ambito-catalogo que="plan" :actual="$plan" />
+
                 <div class="form-group">
                     <label>Nombre</label>
                     <input type="text" class="form-control" id="name" name='name'
@@ -25,6 +27,23 @@
                     <span>*{{ $message }}</span>
                 </span>
                     @enderror
+                </div>
+
+                {{-- Se ofrece o está retirado. Retirarlo no toca los contratos
+                     que ya lo tienen: siguen facturándose igual. Lo único que
+                     desaparece es la opción de elegirlo al dar de alta. --}}
+                <div class="form-group">
+                    <label>
+                        <input type="hidden" name="active" value="0">
+                        <input type="checkbox" name="active" value="1"
+                               {{ old('active', $plan->active) ? 'checked' : '' }}>
+                        Se ofrece en contratos nuevos
+                    </label>
+                    @if($plan->contracts()->exists())
+                        <small class="d-block text-muted">
+                            Este plan tiene contratos: no se puede eliminar, solo retirar.
+                        </small>
+                    @endif
 
                 </div>
                 <h3>Lista de servicios</h3>

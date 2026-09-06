@@ -16,6 +16,8 @@
                 <x-selector-sucursal titulo="Sucursal del plan"
                                      ayuda="El plan se ofrece en esta sucursal: solo aparecera al crear contratos suyos." />
 
+                <x-ambito-catalogo que="plan" />
+
                 <div class="form-group">
                     <label for="name">Nombre del plan</label>
                     <input type="text" class="form-control" id="name" name='name'

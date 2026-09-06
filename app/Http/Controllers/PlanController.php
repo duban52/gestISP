@@ -29,7 +29,10 @@ class PlanController extends Controller
         $this->middleware('auth');
         $this->middleware('check.permission:plans.index')->only('index');
         $this->middleware('check.permission:plans.create')->only('create', 'store');
-        $this->middleware('check.permission:plans.edit')->only('edit', 'update');
+        // Retirar un plan es EDITARLO, no borrarlo: los contratos que
+        // lo tienen lo conservan. Por eso lleva plans.edit y no
+        // plans.destroy.
+        $this->middleware('check.permission:plans.edit')->only('edit', 'update', 'toggle');
         $this->middleware('check.permission:plans.destroy')->only('destroy');
     }
 
@@ -45,8 +48,13 @@ class PlanController extends Controller
      */
     public function index(): View
     {
-        $plans = Plan::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+        // Se traen TODOS, activos y retirados: el listado es donde se
+        // administran, y un plan retirado tiene que poder reactivarse.
+        // Quien filtra por activos es el formulario de contrato.
+        $plans = Plan::disponibles()
             ->with(['services', 'branch'])
+            ->withCount('contracts')
+            ->orderBy('name')
             ->get();
 
         return view('gestisp.plans.index', compact('plans'));
@@ -58,7 +66,7 @@ class PlanController extends Controller
      */
     public function create(): View
     {
-        $services = Service::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
+        $services = Service::disponibles()->orderBy('name')->get();
 
         return view('gestisp.plans.create', compact('services'));
     }
@@ -75,7 +83,8 @@ class PlanController extends Controller
 
         $plan = Plan::create([
             'name'      => $validated['name'],
-            'branch_id' => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+            'active'    => $request->boolean('active', true),
+            'branch_id' => $this->ambitoDe($request),
         ]);
 
         // Asociar los servicios seleccionados al plan (tabla pivote)
@@ -95,7 +104,7 @@ class PlanController extends Controller
      */
     public function edit(Plan $plan): View
     {
-        $services = Service::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
+        $services = Service::disponibles()->orderBy('name')->get();
 
         return view('gestisp.plans.edit', compact('plan', 'services'));
     }
@@ -110,7 +119,11 @@ class PlanController extends Controller
     {
         $validated = $this->validatePlan($request);
 
-        $plan->update(['name' => $validated['name']]);
+        $plan->update([
+            'name' => $validated['name'],
+            'active' => $request->boolean('active', true),
+            'branch_id' => $this->ambitoDe($request),
+        ]);
 
         // Sincronizar servicios: refleja exactamente la selección del formulario
         $plan->services()->sync($validated['services'] ?? []);
@@ -128,13 +141,37 @@ class PlanController extends Controller
      * Las asociaciones de la tabla pivote se desvinculan antes
      * de eliminar para no dejar registros huérfanos.
      */
+    /**
+     * Retira un plan del catálogo, o lo devuelve.
+     *
+     * ES LO QUE SUSTITUYE AL BORRADO
+     * ------------------------------
+     * Un plan con contratos vivos ya no se puede borrar —la clave
+     * foránea lo impide desde la migración de la fase 13—, así que
+     * dejar de venderlo es esto. Los contratos que ya lo tienen lo
+     * conservan y se siguen facturando igual; lo único que desaparece
+     * es la opción de elegirlo al dar de alta.
+     */
+    public function toggle(Plan $plan): RedirectResponse
+    {
+        $plan->update(['active' => !$plan->active]);
+
+        return back()->with('success-update', $plan->active
+            ? sprintf('El plan «%s» vuelve a ofrecerse.', $plan->name)
+            : sprintf('El plan «%s» queda retirado: no se ofrecerá en contratos nuevos.', $plan->name));
+    }
+
     public function destroy(Plan $plan): RedirectResponse
     {
-        // Bloquear la eliminación si hay contratos usando este plan
+        // Bloquear la eliminación si hay contratos usando este plan.
+        //
+        // Esto es la red de ARRIBA: da un mensaje legible. La de abajo
+        // es la clave foránea, que desde la fase 13 es `restrictOnDelete`
+        // y ataja también los borrados que no pasen por aquí.
         if ($plan->contracts()->exists()) {
             return back()->with(
                 'error',
-                'No se puede eliminar: el plan tiene contratos asociados.'
+                'No se puede eliminar: el plan tiene contratos asociados. Retírelo en vez de borrarlo.'
             );
         }
 
@@ -156,31 +193,63 @@ class PlanController extends Controller
      */
     private function validatePlan(Request $request): array
     {
-        // La tabla tiene UNIQUE (branch_id, name): dos sucursales
-        // pueden tener cada una su "Plan 100M", pero no la misma dos
-        // veces. Sin esta regla el duplicado no se avisaba en el
-        // formulario — lo rechazaba la base y salia un error 500.
+        // La tabla tiene UNIQUE (company_id, branch_key, name), donde
+        // branch_key es COALESCE(branch_id, 0). O sea: dos sucursales
+        // pueden tener cada una su "Plan 100M", y la empresa puede
+        // tener el suyo, pero no dos iguales en el mismo ambito.
+        //
+        // Sin esta regla el duplicado no se avisaba en el formulario —
+        // lo rechazaba la base y salia un error 500.
         //
         // La sucursal se resuelve igual que en store(), pero SIN
         // lanzar: si en consolidado no se eligio, es branchParaEscritura
         // quien lo dira con su mensaje, y aqui no toca reventar.
-        $branchId = rescue(
-            fn () => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
-            null,
-            report: false,
-        );
+        $branchId = $this->ambitoDe($request);
+
+        $empresaId = app(CurrentContext::class)->companyId();
 
         return $request->validate([
             'name'       => [
                 'required', 'string', 'max:255',
                 Rule::unique('plans', 'name')
-                    ->where(fn ($q) => $q->where('branch_id', $branchId))
+                    ->where(fn ($q) => $q
+                        ->where('company_id', $empresaId)
+                        // Se compara contra branch_key y no contra
+                        // branch_id: con el nulo, `where(null)` no
+                        // encuentra nada y el duplicado pasaria.
+                        ->where('branch_key', $branchId ?? 0))
                     ->ignore($request->route('plan')?->id),
             ],
+            'de_la_empresa' => 'nullable|boolean',
+            'active'     => 'nullable|boolean',
             'services'   => 'nullable|array',
             'services.*' => 'exists:services,id',
         ], [
-            'name.unique' => 'Ya existe un plan con ese nombre en esta sucursal.',
+            'name.unique' => 'Ya existe un plan con ese nombre en este ámbito.',
         ]);
+    }
+
+    /**
+     * En que ambito vive el plan: la empresa, o una sucursal.
+     *
+     * Devuelve null cuando es DE LA EMPRESA —disponible en todas sus
+     * sedes— y el id de la sucursal cuando es exclusivo de ella.
+     *
+     * Por defecto, de la empresa. Es lo que quiere la mayoria: el
+     * catalogo suele ser el mismo en todas las sedes, y el plan local
+     * es la excepcion. Que el caso comun sea el que NO duplica es
+     * justamente el objetivo de la fase 13.
+     */
+    private function ambitoDe(Request $request): ?int
+    {
+        if ($request->boolean('de_la_empresa', true)) {
+            return null;
+        }
+
+        return rescue(
+            fn () => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
+            null,
+            report: false,
+        );
     }
 }

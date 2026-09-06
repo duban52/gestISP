@@ -17,6 +17,8 @@
             <form method="POST" action="{{ route('services.update', $service) }}" enctype="multipart/form-data">
                 @method('PUT')
                 @csrf
+                <x-ambito-catalogo que="servicio" :actual="$service" />
+
                 <div class="form-group">
                     <label for="name">Nombre del servicio</label>
                     <input type="text" class="form-control" id="name" name='name'
