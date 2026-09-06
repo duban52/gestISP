@@ -165,14 +165,16 @@ class ElectronicInvoicingDecisionTest extends BillingTestCase
             'environment_code' => \App\Models\DianConfiguration::PRUEBAS,
         ]);
 
-        // 3. En pruebas tampoco: emitir en pruebas no es emitir.
-        $this->assertFalse($this->decider->esElectronico($contrato->fresh()));
+        // 3. En PRUEBAS ya sí: es como se arma el set que la DIAN
+        //    exige para habilitar. Bloquearlo aquí hacía imposible la
+        //    habilitación — sin documentos no hay set que mandar.
+        $this->assertTrue($this->decider->esElectronico($contrato->fresh()));
 
         $this->empresa()->dianConfiguration->update([
             'environment_code' => \App\Models\DianConfiguration::PRODUCCION,
         ]);
 
-        // 4. En producción PERO sin habilitación aprobada, tampoco:
+        // 4. En producción PERO sin habilitación aprobada, NO:
         //    sin pasar el set de pruebas, lo que se emita lo rechazan.
         $this->assertFalse($this->decider->esElectronico($contrato->fresh()));
 
@@ -181,20 +183,47 @@ class ElectronicInvoicingDecisionTest extends BillingTestCase
         $this->assertTrue($this->decider->esElectronico($contrato->fresh()));
     }
 
-    public function test_el_ambiente_de_pruebas_no_emite_electronicamente(): void
+    public function test_el_ambiente_de_pruebas_SI_emite_electronicamente(): void
     {
-        // Es la trampa más fácil de caer: cambiar el ambiente sin haber
-        // pasado la habilitación y creer que ya se está facturando.
+        // ESTA PRUEBA DECÍA LO CONTRARIO Y ESTABA MAL.
+        //
+        // Afirmaba que en pruebas no se emite. Con esa regla, una
+        // empresa en habilitación no producía ni un solo documento
+        // electrónico — y `dian:set-de-pruebas` no inventa documentos,
+        // manda los que ya existen firmados. Sin documentos no hay set,
+        // sin set no hay habilitación, y sin habilitación no se puede
+        // pasar a producción. No había salida.
+        //
+        // Lo que de verdad hay que impedir es emitir en PRODUCCIÓN sin
+        // la habilitación aprobada, y eso lo cubre la prueba siguiente.
         $contrato = $this->contratoEn($this->grupo(electronico: true));
 
         $this->habilitarEmpresa();
         $this->empresa()->dianConfiguration->update([
             'environment_code' => \App\Models\DianConfiguration::PRUEBAS,
+            'enabled_at' => null,
+        ]);
+
+        $this->assertTrue($this->decider->esElectronico($contrato->fresh()));
+        $this->assertNull($this->decider->motivoInterno($contrato->fresh()));
+    }
+
+    public function test_produccion_sin_habilitacion_no_emite(): void
+    {
+        // El candado que sí importa: cambiar el ambiente a producción
+        // sin haber pasado el set de pruebas produce documentos que la
+        // DIAN rechaza.
+        $contrato = $this->contratoEn($this->grupo(electronico: true));
+
+        $this->habilitarEmpresa();
+        $this->empresa()->dianConfiguration->update([
+            'environment_code' => \App\Models\DianConfiguration::PRODUCCION,
+            'enabled_at' => null,
         ]);
 
         $this->assertFalse($this->decider->esElectronico($contrato->fresh()));
         $this->assertStringContainsString(
-            'ambiente de pruebas',
+            'habilitación todavía no está aprobada',
             $this->decider->motivoInterno($contrato->fresh()),
         );
     }

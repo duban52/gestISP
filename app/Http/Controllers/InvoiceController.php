@@ -270,7 +270,15 @@ class InvoiceController extends Controller
             'Este contrato no es de una sucursal a la que tenga acceso.',
         );
 
-        $resultado = $generator->generateForContract($contract, now(), Auth::id());
+        // El generador LANZA cuando no hay rango autorizado y la
+        // factura es electrónica. La corrida mensual lo atrapa y sigue
+        // con el resto; aquí no hay resto, pero tampoco puede salir un
+        // 500: quien pulsó el botón necesita leer qué falta.
+        try {
+            $resultado = $generator->generateForContract($contract, now(), Auth::id());
+        } catch (\RuntimeException $error) {
+            return back()->with('error', $error->getMessage());
+        }
 
         if (!($resultado['generated'] ?? false)) {
             return back()->with('error', $this->motivoDeNoFacturar($resultado, $contract));
@@ -317,6 +325,10 @@ class InvoiceController extends Controller
         return match ($resultado['reason'] ?? null) {
             'Contract suspended' =>
                 'El contrato está suspendido: no se le factura hasta reconectarlo.',
+
+            'Nothing to bill' =>
+                'Este contrato no tiene nada que facturar: se quedó sin plan y no tiene cargos '
+                . 'pendientes. Asígnele un plan antes de emitir.',
 
             'Invoice already exists for this period' => sprintf(
                 'Este contrato ya tiene factura del período %s (%s). '

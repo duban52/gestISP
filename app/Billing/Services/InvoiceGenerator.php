@@ -74,6 +74,22 @@ class InvoiceGenerator
             return ['generated' => false, 'reason' => 'Invoice already exists for this period'];
         }
 
+        // ---- No se emite una factura sin nada dentro ----
+        //
+        // Pasa cuando el contrato se quedó sin plan: `plan_id` es nulo
+        // con ON DELETE SET NULL, así que basta con que alguien borre
+        // un plan. La factura salía igual, con cero renglones y total
+        // cero.
+        //
+        // En una interna es un documento absurdo. En una ELECTRÓNICA es
+        // caro: gasta un consecutivo del rango autorizado —que no se
+        // recupera— en un XML que además el XSD de la DIAN rechaza,
+        // porque un `Invoice` sin `InvoiceLine` no es válido. Queda el
+        // hueco en la numeración y ningún documento que enseñar.
+        if (!$this->hayAlgoQueFacturar($contract)) {
+            return ['generated' => false, 'reason' => 'Nothing to bill'];
+        }
+
         $settings = BranchBillingSetting::forBranch($contract->branch_id);
 
         $invoice = DB::transaction(function () use ($contract, $today, $userId, $yearMonth, $settings, $billingRunId) {
@@ -193,6 +209,27 @@ class InvoiceGenerator
             'period_end' => $endOfMonth->toDateString(),
             'prorate_multiplier' => $prorateMultiplier,
         ];
+    }
+
+    /**
+     * ¿Hay algo que facturarle a este contrato?
+     *
+     * Las dos fuentes son las mismas que usa `addItems()`, y tienen que
+     * seguir siéndolo: si un día se factura algo más, hay que añadirlo
+     * también aquí o volverán las facturas vacías.
+     */
+    private function hayAlgoQueFacturar(Contract $contract): bool
+    {
+        if ($contract->plan?->services()->exists()) {
+            return true;
+        }
+
+        // Misma consulta que abajo, literalmente: la relación y el
+        // mismo estado en minúscula. Escribirla de otra forma es como
+        // se separan con el tiempo.
+        return $contract->additionalCharges()
+            ->where('status', 'pendiente')
+            ->exists();
     }
 
     /**
