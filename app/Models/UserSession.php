@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\NotAudited;
+
 use App\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +26,8 @@ use Illuminate\Support\Carbon;
  */
 class UserSession extends Model
 {
+    use NotAudited;
+
     use BelongsToCompany;
 
     public const REASON_MANUAL = 'manual';

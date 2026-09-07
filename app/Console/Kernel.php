@@ -110,6 +110,24 @@ class Kernel extends ConsoleKernel
             ->dailyAt('07:00')
             ->withoutOverlapping();
 
+        // ---- Retencion de la trazabilidad ----
+        //
+        // `audits:prune` existia desde hace tiempo y NO lo llamaba
+        // nadie: habia que acordarse de ejecutarlo a mano, que es como
+        // no tenerlo. La tabla llego a 4,31 GB.
+        //
+        // Domingo de madrugada porque borra por lotes y toca una tabla
+        // grande: mejor cuando no hay nadie cobrando.
+        //
+        // El periodo sale de config('audit.retention_days'). Se deja
+        // ahi y no aqui para que cambiarlo no exija tocar codigo.
+        // Sin `onOneServer()`: exige un cache con bloqueos atomicos y
+        // aqui CACHE_DRIVER es `file`, que no los tiene. Con un solo
+        // servidor `withoutOverlapping()` ya basta.
+        $schedule->command('audits:prune --force')
+            ->weeklyOn(0, '03:00')
+            ->withoutOverlapping();
+
         // Barrido de documentos electronicos firmados sin transmitir.
         // Recoge lo que se quedo atras porque la cola se cayo o porque
         // el servicio de la DIAN estuvo caido. Es idempotente: no

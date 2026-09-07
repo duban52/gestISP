@@ -142,6 +142,21 @@ class AuditServiceProvider extends ServiceProvider
      */
     private function auditable(Model $model): bool
     {
+        // El modelo lo dice de si mismo. Es la via PRINCIPAL: puesta en
+        // el propio modelo, la decision viaja con el, y quien cree la
+        // siguiente tabla de metricas la tiene delante en el archivo
+        // que esta escribiendo.
+        //
+        // La lista de configuracion de abajo fallaba ABIERTO —se audita
+        // todo salvo lo apuntado— y olvidarse de una tabla no daba
+        // ningun error: solo hacia crecer `audits` en silencio. Asi se
+        // colaron 1.965.252 filas de OltPortMetric.
+        if (method_exists($model, 'seAudita') && !$model->seAudita()) {
+            return false;
+        }
+
+        // La lista sigue valiendo: una instalacion ya desplegada la
+        // tiene puesta y no hay por que romperla.
         foreach (config('audit.excluded_models', []) as $excluido) {
             if ($model instanceof $excluido) {
                 return false;

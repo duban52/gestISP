@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\NotAudited;
+
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -26,6 +28,15 @@ use Illuminate\Support\Collection;
  */
 class FiscalCatalog extends Model
 {
+    // Datos de referencia de la DIAN, no actividad de nadie: los
+    // escribe FiscalCatalogSeeder desde los JSON versionados, y el
+    // controlador solo los lee para los desplegables.
+    //
+    // Cada `db:seed --class=FiscalCatalogSeeder` recorre ~2.000 codigos
+    // con updateOrCreate. Auditarlos metia 2.000 filas por ejecucion:
+    // el 90% de la tabla en esta instalacion.
+    use NotAudited;
+
     /** Los catalogos que usa el sistema, por su nombre corto. */
     public const TIPO_DOCUMENTO = 'tipo_documento';
     public const TIPO_ORGANIZACION = 'tipo_organizacion';

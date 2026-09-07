@@ -20,12 +20,21 @@ class PruneAudits extends Command
 {
     protected $signature = 'audits:prune
                             {--days= : Días de historial que se conservan}
-                            {--dry-run : Muestra cuántos se borrarían, sin borrar}';
+                            {--dry-run : Muestra cuántos se borrarían, sin borrar}
+                            {--force : No pregunta. Lo usa el planificador}
+                            {--resumen : Enseña quién está llenando la tabla y no borra nada}';
 
     protected $description = 'Elimina los registros de trazabilidad más antiguos que el periodo indicado';
 
     public function handle(): int
     {
+        // El resumen va ANTES de todo lo demas: es una consulta y no
+        // borra nada, y es lo que hay que mirar cuando la tabla crece
+        // sin motivo aparente.
+        if ($this->option('resumen')) {
+            return $this->resumen();
+        }
+
         $dias = (int) ($this->option('days') ?: config('audit.retention_days', 730));
 
         if ($dias < 30) {
@@ -52,7 +61,13 @@ class PruneAudits extends Command
             return self::SUCCESS;
         }
 
-        if (!$this->confirm("¿Eliminar definitivamente {$total} registro(s) de auditoría?", false)) {
+        // `--force` para el planificador. Sin el, `confirm()` en un
+        // proceso sin terminal devuelve el valor por defecto —false— y
+        // la tarea programada no borraria NUNCA nada, sin dar ningun
+        // error. Es la clase de fallo que se descubre mirando el tamaño
+        // de la base seis meses despues.
+        if (!$this->option('force')
+            && !$this->confirm("¿Eliminar definitivamente {$total} registro(s) de auditoría?", false)) {
             $this->comment('Operación cancelada.');
 
             return self::SUCCESS;
@@ -67,6 +82,73 @@ class PruneAudits extends Command
         } while ($lote > 0);
 
         $this->info('Registros eliminados: ' . number_format($borrados));
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Quien esta llenando la tabla.
+     *
+     * POR QUE EXISTE
+     * --------------
+     * Porque `audits` llego a 4,31 GB y 7.319.292 filas en un sistema
+     * con 15 contratos, y averiguar de donde salian costo leer tres
+     * clases y una lista de configuracion. Con esto es una consulta.
+     *
+     * La causa era `OltPortMetric`: no estaba en la lista de exclusion,
+     * y `olt:poll-ports` escribe una lectura por puerto PON cada cinco
+     * minutos. La telemetria no la hace ninguna persona y no tiene por
+     * que auditarse.
+     *
+     * Si algun dia vuelve a crecer, esto lo dice en un comando en vez
+     * de en una tarde.
+     */
+    private function resumen(): int
+    {
+        $total = Audit::count();
+
+        if ($total === 0) {
+            $this->info('La tabla de trazabilidad esta vacia.');
+
+            return self::SUCCESS;
+        }
+
+        $this->info('Filas en `audits`: ' . number_format($total));
+        $this->newLine();
+
+        $porModelo = Audit::query()
+            ->selectRaw('COALESCE(auditable_type, CONCAT("(peticion) ", COALESCE(category, "?"))) AS origen')
+            ->selectRaw('COUNT(*) AS n')
+            ->groupBy('origen')
+            ->orderByDesc('n')
+            ->limit(15)
+            ->get();
+
+        $this->table(
+            ['Origen', 'Filas', '% del total'],
+            $porModelo->map(fn ($f) => [
+                $f->origen,
+                number_format($f->n),
+                sprintf('%.1f %%', $f->n * 100 / $total),
+            ]),
+        );
+
+        // Un origen que se lleva la mayor parte casi siempre es
+        // telemetria colada, no actividad humana.
+        $mayor = $porModelo->first();
+
+        if ($mayor && $mayor->n > $total * 0.5) {
+            $this->newLine();
+            $this->warn(sprintf(
+                '«%s» se lleva el %.0f%% de la tabla. Si es telemetria, marque ese modelo '
+                . 'con el trait App\Billing\Concerns\NotAudited.',
+                $mayor->origen,
+                $mayor->n * 100 / $total,
+            ));
+        }
+
+        $this->newLine();
+        $this->comment('Este modo no borra nada. Para depurar: php artisan audits:prune');
 
         return self::SUCCESS;
     }

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\NotAudited;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -19,6 +21,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class PaymentAudit extends Model
 {
+    use NotAudited;
+
     use HasFactory;
 
     protected $fillable = [

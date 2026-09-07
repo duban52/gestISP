@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\NotAudited;
+
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class OltPortMetric extends Model
 {
+    use NotAudited;
+
     protected $fillable = [
         'port_type',
         'port_id',

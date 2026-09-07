@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\NotAudited;
+
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -12,6 +14,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class PppoeSessionMetric extends Model
 {
+    use NotAudited;
+
     protected $fillable = [
         'pppoe_account_id',
         'in_octets',

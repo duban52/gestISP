@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Billing\Concerns\NotAudited;
+
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -13,6 +15,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class FailedLogin extends Model
 {
+    use NotAudited;
+
     protected $fillable = [
         'user_id', 'email', 'ip_address', 'user_agent', 'attempted_at',
     ];

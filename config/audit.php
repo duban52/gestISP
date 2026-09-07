@@ -41,6 +41,11 @@ return [
     'excluded_models' => [
         App\Models\Audit::class,
         App\Models\OntMetric::class,
+        // Faltaba, y costo 1.965.252 filas: `olt:poll-ports` escribe
+        // una lectura por puerto PON cada cinco minutos. Ahora la
+        // exclusion vive ademas en el propio modelo (trait NotAudited),
+        // que es la via que no se olvida.
+        App\Models\OltPortMetric::class,
         App\Models\PppoeSessionMetric::class,
         App\Models\UserSession::class,
         App\Models\FailedLogin::class,
