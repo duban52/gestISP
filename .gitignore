@@ -19,6 +19,7 @@ yarn-error.log
 /.vscode
 gestISP.zip
 /DB_recuperada
+/Certificado_digital_certicamara
 
 # Paquete oficial del anexo tecnico de la DIAN (~54 MB de XSD, XSL y
 # ejemplos). Es material de consulta descargable de la DIAN, no codigo

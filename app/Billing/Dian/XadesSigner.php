@@ -74,14 +74,25 @@ class XadesSigner
     /**
      * La política de firma de la DIAN.
      *
-     * OJO: el identificador y su resumen son los del ejemplo oficial. El
-     * anexo 1.9 menciona una ruta «v2» distinta de la que traen sus
-     * propios ejemplos («v1/politicadefirmav2.pdf»), y el resumen tiene
-     * que ser el del PDF que esté publicado de verdad. **Hay que
-     * confirmarlos contra la política vigente antes de emitir en
-     * producción**: si no coinciden, la DIAN rechaza la firma.
+     * VERIFICADO CONTRA LA POLÍTICA PUBLICADA (2026-09-07)
+     * ----------------------------------------------------
+     * Se descargó el PDF vivo y se calculó su SHA-384:
+     *
+     *   openssl dgst -sha384 -binary politicadefirmav2.pdf | openssl base64 -A
+     *
+     * El resumen coincide byte a byte con el del ejemplo oficial, así
+     * que POLITICA_RESUMEN estaba bien desde el principio.
+     *
+     * LA RUTA NO. La que traen los XML firmados de la DIAN
+     * —`v1/politicadefirmav2.pdf`— responde **404**. La viva es la
+     * `v2/`, que es la que dice el TEXTO del anexo 1.9. O sea: el anexo
+     * tenía razón y sus propios ejemplos estaban desactualizados.
+     *
+     * Es el mismo documento en las dos rutas —el hash lo demuestra—,
+     * pero declarar una URL muerta en el `SigPolicyId` es declarar algo
+     * que no se puede comprobar.
      */
-    private const POLITICA_URL = 'https://facturaelectronica.dian.gov.co/politicadefirma/v1/politicadefirmav2.pdf';
+    private const POLITICA_URL = 'https://facturaelectronica.dian.gov.co/politicadefirma/v2/politicadefirmav2.pdf';
     private const POLITICA_RESUMEN = 'EQC0kiWPaAME6IsEZ7WuaTWJ97Zmf6hIO69rMCVURmQxBB9ebgLrjhL5BArQ0a0l';
 
     private const NS_DS = 'http://www.w3.org/2000/09/xmldsig#';

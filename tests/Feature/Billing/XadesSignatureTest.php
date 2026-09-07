@@ -190,7 +190,21 @@ class XadesSignatureTest extends BillingTestCase
     {
         $firmado = $this->firmar()[0];
 
-        $this->assertStringContainsString('facturaelectronica.dian.gov.co/politicadefirma', $firmado);
+        // La RUTA, no solo el dominio. La que traen los XML de ejemplo
+        // de la DIAN (`v1/`) responde 404; la viva es `v2/`, que es la
+        // que dice el texto del anexo. Se fija aqui porque un
+        // `SigPolicyId` que apunta a un documento inexistente es
+        // exactamente lo que nadie mira hasta que la DIAN rechaza.
+        $this->assertStringContainsString(
+            'https://facturaelectronica.dian.gov.co/politicadefirma/v2/politicadefirmav2.pdf',
+            $firmado,
+        );
+
+        // El resumen, verificado contra el PDF publicado el 2026-09-07.
+        $this->assertStringContainsString(
+            'EQC0kiWPaAME6IsEZ7WuaTWJ97Zmf6hIO69rMCVURmQxBB9ebgLrjhL5BArQ0a0l',
+            $firmado,
+        );
         $this->assertStringContainsString('<xades:ClaimedRole>supplier</xades:ClaimedRole>', $firmado);
         $this->assertStringContainsString('<xades:SigningTime>', $firmado);
     }
