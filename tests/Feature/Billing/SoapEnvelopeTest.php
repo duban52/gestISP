@@ -63,57 +63,88 @@ class SoapEnvelopeTest extends TestCase
         $this->assertStringContainsString('SendBillSync', $sobre);
     }
 
-    public function test_van_firmados_todos_los_encabezados_de_direccionamiento(): void
+    /**
+     * El sobre, contra la politica que el servicio publica.
+     *
+     * DE DONDE SALEN ESTAS TRES REGLAS
+     * --------------------------------
+     * Del WSDL del propio servicio, que declara su WS-Policy:
+     *
+     *   curl -s "https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc?wsdl=wsdl0"
+     *
+     *   <sp:AlgorithmSuite><sp:Basic256Sha256Rsa15/>
+     *   <sp:X509Token><sp:RequireThumbprintReference/>
+     *   <sp:SignedParts><sp:Header Name="To" .../>
+     *
+     * Se llego ahi despues de tres intentos a ciegas —firmar solo To,
+     * anadir Action, cambiar a SHA-1— todos rechazados con el mismo
+     * `wsse:InvalidSecurity`, que no dice nada. La respuesta llevaba
+     * todo el tiempo publicada en el WSDL.
+     *
+     * Por eso estas pruebas citan la politica: si alguien las cambia,
+     * que sepa contra que las esta cambiando.
+     */
+    public function test_el_certificado_se_referencia_por_huella(): void
     {
-        // DE DONDE SALE ESTA PRUEBA
-        // -------------------------
-        // De un rechazo real: la DIAN contesto 500 con
-        // `wsse:InvalidSecurity` — «An error occurred when verifying
-        // security for the message».
+        // `<sp:RequireThumbprintReference/>` y `<sp:MustSupportRefThumbprint/>`.
+        // Con una `wsse:Reference` directa —la forma mas comun— WCF
+        // rechaza el mensaje por politica antes de verificar nada.
+        $sobre = $this->capturarSobre();
+
+        $this->assertStringContainsString(
+            'wsse:KeyIdentifier',
+            $sobre,
+            'El certificado no se referencia por huella.',
+        );
+
+        $this->assertStringContainsString(
+            'oasis-wss-soap-message-security-1.1#ThumbprintSHA1',
+            $sobre,
+        );
+
+        $this->assertStringNotContainsString(
+            '<wsse:Reference',
+            $sobre,
+            'Sigue la referencia directa, que la politica no admite.',
+        );
+    }
+
+    public function test_se_firma_el_timestamp_y_el_destino(): void
+    {
+        // `<sp:SignedParts><sp:Header Name="To"/>` mas el Timestamp,
+        // que va porque el enlace lleva `<sp:IncludeTimestamp/>`.
         //
-        // Se firmaban el Timestamp, `wsa:To` y el cuerpo, pero NO
-        // `wsa:Action`. El servicio de la DIAN es WCF —su URL termina
-        // en `.svc`— y WCF exige que vayan firmados TODOS los
-        // encabezados de direccionamiento presentes. Con uno sin firmar
-        // la verificacion falla antes de mirar el documento, y el error
-        // no dice cual falta.
+        // El CUERPO no: el enlace es `sp:TransportBinding` sobre HTTPS,
+        // asi que del cuerpo se encarga TLS.
         $sobre = $this->capturarSobre();
 
         $doc = new \DOMDocument();
         $doc->loadXML($sobre);
 
         $xpath = new \DOMXPath($doc);
-        $xpath->registerNamespace('wsa', 'http://www.w3.org/2005/08/addressing');
         $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
         $xpath->registerNamespace('wsu', 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd');
 
-        // Lo que hay en la cabecera de direccionamiento.
-        $direccionamiento = $xpath->query("//*[local-name()='Header']/wsa:*");
-        $this->assertGreaterThan(0, $direccionamiento->length, 'El sobre no lleva direccionamiento.');
-
-        // Lo que la firma referencia.
-        $referenciados = [];
+        $firmados = [];
 
         foreach ($xpath->query('//ds:Reference/@URI') as $uri) {
-            $referenciados[] = ltrim($uri->value, '#');
+            $id = ltrim($uri->value, '#');
+            $nodo = $xpath->query(sprintf('//*[@wsu:Id="%s"]', $id))->item(0);
+            $firmados[] = $nodo instanceof \DOMElement ? $nodo->localName : '?';
         }
 
-        foreach ($direccionamiento as $nodo) {
-            $id = $nodo->getAttributeNS(
-                'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd',
-                'Id',
-            );
+        sort($firmados);
 
-            $this->assertNotSame('', $id, sprintf(
-                'El encabezado wsa:%s no lleva wsu:Id, asi que no se puede firmar.',
-                $nodo->localName,
-            ));
+        $this->assertSame(['Timestamp', 'To'], $firmados);
+    }
 
-            $this->assertContains($id, $referenciados, sprintf(
-                'El encabezado wsa:%s no va firmado. WCF lo rechaza con InvalidSecurity.',
-                $nodo->localName,
-            ));
-        }
+    public function test_la_suite_es_la_que_pide_la_politica(): void
+    {
+        // `<sp:Basic256Sha256Rsa15/>`: SHA-256, no SHA-1.
+        $sobre = $this->capturarSobre();
+
+        $this->assertStringContainsString('xmldsig-more#rsa-sha256', $sobre);
+        $this->assertStringContainsString('xmlenc#sha256', $sobre);
     }
 
     public function test_la_firma_del_sobre_verifica(): void

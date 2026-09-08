@@ -88,10 +88,19 @@ return [
     | Con esto se cambia en el `.env` y se reintenta con
     | `dian:transmitir`, sin tocar codigo ni volver a desplegar.
     |
-    | Valores: 'sha1' (Basic256, el de WCF por defecto) o 'sha256'.
+    | CONFIRMADO el 2026-09-08: es **sha256**. La politica del propio
+    | servicio lo dice, y se lee en su WSDL:
+    |
+    |   curl -s "https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc?wsdl=wsdl0"
+    |   <sp:AlgorithmSuite><wsp:Policy><sp:Basic256Sha256Rsa15/>
+    |
+    | Se deja conmutable por si la DIAN cambia la suite, pero ya no es
+    | una incognita: es un dato publicado.
+    |
+    | Valores: 'sha256' (Basic256Sha256Rsa15, el que pide) o 'sha1'.
     |
     */
 
-    'ws_security_hash' => env('DIAN_WS_SECURITY_HASH', 'sha1'),
+    'ws_security_hash' => env('DIAN_WS_SECURITY_HASH', 'sha256'),
 
 ];

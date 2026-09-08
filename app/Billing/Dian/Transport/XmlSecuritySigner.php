@@ -77,6 +77,9 @@ class XmlSecuritySigner
     ];
 
     private const TIPO_X509 = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3';
+    /** Referencia al certificado por su huella. Lo exige `RequireThumbprintReference`. */
+    private const TIPO_HUELLA = 'http://docs.oasis-open.org/wss/oasis-wss-soap-message-security-1.1#ThumbprintSHA1';
+
     private const CODIFICACION = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary';
 
     /**
@@ -144,11 +147,31 @@ class XmlSecuritySigner
         // nombres: si manana se anade `MessageID` o `ReplyTo` al sobre,
         // entra firmado solo. Una lista escrita a mano es como se vuelve
         // a caer en esto.
-        $firmados = array_filter(array_merge(
-            [$marca],
-            $this->encabezadosDeDireccionamiento($doc),
-            [$this->porNombre($doc, 'Body')],
-        ));
+        // ---- Lo que se firma: EL TIMESTAMP Y `To` ----
+        //
+        // Lo dice la politica del servicio, que se puede leer en su
+        // propio WSDL (`?wsdl=wsdl0`):
+        //
+        //   <sp:EndorsingSupportingTokens>
+        //     <sp:SignedParts>
+        //       <sp:Header Name="To" Namespace=".../addressing"/>
+        //
+        // Y el Timestamp porque el enlace lleva `<sp:IncludeTimestamp/>`
+        // y un token «endorsing» sobre transporte firma precisamente la
+        // marca de tiempo.
+        //
+        // NO va el cuerpo: el enlace es `sp:TransportBinding` con
+        // HTTPS, asi que la confidencialidad e integridad del cuerpo
+        // las da TLS, no la firma.
+        //
+        // Se llego aqui despues de probar con `To` solo, con `To` mas
+        // `Action`, y con los dos mas el cuerpo — todos rechazados
+        // igual. Adivinar no servia: la respuesta estaba publicada en
+        // el WSDL del propio servicio.
+        $firmados = array_filter([
+            $marca,
+            $this->porNombre($doc, 'To'),
+        ]);
 
         foreach ($firmados as $nodo) {
             if (!$nodo->hasAttributeNS(self::NS_WSU, 'Id')) {
@@ -156,7 +179,7 @@ class XmlSecuritySigner
             }
         }
 
-        $this->firma($doc, $seguridad, $firmados, $id, $clave);
+        $this->firma($doc, $seguridad, $firmados, $id, $clave, $pem);
 
         return $doc->saveXML();
     }
@@ -172,6 +195,7 @@ class XmlSecuritySigner
         array $firmados,
         string $idToken,
         string $clave,
+        string $pem,
     ): void {
         $firma = $doc->createElementNS(self::NS_DS, 'ds:Signature');
         $seguridad->appendChild($firma);
@@ -203,11 +227,36 @@ class XmlSecuritySigner
         $valor = $this->nodo($doc, $firma, self::NS_DS, 'ds:SignatureValue', '');
 
         // ---- Como se encuentra la clave publica ----
+        // ---- Como se identifica el certificado: POR HUELLA ----
+        //
+        // La politica del servicio lo exige literalmente:
+        //
+        //   <sp:X509Token ...>
+        //     <sp:RequireThumbprintReference/>
+        //   <sp:Wss11><sp:MustSupportRefThumbprint/>
+        //
+        // Antes se apuntaba con `wsse:Reference URI="#X509-..."`, que
+        // es la forma directa y la mas comun — y la DIAN contestaba
+        // `wsse:InvalidSecurity` sin decir por que. WCF valida el
+        // mensaje contra su politica ANTES de verificar nada, y una
+        // referencia que no es por huella no encaja.
+        //
+        // La huella es el SHA-1 del certificado en DER. Es SHA-1
+        // aunque la suite sea SHA-256: no es un resumen criptografico
+        // del mensaje, es el identificador estandar de un certificado
+        // (el mismo que enseña Windows en «Huella digital»).
         $keyInfo = $this->nodo($doc, $firma, self::NS_DS, 'ds:KeyInfo');
         $referenciaToken = $this->nodo($doc, $keyInfo, self::NS_WSSE, 'wsse:SecurityTokenReference');
-        $apunta = $this->nodo($doc, $referenciaToken, self::NS_WSSE, 'wsse:Reference');
-        $apunta->setAttribute('URI', '#' . $idToken);
-        $apunta->setAttribute('ValueType', self::TIPO_X509);
+
+        $huella = $this->nodo(
+            $doc,
+            $referenciaToken,
+            self::NS_WSSE,
+            'wsse:KeyIdentifier',
+            base64_encode(sha1(base64_decode($this->base64Del($pem)), true)),
+        );
+        $huella->setAttribute('EncodingType', self::CODIFICACION);
+        $huella->setAttribute('ValueType', self::TIPO_HUELLA);
 
         // El SignedInfo se firma ya insertado, por lo mismo que en la
         // XAdES: la canonicalizacion arrastra los espacios de nombres
