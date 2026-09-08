@@ -470,4 +470,60 @@ class DianReadinessTest extends TestCase
             'signed_at' => now(),
         ]);
     }
+
+    // ============ Encender en PRUEBAS, para la habilitacion ============
+
+    public function test_se_puede_encender_la_emision_sin_irse_a_produccion(): void
+    {
+        // Es la otra mitad del bloqueo que se corrigio en el decisor.
+        // Alli se permitio emitir en pruebas; aqui se permite ENCENDER
+        // sin pasar a produccion, que era lo que faltaba: el
+        // interruptor de la empresa solo lo movia `dian:habilitar` en
+        // su modo normal, y ese ademas anota la habilitacion como
+        // aprobada.
+        //
+        // Sin esto no habia forma de armar el set de pruebas: para
+        // producir documentos hace falta el interruptor, y encenderlo
+        // obligaba a irse a produccion sin haber pasado el set.
+        $this->artisan('dian:habilitar --pruebas --empresa=' . $this->empresa->id)
+            ->assertSuccessful();
+
+        $this->empresa->refresh();
+
+        $this->assertTrue($this->empresa->electronic_invoicing_enabled);
+        $this->assertSame(
+            DianConfiguration::PRUEBAS,
+            $this->empresa->dianConfiguration->environment_code,
+        );
+    }
+
+    public function test_encender_en_pruebas_no_anota_la_habilitacion(): void
+    {
+        // `enabled_at` sigue en null porque la DIAN no ha aprobado
+        // nada. Es lo que impide que un despiste con el ambiente acabe
+        // emitiendo en produccion sin haber pasado el set.
+        $this->artisan('dian:habilitar --pruebas --empresa=' . $this->empresa->id);
+
+        $this->assertNull($this->empresa->fresh()->dianConfiguration->enabled_at);
+    }
+
+    public function test_no_se_usa_para_volver_atras_desde_produccion(): void
+    {
+        // Una empresa ya habilitada que quiera volver a pruebas usa
+        // --apagar, que es explicito. Que --pruebas lo hiciera de
+        // callada seria apagar la facturacion de una empresa viva
+        // creyendo que se esta preparando una habilitacion.
+        DianConfiguration::withoutGlobalScopes()->updateOrCreate(
+            ['company_id' => $this->empresa->id],
+            ['environment_code' => DianConfiguration::PRODUCCION, 'enabled_at' => now()],
+        );
+
+        $this->artisan('dian:habilitar --pruebas --empresa=' . $this->empresa->id)
+            ->assertFailed();
+
+        $this->assertSame(
+            DianConfiguration::PRODUCCION,
+            $this->empresa->fresh()->dianConfiguration->environment_code,
+        );
+    }
 }

@@ -40,6 +40,7 @@ class EnableDianProduction extends Command
     protected $signature = 'dian:habilitar
                             {--empresa= : La empresa que se habilita}
                             {--forzar : Enciende aunque el diagnóstico encuentre bloqueos}
+                            {--pruebas : Enciende la emisión PERO en ambiente de pruebas, para armar el set de habilitación}
                             {--apagar : Vuelve a pruebas y desactiva la emisión electrónica}';
 
     protected $description = 'Enciende (o apaga) la facturación electrónica de una empresa';
@@ -54,6 +55,10 @@ class EnableDianProduction extends Command
 
         if ($this->option('apagar')) {
             return $this->apagar($empresa, $trazabilidad);
+        }
+
+        if ($this->option('pruebas')) {
+            return $this->encenderEnPruebas($empresa, $trazabilidad);
         }
 
         $bloqueos = $revision->bloqueos($empresa);
@@ -115,6 +120,78 @@ class EnableDianProduction extends Command
         );
 
         $this->info('Facturación electrónica encendida.');
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Enciende la emisión, pero en AMBIENTE DE PRUEBAS.
+     *
+     * POR QUÉ HACE FALTA UN MODO APARTE
+     * ---------------------------------
+     * Para armar el set de pruebas hay que EMITIR documentos
+     * electrónicos, y para eso `ElectronicInvoicingDecider` exige tres
+     * cosas: el interruptor de la empresa, el grupo de afinidad, y que
+     * la configuración DIAN lo permita en su ambiente.
+     *
+     * El interruptor de la empresa solo lo encendía este comando en su
+     * modo normal — que además pasa el ambiente a PRODUCCIÓN y anota la
+     * habilitación como aprobada. Y en el panel es de solo lectura.
+     *
+     * O sea: no había forma de quedar «encendido pero en pruebas», que
+     * es exactamente el estado en el que se pasa la habilitación. Es la
+     * otra mitad del bloqueo que se corrigió en el decisor: allí se
+     * permitió emitir en pruebas, pero el interruptor seguía sin poder
+     * encenderse sin irse a producción.
+     *
+     * NO TOCA `enabled_at`
+     * --------------------
+     * Sigue en null, porque la DIAN todavía no ha aprobado nada. Es lo
+     * que impide que un despiste con el ambiente acabe emitiendo en
+     * producción sin haber pasado el set.
+     *
+     * NO EXIGE EL DIAGNÓSTICO LIMPIO
+     * ------------------------------
+     * Sería imposible: la comprobación de habilitación está en rojo
+     * por definición mientras no se haya pasado el set de pruebas.
+     * Pedirla aquí sería pedir el resultado antes de hacer el examen.
+     */
+    private function encenderEnPruebas($empresa, AuditLogger $trazabilidad): int
+    {
+        $configuracion = DianConfiguration::withoutGlobalScopes()->firstOrNew([
+            'company_id' => $empresa->id,
+        ]);
+
+        if ($configuracion->enabled_at !== null) {
+            $this->warn(sprintf(
+                '«%s» ya tiene la habilitación aprobada (%s). Volver a pruebas se hace con --apagar.',
+                $empresa->nombreVisible(),
+                $configuracion->enabled_at->format('d/m/Y'),
+            ));
+
+            return self::FAILURE;
+        }
+
+        $configuracion->environment_code = DianConfiguration::PRUEBAS;
+        $configuracion->save();
+
+        $empresa->update(['electronic_invoicing_enabled' => true]);
+
+        $trazabilidad->action(
+            'dian.pruebas',
+            sprintf('Encendió la emisión electrónica de %s EN PRUEBAS, para armar el set de habilitación', $empresa->nombreVisible()),
+            ['empresa' => $empresa->identificacion()],
+            $empresa,
+            'facturacion',
+        );
+
+        $this->info(sprintf('«%s» ya emite documentos electrónicos EN PRUEBAS.', $empresa->nombreVisible()));
+        $this->newLine();
+        $this->line('Los contratos de grupos electrónicos van a producir XML firmados que se');
+        $this->line('mandan al ambiente de HABILITACIÓN, no al de producción. Gastan');
+        $this->line('consecutivos del rango de pruebas, que es para lo que existe.');
+        $this->newLine();
+        $this->line('Siguiente paso: emitir las facturas del set y `php artisan dian:set-de-pruebas`.');
 
         return self::SUCCESS;
     }
