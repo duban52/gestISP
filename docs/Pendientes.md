@@ -6,40 +6,41 @@ construyendo, no algo que se nos ocurrió que estaría bien.
 
 Ordenado por lo que **bloquea** primero.
 
-### 1.1 · Confirmar la política de firma 🔴
+### 1.1 · La política de firma — RESUELTO el 2026-09-07 ✅
 
-`XadesSigner` declara el identificador de la política y su resumen con
-los valores de los XML de ejemplo de la DIAN
-(`.../politicadefirma/v1/politicadefirmav2.pdf`). Pero **el texto del
-anexo 1.9 menciona una ruta `v2` distinta**.
+Se descargó la política publicada y se calculó su resumen:
 
-Si el identificador o el resumen no coinciden con la política publicada,
-**la DIAN rechaza la firma**.
+```bash
+curl -sSL -o politica.pdf https://facturaelectronica.dian.gov.co/politicadefirma/v2/politicadefirmav2.pdf
+openssl dgst -sha384 -binary politica.pdf | openssl base64 -A
+```
 
-**Qué hacer:** descargar la política vigente, calcular su SHA-384 y
-comparar con las constantes `POLITICA_URL` y `POLITICA_RESUMEN` de
-[XadesSigner](../app/Billing/Dian/XadesSigner.php).
+Resultado:
 
-### 1.2 · Conseguir el certificado en archivo `.p12` 🔴
+| | |
+|---|---|
+| El **resumen** que declarábamos | Correcto. Coincide byte a byte |
+| La **URL** que declarábamos | Equivocada: `v1/` responde **404** |
 
-Es **el único bloqueante que no depende de programar**. Sin clave privada
-no hay firma, y sin firma no hay factura electrónica.
+O sea: el TEXTO del anexo tenía razón con la ruta `v2/`, y sus propios
+XML de ejemplo —de donde la habíamos copiado— estaban desactualizados.
+Es el mismo documento en las dos rutas; el hash lo demuestra.
 
-El archivo `.crt` que entregan las entidades de certificación cuando el
-certificado se contrata "en la nube" **no sirve**: es solo la mitad
-pública. La clave privada se queda en el HSM del proveedor, que es quien
-firma por el facturador gratuito de la DIAN. Un servidor propio necesita
-el `.p12`.
+`POLITICA_URL` ya apunta a la viva, y la prueba
+`test_declara_la_politica_de_firma_de_la_dian` fija la ruta completa y
+el resumen, no solo el dominio.
 
-**Qué hacer:** pedirle a la entidad acreditada el certificado **en
-archivo `.p12`/`.pfx`, con la clave privada exportable** — ni en la nube
-ni en token de hardware. Ver
-[Certificado-Digital.md](Certificado-Digital.md) para el texto exacto de
-la solicitud.
+### 1.2 · El certificado — CONSEGUIDO el 2026-09-07 ✅
 
-**Mientras tanto** hay `php artisan dian:certificado-de-pruebas`, que
-genera uno autofirmado y deja recorrer todo el flujo menos la aceptación
-de la DIAN.
+Certicámara lo entregó en `.pfx`, que es el mismo formato PKCS#12 que
+el `.p12`: `openssl_pkcs12_read()` los lee igual y el formulario ya
+acepta las dos extensiones.
+
+Queda pendiente comprobar al cargarlo que trae la **cadena completa**
+(los certificados intermedios). `XadesSigner` la saca de `extracerts`
+del propio archivo, y el anexo exige un `xades:Cert` por cada
+certificado de la cadena, no solo el del firmante. Si `extracerts`
+llega vacío hay que pedírsela a Certicámara.
 
 ### 1.3 · La firma, contra un certificado real ⚠️
 
@@ -150,12 +151,22 @@ que entrar al portal de la DIAN a mirarlo.
 
 ## 4. Deuda anterior a todo esto
 
-### 4.1 · La tabla `audits` sin política de retención 🔴
+### 4.1 · La tabla `audits` — RESUELTO el 2026-09-07 ✅
 
-Se encontró el disco **al 100%** con `audits` ocupando **2,67 GB**. No
-hay purga, ni archivado, ni rotación.
+Llegó a **4,31 GB y 7.319.292 filas** con 15 contratos. No era falta de
+retención sino ruido: `AuditServiceProvider` escucha `eloquent.*: *` y
+la lista de exclusión de `config/audit.php` no tenía `OltPortMetric`
+(1.965.252 filas) ni `FiscalCatalog` (el 90% de la tabla en
+desarrollo).
 
-Va a volver a pasar.
+Arreglado en tres frentes: el trait `NotAudited` en el propio modelo
+—el diseño anterior fallaba abierto—, `audits:prune` semanal en el
+planificador con `--force`, y `audits:prune --resumen` para ver quién
+llena la tabla sin adivinarlo.
+
+**Queda comprobar** con datos reales: se truncó la tabla antes de
+diagnosticar, así que puede quedar algún productor más. Correr
+`--resumen` cuando producción lleve unos días.
 
 ### 4.2 · Los informes en modo consolidado
 
