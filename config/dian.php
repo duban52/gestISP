@@ -61,4 +61,37 @@ return [
     */
     'transport' => env('DIAN_TRANSPORT', 'auto'),
 
+    /*
+    |----------------------------------------------------------------
+    | Algoritmos de WS-Security
+    |----------------------------------------------------------------
+    |
+    | Los del SOBRE, no los del documento. El documento va firmado con
+    | XAdES y SHA-256 porque lo dice el anexo; esto es otra cosa: la
+    | firma que autentica la LLAMADA, y la decide el binding de WCF que
+    | corre la DIAN, no el anexo.
+    |
+    | WCF valida el mensaje contra la «algorithm suite» de su binding, y
+    | la suite por defecto (Basic256) usa SHA-1 para los resumenes y
+    | RSA-SHA1 para la firma. Si no coinciden, contesta
+    | `wsse:InvalidSecurity` — y no dice que el problema sea el
+    | algoritmo.
+    |
+    | POR QUE ESTO ES CONFIGURABLE Y NO UNA CONSTANTE
+    | ----------------------------------------------
+    | Porque no se puede confirmar: la guia de consumo de la DIAN
+    | muestra estos valores EN UNA IMAGEN, y del PDF no se extrae texto
+    | (se intento: 2 MB de flujos y la palabra «Algorithm» aparece una
+    | vez). Asi que es una hipotesis, y una hipotesis se prueba — no se
+    | fija en una constante y se despliega.
+    |
+    | Con esto se cambia en el `.env` y se reintenta con
+    | `dian:transmitir`, sin tocar codigo ni volver a desplegar.
+    |
+    | Valores: 'sha1' (Basic256, el de WCF por defecto) o 'sha256'.
+    |
+    */
+
+    'ws_security_hash' => env('DIAN_WS_SECURITY_HASH', 'sha1'),
+
 ];

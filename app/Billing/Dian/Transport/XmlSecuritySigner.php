@@ -44,11 +44,52 @@ class XmlSecuritySigner
     /** Canonicalización EXCLUSIVA: es la de WS-Security, no la de XAdES. */
     private const EXC_C14N = 'http://www.w3.org/2001/10/xml-exc-c14n#';
 
-    private const METODO_FIRMA = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
-    private const METODO_RESUMEN = 'http://www.w3.org/2001/04/xmlenc#sha256';
+    /**
+     * Los algoritmos, segun la suite del binding de WCF.
+     *
+     * OJO: NO son los del documento. El documento va firmado con XAdES
+     * y SHA-256 porque lo dice el anexo. Esto es la firma que autentica
+     * la LLAMADA, y quien la decide es el binding de WCF que corre la
+     * DIAN.
+     *
+     * La suite por defecto de WCF (Basic256) usa SHA-1. Si el mensaje
+     * no encaja con la suite del binding, WCF contesta
+     * `wsse:InvalidSecurity` sin decir que el problema sea el
+     * algoritmo.
+     *
+     * Se elige por configuracion porque no se pudo confirmar: la guia
+     * de consumo de la DIAN muestra estos valores en una imagen. Ver
+     * `config/dian.php`.
+     */
+    private const ALGORITMOS = [
+        'sha1' => [
+            'firma' => 'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+            'resumen' => 'http://www.w3.org/2000/09/xmldsig#sha1',
+            'php' => 'sha1',
+            'openssl' => OPENSSL_ALGO_SHA1,
+        ],
+        'sha256' => [
+            'firma' => 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+            'resumen' => 'http://www.w3.org/2001/04/xmlenc#sha256',
+            'php' => 'sha256',
+            'openssl' => OPENSSL_ALGO_SHA256,
+        ],
+    ];
 
     private const TIPO_X509 = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3';
     private const CODIFICACION = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary';
+
+    /**
+     * La suite de algoritmos que se va a usar.
+     *
+     * @return array{firma: string, resumen: string, php: string, openssl: int}
+     */
+    private function suite(): array
+    {
+        $elegida = (string) config('dian.ws_security_hash', 'sha1');
+
+        return self::ALGORITMOS[$elegida] ?? self::ALGORITMOS['sha1'];
+    }
 
     /**
      * Firma el sobre y lo devuelve como XML.
@@ -138,7 +179,9 @@ class XmlSecuritySigner
         $info = $this->nodo($doc, $firma, self::NS_DS, 'ds:SignedInfo');
 
         $this->conAlgoritmo($doc, $info, 'ds:CanonicalizationMethod', self::EXC_C14N);
-        $this->conAlgoritmo($doc, $info, 'ds:SignatureMethod', self::METODO_FIRMA);
+        $suite = $this->suite();
+
+        $this->conAlgoritmo($doc, $info, 'ds:SignatureMethod', $suite['firma']);
 
         foreach ($firmados as $nodo) {
             $referencia = $this->nodo($doc, $info, self::NS_DS, 'ds:Reference');
@@ -147,13 +190,13 @@ class XmlSecuritySigner
             $transformadas = $this->nodo($doc, $referencia, self::NS_DS, 'ds:Transforms');
             $this->conAlgoritmo($doc, $transformadas, 'ds:Transform', self::EXC_C14N);
 
-            $this->conAlgoritmo($doc, $referencia, 'ds:DigestMethod', self::METODO_RESUMEN);
+            $this->conAlgoritmo($doc, $referencia, 'ds:DigestMethod', $suite['resumen']);
 
             // Exclusiva: C14N(true). Con la inclusiva el resumen sale
             // distinto y la DIAN devuelve un fallo de firma que no dice
             // por que.
             $this->nodo($doc, $referencia, self::NS_DS, 'ds:DigestValue', base64_encode(
-                hash('sha256', $nodo->C14N(true), true),
+                hash($suite['php'], $nodo->C14N(true), true),
             ));
         }
 
@@ -171,7 +214,7 @@ class XmlSecuritySigner
         // heredados.
         $firmado = '';
 
-        if (!openssl_sign($info->C14N(true), $firmado, $clave, OPENSSL_ALGO_SHA256)) {
+        if (!openssl_sign($info->C14N(true), $firmado, $clave, $suite['openssl'])) {
             throw new RuntimeException('No se pudo firmar la petición a la DIAN.');
         }
 

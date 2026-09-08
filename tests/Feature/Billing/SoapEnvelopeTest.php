@@ -138,12 +138,42 @@ class SoapEnvelopeTest extends TestCase
 
         $this->assertNotFalse($publica, 'El certificado del sobre no se pudo leer.');
 
+        // El algoritmo sale de la configuracion, no fijo: la suite de
+        // WS-Security es conmutable porque no se pudo confirmar cual
+        // espera la DIAN. Fijarlo aqui haria que la prueba pasara con
+        // una configuracion y fallara con la otra sin que nada este
+        // roto.
+        $algoritmo = config('dian.ws_security_hash') === 'sha256'
+            ? OPENSSL_ALGO_SHA256
+            : OPENSSL_ALGO_SHA1;
+
         // Canonicalización EXCLUSIVA: es la de WS-Security, no la
         // inclusiva de la firma XAdES de la factura.
         $this->assertSame(
             1,
-            openssl_verify($info->C14N(true), $valor, $publica, OPENSSL_ALGO_SHA256),
+            openssl_verify($info->C14N(true), $valor, $publica, $algoritmo),
             'La firma del sobre SOAP no verifica.',
+        );
+    }
+
+    public function test_la_suite_de_algoritmos_es_conmutable(): void
+    {
+        // La DIAN devuelve `wsse:InvalidSecurity` sin decir por que, y
+        // los algoritmos del sobre no se pudieron confirmar: la guia de
+        // consumo los muestra en una imagen. Poder alternarlos desde el
+        // `.env` es lo que permite probar sin desplegar.
+        config(['dian.ws_security_hash' => 'sha256']);
+
+        $this->assertStringContainsString(
+            'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+            $this->capturarSobre(),
+        );
+
+        config(['dian.ws_security_hash' => 'sha1']);
+
+        $this->assertStringContainsString(
+            'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
+            $this->capturarSobre(),
         );
     }
 
