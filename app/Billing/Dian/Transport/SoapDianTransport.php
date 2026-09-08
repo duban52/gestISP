@@ -301,6 +301,22 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
     /**
      * Arma el sobre SOAP, firmado con WS-Security.
      */
+    /**
+     * El sobre que se le mandaria a la DIAN, sin mandarlo.
+     *
+     * Existe para poder MIRARLO. La DIAN contesta a un sobre mal
+     * formado con `wsse:InvalidSecurity` y nada mas: no dice que
+     * encabezado falta, ni que referencia no cuadra, ni que algoritmo
+     * no esperaba. Sin poder ver lo que se envia, depurarlo es cambiar
+     * una cosa y reenviar — y cada vuelta cuesta un intento.
+     *
+     * Lo usa `dian:sobre`.
+     */
+    public function sobreDe(ElectronicDocument $documento, string $url, DianCertificate $certificado): string
+    {
+        return $this->sobre($documento, $url, $certificado);
+    }
+
     private function sobre(ElectronicDocument $documento, string $url, DianCertificate $certificado): string
     {
         $doc = new \DOMDocument('1.0', 'UTF-8');
@@ -313,10 +329,23 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
         $cabecera = $doc->createElementNS(self::NS_SOAP, 'soap:Header');
         $sobre->appendChild($cabecera);
 
+        // `mustUnderstand` en los dos: es lo que WCF espera de los
+        // encabezados de direccionamiento, y es lo que la propia DIAN
+        // pone en sus respuestas.
+        //
+        // El `Id="to"` suelto que llevaba `wsa:To` se retiro: era un
+        // atributo SIN espacio de nombres, que no es el `wsu:Id` que
+        // usa la firma. Lo ponia ademas del que anade el firmador, asi
+        // que el nodo viajaba con dos identificadores distintos y solo
+        // uno referenciado.
         $direccionamiento = 'http://www.w3.org/2005/08/addressing';
+
         $accion = $doc->createElementNS($direccionamiento, 'wsa:Action', self::ACCION_ENVIO);
+        $accion->setAttributeNS(self::NS_SOAP, 'soap:mustUnderstand', '1');
+
         $destino = $doc->createElementNS($direccionamiento, 'wsa:To', $url);
-        $destino->setAttribute('Id', 'to');
+        $destino->setAttributeNS(self::NS_SOAP, 'soap:mustUnderstand', '1');
+
         $cabecera->appendChild($accion);
         $cabecera->appendChild($destino);
 
