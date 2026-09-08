@@ -39,6 +39,7 @@ class XmlSecuritySigner
     private const NS_WSU = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd';
     private const NS_DS = 'http://www.w3.org/2000/09/xmldsig#';
     private const NS_SOAP = 'http://www.w3.org/2003/05/soap-envelope';
+    private const NS_WSA = 'http://www.w3.org/2005/08/addressing';
 
     /** Canonicalización EXCLUSIVA: es la de WS-Security, no la de XAdES. */
     private const EXC_C14N = 'http://www.w3.org/2001/10/xml-exc-c14n#';
@@ -82,14 +83,31 @@ class XmlSecuritySigner
 
         // ---- Lo que se firma ----
         //
-        // El Timestamp, la direccion de destino y el cuerpo. Firmar solo
-        // el cuerpo dejaria redirigir la peticion a otro sitio o
-        // reenviarla pasada su vigencia.
-        $firmados = array_filter([
-            $marca,
-            $this->porNombre($doc, 'To'),
-            $this->porNombre($doc, 'Body'),
-        ]);
+        // El Timestamp, TODOS los encabezados de direccionamiento y el
+        // cuerpo.
+        //
+        // POR QUE TODOS LOS DE DIRECCIONAMIENTO, Y NO SOLO `To`
+        // -----------------------------------------------------
+        // Antes se firmaban solo `To` y el cuerpo, y la DIAN contestaba
+        // 500 con `wsse:InvalidSecurity` — «An error occurred when
+        // verifying security for the message».
+        //
+        // El servicio de la DIAN es WCF (su URL termina en `.svc`), y
+        // WCF exige que vayan firmados TODOS los encabezados de
+        // direccionamiento presentes, no solo el destino. Con
+        // `wsa:Action` sin firmar, la verificacion falla antes de mirar
+        // el documento — y el error no dice cual falta, solo que la
+        // seguridad no cuadra.
+        //
+        // Se recogen por espacio de nombres y no por una lista de
+        // nombres: si manana se anade `MessageID` o `ReplyTo` al sobre,
+        // entra firmado solo. Una lista escrita a mano es como se vuelve
+        // a caer en esto.
+        $firmados = array_filter(array_merge(
+            [$marca],
+            $this->encabezadosDeDireccionamiento($doc),
+            [$this->porNombre($doc, 'Body')],
+        ));
 
         foreach ($firmados as $nodo) {
             if (!$nodo->hasAttributeNS(self::NS_WSU, 'Id')) {
@@ -191,6 +209,31 @@ class XmlSecuritySigner
         }
 
         return $cabecera;
+    }
+
+    /**
+     * Los encabezados de WS-Addressing que lleve el sobre.
+     *
+     * `wsa:Action`, `wsa:To`, y lo que se anada en el futuro. WCF los
+     * quiere todos firmados; dejarse uno da `InvalidSecurity` sin decir
+     * cual.
+     *
+     * @return array<int, \DOMElement>
+     */
+    private function encabezadosDeDireccionamiento(\DOMDocument $doc): array
+    {
+        $xpath = new \DOMXPath($doc);
+        $xpath->registerNamespace('wsa', self::NS_WSA);
+
+        $nodos = [];
+
+        foreach ($xpath->query("//*[local-name()='Header']/wsa:*") as $nodo) {
+            if ($nodo instanceof \DOMElement) {
+                $nodos[] = $nodo;
+            }
+        }
+
+        return $nodos;
     }
 
     private function porNombre(\DOMDocument $doc, string $nombre): ?\DOMElement

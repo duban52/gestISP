@@ -63,6 +63,59 @@ class SoapEnvelopeTest extends TestCase
         $this->assertStringContainsString('SendBillSync', $sobre);
     }
 
+    public function test_van_firmados_todos_los_encabezados_de_direccionamiento(): void
+    {
+        // DE DONDE SALE ESTA PRUEBA
+        // -------------------------
+        // De un rechazo real: la DIAN contesto 500 con
+        // `wsse:InvalidSecurity` — «An error occurred when verifying
+        // security for the message».
+        //
+        // Se firmaban el Timestamp, `wsa:To` y el cuerpo, pero NO
+        // `wsa:Action`. El servicio de la DIAN es WCF —su URL termina
+        // en `.svc`— y WCF exige que vayan firmados TODOS los
+        // encabezados de direccionamiento presentes. Con uno sin firmar
+        // la verificacion falla antes de mirar el documento, y el error
+        // no dice cual falta.
+        $sobre = $this->capturarSobre();
+
+        $doc = new \DOMDocument();
+        $doc->loadXML($sobre);
+
+        $xpath = new \DOMXPath($doc);
+        $xpath->registerNamespace('wsa', 'http://www.w3.org/2005/08/addressing');
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+        $xpath->registerNamespace('wsu', 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd');
+
+        // Lo que hay en la cabecera de direccionamiento.
+        $direccionamiento = $xpath->query("//*[local-name()='Header']/wsa:*");
+        $this->assertGreaterThan(0, $direccionamiento->length, 'El sobre no lleva direccionamiento.');
+
+        // Lo que la firma referencia.
+        $referenciados = [];
+
+        foreach ($xpath->query('//ds:Reference/@URI') as $uri) {
+            $referenciados[] = ltrim($uri->value, '#');
+        }
+
+        foreach ($direccionamiento as $nodo) {
+            $id = $nodo->getAttributeNS(
+                'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd',
+                'Id',
+            );
+
+            $this->assertNotSame('', $id, sprintf(
+                'El encabezado wsa:%s no lleva wsu:Id, asi que no se puede firmar.',
+                $nodo->localName,
+            ));
+
+            $this->assertContains($id, $referenciados, sprintf(
+                'El encabezado wsa:%s no va firmado. WCF lo rechaza con InvalidSecurity.',
+                $nodo->localName,
+            ));
+        }
+    }
+
     public function test_la_firma_del_sobre_verifica(): void
     {
         // Es la mecánica que la DIAN va a comprobar del otro lado: si no
