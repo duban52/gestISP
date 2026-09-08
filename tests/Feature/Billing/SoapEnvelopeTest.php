@@ -426,8 +426,26 @@ class SoapEnvelopeTest extends TestCase
         return $documento->fresh();
     }
 
+    /**
+     * El .p12 de las pruebas, generado UNA vez por corrida.
+     *
+     * Generar una pareja de claves RSA cuesta segundos en esta maquina,
+     * y esta clase arma un sobre en casi cada prueba. Con uno nuevo por
+     * prueba la clase pasaba de minutos y PHPUnit moria por tiempo — y
+     * las pruebas que quedaban sin correr salen como fallidas, que
+     * parece un fallo del codigo y no lo es.
+     *
+     * Se guarda en una propiedad estatica: el certificado no forma
+     * parte de lo que se comprueba, solo hace falta que sea valido.
+     */
+    private static ?string $p12Compartido = null;
+
     private function certificado(int $empresaId): DianCertificate
     {
+        if (self::$p12Compartido !== null) {
+            return $this->guardarCertificado($empresaId, self::$p12Compartido);
+        }
+
         $opciones = ['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA];
         $llave = @openssl_pkey_new($opciones);
 
@@ -450,6 +468,14 @@ class SoapEnvelopeTest extends TestCase
         $p12 = '';
         openssl_pkcs12_export($cert, $p12, $llave, 'prueba', $extra);
 
+        self::$p12Compartido = $p12;
+
+        return $this->guardarCertificado($empresaId, $p12);
+    }
+
+    /** Escribe el .p12 y lo registra para la empresa. */
+    private function guardarCertificado(int $empresaId, string $p12): DianCertificate
+    {
         $carpeta = storage_path('app/certificados-prueba');
         @mkdir($carpeta, 0755, true);
         $archivo = $carpeta . '/soap-' . uniqid() . '.p12';
