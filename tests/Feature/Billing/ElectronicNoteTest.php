@@ -142,7 +142,10 @@ class ElectronicNoteTest extends BillingTestCase
         $nota = $this->emitirNota($factura);
 
         $this->assertSame($gastadoAntes, $this->rango->fresh()->current_number);
-        $this->assertStringStartsWith('NC-', $nota->full_number);
+
+        // Sin guion: la DIAN marca el numero que lo lleva (CAD05a).
+        $this->assertStringStartsWith('NC', $nota->full_number);
+        $this->assertStringNotContainsString('-', $nota->full_number);
     }
 
     // ==================== El documento ====================

@@ -290,10 +290,25 @@ class NoteIssuer
      * la misma forma que en contratos y facturas. Ahora los hace
      * DocumentNumberService y este metodo solo dice QUE serie quiere.
      *
-     * El formato no cambia —NC-1, ND-1—, pero el separador pasa a ir
-     * dentro del propio prefijo ("NC-") en vez de concatenarse a mano
-     * al construir el numero completo: asi el formato entero es un dato
-     * de la serie y no codigo repartido por los servicios.
+     * El separador va dentro del propio prefijo en vez de
+     * concatenarse a mano al construir el numero completo: asi el
+     * formato entero es un dato de la serie y no codigo repartido por
+     * los servicios.
+     *
+     * SIN GUION (2026-09-09)
+     * ----------------------
+     * El prefijo era "NC-"/"ND-" y ahora es "NC"/"ND". La DIAN acepta
+     * la nota con guion, pero la marca: «Valida numero de factura no
+     * contenga caracteres adicionales como espacios o guiones» —regla
+     * CAD05a—, y esa observacion queda pegada al documento para
+     * siempre en su catalogo.
+     *
+     * Las notas ya emitidas conservan su numero (NC-1, NC-2): el
+     * numero es del documento, no de la serie, y cambiarlo seria
+     * reescribir un documento que la DIAN ya valido. Las nuevas
+     * siguen el consecutivo sin guion (NC3, NC4...). No hay choque con
+     * el UNIQUE de `full_number` porque las cadenas siguen siendo
+     * distintas.
      *
      * LA SEMILLA
      * ----------
@@ -315,7 +330,7 @@ class NoteIssuer
             $documentType,
             $companyId,
             $branchId,
-            ['prefix' => $tipo->prefijo() . '-', 'padding' => 0],
+            ['prefix' => $tipo->prefijo(), 'padding' => 0],
             semilla: fn () => (int) CreditDebitNote::withoutGlobalScopes()
                 ->where('branch_id', $branchId)
                 ->where('type', $tipo->value)

@@ -269,9 +269,10 @@ class CreditDebitNoteTest extends TestCase
         ]);
         $credito2 = $this->emitir($factura, ['subtotal' => 3000]);
 
-        $this->assertSame('NC-1', $credito1->full_number);
-        $this->assertSame('ND-1', $debito1->full_number);
-        $this->assertSame('NC-2', $credito2->full_number);
+        // Sin guion: la DIAN marca el numero que lo lleva (CAD05a).
+        $this->assertSame('NC1', $credito1->full_number);
+        $this->assertSame('ND1', $debito1->full_number);
+        $this->assertSame('NC2', $credito2->full_number);
     }
 
     // ==================== Anulación ====================
