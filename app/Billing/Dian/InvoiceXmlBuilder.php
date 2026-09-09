@@ -219,7 +219,12 @@ class InvoiceXmlBuilder extends UblBuilder
         // aquí va el NIT del PT y no el del contribuyente.
         $proveedorId = $this->hijo($doc, $proveedor, 'sts:ProviderID', (string) $empresa->document_number);
         $proveedorId->setAttribute('schemeID', (string) ($empresa->verification_digit ?? '0'));
-        $proveedorId->setAttribute('schemeName', (string) $empresa->document_type_code);
+        // NIT, igual que en `cac:AccountingSupplierParty`. Es el mismo
+        // motivo (FAB23) y el mismo emisor: quien provee el software en
+        // emisión directa es la empresa, y ante la DIAN es un NIT. Se
+        // nos escapó la primera vez porque este identificador está en
+        // la extensión `sts:` y no en la parte del emisor.
+        $proveedorId->setAttribute('schemeName', self::TIPO_NIT);
         $proveedorId->setAttribute('schemeAgencyID', self::AGENCIA_ID);
         $proveedorId->setAttribute('schemeAgencyName', self::AGENCIA_NOMBRE);
 
@@ -316,10 +321,7 @@ class InvoiceXmlBuilder extends UblBuilder
      */
     private function impuestos(\DOMDocument $doc, \DOMElement $raiz, Invoice $factura): void
     {
-        // Entran las gravadas y las exentas; las excluidas no.
-        $conImpuesto = $factura->invoice_items->filter(
-            fn ($item) => $this->clasificacionDe($item)->llevaBloqueDeImpuestos(),
-        );
+        $conImpuesto = $this->lineasConImpuesto($factura);
 
         if ($conImpuesto->isEmpty()) {
             return;
@@ -352,7 +354,22 @@ class InvoiceXmlBuilder extends UblBuilder
         $nodo = $this->hijo($doc, $raiz, 'cac:LegalMonetaryTotal');
 
         $this->importe($doc, $nodo, 'cbc:LineExtensionAmount', (float) $factura->subtotal);
-        $this->importe($doc, $nodo, 'cbc:TaxExclusiveAmount', (float) $factura->subtotal);
+
+        // TaxExclusiveAmount NO es «el total antes de impuestos».
+        //
+        // Es la BASE IMPONIBLE: la suma de las bases de los impuestos
+        // declarados, que es justo lo que la DIAN compara contra la
+        // suma de las bases de las líneas. Si aquí se pone el subtotal
+        // y la factura es de servicios excluidos —que no declaran
+        // impuesto—, el documento dice «base 80.000» y las líneas
+        // suman 0: rechazo FAU04, «Base Imponible es distinto a la suma
+        // de los valores de las bases imponibles de todas líneas de
+        // detalle».
+        //
+        // Nos pasó con una factura de internet residencial excluido, y
+        // es el caso NORMAL de este sistema, no un borde.
+        $this->importe($doc, $nodo, 'cbc:TaxExclusiveAmount', $this->baseImponible($factura));
+
         $this->importe($doc, $nodo, 'cbc:TaxInclusiveAmount', (float) $factura->subtotal + (float) $factura->tax);
 
         if ((float) $factura->discount > 0) {
@@ -416,6 +433,30 @@ class InvoiceXmlBuilder extends UblBuilder
      * clasificacion no la tienen: se deduce de la tarifa, que es lo que
      * habia entonces.
      */
+    /**
+     * Las líneas que declaran impuesto: gravadas y exentas.
+     *
+     * Las excluidas no llevan bloque de impuestos, así que no aportan
+     * base imponible. Está aquí, en un solo sitio, porque el bloque de
+     * impuestos y la base imponible del total TIENEN que salir del
+     * mismo conjunto de líneas — si se separan, se descuadran y la DIAN
+     * lo rechaza (FAU04).
+     */
+    private function lineasConImpuesto(Invoice $factura): \Illuminate\Support\Collection
+    {
+        return $factura->invoice_items->filter(
+            fn ($item) => $this->clasificacionDe($item)->llevaBloqueDeImpuestos(),
+        );
+    }
+
+    /** La suma de las bases de las líneas que sí declaran impuesto. */
+    private function baseImponible(Invoice $factura): float
+    {
+        return (float) $this->lineasConImpuesto($factura)->sum(
+            fn ($item) => (float) $item->unit_price * (float) $item->quantity,
+        );
+    }
+
     private function clasificacionDe($item): \App\Billing\Enums\TaxClassification
     {
         if ($item->tax_classification) {

@@ -39,6 +39,47 @@ abstract class UblBuilder
     protected const MONEDA = 'COP';
 
     /**
+     * El tipo de documento con el que se identifica al EMISOR: NIT.
+     *
+     * No se toma de `document_type_code` de la empresa a propósito.
+     * Quien factura electrónicamente está inscrito en el RUT y ante la
+     * DIAN se identifica por su NIT, aunque sea persona natural y su
+     * NIT coincida con su cédula. La DIAN lo dice sin rodeos con la
+     * regla FAB23: «Identificador del tipo de documento de identidad no
+     * es igual a 31».
+     *
+     * Se rechazó una factura por esto: la empresa tenía guardado el
+     * tipo 11 y salía tal cual en el XML.
+     */
+    protected const TIPO_NIT = '31';
+
+    /**
+     * Las responsabilidades fiscales que el validador de la DIAN acepta.
+     *
+     * OJO: son MENOS de las que trae su propio catálogo. El fichero
+     * `TipoResponsabilidad-2.1.gc` incluye `ZZ` («No aplica»), se
+     * sembró tal cual, un usuario lo eligió, y la DIAN rechazó la
+     * factura dos veces —FAJ26 para el emisor y FAK26 para el
+     * adquiriente— con «Responsabilidad informada no válida según
+     * lista».
+     *
+     * Es el mismo patrón que ya nos pasó con la política del WSDL: lo
+     * que la DIAN publica declara más de lo que su validador admite.
+     * Cuando choquen, manda el validador.
+     *
+     * `R-99-PN` («No responsable») no está en el .gc y sin embargo sí
+     * se acepta: es el que corresponde a quien no tiene ninguna
+     * responsabilidad especial.
+     */
+    protected const RESPONSABILIDADES_VALIDAS = ['O-13', 'O-15', 'O-23', 'O-47', 'R-99-PN'];
+
+    /** Lo que se informa cuando no queda ninguna responsabilidad válida. */
+    protected const SIN_RESPONSABILIDAD = 'R-99-PN';
+
+    /** `cbc:AdditionalAccountID` de una persona natural (frente a «1», jurídica). */
+    protected const PERSONA_NATURAL = '2';
+
+    /**
      * Valida un XML contra el esquema que le corresponda.
      *
      * @return array<int, string>  vacío si es válido
@@ -87,14 +128,14 @@ abstract class UblBuilder
 
         $tributario = $this->hijo($doc, $parte, 'cac:PartyTaxScheme');
         $this->hijo($doc, $tributario, 'cbc:RegistrationName', (string) $empresa->legal_name);
-        $this->identificacion($doc, $tributario, $empresa->document_number, $empresa->verification_digit, $empresa->document_type_code);
+        $this->identificacion($doc, $tributario, $empresa->document_number, $empresa->verification_digit, self::TIPO_NIT);
         $this->hijo($doc, $tributario, 'cbc:TaxLevelCode', $this->responsabilidades($empresa));
         $this->direccion($doc, $tributario, 'cac:RegistrationAddress', $empresa->municipality_dane_code, $empresa->department_dane_code, (string) $empresa->address);
         $this->esquemaIva($doc, $tributario);
 
         $legal = $this->hijo($doc, $parte, 'cac:PartyLegalEntity');
         $this->hijo($doc, $legal, 'cbc:RegistrationName', (string) $empresa->legal_name);
-        $this->identificacion($doc, $legal, $empresa->document_number, $empresa->verification_digit, $empresa->document_type_code);
+        $this->identificacion($doc, $legal, $empresa->document_number, $empresa->verification_digit, self::TIPO_NIT);
 
         if ($prefijoAutorizado !== null) {
             $registro = $this->hijo($doc, $legal, 'cac:CorporateRegistrationScheme');
@@ -138,6 +179,22 @@ abstract class UblBuilder
             $this->hijo($doc, $contacto, 'cbc:Telephone', (string) $cliente->number_phone);
         }
         $this->hijo($doc, $contacto, 'cbc:ElectronicMail', (string) $cliente->email);
+
+        // Persona natural: nombre y apellido aparte.
+        //
+        // Cuando `AdditionalAccountID` vale 2 —persona natural— la DIAN
+        // exige además el grupo `cac:Person`. Si falta, rechaza con
+        // FAK61: «Si el valor de AdditionalAccountID es igual a "2" y el
+        // grupo no es informado». Nos pasó.
+        //
+        // Va DESPUÉS de `cac:Contact` porque ese es el orden que fija el
+        // XSD de UBL 2.1, y el orden no es negociable: el documento se
+        // valida contra el esquema antes de firmarse.
+        if ((string) $cliente->organization_type_code === self::PERSONA_NATURAL) {
+            $persona = $this->hijo($doc, $parte, 'cac:Person');
+            $this->hijo($doc, $persona, 'cbc:FirstName', (string) $cliente->name);
+            $this->hijo($doc, $persona, 'cbc:FamilyName', (string) $cliente->last_name);
+        }
     }
 
     // ==================== Piezas sueltas ====================
@@ -227,9 +284,19 @@ abstract class UblBuilder
      */
     protected function responsabilidades($parte): string
     {
-        $codigos = $parte->taxResponsibilities->pluck('responsibility_code')->all();
+        // Se filtra por RESPONSABILIDADES_VALIDAS, no se manda lo que
+        // haya guardado. Véase esa constante: el catálogo de la DIAN
+        // ofrece códigos que su propio validador rechaza, y `ZZ` es
+        // uno. Filtrar aquí evita que un dato elegido en el panel
+        // —siguiendo el catálogo oficial— tumbe la factura.
+        $codigos = $parte->taxResponsibilities
+            ->pluck('responsibility_code')
+            ->filter(fn ($codigo) => in_array($codigo, self::RESPONSABILIDADES_VALIDAS, true))
+            ->unique()
+            ->values()
+            ->all();
 
-        return $codigos === [] ? 'R-99-PN' : implode(';', $codigos);
+        return $codigos === [] ? self::SIN_RESPONSABILIDAD : implode(';', $codigos);
     }
 
     /**

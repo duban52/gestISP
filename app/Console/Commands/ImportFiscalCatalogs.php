@@ -202,6 +202,46 @@ class ImportFiscalCatalogs extends Command
             throw new RuntimeException('no trae ningún código.');
         }
 
+        return $this->completar($catalogo, $codigos);
+    }
+
+    /**
+     * Añade códigos que el validador de la DIAN acepta pero su propio
+     * .gc no trae.
+     *
+     * Suena raro y lo es. `R-99-PN` («No responsable») es la
+     * responsabilidad fiscal de cualquier persona natural que no sea
+     * gran contribuyente ni autorretenedor —o sea, casi todos los
+     * clientes de un ISP—, la DIAN la exige, y no está en
+     * `TipoResponsabilidad-2.1.gc`. Sin esto no se puede elegir en el
+     * panel.
+     *
+     * Se añade aquí, en la importación, para que sobreviva a volver a
+     * importar los .gc. Retocar el JSON a mano no sobreviviría.
+     *
+     * @param  array<int, array<string, mixed>>  $codigos
+     * @return array<int, array<string, mixed>>
+     */
+    private function completar(string $catalogo, array $codigos): array
+    {
+        if ($catalogo !== FiscalCatalog::RESPONSABILIDAD) {
+            return $codigos;
+        }
+
+        $tiene = array_column($codigos, 'code');
+
+        if (in_array('R-99-PN', $tiene, true)) {
+            return $codigos;
+        }
+
+        $codigos[] = [
+            'code' => 'R-99-PN',
+            'name' => 'No responsable',
+            'parent_code' => null,
+            'extra' => null,
+            'sort_order' => count($codigos),
+        ];
+
         return $codigos;
     }
 

@@ -141,6 +141,64 @@ class XadesSignatureTest extends BillingTestCase
         }
     }
 
+    public function test_el_resumen_del_documento_cuadra_al_quitar_solo_la_firma(): void
+    {
+        // ESTA ES LA PRUEBA QUE FALTABA, y su ausencia costó un rechazo
+        // de la DIAN con el código ZE02, «Valor de la firma inválido».
+        //
+        // Había una prueba de que alterar el documento cambia el
+        // resumen, pero ninguna que comparase el resumen RECALCULADO
+        // con el DECLARADO. Con eso, dos valores igual de equivocados
+        // seguían siendo distintos entre sí y la prueba pasaba.
+        //
+        // Lo que se comprueba aquí es lo que hace el verificador del
+        // otro lado: la transformada «enveloped-signature» quita
+        // `ds:Signature` —y nada más—, canonicaliza lo que queda y
+        // resume. Si el firmador añadiera al documento cualquier otra
+        // cosa después de resumir —el envoltorio `ext:UBLExtension`,
+        // por ejemplo—, aquí saltaría.
+        [$firmado] = $this->firmar();
+
+        $xpath = $this->xpath($firmado);
+        $declarado = $xpath->query('//ds:SignedInfo/ds:Reference[@URI=""]/ds:DigestValue')->item(0);
+
+        $this->assertNotNull($declarado, 'No hay referencia al documento (URI="").');
+
+        $this->assertSame(
+            $declarado->nodeValue,
+            $this->resumenDelDocumento($firmado),
+            'El resumen del documento no cuadra al quitar solo la firma: la DIAN lo rechazaría con ZE02.',
+        );
+    }
+
+    public function test_la_firma_va_dentro_de_una_extension_que_ya_existia_al_resumir(): void
+    {
+        // El envoltorio de la firma tiene que estar en el documento
+        // ANTES de resumirlo. Se comprueba por su efecto: al quitar
+        // solo `ds:Signature` queda un `ext:ExtensionContent` vacío, y
+        // el resumen —el de la prueba de arriba— sigue cuadrando.
+        //
+        // Se deja explícito porque es una condición de orden dentro del
+        // firmador, y el orden no se ve leyendo el XML resultante.
+        [$firmado] = $this->firmar();
+
+        $doc = new \DOMDocument();
+        $doc->loadXML($firmado);
+
+        $firma = $doc->getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'Signature')->item(0);
+        $envoltorio = $firma->parentNode;
+
+        $this->assertSame('ExtensionContent', $envoltorio->localName);
+
+        $firma->parentNode->removeChild($firma);
+
+        $this->assertSame(
+            0,
+            $envoltorio->childNodes->length,
+            'Al quitar la firma su ExtensionContent tiene que quedar vacío, no desaparecer.',
+        );
+    }
+
     public function test_tocar_el_documento_despues_de_firmar_rompe_la_firma(): void
     {
         // Es la propiedad que hace que la firma proteja algo. Si se

@@ -224,8 +224,36 @@ class ElectronicNoteTest extends BillingTestCase
             ->where('credit_debit_note_id', $nota->id)->firstOrFail()->signed_xml;
 
         $this->assertStringNotContainsString('InvoiceControl', $xml);
-        $this->assertStringContainsString('<cbc:CustomizationID>11</cbc:CustomizationID>', $xml);
         $this->assertStringContainsString('CUDE-SHA384', $xml);
+    }
+
+    public function test_cad02_la_nota_credito_se_personaliza_como_20(): void
+    {
+        // Aquí decía 11, y esta prueba lo daba por bueno. La DIAN
+        // rechazó la nota por partida doble: CAD02 «CustomizationID no
+        // indica un valor válido para el tipo de operación» y CAD02a
+        // «CustomizationID debe ser igual a 20».
+        //
+        // 20 es «nota crédito que referencia una factura electrónica»,
+        // que es la única clase que emite este sistema.
+        $nota = $this->emitirNota($this->facturaElectronica());
+
+        $xml = ElectronicDocument::withoutGlobalScopes()
+            ->where('credit_debit_note_id', $nota->id)->firstOrFail()->signed_xml;
+
+        $this->assertStringContainsString('<cbc:CustomizationID>20</cbc:CustomizationID>', $xml);
+        $this->assertStringContainsString('DIAN 2.1: Nota Crédito de Factura Electrónica de Venta', $xml);
+    }
+
+    public function test_cad02_la_nota_debito_se_personaliza_como_30(): void
+    {
+        $nota = $this->emitirNota($this->facturaElectronica(), NoteType::Debito);
+
+        $xml = ElectronicDocument::withoutGlobalScopes()
+            ->where('credit_debit_note_id', $nota->id)->firstOrFail()->signed_xml;
+
+        $this->assertStringContainsString('<cbc:CustomizationID>30</cbc:CustomizationID>', $xml);
+        $this->assertStringContainsString('DIAN 2.1: Nota Débito de Factura Electrónica de Venta', $xml);
     }
 
     public function test_el_concepto_de_la_dian_va_en_el_xml(): void

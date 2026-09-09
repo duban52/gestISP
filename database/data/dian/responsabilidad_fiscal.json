@@ -33,5 +33,12 @@
         "parent_code": null,
         "extra": null,
         "sort_order": 4
+    },
+    {
+        "code": "R-99-PN",
+        "name": "No responsable",
+        "parent_code": null,
+        "extra": null,
+        "sort_order": 5
     }
 ]

@@ -233,6 +233,122 @@ class InvoiceXmlTest extends BillingTestCase
         $this->assertSame([], app(InvoiceXmlBuilder::class)->erroresDeEsquema($resultado['xml']));
     }
 
+    // ============ Lo que la DIAN rechazó de verdad ============
+    //
+    // Las cuatro pruebas que siguen no salen del anexo: salen de una
+    // factura que la DIAN rechazó el 2026-09-08, con el código de cada
+    // regla en el nombre. Antes de esto el XML validaba contra el XSD
+    // —y el XSD no comprueba nada de esto—.
+
+    public function test_fab23_el_emisor_se_identifica_siempre_con_nit(): void
+    {
+        // Quien factura electrónicamente está en el RUT y ante la DIAN
+        // es un NIT (31), aunque sea persona natural y su NIT sea su
+        // cédula. La empresa tenía guardado el tipo 11 y salía tal cual:
+        // «Identificador del tipo de documento de identidad no es igual
+        // a 31».
+        $this->empresa()->update(['document_type_code' => '11']);
+
+        $xpath = $this->xpath($this->construirXml($this->facturaElectronica())['xml']);
+
+        $emisor = $xpath->query('//cac:AccountingSupplierParty')->item(0);
+
+        foreach (['cac:PartyTaxScheme', 'cac:PartyLegalEntity'] as $grupo) {
+            $id = $xpath->query('cac:Party/' . $grupo . '/cbc:CompanyID', $emisor)->item(0);
+
+            $this->assertNotNull($id, "No se encontró el CompanyID de {$grupo}.");
+            $this->assertSame('31', $id->getAttribute('schemeName'), "En {$grupo} el emisor no va como NIT.");
+        }
+    }
+
+    public function test_faj26_una_responsabilidad_que_la_dian_no_acepta_no_viaja(): void
+    {
+        // `ZZ` («No aplica») VIENE en el catálogo oficial de la DIAN, se
+        // sembró, se pudo elegir en el panel… y su propio validador lo
+        // rechaza. Se filtra al construir el XML: lo que se elige en el
+        // panel no puede tumbar la factura.
+        $this->empresa()->taxResponsibilities()->delete();
+        $this->empresa()->taxResponsibilities()->create(['responsibility_code' => 'ZZ']);
+
+        $xml = $this->construirXml($this->facturaElectronica())['xml'];
+
+        $this->assertStringNotContainsString('<cbc:TaxLevelCode>ZZ</cbc:TaxLevelCode>', $xml);
+        $this->assertStringContainsString('<cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>', $xml);
+    }
+
+    public function test_fak61_una_persona_natural_lleva_su_grupo_de_persona(): void
+    {
+        // Con `AdditionalAccountID` = 2 la DIAN exige además el grupo
+        // `cac:Person`. Faltaba.
+        $contrato = $this->contratoElectronico();
+        $contrato->client->update(['name' => 'Marina', 'last_name' => 'Quiceno Ospina']);
+
+        $resultado = $this->construirXml($this->emitir($contrato->fresh()));
+
+        $xpath = $this->xpath($resultado['xml']);
+        $persona = $xpath->query('//cac:AccountingCustomerParty//cac:Person')->item(0);
+
+        $this->assertNotNull($persona, 'Una persona natural tiene que llevar cac:Person.');
+        $this->assertSame('Marina', $xpath->query('cbc:FirstName', $persona)->item(0)->nodeValue);
+        $this->assertSame('Quiceno Ospina', $xpath->query('cbc:FamilyName', $persona)->item(0)->nodeValue);
+
+        // Y sigue validando: el orden dentro de cac:Party lo fija el XSD.
+        $this->assertSame([], app(InvoiceXmlBuilder::class)->erroresDeEsquema($resultado['xml']));
+    }
+
+    public function test_fak61_una_persona_juridica_no_lleva_grupo_de_persona(): void
+    {
+        $contrato = $this->contratoElectronico();
+        $contrato->client->update(['organization_type_code' => '1']);
+
+        $resultado = $this->construirXml($this->emitir($contrato->fresh()));
+
+        $this->assertNull($this->nodo($resultado['xml'], '//cac:AccountingCustomerParty//cac:Person'));
+        $this->assertSame([], app(InvoiceXmlBuilder::class)->erroresDeEsquema($resultado['xml']));
+    }
+
+    public function test_fau04_la_base_imponible_es_la_de_las_lineas_con_impuesto(): void
+    {
+        // `TaxExclusiveAmount` no es «el total antes de impuestos»: es
+        // la base imponible, y la DIAN la compara contra la suma de las
+        // bases de las líneas. En una factura de servicios EXCLUIDOS
+        // —el caso normal de un ISP: internet residencial de estratos
+        // 1 a 3— no hay ninguna base, así que va en cero.
+        $factura = $this->emitir($this->contratoElectronico(precio: 80000, iva: 0));
+
+        // EXCLUIDO, no «al 0 %». Son cosas distintas: un servicio al
+        // 0 % nace clasificado como gravado y sí declara impuesto —en
+        // ceros—; uno excluido no declara ninguno. La factura que la
+        // DIAN rechazó era de este segundo tipo.
+        $factura->invoice_items()->update(['tax_classification' => 'excluido']);
+
+        $xml = $this->construirXml($factura->fresh())['xml'];
+
+        $this->assertStringNotContainsString('<cac:TaxTotal>', $xml);
+        $this->assertStringContainsString('<cbc:LineExtensionAmount currencyID="COP">80000.00<', $xml);
+        $this->assertStringContainsString('<cbc:TaxExclusiveAmount currencyID="COP">0.00<', $xml);
+    }
+
+    public function test_fau04_con_iva_la_base_imponible_es_la_suma_de_las_lineas(): void
+    {
+        // El otro lado de lo mismo: cuando sí hay impuesto, la base del
+        // documento tiene que ser exactamente la suma de las bases
+        // declaradas en las líneas.
+        $xml = $this->construirXml($this->emitir($this->contratoElectronico(precio: 100000, iva: 19)))['xml'];
+
+        $xpath = $this->xpath($xml);
+
+        $documento = (float) $xpath->query('//cac:LegalMonetaryTotal/cbc:TaxExclusiveAmount')->item(0)->nodeValue;
+
+        $lineas = 0.0;
+        foreach ($xpath->query('//cac:InvoiceLine/cac:TaxTotal/cac:TaxSubtotal/cbc:TaxableAmount') as $base) {
+            $lineas += (float) $base->nodeValue;
+        }
+
+        $this->assertGreaterThan(0, $lineas, 'La prueba no sirve si ninguna línea declara base.');
+        $this->assertSame($lineas, $documento, 'La base del documento no cuadra con la de las líneas (FAU04).');
+    }
+
     // ==================== Cuando faltan datos ====================
 
     public function test_sin_datos_fiscales_del_cliente_falla_diciendo_cuales(): void
@@ -346,6 +462,25 @@ class InvoiceXmlTest extends BillingTestCase
         );
 
         return $resultado['invoice'];
+    }
+
+    private function xpath(string $xml): \DOMXPath
+    {
+        $doc = new \DOMDocument();
+        $doc->loadXML($xml);
+
+        $xpath = new \DOMXPath($doc);
+        $xpath->registerNamespace('cac', 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2');
+        $xpath->registerNamespace('cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
+
+        return $xpath;
+    }
+
+    private function nodo(string $xml, string $consulta): ?\DOMElement
+    {
+        $encontrado = $this->xpath($xml)->query($consulta)->item(0);
+
+        return $encontrado instanceof \DOMElement ? $encontrado : null;
     }
 
     /** @return array{xml: string, cufe: string, qr: string} */

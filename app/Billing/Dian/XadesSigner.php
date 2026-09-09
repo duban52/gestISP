@@ -117,15 +117,32 @@ class XadesSigner
             throw new RuntimeException('El XML a firmar no se pudo leer.');
         }
 
-        // El resumen del documento se calcula ANTES de meter la firma:
-        // es exactamente lo que significa la transformada
-        // «enveloped-signature», que manda excluirla del cálculo.
+        // EL ORDEN DE ESTAS TRES LÍNEAS ES LA FIRMA ENTERA.
+        //
+        // Primero se crea el envoltorio VACÍO donde irá la firma;
+        // después se resume el documento; y sólo entonces se mete la
+        // firma dentro del envoltorio que ya se resumió.
+        //
+        // La transformada «enveloped-signature» excluye del cálculo
+        // `ds:Signature` — y NADA MÁS. Si el envoltorio
+        // `ext:UBLExtension`/`ext:ExtensionContent` se creara junto con
+        // la firma, quien verifique quitaría la firma y se encontraría
+        // con un envoltorio vacío que no estaba cuando resumimos: el
+        // resumen no cuadra y la DIAN contesta ZE02, «Valor de la firma
+        // inválido».
+        //
+        // No es teoría: se comprobó sobre el XML que la DIAN rechazó.
+        // Quitando sólo `ds:Signature` el resumen no cuadraba;
+        // quitando el `ext:UBLExtension` entero, cuadraba exacto. Eso
+        // es la prueba de que se resumió antes de añadir el envoltorio.
+        $contenido = $this->prepararExtension($doc);
+
         $resumenDocumento = $this->resumir($doc->documentElement->C14N());
 
         $id = 'xmldsig-' . $this->uuid();
 
         $firma = $this->armarFirma($doc, $id, $certificado, $resumenDocumento);
-        $this->insertarEnExtension($doc, $firma);
+        $contenido->appendChild($firma);
 
         // Ya insertada: ahora los resúmenes de KeyInfo y
         // SignedProperties salen con los espacios de nombres que
@@ -318,7 +335,16 @@ class XadesSigner
      * En la primera va el bloque de la DIAN; la firma va en una
      * SEGUNDA, que es donde el anexo la ubica (§10.8).
      */
-    private function insertarEnExtension(\DOMDocument $doc, \DOMElement $firma): void
+    /**
+     * Crea el `ext:UBLExtension`/`ext:ExtensionContent` donde irá la
+     * firma, y devuelve el `ExtensionContent` vacío.
+     *
+     * Se llama ANTES de resumir el documento, y ahí está todo el
+     * asunto: lo que se resume tiene que ser exactamente lo que quedará
+     * cuando alguien quite la firma para verificarla. Véase el
+     * comentario de `firmar()`.
+     */
+    private function prepararExtension(\DOMDocument $doc): \DOMElement
     {
         $extensiones = $doc->getElementsByTagNameNS(
             'urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2',
@@ -338,9 +364,10 @@ class XadesSigner
             'ext:ExtensionContent',
         );
 
-        $contenido->appendChild($firma);
         $extension->appendChild($contenido);
         $extensiones->appendChild($extension);
+
+        return $contenido;
     }
 
     /**

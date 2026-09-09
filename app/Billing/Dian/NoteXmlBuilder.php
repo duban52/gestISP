@@ -189,7 +189,8 @@ class NoteXmlBuilder extends UblBuilder
 
         $proveedorId = $this->hijo($doc, $proveedor, 'sts:ProviderID', (string) $empresa->document_number);
         $proveedorId->setAttribute('schemeID', (string) ($empresa->verification_digit ?? '0'));
-        $proveedorId->setAttribute('schemeName', (string) $empresa->document_type_code);
+        // NIT: mismo motivo que en la factura (CAB23).
+        $proveedorId->setAttribute('schemeName', self::TIPO_NIT);
         $proveedorId->setAttribute('schemeAgencyID', self::AGENCIA_ID);
         $proveedorId->setAttribute('schemeAgencyName', self::AGENCIA_NOMBRE);
 
@@ -225,10 +226,24 @@ class NoteXmlBuilder extends UblBuilder
         bool $esCredito,
     ): void {
         $this->hijo($doc, $raiz, 'cbc:UBLVersionID', 'UBL 2.1');
-        // 11 para las notas, no 10: es lo que las distingue de una
-        // factura ante el validador de la DIAN.
-        $this->hijo($doc, $raiz, 'cbc:CustomizationID', '11');
-        $this->hijo($doc, $raiz, 'cbc:ProfileID', 'DIAN 2.1');
+
+        // 20 para la nota CRÉDITO y 30 para la DÉBITO — las dos «que
+        // referencian una factura electrónica», que es el único caso
+        // que emite este sistema (siempre se emiten contra una factura,
+        // y por eso llevan `cac:BillingReference`).
+        //
+        // Aquí decía 11, y la DIAN rechazó la nota dos veces por lo
+        // mismo: CAD02 «CustomizationID no indica un valor válido para
+        // el tipo de operación» y CAD02a «CustomizationID debe ser
+        // igual a 20». El 11 no salía de ninguna parte.
+        $this->hijo($doc, $raiz, 'cbc:CustomizationID', $esCredito ? '20' : '30');
+
+        // El ProfileID lleva el nombre COMPLETO del tipo de documento.
+        // Con «DIAN 2.1» a secas la DIAN avisa (CAD03) de que no
+        // contiene el literal que espera.
+        $this->hijo($doc, $raiz, 'cbc:ProfileID', $esCredito
+            ? 'DIAN 2.1: Nota Crédito de Factura Electrónica de Venta'
+            : 'DIAN 2.1: Nota Débito de Factura Electrónica de Venta');
         $this->hijo($doc, $raiz, 'cbc:ProfileExecutionID', $ambiente);
         $this->hijo($doc, $raiz, 'cbc:ID', (string) $nota->full_number);
 
@@ -323,7 +338,13 @@ class NoteXmlBuilder extends UblBuilder
         $nodo = $this->hijo($doc, $raiz, $esCredito ? 'cac:LegalMonetaryTotal' : 'cac:RequestedMonetaryTotal');
 
         $this->importe($doc, $nodo, 'cbc:LineExtensionAmount', (float) $nota->subtotal);
-        $this->importe($doc, $nodo, 'cbc:TaxExclusiveAmount', (float) $nota->subtotal);
+
+        // La base imponible, no el subtotal. Si la nota no lleva
+        // impuesto tampoco declara base, y decir aquí el subtotal la
+        // descuadraría contra sus propias líneas: es el rechazo FAU04,
+        // el mismo que nos devolvió la DIAN en una factura.
+        $this->importe($doc, $nodo, 'cbc:TaxExclusiveAmount', (float) $nota->tax > 0 ? (float) $nota->subtotal : 0.0);
+
         $this->importe($doc, $nodo, 'cbc:TaxInclusiveAmount', (float) $nota->total);
         $this->importe($doc, $nodo, 'cbc:PayableAmount', (float) $nota->total);
     }
