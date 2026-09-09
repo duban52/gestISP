@@ -134,7 +134,7 @@ class XadesSignatureTest extends BillingTestCase
             $declarado = $xpath->query('ds:DigestValue', $referencia)->item(0)->nodeValue;
 
             $this->assertSame(
-                base64_encode(hash('sha384', $nodo->C14N(), true)),
+                base64_encode(hash($this->algoritmoDeclarado($xpath), $nodo->C14N(), true)),
                 $declarado,
                 "El resumen declarado de {$sufijo} no coincide con el que se recalcula.",
             );
@@ -258,13 +258,63 @@ class XadesSignatureTest extends BillingTestCase
             $firmado,
         );
 
-        // El resumen, verificado contra el PDF publicado el 2026-09-07.
+        // El resumen SHA-256, verificado contra el PDF publicado
+        // descargandolo y calculandolo (2026-09-08). Es el mismo valor,
+        // caracter por caracter, que declara la DIAN en sus propias
+        // firmas.
         $this->assertStringContainsString(
-            'EQC0kiWPaAME6IsEZ7WuaTWJ97Zmf6hIO69rMCVURmQxBB9ebgLrjhL5BArQ0a0l',
+            'dMoMvtcG5aIzgYo0tIsSQeVJBDnUnfSOfBpxXrmor0Y=',
             $firmado,
         );
         $this->assertStringContainsString('<xades:ClaimedRole>supplier</xades:ClaimedRole>', $firmado);
         $this->assertStringContainsString('<xades:SigningTime>', $firmado);
+    }
+
+    public function test_los_resumenes_van_en_sha256(): void
+    {
+        // AQUI HUBO SHA-384 Y LA DIAN RECHAZO CON ZE02.
+        //
+        // La firma era perfecta: verificaba y sus tres resumenes
+        // cuadraban —se comprobo sobre el XML que la DIAN devolvio—.
+        // Lo que no aceptaba era el ALGORITMO. Su propia firma usa
+        // `xmlenc#sha256` en las tres referencias, en el CertDigest y
+        // en el SigPolicyHash.
+        //
+        // El CUFE sigue siendo SHA-384: es otra cosa. Por eso esta
+        // prueba mira dentro de la firma y no en todo el documento.
+        $firmado = $this->firmar()[0];
+        $xpath = $this->xpath($firmado);
+
+        $algoritmos = [];
+
+        foreach ($xpath->query('//ds:Signature//ds:DigestMethod/@Algorithm') as $atributo) {
+            $algoritmos[] = $atributo->value;
+        }
+
+        $this->assertNotEmpty($algoritmos);
+        $this->assertSame(
+            ['http://www.w3.org/2001/04/xmlenc#sha256'],
+            array_values(array_unique($algoritmos)),
+            'Todos los resumenes de la firma van en SHA-256.',
+        );
+
+        $this->assertStringContainsString(
+            'Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"',
+            $firmado,
+        );
+    }
+
+    public function test_lleva_lo_que_lleva_la_firma_de_la_dian(): void
+    {
+        // Tres bloques que su firma trae y a la nuestra le faltaban. No
+        // son obligatorios segun el esquema; estan porque estan alli, y
+        // parecerse a un firmador que su validador acepta es lo unico
+        // que ha funcionado.
+        $firmado = $this->firmar()[0];
+
+        $this->assertStringContainsString('<ds:RSAKeyValue>', $firmado);
+        $this->assertStringContainsString('<xades:SignedDataObjectProperties>', $firmado);
+        $this->assertStringContainsString('<xades:MimeType>text/xml</xades:MimeType>', $firmado);
     }
 
     public function test_el_certificado_viaja_dentro_del_documento(): void
@@ -443,9 +493,27 @@ class XadesSignatureTest extends BillingTestCase
         $doc = new \DOMDocument();
         $doc->loadXML($xml);
 
+        $algoritmo = $this->algoritmoDeclarado($this->xpath($xml));
+
         $firma = $doc->getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'Signature')->item(0);
         $firma?->parentNode->removeChild($firma);
 
-        return base64_encode(hash('sha384', $doc->documentElement->C14N(), true));
+        return base64_encode(hash($algoritmo, $doc->documentElement->C14N(), true));
+    }
+
+    /**
+     * El algoritmo de resumen que el propio documento declara.
+     *
+     * Se lee en vez de fijarlo aqui para que estas comprobaciones sigan
+     * midiendo lo que dicen medir —que el resumen CUADRA— y no se
+     * conviertan en una segunda copia del algoritmo que hay que
+     * acordarse de cambiar. Cual debe ser lo fija
+     * `test_los_resumenes_van_en_sha256`, y solo esa.
+     */
+    private function algoritmoDeclarado(\DOMXPath $xpath): string
+    {
+        $uri = $xpath->query('//ds:SignedInfo/ds:Reference/ds:DigestMethod/@Algorithm')->item(0)->value;
+
+        return strtolower(substr($uri, strrpos($uri, '#') + 1));
     }
 }

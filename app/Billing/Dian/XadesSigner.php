@@ -58,42 +58,61 @@ class XadesSigner
     private const C14N = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
 
     /**
-     * Algoritmos.
+     * Algoritmos: SHA-256 en TODO, que es como firma la propia DIAN.
      *
-     * Son los del ejemplo firmado de la DIAN, que combina firma RSA con
-     * SHA-256 y resúmenes con SHA-384. El anexo admite también sha256 y
-     * sha512 para la firma; se dejan aquí, juntos y visibles, porque son
-     * lo primero que hay que mirar si un día la DIAN rechaza por
-     * algoritmo.
+     * AQUÍ HUBO SHA-384, Y COSTÓ UN RECHAZO
+     * -------------------------------------
+     * Se rechazó una factura con ZE02, «Valor de la firma inválido»,
+     * teniendo la firma perfecta: se comprobó sobre el XML transmitido
+     * que el RSA verificaba y que los tres resúmenes cuadraban. No
+     * fallaba ningún valor: fallaba el ALGORITMO declarado.
+     *
+     * La prueba vino de la propia DIAN. Su respuesta —el
+     * ApplicationResponse que devuelve firmado— usa `xmlenc#sha256` en
+     * los tres `DigestMethod`, en el `CertDigest` y en el
+     * `SigPolicyHash`. Y su `SigPolicyHash` vale
+     * `dMoMvtcG5aIzgYo0tIsSQeVJBDnUnfSOfBpxXrmor0Y=`, que es
+     * exactamente el SHA-256 del PDF de la política; se descargó y se
+     * comprobó:
+     *
+     *   curl -s <url de la politica> | openssl dgst -sha256 -binary | openssl base64 -A
+     *
+     * El SHA-384 que había también era correcto —el mismo PDF, otro
+     * algoritmo—, y por eso no lo delataba ninguna comprobación
+     * interna. Sólo se ve comparando contra quien sí funciona.
+     *
+     * NO CONFUNDIR CON EL CUFE. El CUFE y el CUDE siguen siendo
+     * SHA-384: son otra cosa, y el propio XML lo declara en
+     * `schemeName="CUFE-SHA384"`.
      */
     private const METODO_FIRMA = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
-    private const METODO_RESUMEN = 'http://www.w3.org/2001/04/xmldsig-more#sha384';
-    private const ALGORITMO_RESUMEN = 'sha384';
+    private const METODO_RESUMEN = 'http://www.w3.org/2001/04/xmlenc#sha256';
+    private const ALGORITMO_RESUMEN = 'sha256';
     private const ALGORITMO_FIRMA = OPENSSL_ALGO_SHA256;
 
     /**
      * La política de firma de la DIAN.
      *
-     * VERIFICADO CONTRA LA POLÍTICA PUBLICADA (2026-09-07)
+     * VERIFICADO CONTRA LA POLÍTICA PUBLICADA (2026-09-08)
      * ----------------------------------------------------
-     * Se descargó el PDF vivo y se calculó su SHA-384:
+     * Se descargó el PDF vivo y se calcularon SUS DOS resúmenes:
      *
+     *   openssl dgst -sha256 -binary politicadefirmav2.pdf | openssl base64 -A
+     *     => dMoMvtcG5aIzgYo0tIsSQeVJBDnUnfSOfBpxXrmor0Y=
      *   openssl dgst -sha384 -binary politicadefirmav2.pdf | openssl base64 -A
+     *     => EQC0kiWPaAME6IsEZ7WuaTWJ97Zmf6hIO69rMCVURmQxBB9ebgLrjhL5BArQ0a0l
      *
-     * El resumen coincide byte a byte con el del ejemplo oficial, así
-     * que POLITICA_RESUMEN estaba bien desde el principio.
+     * Los dos son correctos. Aquí va el de SHA-256 porque es el que
+     * declara la propia DIAN en las firmas que ella emite —el mismo
+     * valor, carácter por carácter— y porque es el algoritmo que usa
+     * para todo lo demás de la firma. Véase el comentario de los
+     * algoritmos: con el de SHA-384 rechazaba con ZE02.
      *
-     * LA RUTA NO. La que traen los XML firmados de la DIAN
-     * —`v1/politicadefirmav2.pdf`— responde **404**. La viva es la
-     * `v2/`, que es la que dice el TEXTO del anexo 1.9. O sea: el anexo
-     * tenía razón y sus propios ejemplos estaban desactualizados.
-     *
-     * Es el mismo documento en las dos rutas —el hash lo demuestra—,
-     * pero declarar una URL muerta en el `SigPolicyId` es declarar algo
-     * que no se puede comprobar.
+     * OJO CON LA URL: la `v1/` da 404 y la `v2/` es la viva. Poner una
+     * URL muerta en la política es una firma que nadie puede validar.
      */
     private const POLITICA_URL = 'https://facturaelectronica.dian.gov.co/politicadefirma/v2/politicadefirmav2.pdf';
-    private const POLITICA_RESUMEN = 'EQC0kiWPaAME6IsEZ7WuaTWJ97Zmf6hIO69rMCVURmQxBB9ebgLrjhL5BArQ0a0l';
+    private const POLITICA_RESUMEN = 'dMoMvtcG5aIzgYo0tIsSQeVJBDnUnfSOfBpxXrmor0Y=';
 
     private const NS_DS = 'http://www.w3.org/2000/09/xmldsig#';
     private const NS_XADES = 'http://uri.etsi.org/01903/v1.3.2#';
@@ -236,6 +255,14 @@ class XadesSigner
         $datos = $this->nodo($doc, $keyInfo, 'ds:X509Data');
         $this->nodo($doc, $datos, 'ds:X509Certificate', $this->base64Del($certificado['cert']));
 
+        // La clave pública también suelta, además del certificado.
+        //
+        // Es redundante —la clave ya va dentro del X509— y aun así la
+        // firma que emite la DIAN la lleva. Se añade para parecernos a
+        // ella: es la única referencia de un firmador que su propio
+        // validador acepta.
+        $this->clavePublicaDeclarada($doc, $keyInfo, $certificado['cert']);
+
         // ---- SignedProperties ----
         $this->armarPropiedades($doc, $firma, $id, $certificado);
 
@@ -276,6 +303,7 @@ class XadesSigner
         $politicaId = $this->nodo($doc, $politica, 'xades:SignaturePolicyId');
         $sigPolicyId = $this->nodo($doc, $politicaId, 'xades:SigPolicyId');
         $this->nodo($doc, $sigPolicyId, 'xades:Identifier', self::POLITICA_URL);
+        $this->nodo($doc, $sigPolicyId, 'xades:Description');
         $hash = $this->nodo($doc, $politicaId, 'xades:SigPolicyHash');
         $this->conAlgoritmo($doc, $hash, 'ds:DigestMethod', self::METODO_RESUMEN);
         $this->nodo($doc, $hash, 'ds:DigestValue', self::POLITICA_RESUMEN);
@@ -285,6 +313,41 @@ class XadesSigner
         $rol = $this->nodo($doc, $propiedades, 'xades:SignerRole');
         $roles = $this->nodo($doc, $rol, 'xades:ClaimedRoles');
         $this->nodo($doc, $roles, 'xades:ClaimedRole', 'supplier');
+
+        // Qué se firmó y en qué formato. También lo lleva la firma de
+        // la DIAN y a nosotros nos faltaba entero.
+        $datosFirmados = $this->nodo($doc, $firmadas, 'xades:SignedDataObjectProperties');
+        $formato = $this->nodo($doc, $datosFirmados, 'xades:DataObjectFormat');
+        $formato->setAttribute('ObjectReference', '#' . $id . '-ref0');
+        $this->nodo($doc, $formato, 'xades:MimeType', 'text/xml');
+        $this->nodo($doc, $formato, 'xades:Encoding', 'UTF-8');
+    }
+
+    /**
+     * La clave pública del certificado, como `ds:RSAKeyValue`.
+     *
+     * El módulo y el exponente salen del propio certificado, así que no
+     * añaden ninguna información nueva —ni ningún riesgo: es la clave
+     * PÚBLICA—. Están porque la firma de la DIAN los lleva.
+     */
+    private function clavePublicaDeclarada(\DOMDocument $doc, \DOMElement $keyInfo, string $pem): void
+    {
+        $publica = openssl_pkey_get_public($pem);
+
+        if ($publica === false) {
+            throw new RuntimeException('No se pudo leer la clave pública del certificado.');
+        }
+
+        $detalle = openssl_pkey_get_details($publica);
+
+        if (!isset($detalle['rsa']['n'], $detalle['rsa']['e'])) {
+            throw new RuntimeException('El certificado no lleva una clave RSA.');
+        }
+
+        $valor = $this->nodo($doc, $keyInfo, 'ds:KeyValue');
+        $rsa = $this->nodo($doc, $valor, 'ds:RSAKeyValue');
+        $this->nodo($doc, $rsa, 'ds:Modulus', base64_encode($detalle['rsa']['n']));
+        $this->nodo($doc, $rsa, 'ds:Exponent', base64_encode($detalle['rsa']['e']));
     }
 
     /** Un xades:Cert: el resumen del certificado y quién lo emitió. */

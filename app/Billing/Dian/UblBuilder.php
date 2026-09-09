@@ -157,6 +157,19 @@ abstract class UblBuilder
 
         $parte = $this->hijo($doc, $nodo, 'cac:Party');
 
+        // EL PRIMER HIJO DE cac:Party, Y NO ES NEGOCIABLE.
+        //
+        // Es lo que pide la regla FAK61 —«Si el valor de
+        // AdditionalAccountID es igual a "2" y el grupo no es
+        // informado»—, que no nombra el grupo. Se intentó con
+        // `cac:Person` y la DIAN volvió a rechazar exactamente igual:
+        // el grupo que falta es éste.
+        //
+        // Y va PRIMERO porque el orden dentro de `cac:Party` lo fija el
+        // XSD de UBL 2.1: `PartyIdentification` antes que `PartyName`.
+        $identificacion = $this->hijo($doc, $parte, 'cac:PartyIdentification');
+        $this->identificacionSimple($doc, $identificacion, $cliente->identity_number, $cliente->verification_digit, $cliente->document_type_code);
+
         $nombre = $this->hijo($doc, $parte, 'cac:PartyName');
         $this->hijo($doc, $nombre, 'cbc:Name', $cliente->fullName());
 
@@ -242,6 +255,26 @@ abstract class UblBuilder
         $id->setAttribute('schemeName', (string) $tipo);
         $id->setAttribute('schemeAgencyID', self::AGENCIA_ID);
         $id->setAttribute('schemeAgencyName', self::AGENCIA_NOMBRE);
+    }
+
+    /**
+     * El `cbc:ID` de un `cac:PartyIdentification`.
+     *
+     * Mismo criterio que en `identificacion()`: `schemeID` es el dígito
+     * de verificación y `schemeName` el tipo de documento. Lo confirma
+     * la propia DIAN en lo que ella emite —`schemeID="4"
+     * schemeName="31"` para su NIT 800197268, cuyo DV es 4—.
+     */
+    protected function identificacionSimple(
+        \DOMDocument $doc,
+        \DOMElement $padre,
+        ?string $numero,
+        ?string $digito,
+        ?string $tipo,
+    ): void {
+        $id = $this->hijo($doc, $padre, 'cbc:ID', (string) $numero);
+        $id->setAttribute('schemeID', (string) ($digito ?? '0'));
+        $id->setAttribute('schemeName', (string) $tipo);
     }
 
     /**

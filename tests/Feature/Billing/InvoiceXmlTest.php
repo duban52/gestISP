@@ -276,34 +276,33 @@ class InvoiceXmlTest extends BillingTestCase
         $this->assertStringContainsString('<cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>', $xml);
     }
 
-    public function test_fak61_una_persona_natural_lleva_su_grupo_de_persona(): void
+    public function test_fak61_el_adquiriente_lleva_su_identificacion(): void
     {
-        // Con `AdditionalAccountID` = 2 la DIAN exige además el grupo
-        // `cac:Person`. Faltaba.
+        // ESTA PRUEBA ESTUVO MAL, y el error se envió a la DIAN.
+        //
+        // FAK61 dice «Si el valor de AdditionalAccountID es igual a "2"
+        // y el grupo no es informado», sin nombrar el grupo. Se supuso
+        // que era `cac:Person`, se emitió con él, y la DIAN volvió a
+        // rechazar con FAK61 exactamente igual. El grupo es
+        // `cac:PartyIdentification`, y va como PRIMER hijo de
+        // `cac:Party` porque así lo ordena el XSD.
         $contrato = $this->contratoElectronico();
         $contrato->client->update(['name' => 'Marina', 'last_name' => 'Quiceno Ospina']);
 
         $resultado = $this->construirXml($this->emitir($contrato->fresh()));
 
         $xpath = $this->xpath($resultado['xml']);
-        $persona = $xpath->query('//cac:AccountingCustomerParty//cac:Person')->item(0);
 
-        $this->assertNotNull($persona, 'Una persona natural tiene que llevar cac:Person.');
-        $this->assertSame('Marina', $xpath->query('cbc:FirstName', $persona)->item(0)->nodeValue);
-        $this->assertSame('Quiceno Ospina', $xpath->query('cbc:FamilyName', $persona)->item(0)->nodeValue);
+        $parte = $xpath->query('//cac:AccountingCustomerParty/cac:Party')->item(0);
+        $id = $xpath->query('cac:PartyIdentification/cbc:ID', $parte)->item(0);
 
-        // Y sigue validando: el orden dentro de cac:Party lo fija el XSD.
-        $this->assertSame([], app(InvoiceXmlBuilder::class)->erroresDeEsquema($resultado['xml']));
-    }
+        $this->assertNotNull($id, 'El adquiriente tiene que llevar cac:PartyIdentification.');
+        $this->assertSame($contrato->client->identity_number, $id->nodeValue);
+        $this->assertSame('13', $id->getAttribute('schemeName'), 'schemeName es el tipo de documento.');
 
-    public function test_fak61_una_persona_juridica_no_lleva_grupo_de_persona(): void
-    {
-        $contrato = $this->contratoElectronico();
-        $contrato->client->update(['organization_type_code' => '1']);
+        // Primero de todo: el orden dentro de cac:Party lo fija el XSD.
+        $this->assertSame('PartyIdentification', $parte->firstElementChild->localName);
 
-        $resultado = $this->construirXml($this->emitir($contrato->fresh()));
-
-        $this->assertNull($this->nodo($resultado['xml'], '//cac:AccountingCustomerParty//cac:Person'));
         $this->assertSame([], app(InvoiceXmlBuilder::class)->erroresDeEsquema($resultado['xml']));
     }
 
