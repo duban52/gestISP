@@ -137,6 +137,7 @@ class NoteXmlBuilder extends UblBuilder
         $this->referencias($doc, $raiz, $nota, $factura, $cufeDeLaFactura);
         $this->emisor($doc, $raiz, $empresa, prefijoAutorizado: null);
         $this->adquiriente($doc, $raiz, $cliente);
+        $this->formaDePago($doc, $raiz, $factura);
         $this->impuestos($doc, $raiz, $nota);
         $this->totales($doc, $raiz, $nota, $esCredito);
         $this->linea($doc, $raiz, $nota, $esCredito);
@@ -257,7 +258,23 @@ class NoteXmlBuilder extends UblBuilder
         // Solo la nota CREDITO lleva codigo de tipo: en UBL la nota
         // debito no tiene ese elemento.
         if ($esCredito) {
-            $this->hijo($doc, $raiz, 'cbc:CreditNoteTypeCode', '91');
+            $tipo = $this->hijo($doc, $raiz, 'cbc:CreditNoteTypeCode', '91');
+
+            // ESTO ES UNA HIPÓTESIS, y se marca como tal.
+            //
+            // La DIAN rechazó la nota con «CBA06: No informado el
+            // literal "195"» sin decir en qué elemento. El literal 195
+            // es su código de agencia, y este es el único elemento de
+            // la nota que existe SOLO en ella —lo que explicaría que la
+            // factura nunca recibiera esa queja— y que en los ejemplos
+            // publicados por la DIAN lo lleva. El nuestro iba pelado.
+            //
+            // Se añade porque no puede hacer daño: son atributos que el
+            // esquema admite y que sus propios ejemplos traen. Si CBA06
+            // vuelve a salir, NO era esto y hay que seguir buscando.
+            $tipo->setAttribute('listAgencyID', self::AGENCIA_ID);
+            $tipo->setAttribute('listAgencyName', self::AGENCIA_NOMBRE);
+            $tipo->setAttribute('listURI', 'http://reference.dian.gov.co/resolucion000042/CreditNoteType.gc');
         }
 
         $this->hijo($doc, $raiz, 'cbc:Note', (string) $nota->reason);
@@ -298,6 +315,36 @@ class NoteXmlBuilder extends UblBuilder
         $uuid->setAttribute('schemeName', 'CUFE-SHA384');
 
         $this->hijo($doc, $documento, 'cbc:IssueDate', \Illuminate\Support\Carbon::parse($factura->issue_date)->format('Y-m-d'));
+    }
+
+    /**
+     * La forma de pago, heredada de la factura que la nota corrige.
+     *
+     * POR QUÉ LA LLEVA UNA NOTA
+     * -------------------------
+     * Porque la DIAN la exige, y no lo dice más claro que con
+     * «CAN01, Rechazo: Rechazo si grupo no informado» —sin nombrar el
+     * grupo—. Se supo comparando: la factura emite `cac:PaymentMeans`
+     * y no recibió esa queja; la nota no lo emitía y sí la recibió.
+     *
+     * Los valores salen de la factura referenciada, que es de donde
+     * tienen sentido: una nota no acuerda condiciones de pago propias,
+     * ajusta las de un documento que ya las tenía.
+     */
+    private function formaDePago(\DOMDocument $doc, \DOMElement $raiz, $factura): void
+    {
+        $nodo = $this->hijo($doc, $raiz, 'cac:PaymentMeans');
+
+        $aCredito = $factura->due_date
+            && $factura->issue_date
+            && \Illuminate\Support\Carbon::parse($factura->due_date)->gt(\Illuminate\Support\Carbon::parse($factura->issue_date));
+
+        $this->hijo($doc, $nodo, 'cbc:ID', $aCredito ? '2' : '1');
+        $this->hijo($doc, $nodo, 'cbc:PaymentMeansCode', (string) ($factura->payment_means_code ?: '10'));
+
+        if ($factura->due_date) {
+            $this->hijo($doc, $nodo, 'cbc:PaymentDueDate', \Illuminate\Support\Carbon::parse($factura->due_date)->format('Y-m-d'));
+        }
     }
 
     private function impuestos(\DOMDocument $doc, \DOMElement $raiz, CreditDebitNote $nota): void

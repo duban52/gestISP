@@ -256,6 +256,25 @@ class ElectronicNoteTest extends BillingTestCase
         $this->assertStringContainsString('DIAN 2.1: Nota Débito de Factura Electrónica de Venta', $xml);
     }
 
+    public function test_can01_la_nota_lleva_la_forma_de_pago(): void
+    {
+        // La DIAN rechazó una nota con «CAN01: Rechazo si grupo no
+        // informado», sin decir qué grupo. Se supo comparando con la
+        // factura, que sí emite `cac:PaymentMeans` y no recibió esa
+        // queja.
+        //
+        // El XSD no lo exige —la nota validaba contra el esquema sin
+        // esto—, así que lo único que lo protege es esta prueba.
+        $nota = $this->emitirNota($this->facturaElectronica());
+
+        $xml = ElectronicDocument::withoutGlobalScopes()
+            ->where('credit_debit_note_id', $nota->id)->firstOrFail()->signed_xml;
+
+        $this->assertStringContainsString('<cac:PaymentMeans>', $xml);
+        $this->assertStringContainsString('<cbc:PaymentMeansCode>', $xml);
+        $this->assertSame([], app(NoteXmlBuilder::class)->erroresDeEsquema($xml, esCredito: true));
+    }
+
     public function test_el_concepto_de_la_dian_va_en_el_xml(): void
     {
         // El ResponseCode es el codigo oficial del motivo: es lo que le
