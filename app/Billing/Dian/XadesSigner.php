@@ -217,6 +217,19 @@ class XadesSigner
         $firma = $doc->createElementNS(self::NS_DS, 'ds:Signature');
         $firma->setAttribute('Id', $id);
 
+        // `xmlns:ds` EXPLÍCITO AQUÍ, aunque la raíz ya lo declare.
+        //
+        // Sin esto DOM lo omite por redundante —el `<Invoice>` ya trae
+        // `xmlns:ds`— y la firma deja de poder leerse por su cuenta:
+        // extraer el `ds:Signature` y parsearlo suelto da «unbound
+        // prefix». Se comprobó: pasa con la nuestra y no con la de
+        // `lopezsoft/ubl21dian`, que lo declara a mano por esto mismo.
+        //
+        // Era la ÚNICA diferencia que quedaba entre las dos firmas
+        // después de igualar todo lo demás, y la DIAN seguía
+        // contestando ZE02 con la firma matemáticamente correcta.
+        $firma->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:ds', self::NS_DS);
+
         // ---- SignedInfo: lo que se firma ----
         $info = $this->nodo($doc, $firma, 'ds:SignedInfo');
 
@@ -254,14 +267,6 @@ class XadesSigner
         $keyInfo->setAttribute('Id', $id . '-keyinfo');
         $datos = $this->nodo($doc, $keyInfo, 'ds:X509Data');
         $this->nodo($doc, $datos, 'ds:X509Certificate', $this->base64Del($certificado['cert']));
-
-        // La clave pública también suelta, además del certificado.
-        //
-        // Es redundante —la clave ya va dentro del X509— y aun así la
-        // firma que emite la DIAN la lleva. Se añade para parecernos a
-        // ella: es la única referencia de un firmador que su propio
-        // validador acepta.
-        $this->clavePublicaDeclarada($doc, $keyInfo, $certificado['cert']);
 
         // ---- SignedProperties ----
         $this->armarPropiedades($doc, $firma, $id, $certificado);
@@ -303,7 +308,6 @@ class XadesSigner
         $politicaId = $this->nodo($doc, $politica, 'xades:SignaturePolicyId');
         $sigPolicyId = $this->nodo($doc, $politicaId, 'xades:SigPolicyId');
         $this->nodo($doc, $sigPolicyId, 'xades:Identifier', self::POLITICA_URL);
-        $this->nodo($doc, $sigPolicyId, 'xades:Description');
         $hash = $this->nodo($doc, $politicaId, 'xades:SigPolicyHash');
         $this->conAlgoritmo($doc, $hash, 'ds:DigestMethod', self::METODO_RESUMEN);
         $this->nodo($doc, $hash, 'ds:DigestValue', self::POLITICA_RESUMEN);
@@ -313,41 +317,6 @@ class XadesSigner
         $rol = $this->nodo($doc, $propiedades, 'xades:SignerRole');
         $roles = $this->nodo($doc, $rol, 'xades:ClaimedRoles');
         $this->nodo($doc, $roles, 'xades:ClaimedRole', 'supplier');
-
-        // Qué se firmó y en qué formato. También lo lleva la firma de
-        // la DIAN y a nosotros nos faltaba entero.
-        $datosFirmados = $this->nodo($doc, $firmadas, 'xades:SignedDataObjectProperties');
-        $formato = $this->nodo($doc, $datosFirmados, 'xades:DataObjectFormat');
-        $formato->setAttribute('ObjectReference', '#' . $id . '-ref0');
-        $this->nodo($doc, $formato, 'xades:MimeType', 'text/xml');
-        $this->nodo($doc, $formato, 'xades:Encoding', 'UTF-8');
-    }
-
-    /**
-     * La clave pública del certificado, como `ds:RSAKeyValue`.
-     *
-     * El módulo y el exponente salen del propio certificado, así que no
-     * añaden ninguna información nueva —ni ningún riesgo: es la clave
-     * PÚBLICA—. Están porque la firma de la DIAN los lleva.
-     */
-    private function clavePublicaDeclarada(\DOMDocument $doc, \DOMElement $keyInfo, string $pem): void
-    {
-        $publica = openssl_pkey_get_public($pem);
-
-        if ($publica === false) {
-            throw new RuntimeException('No se pudo leer la clave pública del certificado.');
-        }
-
-        $detalle = openssl_pkey_get_details($publica);
-
-        if (!isset($detalle['rsa']['n'], $detalle['rsa']['e'])) {
-            throw new RuntimeException('El certificado no lleva una clave RSA.');
-        }
-
-        $valor = $this->nodo($doc, $keyInfo, 'ds:KeyValue');
-        $rsa = $this->nodo($doc, $valor, 'ds:RSAKeyValue');
-        $this->nodo($doc, $rsa, 'ds:Modulus', base64_encode($detalle['rsa']['n']));
-        $this->nodo($doc, $rsa, 'ds:Exponent', base64_encode($detalle['rsa']['e']));
     }
 
     /** Un xades:Cert: el resumen del certificado y quién lo emitió. */

@@ -135,11 +135,30 @@ class InvoiceXmlBuilder extends UblBuilder
         );
         $doc->appendChild($raiz);
 
+        // POR QUÉ SE DECLARAN AQUÍ `xades` Y `xades141`, QUE ESTE
+        // DOCUMENTO NO USA
+        //
+        // Los usa la FIRMA, que se añade después. Si no se declaran en
+        // la raíz, DOM los declara dentro del propio `ds:Signature`, y
+        // entonces el conjunto de espacios de nombres que hereda
+        // `xades:SignedProperties` al canonicalizarlo es distinto —y su
+        // resumen también—.
+        //
+        // Eso costó un rechazo ZE02 con la firma matemáticamente
+        // correcta: verificaba, sus resúmenes cuadraban al recalcularlos
+        // sobre nuestro propio documento, y aun así la DIAN la
+        // rechazaba. `lopezsoft/ubl21dian` los espera declarados en la
+        // raíz —su lista de espacios de nombres los incluye— y es la
+        // implementación que la DIAN acepta.
+        //
         foreach ([
             'cac' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
             'cbc' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
             'ext' => 'urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2',
             'sts' => 'dian:gov:co:facturaelectronica:Structures-2-1',
+            'xsi' => 'http://www.w3.org/2001/XMLSchema-instance',
+            'xades141' => 'http://uri.etsi.org/01903/v1.4.1#',
+            'xades' => 'http://uri.etsi.org/01903/v1.3.2#',
             'ds' => 'http://www.w3.org/2000/09/xmldsig#',
         ] as $prefijo => $uri) {
             $raiz->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:' . $prefijo, $uri);

@@ -304,17 +304,34 @@ class XadesSignatureTest extends BillingTestCase
         );
     }
 
-    public function test_lleva_lo_que_lleva_la_firma_de_la_dian(): void
+    public function test_los_espacios_de_nombres_de_xades_van_en_la_raiz(): void
     {
-        // Tres bloques que su firma trae y a la nuestra le faltaban. No
-        // son obligatorios segun el esquema; estan porque estan alli, y
-        // parecerse a un firmador que su validador acepta es lo unico
-        // que ha funcionado.
+        // Y NO DENTRO DE LA FIRMA. Es la diferencia que quedaba con
+        // `lopezsoft/ubl21dian` despues de igualar todo lo demas, y la
+        // que explica un ZE02 con la firma matematicamente correcta.
+        //
+        // Si `xmlns:xades` se declara dentro de `ds:Signature`, lo que
+        // hereda `xades:SignedProperties` al canonicalizarlo cambia, y
+        // su resumen tambien. Declarandolo en la raiz, el conjunto es
+        // el mismo que ve quien valida.
         $firmado = $this->firmar()[0];
 
-        $this->assertStringContainsString('<ds:RSAKeyValue>', $firmado);
-        $this->assertStringContainsString('<xades:SignedDataObjectProperties>', $firmado);
-        $this->assertStringContainsString('<xades:MimeType>text/xml</xades:MimeType>', $firmado);
+        $doc = new \DOMDocument();
+        $doc->loadXML($firmado);
+
+        $this->assertSame(
+            'http://uri.etsi.org/01903/v1.3.2#',
+            $doc->documentElement->getAttribute('xmlns:xades'),
+            'xmlns:xades tiene que estar declarado en la raiz del documento.',
+        );
+
+        $firma = $doc->getElementsByTagNameNS('http://www.w3.org/2000/09/xmldsig#', 'Signature')->item(0);
+
+        $this->assertSame(
+            '',
+            $firma->getAttribute('xmlns:xades'),
+            'Si la firma lo redeclara, la canonicalizacion vuelve a divergir.',
+        );
     }
 
     public function test_el_certificado_viaja_dentro_del_documento(): void
