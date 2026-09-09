@@ -61,46 +61,4 @@ return [
     */
     'transport' => env('DIAN_TRANSPORT', 'auto'),
 
-    /*
-    |----------------------------------------------------------------
-    | Algoritmos de WS-Security
-    |----------------------------------------------------------------
-    |
-    | Los del SOBRE, no los del documento. El documento va firmado con
-    | XAdES y SHA-256 porque lo dice el anexo; esto es otra cosa: la
-    | firma que autentica la LLAMADA, y la decide el binding de WCF que
-    | corre la DIAN, no el anexo.
-    |
-    | WCF valida el mensaje contra la «algorithm suite» de su binding, y
-    | la suite por defecto (Basic256) usa SHA-1 para los resumenes y
-    | RSA-SHA1 para la firma. Si no coinciden, contesta
-    | `wsse:InvalidSecurity` — y no dice que el problema sea el
-    | algoritmo.
-    |
-    | POR QUE ESTO ES CONFIGURABLE Y NO UNA CONSTANTE
-    | ----------------------------------------------
-    | Porque no se puede confirmar: la guia de consumo de la DIAN
-    | muestra estos valores EN UNA IMAGEN, y del PDF no se extrae texto
-    | (se intento: 2 MB de flujos y la palabra «Algorithm» aparece una
-    | vez). Asi que es una hipotesis, y una hipotesis se prueba — no se
-    | fija en una constante y se despliega.
-    |
-    | Con esto se cambia en el `.env` y se reintenta con
-    | `dian:transmitir`, sin tocar codigo ni volver a desplegar.
-    |
-    | CONFIRMADO el 2026-09-08: es **sha256**. La politica del propio
-    | servicio lo dice, y se lee en su WSDL:
-    |
-    |   curl -s "https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc?wsdl=wsdl0"
-    |   <sp:AlgorithmSuite><wsp:Policy><sp:Basic256Sha256Rsa15/>
-    |
-    | Se deja conmutable por si la DIAN cambia la suite, pero ya no es
-    | una incognita: es un dato publicado.
-    |
-    | Valores: 'sha256' (Basic256Sha256Rsa15, el que pide) o 'sha1'.
-    |
-    */
-
-    'ws_security_hash' => env('DIAN_WS_SECURITY_HASH', 'sha256'),
-
 ];

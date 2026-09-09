@@ -7,31 +7,51 @@ use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /**
- * Firma WS-Security de un sobre SOAP.
+ * Firma WS-Security del sobre SOAP que se le manda a la DIAN.
  *
- * NO ES LA MISMA FIRMA QUE LA DE LA FACTURA
- * -----------------------------------------
- * Se parecen y no lo son, y confundirlas cuesta días:
+ * NO ES LA FIRMA DEL DOCUMENTO
+ * ----------------------------
+ * El documento va firmado con XAdES y eso lo protege para siempre.
+ * Esto autentica la LLAMADA, y por eso lleva un `Timestamp` con
+ * vencimiento: sin él, una petición capturada podría reenviarse.
  *
- * | | Factura (XAdES) | Sobre SOAP (WS-Security) |
- * |---|---|---|
- * | Canonicalización | **inclusiva** (C14N) | **exclusiva** (exc-c14n) |
- * | Qué se firma | documento, KeyInfo, SignedProperties | Timestamp, wsa:To, Body |
- * | La clave pública | dentro de `ds:X509Certificate` | en un `BinarySecurityToken` referenciado |
- * | Para qué | que el documento sea auténtico y perdure | autenticar ESTA petición, y caduca |
+ * DE DÓNDE SALE ESTA ESTRUCTURA, Y POR QUÉ IMPORTA
+ * ------------------------------------------------
+ * De `lopezsoft/ubl21dian`, la librería PHP que usa buena parte de las
+ * integraciones colombianas y que **funciona contra el servicio real**.
+ * No de la guía de la DIAN, que muestra estos valores en una imagen que
+ * no se puede leer del PDF.
  *
- * El certificado es el mismo. Lo que cambia es para qué se usa: la
- * XAdES protege el documento para siempre; esta solo autentica la
- * llamada, y por eso lleva un `Timestamp` con vencimiento — sin él, una
- * petición capturada podría reenviarse indefinidamente.
+ * Antes de llegar aquí se intentó deducirla, y la DIAN contestó cuatro
+ * veces `wsse:InvalidSecurity` —«An error occurred when verifying
+ * security for the message»— que no dice absolutamente nada de qué
+ * falla. Se probó firmando `To`; añadiendo `Action`; cambiando la suite
+ * a SHA-1; y referenciando el certificado por huella según la política
+ * que el propio WSDL publica. Ninguna pasó.
  *
- * ⚠️ NO VERIFICADA CONTRA EL SERVICIO REAL
- * ----------------------------------------
- * La mecánica está tomada de la guía de consumo de servicios web de la
- * DIAN, pero los valores exactos que esa guía muestra —en una imagen—
- * para el tipo de identificador de clave y los algoritmos no se pueden
- * leer del PDF. Aquí van los estándar para este perfil. Es lo primero
- * que hay que revisar si la DIAN devuelve un error de autenticación.
+ * Las cinco diferencias con lo que hacíamos, y todas cuentan:
+ *
+ *   1. Se firma **solo `wsa:To`**. Ni el Timestamp, ni el cuerpo.
+ *   2. `ec:InclusiveNamespaces` con su `PrefixList` en la
+ *      canonicalización y en la transformada. Sin eso los resúmenes no
+ *      cuadran, porque el otro lado incluye espacios de nombres que
+ *      nosotros no incluíamos.
+ *   3. El resumen se calcula sobre el nodo **reserializado con sus
+ *      espacios de nombres inyectados** y canonicalización INCLUSIVA —
+ *      que es lo que produce los mismos bytes que el exc-c14n con esa
+ *      lista de prefijos.
+ *   4. El certificado se referencia con `wsse:Reference`, no por
+ *      huella. (La política del WSDL dice `RequireThumbprintReference`;
+ *      la implementación que funciona usa `Reference`. Manda lo que
+ *      funciona.)
+ *   5. El orden en la cabecera es `Security`, `Action`, `To` — y sin
+ *      `mustUnderstand` en ninguno.
+ *
+ * SI HAY QUE TOCAR ESTO
+ * ---------------------
+ * Compárelo primero contra esa librería. Cada detalle de aquí está
+ * porque allí está, y la diferencia entre que la DIAN acepte o conteste
+ * `InvalidSecurity` puede ser un atributo.
  */
 class XmlSecuritySigner
 {
@@ -40,237 +60,262 @@ class XmlSecuritySigner
     private const NS_DS = 'http://www.w3.org/2000/09/xmldsig#';
     private const NS_SOAP = 'http://www.w3.org/2003/05/soap-envelope';
     private const NS_WSA = 'http://www.w3.org/2005/08/addressing';
+    private const NS_WCF = 'http://wcf.dian.colombia';
 
-    /** Canonicalización EXCLUSIVA: es la de WS-Security, no la de XAdES. */
     private const EXC_C14N = 'http://www.w3.org/2001/10/xml-exc-c14n#';
 
-    /**
-     * Los algoritmos, segun la suite del binding de WCF.
-     *
-     * OJO: NO son los del documento. El documento va firmado con XAdES
-     * y SHA-256 porque lo dice el anexo. Esto es la firma que autentica
-     * la LLAMADA, y quien la decide es el binding de WCF que corre la
-     * DIAN.
-     *
-     * La suite por defecto de WCF (Basic256) usa SHA-1. Si el mensaje
-     * no encaja con la suite del binding, WCF contesta
-     * `wsse:InvalidSecurity` sin decir que el problema sea el
-     * algoritmo.
-     *
-     * Se elige por configuracion porque no se pudo confirmar: la guia
-     * de consumo de la DIAN muestra estos valores en una imagen. Ver
-     * `config/dian.php`.
-     */
-    private const ALGORITMOS = [
-        'sha1' => [
-            'firma' => 'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
-            'resumen' => 'http://www.w3.org/2000/09/xmldsig#sha1',
-            'php' => 'sha1',
-            'openssl' => OPENSSL_ALGO_SHA1,
-        ],
-        'sha256' => [
-            'firma' => 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
-            'resumen' => 'http://www.w3.org/2001/04/xmlenc#sha256',
-            'php' => 'sha256',
-            'openssl' => OPENSSL_ALGO_SHA256,
-        ],
-    ];
+    private const METODO_FIRMA = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+    private const METODO_RESUMEN = 'http://www.w3.org/2001/04/xmlenc#sha256';
 
     private const TIPO_X509 = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3';
-    /** Referencia al certificado por su huella. Lo exige `RequireThumbprintReference`. */
-    private const TIPO_HUELLA = 'http://docs.oasis-open.org/wss/oasis-wss-soap-message-security-1.1#ThumbprintSHA1';
-
     private const CODIFICACION = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary';
 
     /**
-     * La suite de algoritmos que se va a usar.
+     * Espacios de nombres que se inyectan al canonicalizar.
      *
-     * @return array{firma: string, resumen: string, php: string, openssl: int}
+     * Son los del `PrefixList`: al calcular el resumen sobre el nodo
+     * suelto hay que declararlos a mano, porque fuera del sobre ya no
+     * los hereda de ningún sitio.
      */
-    private function suite(): array
-    {
-        $elegida = (string) config('dian.ws_security_hash', 'sha1');
+    private const NS_DE_TO = [
+        'xmlns:wsa' => self::NS_WSA,
+        'xmlns:soap' => self::NS_SOAP,
+        'xmlns:wcf' => self::NS_WCF,
+    ];
 
-        return self::ALGORITMOS[$elegida] ?? self::ALGORITMOS['sha1'];
-    }
+    private const NS_DE_SIGNEDINFO = [
+        'xmlns:ds' => self::NS_DS,
+        'xmlns:wsa' => self::NS_WSA,
+        'xmlns:soap' => self::NS_SOAP,
+        'xmlns:wcf' => self::NS_WCF,
+    ];
 
     /**
      * Firma el sobre y lo devuelve como XML.
      *
-     * @param  int  $vigenciaSegundos  Cuánto vale la petición. La guía
-     *   de la DIAN lo llama «tiempo de vigencia del token de seguridad».
+     * Rehace la cabecera entera: el orden y los espacios de nombres son
+     * parte de lo que se firma, así que no puede quedar a merced de
+     * cómo la haya armado quien llame.
+     *
+     * @param  int  $vigenciaSegundos  Cuánto vale la petición.
      */
     public function firmar(\DOMDocument $doc, DianCertificate $certificado, int $vigenciaSegundos = 60): string
     {
         [$pem, $clave] = $this->abrir($certificado);
 
-        $cabecera = $this->cabecera($doc);
+        [$accion, $destino] = $this->datosDeDireccionamiento($doc);
 
-        $id = 'X509-' . bin2hex(random_bytes(8));
+        $cabecera = $this->rehacerCabecera($doc);
 
-        // ---- El token con el certificado ----
+        // ---- Security, y dentro el Timestamp y el token ----
         $seguridad = $doc->createElementNS(self::NS_WSSE, 'wsse:Security');
-        $seguridad->setAttributeNS(self::NS_SOAP, 'soap:mustUnderstand', 'true');
+        $seguridad->setAttribute('xmlns:wsu', self::NS_WSU);
         $cabecera->appendChild($seguridad);
 
-        // ---- Timestamp: hace que la peticion caduque ----
         $ahora = Carbon::now('UTC');
-        $marca = $this->nodo($doc, $seguridad, self::NS_WSU, 'wsu:Timestamp');
-        $this->identificar($marca, 'TS-' . bin2hex(random_bytes(6)));
-        $this->nodo($doc, $marca, self::NS_WSU, 'wsu:Created', $ahora->format('Y-m-d\TH:i:s\Z'));
-        $this->nodo($doc, $marca, self::NS_WSU, 'wsu:Expires', $ahora->copy()->addSeconds($vigenciaSegundos)->format('Y-m-d\TH:i:s\Z'));
+        $marca = $doc->createElement('wsu:Timestamp');
+        $marca->setAttribute('wsu:Id', 'TS-' . bin2hex(random_bytes(6)));
+        $seguridad->appendChild($marca);
+        $marca->appendChild($doc->createElement('wsu:Created', $ahora->format('Y-m-d\TH:i:s\Z')));
+        $marca->appendChild($doc->createElement('wsu:Expires', $ahora->copy()->addSeconds($vigenciaSegundos)->format('Y-m-d\TH:i:s\Z')));
 
-        $token = $this->nodo($doc, $seguridad, self::NS_WSSE, 'wsse:BinarySecurityToken', $this->base64Del($pem));
+        $idToken = 'X509-' . bin2hex(random_bytes(8));
+        $token = $doc->createElement('wsse:BinarySecurityToken', $this->base64Del($pem));
         $token->setAttribute('EncodingType', self::CODIFICACION);
         $token->setAttribute('ValueType', self::TIPO_X509);
-        $this->identificar($token, $id);
+        $token->setAttribute('wsu:Id', $idToken);
+        $seguridad->appendChild($token);
 
-        // ---- Lo que se firma ----
-        //
-        // El Timestamp, TODOS los encabezados de direccionamiento y el
-        // cuerpo.
-        //
-        // POR QUE TODOS LOS DE DIRECCIONAMIENTO, Y NO SOLO `To`
-        // -----------------------------------------------------
-        // Antes se firmaban solo `To` y el cuerpo, y la DIAN contestaba
-        // 500 con `wsse:InvalidSecurity` — «An error occurred when
-        // verifying security for the message».
-        //
-        // El servicio de la DIAN es WCF (su URL termina en `.svc`), y
-        // WCF exige que vayan firmados TODOS los encabezados de
-        // direccionamiento presentes, no solo el destino. Con
-        // `wsa:Action` sin firmar, la verificacion falla antes de mirar
-        // el documento — y el error no dice cual falta, solo que la
-        // seguridad no cuadra.
-        //
-        // Se recogen por espacio de nombres y no por una lista de
-        // nombres: si manana se anade `MessageID` o `ReplyTo` al sobre,
-        // entra firmado solo. Una lista escrita a mano es como se vuelve
-        // a caer en esto.
-        // ---- Lo que se firma: EL TIMESTAMP Y `To` ----
-        //
-        // Lo dice la politica del servicio, que se puede leer en su
-        // propio WSDL (`?wsdl=wsdl0`):
-        //
-        //   <sp:EndorsingSupportingTokens>
-        //     <sp:SignedParts>
-        //       <sp:Header Name="To" Namespace=".../addressing"/>
-        //
-        // Y el Timestamp porque el enlace lleva `<sp:IncludeTimestamp/>`
-        // y un token «endorsing» sobre transporte firma precisamente la
-        // marca de tiempo.
-        //
-        // NO va el cuerpo: el enlace es `sp:TransportBinding` con
-        // HTTPS, asi que la confidencialidad e integridad del cuerpo
-        // las da TLS, no la firma.
-        //
-        // Se llego aqui despues de probar con `To` solo, con `To` mas
-        // `Action`, y con los dos mas el cuerpo — todos rechazados
-        // igual. Adivinar no servia: la respuesta estaba publicada en
-        // el WSDL del propio servicio.
-        $firmados = array_filter([
-            $marca,
-            $this->porNombre($doc, 'To'),
-        ]);
+        // ---- Action y To, DESPUES de Security ----
+        $cabecera->appendChild($doc->createElement('wsa:Action', $accion));
 
-        foreach ($firmados as $nodo) {
-            if (!$nodo->hasAttributeNS(self::NS_WSU, 'Id')) {
-                $this->identificar($nodo, 'id-' . bin2hex(random_bytes(6)));
-            }
-        }
+        $idDestino = 'ID-' . bin2hex(random_bytes(6));
+        $to = $doc->createElement('wsa:To', $destino);
+        $to->setAttribute('wsu:Id', $idDestino);
+        $to->setAttribute('xmlns:wsu', self::NS_WSU);
+        $cabecera->appendChild($to);
 
-        $this->firma($doc, $seguridad, $firmados, $id, $clave, $pem);
+        $this->firma($doc, $seguridad, $to, $idDestino, $idToken, $clave);
 
         return $doc->saveXML();
     }
 
     // ==================== La firma ====================
 
-    /**
-     * @param  array<int, \DOMElement>  $firmados
-     */
     private function firma(
         \DOMDocument $doc,
         \DOMElement $seguridad,
-        array $firmados,
+        \DOMElement $to,
+        string $idDestino,
         string $idToken,
         string $clave,
-        string $pem,
     ): void {
-        $firma = $doc->createElementNS(self::NS_DS, 'ds:Signature');
+        $firma = $doc->createElement('ds:Signature');
+        $firma->setAttribute('Id', 'SIG-' . bin2hex(random_bytes(6)));
+        $firma->setAttribute('xmlns:ds', self::NS_DS);
         $seguridad->appendChild($firma);
 
-        $info = $this->nodo($doc, $firma, self::NS_DS, 'ds:SignedInfo');
+        $info = $doc->createElement('ds:SignedInfo');
+        $firma->appendChild($info);
 
-        $this->conAlgoritmo($doc, $info, 'ds:CanonicalizationMethod', self::EXC_C14N);
-        $suite = $this->suite();
+        // Canonicalizacion, con su lista de prefijos.
+        $c14n = $doc->createElement('ds:CanonicalizationMethod');
+        $c14n->setAttribute('Algorithm', self::EXC_C14N);
+        $info->appendChild($c14n);
+        $c14n->appendChild($this->prefijos($doc, 'wsa soap wcf'));
 
-        $this->conAlgoritmo($doc, $info, 'ds:SignatureMethod', $suite['firma']);
+        $metodo = $doc->createElement('ds:SignatureMethod');
+        $metodo->setAttribute('Algorithm', self::METODO_FIRMA);
+        $info->appendChild($metodo);
 
-        foreach ($firmados as $nodo) {
-            $referencia = $this->nodo($doc, $info, self::NS_DS, 'ds:Reference');
-            $referencia->setAttribute('URI', '#' . $nodo->getAttributeNS(self::NS_WSU, 'Id'));
+        // ---- La UNICA referencia: wsa:To ----
+        $referencia = $doc->createElement('ds:Reference');
+        $referencia->setAttribute('URI', '#' . $idDestino);
+        $info->appendChild($referencia);
 
-            $transformadas = $this->nodo($doc, $referencia, self::NS_DS, 'ds:Transforms');
-            $this->conAlgoritmo($doc, $transformadas, 'ds:Transform', self::EXC_C14N);
+        $transformadas = $doc->createElement('ds:Transforms');
+        $referencia->appendChild($transformadas);
 
-            $this->conAlgoritmo($doc, $referencia, 'ds:DigestMethod', $suite['resumen']);
+        $transformada = $doc->createElement('ds:Transform');
+        $transformada->setAttribute('Algorithm', self::EXC_C14N);
+        $transformadas->appendChild($transformada);
+        $transformada->appendChild($this->prefijos($doc, 'soap wcf'));
 
-            // Exclusiva: C14N(true). Con la inclusiva el resumen sale
-            // distinto y la DIAN devuelve un fallo de firma que no dice
-            // por que.
-            $this->nodo($doc, $referencia, self::NS_DS, 'ds:DigestValue', base64_encode(
-                hash($suite['php'], $nodo->C14N(true), true),
-            ));
-        }
+        $resumen = $doc->createElement('ds:DigestMethod');
+        $resumen->setAttribute('Algorithm', self::METODO_RESUMEN);
+        $referencia->appendChild($resumen);
 
-        $valor = $this->nodo($doc, $firma, self::NS_DS, 'ds:SignatureValue', '');
+        $referencia->appendChild($doc->createElement(
+            'ds:DigestValue',
+            base64_encode(hash('sha256', $this->canonizar($doc->saveXML($to), '<wsa:To ', self::NS_DE_TO), true)),
+        ));
 
-        // ---- Como se encuentra la clave publica ----
-        // ---- Como se identifica el certificado: POR HUELLA ----
-        //
-        // La politica del servicio lo exige literalmente:
-        //
-        //   <sp:X509Token ...>
-        //     <sp:RequireThumbprintReference/>
-        //   <sp:Wss11><sp:MustSupportRefThumbprint/>
-        //
-        // Antes se apuntaba con `wsse:Reference URI="#X509-..."`, que
-        // es la forma directa y la mas comun — y la DIAN contestaba
-        // `wsse:InvalidSecurity` sin decir por que. WCF valida el
-        // mensaje contra su politica ANTES de verificar nada, y una
-        // referencia que no es por huella no encaja.
-        //
-        // La huella es el SHA-1 del certificado en DER. Es SHA-1
-        // aunque la suite sea SHA-256: no es un resumen criptografico
-        // del mensaje, es el identificador estandar de un certificado
-        // (el mismo que enseña Windows en «Huella digital»).
-        $keyInfo = $this->nodo($doc, $firma, self::NS_DS, 'ds:KeyInfo');
-        $referenciaToken = $this->nodo($doc, $keyInfo, self::NS_WSSE, 'wsse:SecurityTokenReference');
-
-        $huella = $this->nodo(
-            $doc,
-            $referenciaToken,
-            self::NS_WSSE,
-            'wsse:KeyIdentifier',
-            base64_encode(sha1(base64_decode($this->base64Del($pem)), true)),
-        );
-        $huella->setAttribute('EncodingType', self::CODIFICACION);
-        $huella->setAttribute('ValueType', self::TIPO_HUELLA);
-
-        // El SignedInfo se firma ya insertado, por lo mismo que en la
-        // XAdES: la canonicalizacion arrastra los espacios de nombres
-        // heredados.
+        // ---- La firma del SignedInfo ----
         $firmado = '';
 
-        if (!openssl_sign($info->C14N(true), $firmado, $clave, $suite['openssl'])) {
+        $canonico = $this->canonizar($doc->saveXML($info), '<ds:SignedInfo', self::NS_DE_SIGNEDINFO);
+
+        if (!openssl_sign($canonico, $firmado, $clave, OPENSSL_ALGO_SHA256)) {
             throw new RuntimeException('No se pudo firmar la petición a la DIAN.');
         }
 
-        $valor->appendChild($doc->createTextNode(base64_encode($firmado)));
+        $firma->appendChild($doc->createElement('ds:SignatureValue', base64_encode($firmado)));
+
+        // ---- KeyInfo, DESPUES del SignatureValue ----
+        $keyInfo = $doc->createElement('ds:KeyInfo');
+        $keyInfo->setAttribute('Id', 'KI-' . bin2hex(random_bytes(6)));
+        $firma->appendChild($keyInfo);
+
+        $referenciaToken = $doc->createElement('wsse:SecurityTokenReference');
+        $referenciaToken->setAttribute('wsu:Id', 'STR-' . bin2hex(random_bytes(6)));
+        $keyInfo->appendChild($referenciaToken);
+
+        $apunta = $doc->createElement('wsse:Reference');
+        $apunta->setAttribute('URI', '#' . $idToken);
+        $apunta->setAttribute('ValueType', self::TIPO_X509);
+        $referenciaToken->appendChild($apunta);
+    }
+
+    /**
+     * El nodo canonicalizado, con sus espacios de nombres inyectados.
+     *
+     * ESTE ES EL TRUCO, Y NO ES OBVIO
+     * -------------------------------
+     * El resumen NO se calcula con `C14N(true)` sobre el nodo dentro del
+     * documento. Se serializa el nodo suelto, se le meten a mano las
+     * declaraciones del `PrefixList`, y se canonicaliza de forma
+     * INCLUSIVA.
+     *
+     * Da los mismos bytes que un exc-c14n con esa lista de prefijos —que
+     * es lo que el otro lado calcula— y es como lo hace la
+     * implementación que funciona. Con exc-c14n a secas los espacios de
+     * nombres que no se «utilizan visiblemente» quedan fuera, el resumen
+     * sale distinto, y la DIAN responde `InvalidSecurity` sin decir por
+     * qué.
+     *
+     * @param  array<string, string>  $espacios
+     */
+    private function canonizar(string $xml, string $etiqueta, array $espacios): string
+    {
+        $declaraciones = [];
+
+        foreach ($espacios as $prefijo => $uri) {
+            $declaraciones[] = sprintf('%s="%s"', $prefijo, $uri);
+        }
+
+        $con = str_replace(
+            $etiqueta,
+            $etiqueta . ' ' . implode(' ', $declaraciones) . ' ',
+            $xml,
+        );
+
+        $suelto = new \DOMDocument('1.0', 'UTF-8');
+
+        if (!$suelto->loadXML($con)) {
+            throw new RuntimeException('No se pudo preparar el nodo para firmarlo.');
+        }
+
+        return $suelto->C14N();
+    }
+
+    /** El `ec:InclusiveNamespaces` con su lista de prefijos. */
+    private function prefijos(\DOMDocument $doc, string $lista): \DOMElement
+    {
+        $nodo = $doc->createElement('ec:InclusiveNamespaces');
+        $nodo->setAttribute('PrefixList', $lista);
+        $nodo->setAttribute('xmlns:ec', self::EXC_C14N);
+
+        return $nodo;
     }
 
     // ==================== Apoyo ====================
+
+    /**
+     * La acción y el destino que traía el sobre.
+     *
+     * Se leen antes de rehacer la cabecera: los pone quien arma el
+     * sobre —cada método del servicio tiene su acción— y aquí solo se
+     * recolocan.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function datosDeDireccionamiento(\DOMDocument $doc): array
+    {
+        $xpath = new \DOMXPath($doc);
+
+        $accion = $xpath->query("//*[local-name()='Action']")->item(0)?->nodeValue;
+        $destino = $xpath->query("//*[local-name()='To']")->item(0)?->nodeValue;
+
+        if (blank($accion) || blank($destino)) {
+            throw new RuntimeException('El sobre no trae acción o destino: no se puede firmar.');
+        }
+
+        return [$accion, $destino];
+    }
+
+    /**
+     * Deja una cabecera vacía, con `xmlns:wsa`, la primera del sobre.
+     *
+     * Se rehace en vez de reutilizar la que venga porque el orden de
+     * sus hijos y sus espacios de nombres forman parte de lo que se
+     * firma.
+     */
+    private function rehacerCabecera(\DOMDocument $doc): \DOMElement
+    {
+        $sobre = $doc->documentElement;
+
+        foreach (iterator_to_array($sobre->childNodes) as $hijo) {
+            if ($hijo instanceof \DOMElement && $hijo->localName === 'Header') {
+                $sobre->removeChild($hijo);
+            }
+        }
+
+        $cabecera = $doc->createElement('soap:Header');
+        $cabecera->setAttribute('xmlns:wsa', self::NS_WSA);
+        $sobre->insertBefore($cabecera, $sobre->firstChild);
+
+        return $cabecera;
+    }
 
     /** @return array{0: string, 1: string} certificado PEM y clave privada */
     private function abrir(DianCertificate $certificado): array
@@ -292,80 +337,7 @@ class XmlSecuritySigner
         return [$contenido['cert'], $contenido['pkey']];
     }
 
-    private function cabecera(\DOMDocument $doc): \DOMElement
-    {
-        $cabecera = $doc->getElementsByTagNameNS(self::NS_SOAP, 'Header')->item(0);
-
-        if (!$cabecera) {
-            throw new RuntimeException('El sobre SOAP no tiene cabecera.');
-        }
-
-        return $cabecera;
-    }
-
-    /**
-     * Los encabezados de WS-Addressing que lleve el sobre.
-     *
-     * `wsa:Action`, `wsa:To`, y lo que se anada en el futuro. WCF los
-     * quiere todos firmados; dejarse uno da `InvalidSecurity` sin decir
-     * cual.
-     *
-     * @return array<int, \DOMElement>
-     */
-    private function encabezadosDeDireccionamiento(\DOMDocument $doc): array
-    {
-        $xpath = new \DOMXPath($doc);
-        $xpath->registerNamespace('wsa', self::NS_WSA);
-
-        $nodos = [];
-
-        foreach ($xpath->query("//*[local-name()='Header']/wsa:*") as $nodo) {
-            if ($nodo instanceof \DOMElement) {
-                $nodos[] = $nodo;
-            }
-        }
-
-        return $nodos;
-    }
-
-    private function porNombre(\DOMDocument $doc, string $nombre): ?\DOMElement
-    {
-        $xpath = new \DOMXPath($doc);
-
-        $nodo = $xpath->query("//*[local-name()='{$nombre}']")->item(0);
-
-        return $nodo instanceof \DOMElement ? $nodo : null;
-    }
-
-    private function identificar(\DOMElement $nodo, string $id): void
-    {
-        $nodo->setAttributeNS(self::NS_WSU, 'wsu:Id', $id);
-    }
-
-    private function nodo(
-        \DOMDocument $doc,
-        \DOMElement $padre,
-        string $espacio,
-        string $nombre,
-        ?string $valor = null,
-    ): \DOMElement {
-        $nodo = $doc->createElementNS($espacio, $nombre);
-
-        if ($valor !== null && $valor !== '') {
-            $nodo->appendChild($doc->createTextNode($valor));
-        }
-
-        $padre->appendChild($nodo);
-
-        return $nodo;
-    }
-
-    private function conAlgoritmo(\DOMDocument $doc, \DOMElement $padre, string $nombre, string $algoritmo): void
-    {
-        $nodo = $this->nodo($doc, $padre, self::NS_DS, $nombre);
-        $nodo->setAttribute('Algorithm', $algoritmo);
-    }
-
+    /** El certificado en base64, sin las cabeceras PEM. */
     private function base64Del(string $pem): string
     {
         return preg_replace('/-----(BEGIN|END) CERTIFICATE-----|\s+/', '', $pem) ?? '';

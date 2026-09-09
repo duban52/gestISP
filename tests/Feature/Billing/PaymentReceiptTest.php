@@ -79,9 +79,16 @@ class PaymentReceiptTest extends BillingTestCase
 
         $cliente = $factura->contract->client;
 
-        $this->assertStringContainsString($cliente->name, $html);
-        $this->assertStringContainsString($cliente->identity_number, $html);
-        $this->assertStringContainsString($this->admin->name, $html);
+        // Se compara con el nombre ESCAPADO, no con el crudo.
+        //
+        // Blade escapa `{{ }}`, asi que un cliente que se llame
+        // «Salma O'Hara» sale en el HTML como «Salma O&#039;Hara». Sin
+        // `e()` la prueba falla cuando Faker saca un apostrofo —una vez
+        // cada tantas corridas— y el fallo no es del recibo: el recibo
+        // esta bien, escapar es lo correcto.
+        $this->assertStringContainsString(e($cliente->name), $html);
+        $this->assertStringContainsString(e($cliente->identity_number), $html);
+        $this->assertStringContainsString(e($this->admin->name), $html);
     }
 
     public function test_un_abono_parcial_muestra_lo_que_queda_pendiente(): void

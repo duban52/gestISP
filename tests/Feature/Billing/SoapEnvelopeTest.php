@@ -84,38 +84,29 @@ class SoapEnvelopeTest extends TestCase
      * Por eso estas pruebas citan la politica: si alguien las cambia,
      * que sepa contra que las esta cambiando.
      */
-    public function test_el_certificado_se_referencia_por_huella(): void
+    /**
+     * El sobre, comparado con la implementacion que SI funciona.
+     *
+     * DE DONDE SALEN ESTAS REGLAS
+     * ---------------------------
+     * De `lopezsoft/ubl21dian`, la libreria PHP que usan buena parte de
+     * las integraciones colombianas contra el servicio real.
+     *
+     * NO de deducciones. Se intento deducirlas y la DIAN contesto
+     * cuatro veces `wsse:InvalidSecurity` —que no dice nada—: se probo
+     * firmando solo `To`, anadiendo `Action`, cambiando la suite a
+     * SHA-1, y referenciando el certificado por huella segun la
+     * politica que el propio WSDL publica. Ninguna paso.
+     *
+     * Por eso estas pruebas fijan la estructura al detalle: la
+     * diferencia entre que la DIAN acepte o conteste `InvalidSecurity`
+     * puede ser un atributo, y sin esto nadie sabria contra que
+     * comparar.
+     */
+    public function test_se_firma_solo_el_destino(): void
     {
-        // `<sp:RequireThumbprintReference/>` y `<sp:MustSupportRefThumbprint/>`.
-        // Con una `wsse:Reference` directa —la forma mas comun— WCF
-        // rechaza el mensaje por politica antes de verificar nada.
-        $sobre = $this->capturarSobre();
-
-        $this->assertStringContainsString(
-            'wsse:KeyIdentifier',
-            $sobre,
-            'El certificado no se referencia por huella.',
-        );
-
-        $this->assertStringContainsString(
-            'oasis-wss-soap-message-security-1.1#ThumbprintSHA1',
-            $sobre,
-        );
-
-        $this->assertStringNotContainsString(
-            '<wsse:Reference',
-            $sobre,
-            'Sigue la referencia directa, que la politica no admite.',
-        );
-    }
-
-    public function test_se_firma_el_timestamp_y_el_destino(): void
-    {
-        // `<sp:SignedParts><sp:Header Name="To"/>` mas el Timestamp,
-        // que va porque el enlace lleva `<sp:IncludeTimestamp/>`.
-        //
-        // El CUERPO no: el enlace es `sp:TransportBinding` sobre HTTPS,
-        // asi que del cuerpo se encarga TLS.
+        // Una sola referencia, a `wsa:To`. Ni el Timestamp, ni el
+        // cuerpo: firmar de mas tambien es no cuadrar.
         $sobre = $this->capturarSobre();
 
         $doc = new \DOMDocument();
@@ -125,32 +116,71 @@ class SoapEnvelopeTest extends TestCase
         $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
         $xpath->registerNamespace('wsu', 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd');
 
-        $firmados = [];
+        $referencias = $xpath->query('//ds:Reference');
 
-        foreach ($xpath->query('//ds:Reference/@URI') as $uri) {
-            $id = ltrim($uri->value, '#');
-            $nodo = $xpath->query(sprintf('//*[@wsu:Id="%s"]', $id))->item(0);
-            $firmados[] = $nodo instanceof \DOMElement ? $nodo->localName : '?';
-        }
+        $this->assertSame(1, $referencias->length, 'Deberia haber UNA referencia: la de wsa:To.');
 
-        sort($firmados);
+        $uri = ltrim($referencias->item(0)->getAttribute('URI'), '#');
+        $apuntado = $xpath->query(sprintf('//*[@wsu:Id="%s"]', $uri))->item(0);
 
-        $this->assertSame(['Timestamp', 'To'], $firmados);
+        $this->assertSame('To', $apuntado?->localName);
     }
 
-    public function test_la_suite_es_la_que_pide_la_politica(): void
+    public function test_lleva_las_listas_de_prefijos(): void
     {
-        // `<sp:Basic256Sha256Rsa15/>`: SHA-256, no SHA-1.
+        // `ec:InclusiveNamespaces` en la canonicalizacion y en la
+        // transformada. Sin ellas el otro lado incluye espacios de
+        // nombres que nosotros no, los resumenes no cuadran, y la DIAN
+        // contesta `InvalidSecurity` sin decir por que.
         $sobre = $this->capturarSobre();
 
-        $this->assertStringContainsString('xmldsig-more#rsa-sha256', $sobre);
-        $this->assertStringContainsString('xmlenc#sha256', $sobre);
+        $this->assertStringContainsString('PrefixList="wsa soap wcf"', $sobre);
+        $this->assertStringContainsString('PrefixList="soap wcf"', $sobre);
+    }
+
+    public function test_el_certificado_se_referencia_por_uri(): void
+    {
+        // `wsse:Reference`, no `KeyIdentifier` con huella.
+        //
+        // La politica del WSDL pide `RequireThumbprintReference` y se
+        // probo asi: la DIAN lo rechazo igual. La implementacion que
+        // funciona usa `Reference`, y manda lo que funciona.
+        $sobre = $this->capturarSobre();
+
+        $this->assertStringContainsString('<wsse:Reference URI="#X509-', $sobre);
+        $this->assertStringNotContainsString('KeyIdentifier', $sobre);
+    }
+
+    public function test_el_orden_de_la_cabecera_es_security_action_to(): void
+    {
+        // El orden forma parte de lo que se firma.
+        $sobre = $this->capturarSobre();
+
+        $doc = new \DOMDocument();
+        $doc->loadXML($sobre);
+
+        $xpath = new \DOMXPath($doc);
+        $hijos = [];
+
+        foreach ($xpath->query("//*[local-name()='Header']/*") as $nodo) {
+            $hijos[] = $nodo->localName;
+        }
+
+        $this->assertSame(['Security', 'Action', 'To'], $hijos);
     }
 
     public function test_la_firma_del_sobre_verifica(): void
     {
-        // Es la mecánica que la DIAN va a comprobar del otro lado: si no
-        // verifica aquí, allí tampoco.
+        // Es la mecanica que la DIAN comprueba del otro lado: si no
+        // verifica aqui, alli tampoco.
+        //
+        // OJO CON LA CANONICALIZACION. El SignedInfo NO se verifica con
+        // `C14N(true)` sobre el nodo en su sitio: se reserializa suelto
+        // con sus espacios de nombres inyectados y se canonicaliza de
+        // forma INCLUSIVA, que es lo que hace el firmador y lo que
+        // produce los mismos bytes que un exc-c14n con esa lista de
+        // prefijos. Verificarlo de otra forma daria un fallo que no
+        // existe.
         $sobre = $this->capturarSobre();
 
         $doc = new \DOMDocument();
@@ -169,43 +199,37 @@ class SoapEnvelopeTest extends TestCase
 
         $this->assertNotFalse($publica, 'El certificado del sobre no se pudo leer.');
 
-        // El algoritmo sale de la configuracion, no fijo: la suite de
-        // WS-Security es conmutable porque no se pudo confirmar cual
-        // espera la DIAN. Fijarlo aqui haria que la prueba pasara con
-        // una configuracion y fallara con la otra sin que nada este
-        // roto.
-        $algoritmo = config('dian.ws_security_hash') === 'sha256'
-            ? OPENSSL_ALGO_SHA256
-            : OPENSSL_ALGO_SHA1;
+        $canonico = $this->canonizarComoElFirmador(
+            $doc->saveXML($info),
+            '<ds:SignedInfo',
+            [
+                'xmlns:ds' => 'http://www.w3.org/2000/09/xmldsig#',
+                'xmlns:wsa' => 'http://www.w3.org/2005/08/addressing',
+                'xmlns:soap' => 'http://www.w3.org/2003/05/soap-envelope',
+                'xmlns:wcf' => 'http://wcf.dian.colombia',
+            ],
+        );
 
-        // Canonicalización EXCLUSIVA: es la de WS-Security, no la
-        // inclusiva de la firma XAdES de la factura.
         $this->assertSame(
             1,
-            openssl_verify($info->C14N(true), $valor, $publica, $algoritmo),
+            openssl_verify($canonico, $valor, $publica, OPENSSL_ALGO_SHA256),
             'La firma del sobre SOAP no verifica.',
         );
     }
 
-    public function test_la_suite_de_algoritmos_es_conmutable(): void
+    /** @param array<string, string> $espacios */
+    private function canonizarComoElFirmador(string $xml, string $etiqueta, array $espacios): string
     {
-        // La DIAN devuelve `wsse:InvalidSecurity` sin decir por que, y
-        // los algoritmos del sobre no se pudieron confirmar: la guia de
-        // consumo los muestra en una imagen. Poder alternarlos desde el
-        // `.env` es lo que permite probar sin desplegar.
-        config(['dian.ws_security_hash' => 'sha256']);
+        $declaraciones = [];
 
-        $this->assertStringContainsString(
-            'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
-            $this->capturarSobre(),
-        );
+        foreach ($espacios as $prefijo => $uri) {
+            $declaraciones[] = sprintf('%s="%s"', $prefijo, $uri);
+        }
 
-        config(['dian.ws_security_hash' => 'sha1']);
+        $suelto = new \DOMDocument('1.0', 'UTF-8');
+        $suelto->loadXML(str_replace($etiqueta, $etiqueta . ' ' . implode(' ', $declaraciones) . ' ', $xml));
 
-        $this->assertStringContainsString(
-            'http://www.w3.org/2000/09/xmldsig#rsa-sha1',
-            $this->capturarSobre(),
-        );
+        return $suelto->C14N();
     }
 
     public function test_la_accion_va_en_el_content_type(): void
