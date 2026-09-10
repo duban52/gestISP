@@ -125,6 +125,41 @@
      */
     $saldoAnterior = $invoice->saldoAnterior();
     $aPagar = $invoice->totalAPagar();
+
+    /**
+     * EL LOGO NO PUEDE DECIDIR LA ALTURA DE NADA.
+     *
+     * Iba con `width="100px"` y SIN alto: la altura la ponia entonces
+     * la imagen. Con un logo cuadrado —el caso real que lo destapo— el
+     * del talon salia de 80x80 y se llevaba la factura a una SEGUNDA
+     * HOJA. Eso no puede pasar nunca: la hoja de mas se pierde, y con
+     * ella el QR y el codigo de barras con el que se cobra.
+     *
+     * Las dos cajas se calculan aqui, con el tamano real del archivo, y
+     * salen con ancho Y alto ya resueltos. La altura queda acotada POR
+     * CONSTRUCCION, suban el logo que suban.
+     *
+     * LOS TOPES ESTAN MEDIDOS, NO ELEGIDOS A OJO
+     * ------------------------------------------
+     * Sobre el peor caso que ya defienden las pruebas —electronica, con
+     * QR y TRES renglones, que ocupa 390 pt de los 396 de la media
+     * carta— se barrio la altura de cada logo por separado:
+     *
+     *   · CABECERA: a 100 px seguia cabiendo. Esa fila la manda el
+     *     recuadro de fechas, que es mas alto que el logo; el logo no
+     *     suma nada. Se topa en 46 px de todas formas, por proporcion
+     *     con el QR (60 px) y para no comerse el nombre de la empresa.
+     *   · TALON: cabe hasta 44 px y se parte en 45. Ahi el logo SI es
+     *     lo mas alto de la fila —al lado solo hay un codigo de barras
+     *     de unos 16 px—, asi que cada pixel cuenta. Se topa en 28: son
+     *     16 px de margen sobre el limite medido.
+     *
+     * Si alguien sube la letra o mete otro bloque al pie, estos numeros
+     * cambian. Lo comprueban las pruebas de InvoicePdfLayoutTest con un
+     * logo cuadrado y otro vertical.
+     */
+    $cajaLogo = \App\Support\PdfBranding::logoBox($logo ?? null, 100, 46);
+    $cajaLogoTalon = \App\Support\PdfBranding::logoBox($logo ?? null, 80, 28);
 @endphp
 <div class="container">
     <div class="info-company">
@@ -135,8 +170,9 @@
                      desde el propio servidor —o desde un worker en
                      cola— eso falla y la factura sale sin logo. --}}
                 <td style="padding-right: 20px;">
-                    @if(!empty($logo))
-                        <img width="100px" src="{{ $logo }}" alt="Logo"/>
+                    @if($cajaLogo)
+                        <img width="{{ $cajaLogo['ancho'] }}" height="{{ $cajaLogo['alto'] }}"
+                             src="{{ $cajaLogo['ruta'] }}" alt="Logo"/>
                     @endif
                 </td>
                 {{-- El aire de esta celda se reduce cuando hay QR: es el
@@ -313,8 +349,9 @@
             <tbody>
                 <tr>
                    <td style="padding-right: 80px">
-                       @if(!empty($logo))
-                           <img width="80px" src="{{ $logo }}" alt="Logo"/>
+                       @if($cajaLogoTalon)
+                           <img width="{{ $cajaLogoTalon['ancho'] }}" height="{{ $cajaLogoTalon['alto'] }}"
+                                src="{{ $cajaLogoTalon['ruta'] }}" alt="Logo"/>
                        @endif
                    </td>
                     <td style="padding-right: 50px; margin-bottom: 0;">

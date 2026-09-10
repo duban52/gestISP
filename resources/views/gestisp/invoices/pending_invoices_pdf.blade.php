@@ -5,9 +5,19 @@
     <title>Facturas Pendientes</title>
     <style>
         body {
-            font-size: 9px;
+            /* LOS MISMOS 8,5 px MEDIDOS DE LA FACTURA SUELTA.
+               Esta plantilla se quedo en 9 px y a 9 px la factura
+               ELECTRONICA no cabe en media carta: se medio y salian dos
+               hojas por factura, con o sin logo. Aqui cuesta el doble
+               que en la suelta, porque este PDF lleva una factura por
+               hoja para todo un corte: cada desbordamiento duplica el
+               documento entero que se manda a imprimir. */
+            font-size: 8.5px;
             font-family: Arial, sans-serif;
+            /* MARGENES DE LA HOJA, como en la suelta: el contenido iba
+               pegado al borde izquierdo. */
             margin: 0;
+            padding: 5px 12px;
         }
         p {
             margin-top: 0;
@@ -16,7 +26,10 @@
             margin-right: 3px;
         }
         .container {
-            width: 720px;
+            /* Se estira a lo que deje el relleno del cuerpo en vez de
+               una anchura fija de 720 px, que dejaba una franja muerta
+               a la derecha. */
+            width: 100%;
             margin-top: 0;
         }
         .table-border-rounded {
@@ -60,9 +73,15 @@
             border-left: 1px solid;
         }
         .interline {
-            line-height: 0.5;
+            /* EL INTERLINEADO NO PUEDE BAJAR DE 1.
+               Estaba en 0.5: un nombre de empresa largo, al partirse en
+               dos lineas, se pintaba encima de la primera. Es el mismo
+               defecto que ya se corrigio en la factura suelta, y esta
+               plantilla se quedo sin arreglar.
+               La compacidad se saca de los margenes, no de solapar. */
+            line-height: 1.05;
             font-size: 9px;
-            margin: 8px;
+            margin: 0 8px;
         }
         .page-break {
             page-break-after: always;
@@ -98,21 +117,44 @@
      */
     $saldoAnterior = $invoice->saldoAnterior();
     $aPagar = $invoice->totalAPagar();
+
+    /**
+     * EL LOGO NO PUEDE DECIDIR LA ALTURA DE NADA.
+     *
+     * Mismos topes y mismo motivo que en la factura suelta —alli esta
+     * la explicacion larga y las medidas—. Aqui es peor todavia, porque
+     * este PDF lleva UNA factura por hoja: cada desbordamiento duplica
+     * el documento entero.
+     *
+     * Se calcula por factura porque cada una puede ser de otra sucursal
+     * —y de otra empresa— con otro logo.
+     */
+    $rutaLogo = $logos[$invoice->contract?->branch?->id] ?? null;
+    $cajaLogo = \App\Support\PdfBranding::logoBox($rutaLogo, 100, 46);
+    $cajaLogoTalon = \App\Support\PdfBranding::logoBox($rutaLogo, 80, 28);
     @endphp
     <div class="container">
         <div class="info-company">
             <table width="100%">
                 <tr>
                     <td style="padding-right: 20px;">
-                        @if(!empty($logos[$invoice->contract?->branch?->id] ?? null))<img width="100px" src="{{ $logos[$invoice->contract->branch->id] }}" alt="Logo"/>@endif
+                        @if($cajaLogo)<img width="{{ $cajaLogo['ancho'] }}" height="{{ $cajaLogo['alto'] }}" src="{{ $cajaLogo['ruta'] }}" alt="Logo"/>@endif
                     </td>
-                    <td style="padding-right: 55px; padding-left: 50px;">
+                    {{-- El aire de esta celda se reduce cuando hay QR: es
+                         el hueco de donde sale su sitio. --}}
+                    <td style="padding-right: {{ empty($dian) ? '55px' : '10px' }}; padding-left: {{ empty($dian) ? '50px' : '20px' }};">
                         <p class="interline">{{ $dian['emisor']['nombre'] ?? $invoice->contract?->branch?->name ?? '' }}</p>
                         <p class="interline">Nit: {{ $invoice->contract?->branch?->nit }}</p>
                         <p class="interline">Tels: {{ $invoice->contract?->branch?->number_phone }}</p>
                         <p class="interline">{{ $invoice->contract?->branch?->address }}</p>
                         <p class="interline">{{ $invoice->contract?->branch?->municipality ?? 'N/A' }}-{{ $invoice->contract?->branch?->department ?? 'N/A' }} - {{ $invoice->contract?->branch?->country }}</p>
                     </td>
+                    {{-- EL QR VA ARRIBA, no al pie: mismo sitio que en la
+                         factura suelta. En el corte impreso la factura
+                         electronica tiene que ser la MISMA que se le
+                         entrega al cliente por correo, o el que la reciba
+                         por ventanilla no encuentra donde escanear. --}}
+                    @include('gestisp.invoices.partials.dian_qr', ['dian' => $dian ?? null])
                     <td>
                         <table class="table-border-rounded">
                             <tbody>
@@ -269,7 +311,7 @@
                 <tbody>
                 <tr>
                     <td style="padding-right: 80px">
-                        @if(!empty($logos[$invoice->contract?->branch?->id] ?? null))<img width="80px" src="{{ $logos[$invoice->contract->branch->id] }}" alt="Logo"/>@endif
+                        @if($cajaLogoTalon)<img width="{{ $cajaLogoTalon['ancho'] }}" height="{{ $cajaLogoTalon['alto'] }}" src="{{ $cajaLogoTalon['ruta'] }}" alt="Logo"/>@endif
                     </td>
                     <td style="padding-right: 50px; margin-bottom: 0;">
                         <img src="{{ $barcodeUrls[$invoice->id] }}" alt="Código de barras" width="250px">

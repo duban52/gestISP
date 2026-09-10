@@ -139,6 +139,66 @@ class PdfBranding
     }
 
     /**
+     * El logo ENCAJADO en una caja máxima, sin deformarlo.
+     *
+     * POR QUÉ NO BASTA CON PONER EL ANCHO
+     * -----------------------------------
+     * Porque entonces la altura la decide la imagen. Las facturas iban
+     * con `<img width="100px">` y sin alto: un logo cuadrado medía 100
+     * de alto, y el del talón —80— se llevaba la factura a una segunda
+     * hoja. Una representación gráfica de dos páginas no es un problema
+     * estético: es lo que se le entrega al cliente y lo que se lleva a
+     * recaudo, y la segunda hoja se pierde.
+     *
+     * (De paso, `width="100px"` tampoco es un atributo HTML válido —el
+     * atributo va en píxeles, sin unidad—. Aquí salen los dos ya
+     * resueltos y sin sufijo.)
+     *
+     * POR QUÉ AQUÍ Y NO EN CSS
+     * ------------------------
+     * Porque con `max-height` el resultado hay que creérselo: depende
+     * de cómo resuelva el motor la caja de la imagen dentro de la
+     * celda. Calculándolo con el tamaño real del archivo, la altura que
+     * sale está ACOTADA por construcción y se puede afirmar en una
+     * prueba. Los topes de la factura están medidos; véase el bloque
+     * `@php` de `gestisp/invoices/pdf.blade.php`.
+     *
+     * Nunca AGRANDA: un logo más pequeño que la caja se sirve tal cual,
+     * porque estirarlo solo lo pixela.
+     *
+     * RECIBE LA RUTA, NO LA SUCURSAL
+     * ------------------------------
+     * Porque la plantilla ya tiene la ruta —se la pasa quien arma el
+     * PDF— y en el mismo documento hacen falta DOS cajas de tamaños
+     * distintos: la de la cabecera y la del talón.
+     *
+     * @param string|null $ruta lo que devolvió `logoPath()`
+     * @return array{ruta: string, ancho: int, alto: int}|null
+     */
+    public static function logoBox(?string $ruta, int $anchoMaximo, int $altoMaximo): ?array
+    {
+        if (!$ruta || !is_file($ruta)) {
+            return null;
+        }
+
+        $medidas = @getimagesize($ruta);
+
+        // Sin poder medirla se sirve la caja máxima: mejor un logo algo
+        // deformado que una factura partida en dos.
+        if (!$medidas || $medidas[0] <= 0 || $medidas[1] <= 0) {
+            return ['ruta' => $ruta, 'ancho' => $anchoMaximo, 'alto' => $altoMaximo];
+        }
+
+        $escala = min($anchoMaximo / $medidas[0], $altoMaximo / $medidas[1], 1);
+
+        return [
+            'ruta' => $ruta,
+            'ancho' => max(1, (int) round($medidas[0] * $escala)),
+            'alto' => max(1, (int) round($medidas[1] * $escala)),
+        ];
+    }
+
+    /**
      * Línea de ubicación de la sucursal (municipio, departamento,
      * país) omitiendo los campos vacíos.
      */
