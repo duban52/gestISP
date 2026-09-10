@@ -5,9 +5,24 @@
     <title>Factura Electrónica</title>
     <style>
         body{
-            font-size: 9px;
+            /* 8,5 px, MEDIDO, NO ELEGIDO A OJO.
+               Media carta (396 pt), interlineado que no solape, y letra
+               de 9 px son tres cosas que NO caben a la vez: a 9 px la
+               factura electronica pide 414 pt y se parte en dos hojas.
+               Se midio renderizando: a 8,5 px caben hasta 3 renglones;
+               a 8 px, cuatro. 8,5 es el cambio mas pequeno que cumple
+               las tres condiciones.
+               Si algun dia hacen falta 4 renglones, bajar a 8px aqui. */
+            font-size: 8.5px;
             font-family: Arial, sans-serif;
+            /* MARGENES DE LA HOJA.
+               El papel es media carta: 612 pt = 816 px a 96 ppp. Antes
+               el cuerpo iba a margen cero y el contenido era una caja
+               fija de 720 px, asi que la factura salia pegada al borde
+               izquierdo y sobraban casi 100 px a la derecha. Ahora hay
+               aire a los dos lados y el contenido ocupa lo que queda. */
             margin: 0;
+            padding: 5px 12px;
         }
         p{
             margin-top: 0;
@@ -16,7 +31,10 @@
             margin-right: 3px;
         }
         .container{
-            width: 720px;
+            /* Se estira a lo que deje el relleno del cuerpo en vez de
+               una anchura fija: asi la factura llena la hoja y no deja
+               una franja muerta a la derecha. */
+            width: 100%;
             margin-top: 0;
         }
         .table-border-rounded{
@@ -60,9 +78,16 @@
             border-left: 1px solid;
         }
         .interline{
-            line-height: 0.5;
+            /* EL INTERLINEADO NO PUEDE BAJAR DE 1.
+               Estuvo en 0.5 y el resultado era que un nombre de empresa
+               largo, al partirse en dos lineas, se montaba sobre si
+               mismo: ilegible. Medio interlineado solo "funciona"
+               mientras cada linea quepa entera, y eso no se puede
+               garantizar con nombres que escribe el usuario.
+               La compacidad se saca de los margenes, no de solapar. */
+            line-height: 1.05;
             font-size: 9px;
-            margin: 8px;
+            margin: 0 8px;
         }
 
     </style>
@@ -73,13 +98,21 @@
         <table width="100%">
             <tr>
                 <td style="padding-right: 20px;"><img width="100px" src="{{ asset('storage/'.$invoice->contract?->branch?->image) }}" alt="Logo"/></td>
-                <td style="padding-right: 55px; padding-left: 50px;">
+                {{-- El aire de esta celda se reduce cuando hay QR: es el
+                     hueco de donde sale su sitio. --}}
+                <td style="padding-right: {{ empty($dian) ? '55px' : '10px' }}; padding-left: {{ empty($dian) ? '50px' : '20px' }};">
                     <p class="interline">{{ $dian['emisor']['nombre'] ?? $invoice->contract?->branch?->name ?? '' }}</p>
                     <p class="interline">Nit: {{ $invoice->contract?->branch?->nit }}</p>
                     <p class="interline">Tels: {{ $invoice->contract?->branch?->number_phone }}</p>
                     <p class="interline">{{ $invoice->contract?->branch?->address }}</p>
                     <p class="interline">{{ $invoice->contract?->branch?->municipality }}-{{ $invoice->contract?->branch?->department ?? 'N/A' }} - {{ $invoice->contract?->branch?->country }}</p>
                 </td>
+                {{-- EL QR VA AQUÍ ARRIBA, NO AL PIE.
+                     La hoja es media carta y el bloque DIAN iba al
+                     final, detrás de los costos: no cabía y se llevaba el QR
+                     a una segunda página. Aquí ocupa un hueco que ya existía
+                     y el pie queda en una línea. --}}
+                @include('gestisp.invoices.partials.dian_qr', ['dian' => $dian ?? null])
                 <td>
                     <table class="table-border-rounded">
                         <tbody>
@@ -141,9 +174,6 @@
             </tr>
             </tbody>
         </table>
-    </div>
-    <div>
-        <br>
     </div>
     <div>
         <table class="table-border-rounded info-service">
@@ -212,20 +242,10 @@
                 <td colspan="2"><strong>TOTAL A PAGAR</strong></td>
                 <td><strong>{{ $invoice->total }}</strong></td>
             </tr>
-            <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-            </tr>
             </tbody>
         </table>
     </div>
-    <hr style="margin: 5px 0; border-top: 1px dashed #000;">
+    <hr style="margin: 2px 0; border-top: 1px dashed #000;">
 
     <div class="container">
         @if($invoice->service_suspension_warning)
@@ -302,17 +322,18 @@
     <div class="container">
         <table width="100%">
             <tbody>
+            {{-- Las dos en una linea: en media carta cada renglon cuenta,
+                 y asi es como van en la representacion grafica que se
+                 tomo de referencia. --}}
             <tr>
-                <td colspan="2"><p style="margin: 0;">Costo traslado servicios ${{ $invoice->contract?->branch?->moving_price }}</p></td>
-            </tr>
-            <tr>
-                <td colspan="2"><p style="margin: 0;">Costo reconexión servicio ${{ $invoice->contract?->branch?->reconnection_price }}</p></td>
+                <td colspan="2">
+                    <p style="margin: 0;">Costo traslado servicios ${{ $invoice->contract?->branch?->moving_price }} &nbsp;&nbsp; Costo reconexión servicio ${{ $invoice->contract?->branch?->reconnection_price }}</p>
+                    @include('gestisp.invoices.partials.dian', ['dian' => $dian ?? null])
+                </td>
             </tr>
             </tbody>
         </table>
     </div>
-
-    @include('gestisp.invoices.partials.dian', ['dian' => $dian ?? null])
 </div>
 </body>
 </html>

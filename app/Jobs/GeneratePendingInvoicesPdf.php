@@ -14,6 +14,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Milon\Barcode\Facades\DNS1DFacade;
+use App\Support\PdfBranding;
 
 class GeneratePendingInvoicesPdf implements ShouldQueue
 {
@@ -102,7 +103,7 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
             );
 
             // Configurar tamaño media carta (5.5" x 8.5") en puntos
-            $pdf->setPaper([0, 0, 612.00, 419.53], 'portrait');
+            $pdf->setPaper(PdfBranding::MEDIA_CARTA, 'portrait');
             $pdf->getDomPDF()->set_option('isRemoteEnabled', true);
 
             // Definir la ruta del PDF generado

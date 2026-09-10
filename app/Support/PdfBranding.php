@@ -20,6 +20,28 @@ use App\Tenancy\CurrentContext;
 class PdfBranding
 {
     /**
+     * El papel de la representación gráfica de la factura: MEDIA CARTA.
+     *
+     * 612 x 396 puntos = 21,6 x 14,0 cm = 8,5 x 5,5 pulgadas, la mitad
+     * exacta de una hoja carta. Es el papel en el que se imprimen las
+     * facturas, y por eso no se usa `letter` como el resto de informes.
+     *
+     * ANTES ERA 612 x 419,53, QUE NO ES MEDIA CARTA
+     * ---------------------------------------------
+     * Son 14,8 cm de alto: el lado corto de un A5. O sea, ancho de
+     * carta con alto de A5, que no es ningún tamaño de papel. La
+     * impresora tenía que escalar o expulsar hoja de más.
+     *
+     * Está aquí, en una constante, porque estaba escrito a mano en dos
+     * sitios —la factura suelta y el lote— y dos copias de un número
+     * mágico acaban divergiendo.
+     *
+     * El contenido de la factura ocupa unos 12,1 cm, así que caben con
+     * casi 2 cm de margen. Lo comprueba `InvoicePdfLayoutTest`.
+     */
+    public const MEDIA_CARTA = [0, 0, 612.00, 396.00];
+
+    /**
      * Construye un PDF del sistema con el formato estándar:
      * tamaño carta, orientación indicada y paginación
      * "Página X de Y" en el pie.

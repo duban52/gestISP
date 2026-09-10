@@ -20,6 +20,7 @@ use Milon\Barcode\Facades\DNS1DFacade;
 use App\Services\Audit\AuditLogger;
 use App\Tenancy\CurrentContext;
 use App\Support\BranchFilter;
+use App\Support\PdfBranding;
 
 /**
  * Controlador de Facturas
@@ -385,7 +386,7 @@ class InvoiceController extends Controller
 
             // Generar el PDF usando la vista
             $pdf = Pdf::loadView('gestisp.invoices.pdf', compact('invoice', 'barcodeUrl', 'codeString', 'dian'));
-            $pdf->setPaper([0, 0, 612.00, 419.53], 'portrait');
+            $pdf->setPaper(PdfBranding::MEDIA_CARTA, 'portrait');
             $pdf->getDomPDF()->set_option('isRemoteEnabled', true);
 
             return $pdf->download('factura_' . $invoice->id . '.pdf');
