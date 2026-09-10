@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Delivery\InvoicePdf;
 use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Services\InvoiceGenerator;
 use App\Billing\Services\InvoiceVoider;
@@ -366,31 +367,18 @@ class InvoiceController extends Controller
     {
         $invoice = Invoice::with(['contract.client', 'invoice_items'])->findOrFail($id);
 
-        $code = '0100' . str_pad($invoice->id, 8, '0', STR_PAD_LEFT) . str_pad($invoice->total * 100, 10, '0', STR_PAD_LEFT);
-        $codeString = $code;
-
         try {
-            // Generar la imagen como PNG
-            $barcodeData = DNS1DFacade::getBarcodePNG($code, 'C128');
+            // El PDF lo arma InvoicePdf, no esta accion: la misma
+            // factura se le envia al cliente por correo y por WhatsApp
+            // desde una cola, sin peticion HTTP, y el codigo tenia que
+            // poder invocarse desde los dos sitios.
+            $pdf = app(InvoicePdf::class);
 
-            // Guardar la imagen en un archivo temporal
-            $barcodePath = 'barcodes/' . $code . '.png';
-            Storage::disk('public')->put($barcodePath, base64_decode($barcodeData));
-
-            $barcodeUrl = asset('storage/' . $barcodePath);
-
-            // Los datos DIAN (CUFE, QR, resolucion). Null si la factura
-            // es interna, que es la mayoria: entonces el bloque no se
-            // pinta y el PDF queda como siempre.
-            $dian = app(\App\Billing\Dian\GraphicRepresentation::class)->para($invoice);
-
-            // Generar el PDF usando la vista
-            $pdf = Pdf::loadView('gestisp.invoices.pdf', compact('invoice', 'barcodeUrl', 'codeString', 'dian'));
-            $pdf->setPaper(PdfBranding::MEDIA_CARTA, 'portrait');
-            $pdf->getDomPDF()->set_option('isRemoteEnabled', true);
-
-            return $pdf->download('factura_' . $invoice->id . '.pdf');
-
+            return response()->streamDownload(
+                fn () => print $pdf->bytes($invoice),
+                $pdf->nombre($invoice),
+                ['Content-Type' => 'application/pdf'],
+            );
         } catch (\Exception $e) {
             \Log::error("Error generando PDF para factura {$id}: " . $e->getMessage());
             return redirect()->back()->with('error', 'Error al generar el PDF de la factura.');

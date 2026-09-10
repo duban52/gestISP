@@ -35,6 +35,20 @@ return [
     |            antes de contratar el proveedor.
     |   'meta' → WhatsApp Cloud API oficial de Meta.
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Enlace de descarga de la factura
+    |--------------------------------------------------------------------------
+    | Cuántos días vive el enlace firmado con el que el cliente descarga
+    | su factura. Pasado ese plazo devuelve 403 y hay que pedirla de
+    | nuevo.
+    |
+    | No es un ajuste cosmético: mientras el enlace vive, cualquiera que
+    | lo tenga puede ver esa factura —igual que un PDF adjunto
+    | reenviado—. Más días es más comodidad y más exposición.
+    */
+    'invoice_link_days' => (int) env('NOTIFY_INVOICE_LINK_DAYS', 30),
+
     'whatsapp' => [
         'driver' => env('WHATSAPP_DRIVER', 'log'),
 
@@ -57,6 +71,24 @@ return [
             // conversación ya abierta por el cliente).
             'use_templates' => (bool) env('WHATSAPP_META_USE_TEMPLATES', true),
             'template_language' => env('WHATSAPP_META_TEMPLATE_LANG', 'es'),
+
+            // ¿La plantilla `factura_generada` ya tiene un hueco para
+            // el enlace de descarga?
+            //
+            // ARRANCA EN false A PROPÓSITO. La plantilla aprobada en
+            // Meta tiene CUATRO parámetros; mandarle un quinto hace que
+            // Meta rechace el envío. O sea: encender esto antes de
+            // actualizar y aprobar la plantilla deja al cliente sin
+            // aviso de factura.
+            //
+            // El orden correcto es: actualizar la plantilla en Meta,
+            // esperar la aprobación, y entonces poner
+            // WHATSAPP_META_INVOICE_LINK=true.
+            //
+            // Mientras esté apagado el enlace sigue viajando en el
+            // cuerpo del mensaje, que es lo que se usa con el driver
+            // `log` y cuando `use_templates` está en false.
+            'invoice_link_in_template' => (bool) env('WHATSAPP_META_INVOICE_LINK', false),
         ],
     ],
 

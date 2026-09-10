@@ -35,6 +35,11 @@ class TransmissionResult
 
     /**
      * @param  array<int, string>  $errores
+     * @param  string|null  $acuse  El ApplicationResponse de la DIAN, ya
+     *   desempaquetado. Es el XML que acredita que el documento fue
+     *   validado, y lo que hay que entregarle al adquiriente junto con
+     *   la factura. Viaja dentro de `$respuesta` en base64; se saca aqui
+     *   para no tener que volver a abrir el SOAP mas adelante.
      */
     public function __construct(
         public readonly string $resultado,
@@ -43,12 +48,13 @@ class TransmissionResult
         public readonly ?int $httpStatus = null,
         public readonly ?string $respuesta = null,
         public readonly ?int $duracionMs = null,
+        public readonly ?string $acuse = null,
     ) {
     }
 
-    public static function aceptado(?string $trackId = null, ?string $respuesta = null): self
+    public static function aceptado(?string $trackId = null, ?string $respuesta = null, ?string $acuse = null): self
     {
-        return new self(self::ACEPTADO, trackId: $trackId, respuesta: $respuesta);
+        return new self(self::ACEPTADO, trackId: $trackId, respuesta: $respuesta, acuse: $acuse);
     }
 
     /** @param array<int, string> $errores */

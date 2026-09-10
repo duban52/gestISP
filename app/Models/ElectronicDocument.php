@@ -41,15 +41,16 @@ class ElectronicDocument extends Model
     protected $fillable = [
         'company_id', 'invoice_id', 'credit_debit_note_id',
         'dian_resolution_id', 'dian_certificate_id',
-        'environment_code', 'cufe', 'signed_xml', 'qr_content',
+        'environment_code', 'cufe', 'signed_xml', 'dian_response_xml', 'qr_content',
         'status', 'last_error', 'generated_at', 'signed_at',
-        'dian_track_id', 'accepted_at', 'attempts',
+        'dian_track_id', 'accepted_at', 'delivered_at', 'attempts',
     ];
 
     protected $casts = [
         'generated_at' => 'datetime',
         'signed_at' => 'datetime',
         'accepted_at' => 'datetime',
+        'delivered_at' => 'datetime',
         'attempts' => 'integer',
     ];
 

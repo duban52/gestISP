@@ -171,6 +171,14 @@ class DocumentTransmitter
                 $cambios['status'] = ElectronicDocument::ACEPTADO;
                 $cambios['accepted_at'] = now();
                 $cambios['last_error'] = null;
+
+                // El acuse de la DIAN: es lo que hay que entregarle al
+                // adquiriente junto con la factura. Solo se pisa si
+                // vino de verdad, para no borrar el de un intento
+                // anterior con uno vacio.
+                if ($resultado->acuse) {
+                    $cambios['dian_response_xml'] = $resultado->acuse;
+                }
                 break;
 
             case TransmissionResult::RECHAZADO:

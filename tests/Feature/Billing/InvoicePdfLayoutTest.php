@@ -3,9 +3,11 @@
 namespace Tests\Feature\Billing;
 
 use App\Billing\Dian\GraphicRepresentation;
+use App\Billing\Delivery\InvoicePdf;
 use App\Models\Invoice;
 use App\Support\PdfBranding;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * La representación gráfica: que quepa en UNA hoja, y que el QR
@@ -138,6 +140,17 @@ class InvoicePdfLayoutTest extends BillingTestCase
         $this->assertSame(1, $this->pdfDe($factura)->getDomPDF()->getCanvas()->get_page_count());
     }
 
+    /** El HTML de la representacion grafica, sin pasar por dompdf. */
+    private function htmlDe(\App\Models\Invoice $factura): string
+    {
+        return view('gestisp.invoices.pdf', [
+            'invoice' => $factura->load(['contract.client', 'contract.branch', 'invoice_items']),
+            'barcodeUrl' => '',
+            'codeString' => '0100',
+            'dian' => app(GraphicRepresentation::class)->para($factura),
+        ])->render();
+    }
+
     public function test_la_electronica_lleva_qr_y_cufe(): void
     {
         $factura = $this->facturaElectronica();
@@ -153,6 +166,62 @@ class InvoicePdfLayoutTest extends BillingTestCase
         $this->assertStringContainsString('Código QR de la factura electrónica', $html);
         $this->assertStringContainsString('CUFE:', $html);
         $this->assertStringContainsString('FACTURA ELECTRÓNICA DE VENTA', $html);
+    }
+
+    public function test_la_tarifa_de_iva_sale_del_documento(): void
+    {
+        // Decia «IVA 19%» SIEMPRE, escrito a mano en la plantilla. En
+        // una factura de servicios excluidos —el caso normal de un ISP:
+        // internet residencial de estratos 1 a 3— imprimia «IVA 19% ...
+        // 0.00», afirmando una tarifa que no se aplico.
+        $gravada = $this->emitir($this->contratoElectronico(precio: 100000, iva: 19));
+
+        $this->assertStringContainsString('IVA 19%', $this->htmlDe($gravada));
+
+        $excluida = $this->emitir($this->contratoElectronico(precio: 80000, iva: 0));
+        $excluida->invoice_items()->update(['tax_classification' => 'excluido', 'percentage_tax' => 0]);
+
+        $this->assertStringNotContainsString('IVA 19%', $this->htmlDe($excluida->fresh()));
+    }
+
+    public function test_la_columna_codigo_muestra_el_codigo_de_producto(): void
+    {
+        // Mostraba `$item->id`, el id interno del renglon: un numero que
+        // no le dice nada a nadie y que cambia entre facturas del mismo
+        // servicio.
+        $factura = $this->facturaElectronica();
+        $factura->invoice_items()->update(['product_code' => '81112200']);
+
+        $html = $this->htmlDe($factura->fresh());
+
+        $this->assertStringContainsString('81112200', $html);
+        $this->assertStringNotContainsString(
+            '<p>' . $factura->invoice_items->first()->id . '</p>',
+            $html,
+        );
+    }
+
+    public function test_el_codigo_de_barras_no_deja_archivos(): void
+    {
+        // Se escribia un PNG en `storage/app/public/barcodes/` y se
+        // enlazaba por URL, lo que obligaba a que el servidor pudiera
+        // pedirse a si mismo por HTTP. Desde un worker en cola —que es
+        // como se le envia ahora la factura al cliente— eso es justo lo
+        // que falla; y ademas dejaba un archivo por factura para
+        // siempre.
+        //
+        // Se compara ANTES y DESPUES en vez de mirar si la carpeta
+        // existe: la carpeta puede venir de archivos viejos, y entonces
+        // la prueba no medira lo que dice medir.
+        $disco = Storage::disk('public');
+        $antes = $disco->exists('barcodes') ? $disco->files('barcodes') : [];
+
+        $bytes = app(InvoicePdf::class)->bytes($this->facturaElectronica());
+
+        $despues = $disco->exists('barcodes') ? $disco->files('barcodes') : [];
+
+        $this->assertStringStartsWith('%PDF-', $bytes);
+        $this->assertSame($antes, $despues, 'Generar el PDF dejo archivos sueltos en storage.');
     }
 
     public function test_la_interna_no_lleva_qr_ni_cufe(): void

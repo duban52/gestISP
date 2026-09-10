@@ -93,6 +93,23 @@
     </style>
 </head>
 <body>
+@php
+    /**
+     * La tarifa de IVA que se imprime en el bloque de totales.
+     *
+     * Se toma la de las lineas que declaran impuesto. Si hay varias
+     * tarifas distintas en la misma factura no se puede resumir en una
+     * cifra, asi que se deja en blanco y manda el importe: preferible a
+     * escribir una tarifa que solo vale para parte del documento.
+     */
+    $tarifas = $invoice->invoice_items
+        ->map(fn ($linea) => (float) $linea->percentage_tax)
+        ->filter(fn ($tarifa) => $tarifa > 0)
+        ->unique()
+        ->values();
+
+    $tarifaIva = $tarifas->count() === 1 ? $tarifas->first() : 0.0;
+@endphp
 <div class="container">
     <div class="info-company">
         <table width="100%">
@@ -188,7 +205,13 @@
             </tr>
             @foreach($invoice->invoice_items as $item)
             <tr>
-                <td><p>{{ $item->id }}</p></td>
+                {{-- El codigo de PRODUCTO que se congelo en la linea al
+                     emitir, no el id interno del renglon. El id no le
+                     dice nada a nadie y cambia entre facturas del mismo
+                     servicio; el codigo es el que identifica lo que se
+                     esta cobrando. Las lineas que no vienen de un
+                     servicio —cargos sueltos— no lo tienen. --}}
+                <td><p>{{ $item->product_code ?: '—' }}</p></td>
                 <td colspan="3"><p>{{ $item->description }} DEL {{ $invoice->billed_period_short }} DEL MES DE {{ $invoice->billed_month_name }}</p></td>
                 <td><p>LUN</p></td>
                 <td><p>{{ $item->quantity }}</p></td>
@@ -214,7 +237,13 @@
                 <td class="border-top border-left" style="text-align: right;"><p>{{ $invoice->total - $invoice->tax }}</p></td>
             </tr>
             <tr>
-                <td class="border-left"><p><strong>IVA 19%</strong></p></td>
+                {{-- LA TARIFA SALE DEL DOCUMENTO, NO ESTA ESCRITA A MANO.
+                     Decia «IVA 19%» siempre. En una factura de servicios
+                     EXCLUIDOS —el caso normal de un ISP: internet
+                     residencial de estratos 1 a 3— eso imprimia
+                     «IVA 19% ... 0.00», afirmando una tarifa que no se
+                     aplico. Y en una linea al 5% mentia igual. --}}
+                <td class="border-left"><p><strong>IVA {{ rtrim(rtrim(number_format($tarifaIva, 2, ',', '.'), '0'), ',') }}%</strong></p></td>
                 <td class="border-left" style="text-align: right;"><p>{{ $invoice->tax }}</p></td>
             </tr>
             <tr>

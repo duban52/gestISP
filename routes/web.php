@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PublicInvoiceDownloadController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\CashRegisterController;
@@ -42,6 +43,26 @@ Route::get('/', function () {
 Auth::routes(['register' => false]);
 
 
+
+/*
+|--------------------------------------------------------------------------
+| Descarga de la factura por el CLIENTE
+|--------------------------------------------------------------------------
+| La unica ruta que atiende a alguien que NO es usuario del sistema: el
+| cliente del ISP recibe un enlace por WhatsApp y descarga su factura.
+|
+| Va fuera de `auth` a proposito, y lo que la protege es `signed`: la URL
+| lleva una firma hecha con la APP_KEY y una caducidad, y Laravel rechaza
+| con 403 lo que no cuadre. Cambiar el numero de factura en la barra del
+| navegador invalida la firma.
+|
+| Se declara ARRIBA, antes del grupo `gestisp`, para que quede a la vista
+| que es publica y nadie la meta por error dentro de un grupo con sesion.
+*/
+Route::get('/facturas/{invoice}/descargar', PublicInvoiceDownloadController::class)
+    ->middleware('signed')
+    ->whereNumber('invoice')
+    ->name('invoices.public_pdf');
 
 Route::get('/', [App\Http\Controllers\AdminController::class, 'index'])->name('gestisp.index');
 

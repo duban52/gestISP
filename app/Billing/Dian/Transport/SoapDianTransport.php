@@ -435,6 +435,7 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
                 trackId: $valores['trackId'],
                 httpStatus: $estado,
                 respuesta: $cuerpo,
+                acuse: $valores['acuse'],
             );
         }
 
@@ -488,6 +489,38 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
             'valido' => $valido === null ? null : filter_var($valido, FILTER_VALIDATE_BOOLEAN),
             'trackId' => $texto('XmlDocumentKey') ?? $texto('TrackId'),
             'errores' => $errores,
+            'acuse' => $this->acuseDe($texto('XmlBase64Bytes')),
         ];
+    }
+
+    /**
+     * El ApplicationResponse que devuelve la DIAN, desempaquetado.
+     *
+     * Viene en `XmlBase64Bytes`, en base64. Es el XML que acredita la
+     * validacion, y hay que entregarselo al adquiriente junto con la
+     * factura: sin el, el cliente no tiene con que comprobar por su
+     * cuenta que su factura fue aceptada.
+     *
+     * Se saca aqui y no mas adelante porque la alternativa es volver a
+     * abrir el sobre SOAP guardado en `document_transmissions`, que es
+     * una tabla candidata a purga —una fila por intento, con el envio
+     * entero dentro—.
+     */
+    private function acuseDe(?string $base64): ?string
+    {
+        if (!$base64) {
+            return null;
+        }
+
+        $xml = base64_decode(trim($base64), true);
+
+        // Si no es base64 valido o no parece un XML, se descarta en
+        // silencio: el acuse es un extra, y no puede tumbar una
+        // transmision que la DIAN acepto.
+        if ($xml === false || !str_contains($xml, '<')) {
+            return null;
+        }
+
+        return $xml;
     }
 }
