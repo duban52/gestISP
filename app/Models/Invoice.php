@@ -162,6 +162,48 @@ class Invoice extends Model
      * Número para mostrar: el formal si existe, o el id para las
      * facturas históricas anteriores a la numeración.
      */
+    /**
+     * Lo que el cliente debe de facturas ANTERIORES a esta.
+     *
+     * OJO CON EL NOMBRE DE LA COLUMNA
+     * -------------------------------
+     * `pending_invoice_amount` NO es el saldo anterior: es el saldo
+     * pendiente de la propia factura —total menos lo pagado—. La
+     * representación gráfica lo imprimía bajo la etiqueta «SALDO
+     * ANTERIOR», que decía una cosa y enseñaba otra.
+     *
+     * El saldo anterior de verdad es lo que sigue abierto de las
+     * facturas anteriores del MISMO contrato. Es lo que hace que un
+     * cliente con un mes vencido vea lo que debe en total en vez de
+     * creer que le basta con pagar el mes.
+     *
+     * NO ENTRA EN EL XML DE LA DIAN, y no debe entrar: el documento
+     * fiscal es esta factura. El saldo anterior es cobranza, no
+     * facturación, y sumarlo al `PayableAmount` seria declararle a la
+     * DIAN un importe que no corresponde a esta venta.
+     */
+    public function saldoAnterior(): float
+    {
+        if (!$this->contract_id) {
+            return 0.0;
+        }
+
+        return (float) static::withoutGlobalScopes()
+            ->where('contract_id', $this->contract_id)
+            ->where('id', '<', $this->id)
+            ->whereNotIn('status', [
+                \App\Billing\Enums\InvoiceStatus::Anulada->value,
+                \App\Billing\Enums\InvoiceStatus::Borrador->value,
+            ])
+            ->sum('pending_invoice_amount');
+    }
+
+    /** Lo que el cliente tiene que pagar hoy: esta factura y lo que arrastra. */
+    public function totalAPagar(): float
+    {
+        return round((float) $this->total + $this->saldoAnterior(), 2);
+    }
+
     public function displayNumber(): string
     {
         return $this->full_number ?? (string) $this->id;

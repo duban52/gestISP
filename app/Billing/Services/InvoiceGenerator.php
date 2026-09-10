@@ -270,7 +270,20 @@ class InvoiceGenerator
                     // servicio. Su XML ya se transmitio.
                     'tax_classification' => $service->clasificacion()->value,
                     'quantity' => 1,
-                    'unit_price' => $service->base_price,
+                    // EL PRECIO PRORRATEADO, NO EL COMPLETO.
+                    //
+                    // Aqui iba `base_price` a secas mientras el IVA se
+                    // calculaba sobre la base PRORRATEADA. En un mes
+                    // partido eso deja la factura contradiciendose: el
+                    // XML declara base = precio completo e IVA = el de
+                    // media base, y la DIAN lo rechaza con FAS07 —«el
+                    // valor del tributo informado no corresponde al
+                    // producto de la base gravable por la tarifa»—.
+                    //
+                    // Paso de verdad, con una factura de la corrida
+                    // mensual. Las individuales no fallaban porque solo
+                    // se prorratea el PRIMER mes de un contrato.
+                    'unit_price' => $basePrice,
                     'percentage_tax' => $service->tax_percentage,
                     'tax' => $taxAmount,
                     'total' => $basePrice + $taxAmount,

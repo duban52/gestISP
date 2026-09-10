@@ -57,15 +57,23 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        // QUIEN FACTURA ES LA EMPRESA, NO LA DIAN.
+        //
+        // Antes este correo hablaba de la DIAN en el asunto, en el
+        // titulo y en dos parrafos. Al cliente le importa quien le
+        // cobra, cuanto y hasta cuando; que el documento este validado
+        // se da por supuesto y basta con decirlo una vez.
+        $emisor = $this->emisor();
+
         $correo = $this->correo(
-            'Factura electrónica ' . $this->invoice->displayNumber() . ' validada por la DIAN',
+            $emisor . ' — Factura electrónica ' . $this->invoice->displayNumber(),
             [
-                'titulo' => 'Su factura electrónica fue validada',
-                'preheader' => 'Factura ' . $this->invoice->displayNumber() . ', validada por la DIAN',
+                'titulo' => $emisor . ' ha emitido su factura electrónica',
+                'preheader' => 'Factura ' . $this->invoice->displayNumber() . ' por ' . $this->pesos($this->invoice->total),
                 'saludo' => 'Hola ' . $notifiable->name . ',',
                 'parrafos' => [
-                    'La DIAN validó su factura electrónica. Adjuntamos el archivo comprimido con el documento en formato XML, la respuesta de la DIAN y la representación gráfica en PDF.',
-                    'Conserve estos archivos: el XML es el documento con validez fiscal, y la respuesta de la DIAN es lo que le permite comprobar su validación.',
+                    'Adjuntamos su factura electrónica. El archivo comprimido contiene el documento en formato XML y la representación gráfica en PDF.',
+                    'Conserve estos archivos: el XML es el documento con validez fiscal, y el PDF es su representación impresa.',
                 ],
                 'datos' => array_filter([
                     'Número de factura' => $this->invoice->displayNumber(),
@@ -89,19 +97,37 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
         $total = '$' . number_format((float) $this->invoice->total, 0, ',', '.');
         $enlace = $this->enlaceDeDescarga();
 
-        $cuerpo = "Hola {$notifiable->name}, su factura {$this->invoice->displayNumber()} por {$total} fue validada por la DIAN.";
+        $cuerpo = "Hola {$notifiable->name}, {$this->emisor()} emitió su factura electrónica {$this->invoice->displayNumber()} por {$total}.";
         $cuerpo .= $enlace ? " Descárguela aquí: {$enlace}" : ' Le enviamos los archivos por correo.';
 
         // Se reutiliza la MISMA plantilla que el aviso de factura, con
         // los mismos cuatro parámetros. Registrar una plantilla nueva en
         // Meta es un trámite de días, y este mensaje dice casi lo mismo:
         // no vale la pena bloquear la entrega por eso.
+        // El cuarto hueco de la plantilla es el VENCIMIENTO. Aqui iba
+        // «validada por la DIAN», que en el mensaje real habria salido
+        // como «Vence el validada por la DIAN».
         return WhatsAppMessage::make($cuerpo)->template('factura_generada', [
             $notifiable->name,
             $this->invoice->displayNumber(),
             $total,
-            'validada por la DIAN',
+            optional($this->invoice->due_date)->format('d/m/Y') ?? 'la fecha indicada',
         ]);
+    }
+
+    /**
+     * El nombre con el que la empresa se presenta al cliente.
+     *
+     * El comercial si lo tiene; si no, la razon social. Ultimo recurso,
+     * el nombre de la sucursal — un correo sin remitente reconocible
+     * parece basura.
+     */
+    private function emisor(): string
+    {
+        $sucursal = $this->invoice->branch;
+
+        return $sucursal?->company?->nombreVisible()
+            ?: ($sucursal?->name ?: config('app.name'));
     }
 
     /** El enlace firmado al paquete. Sin él, el mensaje sale igual. */

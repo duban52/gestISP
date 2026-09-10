@@ -82,13 +82,29 @@
          que hay entre una forma corta y el cierre de un bloque). --}}
     @php
         $dian = $dianes[$invoice->id] ?? null;
+
+    /**
+     * El saldo ANTERIOR de verdad, y lo que hay que pagar hoy.
+     *
+     * `pending_invoice_amount` NO es el saldo anterior: es el saldo de
+     * esta misma factura. Se imprimia bajo esa etiqueta y el cliente con
+     * un mes vencido veia «total a pagar» solo del mes, creyendo que con
+     * eso quedaba al dia.
+     *
+     * El saldo anterior son las facturas anteriores del mismo contrato
+     * que siguen abiertas, y el total a pagar es la suma de las dos
+     * cosas. NO entra en el XML de la DIAN: alli el importe es el de
+     * esta venta.
+     */
+    $saldoAnterior = $invoice->saldoAnterior();
+    $aPagar = $invoice->totalAPagar();
     @endphp
     <div class="container">
         <div class="info-company">
             <table width="100%">
                 <tr>
                     <td style="padding-right: 20px;">
-                        <img width="100px" src="{{ asset('storage/'.$invoice->contract?->branch?->image) }}" alt="Logo"/>
+                        @if(!empty($logos[$invoice->contract?->branch?->id] ?? null))<img width="100px" src="{{ $logos[$invoice->contract->branch->id] }}" alt="Logo"/>@endif
                     </td>
                     <td style="padding-right: 55px; padding-left: 50px;">
                         <p class="interline">{{ $dian['emisor']['nombre'] ?? $invoice->contract?->branch?->name ?? '' }}</p>
@@ -176,7 +192,10 @@
                         <td><p>LUN</p></td>
                         <td><p>{{ $item->quantity }}</p></td>
                         <td><p>{{ $item->unit_price }}</p></td>
-                        <td class="border-left" style="text-align: center;"><p>{{ $item->unit_price }}</p></td>
+                        {{-- El total de la linea es unitario x cantidad, no una copia
+                     del unitario. Con cantidad 1 daba lo mismo y por eso
+                     nadie lo vio. --}}
+                <td class="border-left" style="text-align: center;"><p>{{ number_format((float) $item->unit_price * (float) $item->quantity, 2, '.', '') }}</p></td>
                     </tr>
                 @endforeach
                 <tr>
@@ -209,7 +228,7 @@
                 </tr>
                 <tr>
                     <td class="border-top border-left"><p><strong>SALDO ANTERIOR</strong></p></td>
-                    <td class="border-top border-left" style="text-align: right;"><p>{{ $invoice->pending_invoice_amount }}</p></td>
+                    <td class="border-top border-left" style="text-align: right;"><p>{{ number_format($saldoAnterior, 2, '.', '') }}</p></td>
                 </tr>
                 </tbody>
             </table>
@@ -222,7 +241,7 @@
                     <td colspan="4">A la primera cuota vencida se le suspende la señal, la reconexión tiene un costo de $ {{ $invoice->contract?->branch?->reconnection_price }}</td>
                     <td>suscriptor</td>
                     <td colspan="2"><strong>TOTAL A PAGAR</strong></td>
-                    <td><strong>{{ $invoice->total }}</strong></td>
+                    <td><strong>{{ number_format($aPagar, 2, '.', '') }}</strong></td>
                 </tr>
                 <tr>
                     <td></td>
@@ -250,7 +269,7 @@
                 <tbody>
                 <tr>
                     <td style="padding-right: 80px">
-                        <img width="80px" src="{{ asset('storage/'.$invoice->contract?->branch?->image) }}" alt="Logo"/>
+                        @if(!empty($logos[$invoice->contract?->branch?->id] ?? null))<img width="80px" src="{{ $logos[$invoice->contract->branch->id] }}" alt="Logo"/>@endif
                     </td>
                     <td style="padding-right: 50px; margin-bottom: 0;">
                         <img src="{{ $barcodeUrls[$invoice->id] }}" alt="Código de barras" width="250px">
@@ -321,7 +340,7 @@
                             </tr>
                             <tr>
                                 <td style="padding-left: 5px; padding-right: 3px;">
-                                    <p><strong>{{ $invoice->total }}</strong></p>
+                                    <p><strong>{{ number_format($aPagar, 2, '.', '') }}</strong></p>
                                 </td>
                             </tr>
                             </tbody>

@@ -20,8 +20,16 @@ use Milon\Barcode\Facades\DNS1DFacade;
  * de barras, el bloque DIAN y el tamaño del papel tenían que salir del
  * controlador para poder invocarse desde las dos partes.
  *
- * EL CÓDIGO DE BARRAS VA EMBEBIDO, NO POR URL
- * -------------------------------------------
+ * EL LOGO Y EL CÓDIGO DE BARRAS NO VIAJAN POR URL
+ * -----------------------------------------------
+ * El logo se pasa como RUTA ABSOLUTA DE DISCO —`PdfBranding::logoPath()`,
+ * que ya hacía esto para el resto de informes—. Cargarlo con `asset()`
+ * obliga a que el servidor pueda pedirse a sí mismo por HTTP; si el
+ * dominio no resuelve desde dentro, el logo sale roto y nadie se entera
+ * hasta que un cliente recibe la factura sin él.
+ *
+ * Y EL CÓDIGO DE BARRAS, EMBEBIDO
+ * -------------------------------
  * Antes se escribía un PNG en `storage/app/public/barcodes/` y se
  * enlazaba con `asset()`, lo que obligaba a `isRemoteEnabled` y a que el
  * servidor pudiera pedirse a sí mismo por HTTP. Desde un worker en cola
@@ -69,6 +77,7 @@ class InvoicePdf
             'barcodeUrl' => $this->barrasEmbebidas($codigo),
             'codeString' => $codigo,
             'dian' => $dian,
+            'logo' => PdfBranding::logoPath($factura->contract?->branch),
         ]);
 
         $pdf->setPaper(PdfBranding::MEDIA_CARTA, 'portrait');

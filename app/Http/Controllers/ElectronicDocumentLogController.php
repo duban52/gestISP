@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Delivery\InvoicePackage;
+use App\Billing\Events\ElectronicDocumentAccepted;
 use App\Models\Branch;
 use App\Models\ElectronicDocument;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Spatie\Permission\Models\Role;
 
 /**
  * Qué pasó con cada documento electrónico ante la DIAN.
@@ -43,6 +47,9 @@ class ElectronicDocumentLogController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('check.permission:dian.documents');
+        // Reenviar le manda un correo a un cliente: no basta con poder
+        // mirar.
+        $this->middleware('check.permission:dian.documents.resend')->only('reenviar');
     }
 
     public function index(Request $request): View
@@ -88,7 +95,72 @@ class ElectronicDocumentLogController extends Controller
             'documento' => $document,
             'motivos' => $this->motivos($document->last_error),
             'estados' => $this->estados(),
+            'puedeReenviar' => $this->puedeReenviar(),
         ]);
+    }
+
+    /**
+     * ¿El rol de la sesión puede reenviarle la factura al cliente?
+     *
+     * Se resuelve aquí y no en la vista, y con `checkPermissionTo`, que
+     * es el metodo que NO lanza excepcion si el permiso todavia no
+     * existe en la base. Un permiso declarado en el codigo pero sin
+     * sembrar debe ocultar el boton, nunca tumbar la pantalla con un
+     * 500 — es el mismo criterio que ya aplica `CheckPermission`.
+     */
+    private function puedeReenviar(): bool
+    {
+        $rol = Role::find(session('current_role_id'));
+
+        return (bool) $rol?->checkPermissionTo('dian.documents.resend');
+    }
+
+    /**
+     * Vuelve a entregarle la factura al cliente.
+     *
+     * POR QUÉ HACE FALTA UN BOTÓN
+     * ---------------------------
+     * Porque el correo falla por cosas que no son culpa del sistema: un
+     * buzón lleno, una dirección mal escrita que luego se corrige, el
+     * servidor de correo caído un rato. Sin esto, la única salida era
+     * entrar al servidor y correr un comando.
+     *
+     * SE BORRA `delivered_at` A PROPÓSITO
+     * -----------------------------------
+     * Es la guarda que impide entregar dos veces. Aquí se quita porque
+     * alguien está pidiendo explícitamente que se vuelva a mandar: la
+     * guarda existe contra los reintentos automáticos, no contra una
+     * decisión humana.
+     */
+    public function reenviar(ElectronicDocument $document): RedirectResponse
+    {
+        if ($document->status !== ElectronicDocument::ACEPTADO) {
+            return back()->with('error', 'Solo se puede entregar una factura que la DIAN haya validado.');
+        }
+
+        $factura = $document->invoice;
+
+        if (!$factura || !$factura->contract?->client) {
+            return back()->with('error', 'Esta factura no tiene cliente al que entregársela.');
+        }
+
+        if (!app(InvoicePackage::class)->disponiblePara($factura)) {
+            return back()->with(
+                'error',
+                'No hay paquete que entregar: falta el XML firmado o el acuse de la DIAN. '
+                    . 'Recupérelo con «dian:recuperar-acuses».',
+            );
+        }
+
+        $document->forceFill(['delivered_at' => null])->save();
+
+        ElectronicDocumentAccepted::dispatch($document->refresh());
+
+        return back()->with(
+            'success',
+            'Se encoló el envío a ' . $factura->contract->client->email . '. '
+                . 'Si en unos minutos sigue sin entregarse, revise el registro de errores.',
+        );
     }
 
     /**

@@ -96,10 +96,23 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
                 $dianes[$invoice->id] = $representacion->para($invoice);
             }
 
-            // Generar el PDF con la vista y los datos necesarios
+            // El logo por RUTA DE DISCO, una por sucursal. Con
+            // `asset()` dompdf tiene que pedirselo al servidor por
+            // HTTP, y desde el propio servidor —o desde este job, que
+            // corre en cola— eso falla y las facturas salen sin logo.
+            $logos = [];
+
+            foreach ($invoices as $invoice) {
+                $sucursal = $invoice->contract?->branch;
+
+                if ($sucursal && !array_key_exists($sucursal->id, $logos)) {
+                    $logos[$sucursal->id] = PdfBranding::logoPath($sucursal);
+                }
+            }
+
             $pdf = Pdf::loadView(
                 'gestisp.invoices.pending_invoices_pdf',
-                compact('invoices', 'barcodeUrls', 'barcodeCodes', 'dianes'),
+                compact('invoices', 'barcodeUrls', 'barcodeCodes', 'dianes', 'logos'),
             );
 
             // Configurar tamaño media carta (5.5" x 8.5") en puntos

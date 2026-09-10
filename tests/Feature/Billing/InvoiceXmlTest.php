@@ -308,6 +308,63 @@ class InvoiceXmlTest extends BillingTestCase
         $this->assertSame($lineas, $documento, 'La base del documento no cuadra con la de las líneas (FAU04).');
     }
 
+    public function test_fas07_en_una_factura_prorrateada_el_iva_cuadra_con_la_base(): void
+    {
+        // EL RECHAZO QUE MOTIVO ESTA PRUEBA.
+        //
+        // En un mes partido la base se prorratea y el IVA se calculaba
+        // sobre la base prorrateada, pero la linea guardaba el precio
+        // COMPLETO como unitario. El XML salia diciendo base = precio
+        // entero e IVA = el de media base, y la DIAN lo rechazaba con
+        // FAS07: «el valor del tributo informado no corresponde al
+        // producto de la base gravable por la tarifa».
+        //
+        // Solo pasaba en la corrida mensual, porque solo se prorratea
+        // el PRIMER mes de un contrato.
+        $contrato = $this->contratoElectronico(precio: 100000, iva: 19);
+
+        // Activado a mitad de mes: eso es lo que dispara el prorrateo.
+        $contrato->update(['activation_date' => now()->startOfMonth()->addDays(14)->toDateString()]);
+
+        $xpath = $this->xpath($this->construirXml($this->emitir($contrato->fresh()))['xml']);
+
+        $lineas = $xpath->query('//cac:InvoiceLine');
+
+        $this->assertGreaterThan(0, $lineas->length);
+
+        foreach ($lineas as $linea) {
+            $base = (float) $xpath->query('cac:TaxTotal/cac:TaxSubtotal/cbc:TaxableAmount', $linea)->item(0)?->nodeValue;
+            $tributo = (float) $xpath->query('cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount', $linea)->item(0)?->nodeValue;
+            $tarifa = (float) $xpath->query('cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory/cbc:Percent', $linea)->item(0)?->nodeValue;
+
+            $this->assertEqualsWithDelta(
+                round($base * $tarifa / 100, 2),
+                $tributo,
+                0.02,
+                'El IVA declarado no es la base por la tarifa: la DIAN rechaza con FAS07.',
+            );
+        }
+    }
+
+    public function test_la_factura_prorrateada_cobra_menos_que_el_mes_entero(): void
+    {
+        // La otra mitad de lo mismo: que el arreglo no haya convertido
+        // el prorrateo en «mes completo». Si esto pasara, el cliente
+        // pagaria de mas y la DIAN no diria nada.
+        $entero = $this->contratoElectronico(precio: 100000, iva: 19);
+        $facturaEntera = $this->emitir($entero);
+
+        $partido = $this->contratoElectronico(precio: 100000, iva: 19);
+        $partido->update(['activation_date' => now()->startOfMonth()->addDays(14)->toDateString()]);
+        $facturaPartida = $this->emitir($partido->fresh());
+
+        $this->assertLessThan(
+            (float) $facturaEntera->total,
+            (float) $facturaPartida->total,
+            'La factura de medio mes tendria que costar menos que la del mes entero.',
+        );
+    }
+
     // ==================== Cuando faltan datos ====================
 
     public function test_sin_datos_fiscales_del_cliente_falla_diciendo_cuales(): void

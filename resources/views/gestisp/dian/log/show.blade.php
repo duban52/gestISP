@@ -16,6 +16,13 @@
 
 @section('content')
 
+    @if(session('success'))
+        <div class="alert alert-success"><i class="fas fa-check-circle mr-1"></i>{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="alert alert-danger"><i class="fas fa-exclamation-circle mr-1"></i>{{ session('error') }}</div>
+    @endif
+
     {{-- ============================================================
          LOS MOTIVOS DEL RECHAZO VAN PRIMERO.
 
@@ -140,6 +147,23 @@
                                     <span class="text-warning">Validada, pero todavía no entregada</span>
                                 @else
                                     <span class="text-muted">—</span>
+                                @endif
+
+                                {{-- El reenvío existe porque el correo falla
+                                     por cosas ajenas al sistema: un buzón
+                                     lleno, una dirección mal escrita que
+                                     luego se corrige, el servidor de correo
+                                     caído un rato. --}}
+                                @if($documento->status === \App\Models\ElectronicDocument::ACEPTADO && $puedeReenviar)
+                                    <form method="POST"
+                                          action="{{ route('dian.log.reenviar', $documento) }}"
+                                          class="d-inline"
+                                          onsubmit="return confirm('Se le volverá a enviar la factura al cliente por correo y WhatsApp. ¿Continuar?');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-xs btn-outline-primary ml-2">
+                                            <i class="fas fa-paper-plane mr-1"></i>{{ $documento->delivered_at ? 'Volver a enviar' : 'Enviar ahora' }}
+                                        </button>
+                                    </form>
                                 @endif
                             </td>
                         </tr>

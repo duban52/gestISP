@@ -253,6 +253,12 @@ Route::middleware('auth')->prefix('facturacion-dian/documentos')->group(function
     Route::get('{document}', [App\Http\Controllers\ElectronicDocumentLogController::class, 'show'])
         ->whereNumber('document')
         ->name('dian.log.show');
+
+    // Reenviar la factura al cliente cuando el correo no llego. Es POST
+    // porque manda un correo: no puede dispararse al abrir un enlace.
+    Route::post('{document}/reenviar', [App\Http\Controllers\ElectronicDocumentLogController::class, 'reenviar'])
+        ->whereNumber('document')
+        ->name('dian.log.reenviar');
 });
 
 // Informe de completitud fiscal: que falta para poder emitir factura

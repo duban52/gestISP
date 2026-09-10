@@ -114,6 +114,24 @@
                      la deuda acumulada del contrato se lee en su
                      estado de cuenta, no aquí --}}
                 <p class="col-6"><strong>SALDO PENDIENTE:</strong> {{ number_format($invoice->pending_invoice_amount, 2) }}</p>
+
+                {{-- El saldo ANTERIOR y el total a pagar: lo que arrastra
+                     el cliente de facturas anteriores del mismo contrato.
+                     Es lo que hay que cobrarle hoy, y es distinto del
+                     total de esta factura.
+
+                     No entra en el XML de la DIAN: alli el importe es el
+                     de esta venta y solo el. --}}
+                @php($saldoAnterior = $invoice->saldoAnterior())
+                @if($saldoAnterior > 0)
+                    <p class="col-6 text-warning">
+                        <strong>SALDO ANTERIOR:</strong> {{ number_format($saldoAnterior, 2) }}
+                    </p>
+                    <p class="col-6">
+                        <strong>TOTAL A PAGAR HOY:</strong>
+                        <span class="text-danger">{{ number_format($invoice->totalAPagar(), 2) }}</span>
+                    </p>
+                @endif
                 <p class="col-6"><strong>PERIODO FACTURADO:</strong> Del {{ $invoice->billed_period_short }} del mes de {{ $invoice->billed_month_name }}</p>
                 <p class="col-6"><strong>FECHA DE GENERACIÓN:</strong> {{ $invoice->issue_date->format('d/m/Y') }}</p>
                 <p class="col-6"><strong>FECHA DE VENCIMIENTO:</strong> {{ $invoice->due_date->format('d/m/Y') }}</p>

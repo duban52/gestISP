@@ -5,6 +5,8 @@ namespace Tests\Feature\Billing;
 use App\Models\DocumentTransmission;
 use App\Models\ElectronicDocument;
 use Spatie\Permission\Models\Permission;
+use App\Notifications\ElectronicInvoiceDelivered;
+use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Role;
 
 /**
@@ -45,13 +47,15 @@ class ElectronicDocumentLogTest extends BillingTestCase
         // El permiso lo crea `permissions:sync` a partir del
         // controlador; en pruebas se declara a mano. Va al ROL y no al
         // usuario: es el rol de la sesion lo que mira el middleware.
-        Permission::firstOrCreate(
-            ['name' => 'dian.documents', 'guard_name' => 'web'],
-            ['description' => 'Ver el estado de los documentos DIAN'],
-        );
+        foreach (['dian.documents', 'dian.documents.resend'] as $permiso) {
+            Permission::firstOrCreate(
+                ['name' => $permiso, 'guard_name' => 'web'],
+                ['description' => 'Documentos DIAN'],
+            );
+        }
 
         Role::where('name', 'superadministrador')->firstOrFail()
-            ->givePermissionTo('dian.documents');
+            ->givePermissionTo(['dian.documents', 'dian.documents.resend']);
     }
 
     private function documentoDe($factura): ElectronicDocument
@@ -157,6 +161,65 @@ class ElectronicDocumentLogTest extends BillingTestCase
         $this->get(route('dian.log.index', ['estado' => ElectronicDocument::ACEPTADO]))
             ->assertOk()
             ->assertDontSee($factura->full_number);
+    }
+
+    public function test_se_puede_reenviar_una_factura_validada(): void
+    {
+        // El correo falla por cosas ajenas al sistema: un buzon lleno,
+        // una direccion mal escrita que luego se corrige. Sin este boton
+        // la unica salida era entrar al servidor.
+        Notification::fake();
+
+        $factura = $this->facturaElectronica();
+        $documento = $this->documentoDe($factura);
+
+        $documento->forceFill([
+            'status' => ElectronicDocument::ACEPTADO,
+            'accepted_at' => now(),
+            'dian_response_xml' => '<ApplicationResponse>ok</ApplicationResponse>',
+            'delivered_at' => now(),
+        ])->save();
+
+        $this->post(route('dian.log.reenviar', $documento))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        Notification::assertSentTo(
+            $factura->contract->client,
+            ElectronicInvoiceDelivered::class,
+        );
+    }
+
+    public function test_no_se_reenvia_lo_que_la_dian_no_ha_validado(): void
+    {
+        // Entregarle al cliente algo que la DIAN no acepto seria darle
+        // por buena una factura sin valor fiscal.
+        Notification::fake();
+
+        $factura = $this->facturaElectronica();
+        $documento = $this->documentoDe($factura);
+
+        $this->post(route('dian.log.reenviar', $documento))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        Notification::assertNotSentTo(
+            $factura->contract->client,
+            ElectronicInvoiceDelivered::class,
+        );
+    }
+
+    public function test_reenviar_exige_su_propio_permiso(): void
+    {
+        // Mirar el estado y mandarle un correo a un cliente no son lo
+        // mismo.
+        $factura = $this->facturaElectronica();
+        $documento = $this->documentoDe($factura);
+
+        Role::where('name', 'superadministrador')->firstOrFail()
+            ->revokePermissionTo('dian.documents.resend');
+
+        $this->post(route('dian.log.reenviar', $documento))->assertForbidden();
     }
 
     public function test_sin_permiso_no_se_ve(): void
