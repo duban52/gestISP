@@ -408,6 +408,13 @@ return [
                     'can' => 'dian.index',
                 ],
                 [
+                    'text' => 'Documentos DIAN',
+                    'route' => 'dian.log.index',
+                    'active' => ['facturacion-dian/documentos*'],
+                    'icon' => 'fas fa-clipboard-list',
+                    'can' => 'dian.documents',
+                ],
+                [
                     'text' => 'Grupos de afinidad',
                     'route' => 'affinity_groups.index',
                     'active' => ['grupos-de-afinidad*'],

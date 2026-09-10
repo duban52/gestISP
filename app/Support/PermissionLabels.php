@@ -62,6 +62,11 @@ class PermissionLabels
     private const ACTIONS = [
         'index' => 'Ver',
         'show' => 'Ver detalle de',
+        // Ver el estado de los documentos ante la DIAN NO es lo mismo
+        // que configurar la facturacion electronica: quien lleva la
+        // facturacion necesita saber si una factura fue rechazada sin
+        // poder tocar el certificado ni las resoluciones.
+        'documents' => 'Ver el estado de los documentos de',
         'create' => 'Crear',
         'store' => 'Crear',
         'edit' => 'Editar',

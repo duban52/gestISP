@@ -238,6 +238,23 @@ Route::middleware('auth')->prefix('empresas/{company}/dian')->group(function () 
         ->name('dian.rangos.alternar');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Que paso con cada documento ante la DIAN
+|--------------------------------------------------------------------------
+| Hasta que existio esta pantalla, saber si una factura llego a la DIAN o
+| por que la rechazo obligaba a entrar al servidor y consultar la base a
+| mano. Una factura rechazada no avisa sola.
+*/
+Route::middleware('auth')->prefix('facturacion-dian/documentos')->group(function () {
+    Route::get('/', [App\Http\Controllers\ElectronicDocumentLogController::class, 'index'])
+        ->name('dian.log.index');
+
+    Route::get('{document}', [App\Http\Controllers\ElectronicDocumentLogController::class, 'show'])
+        ->whereNumber('document')
+        ->name('dian.log.show');
+});
+
 // Informe de completitud fiscal: que falta para poder emitir factura
 // electronica. Se consulta ANTES de que haga falta.
 Route::middleware('auth')->get(
