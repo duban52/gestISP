@@ -155,6 +155,31 @@ class RecoverDianReceiptsTest extends BillingTestCase
         );
     }
 
+    public function test_entregar_funciona_en_una_corrida_aparte(): void
+    {
+        // ESTE ES EL USO NORMAL, Y LA PRIMERA VERSION NO LO CUBRIA.
+        //
+        // Se recuperan los acuses, se comprueba que cuadran, y DESPUES
+        // se entrega. En ese momento ya no queda nada por recuperar, y
+        // la version anterior —que solo entregaba lo recuperado en la
+        // misma corrida— no mandaba nada. La bandera era inservible
+        // justo cuando se necesitaba.
+        $documento = $this->aceptadoSinAcuse();
+
+        $this->artisan('dian:recuperar-acuses')->assertSuccessful();
+
+        Notification::fake();
+
+        $this->artisan('dian:recuperar-acuses --entregar')
+            ->expectsOutputToContain('Entregas encoladas: 1')
+            ->assertSuccessful();
+
+        Notification::assertSentTo(
+            $documento->invoice->contract->client,
+            ElectronicInvoiceDelivered::class,
+        );
+    }
+
     public function test_entregar_respeta_lo_ya_entregado(): void
     {
         // La guarda de `delivered_at` manda por encima del comando: una
