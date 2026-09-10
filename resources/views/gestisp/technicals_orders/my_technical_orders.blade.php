@@ -125,23 +125,21 @@
                                     <span class="badge badge-warning ml-1">Devuelta</span>
                                 @endif
                                 <span class="d-md-none d-block text-muted small mt-1">
-                                    {{ $technical_order->contract->client->name }}
-                                    {{ $technical_order->contract->client->last_name }}
+                                    {{ $technical_order->contract?->client?->fullName() ?: '—' }}
                                 </span>
                             </td>
                             {{-- El consecutivo del contrato, no el id interno --}}
-                            <td data-label="Contrato">{{ $technical_order->contract->numero_visible }}</td>
+                            <td data-label="Contrato">{{ $technical_order->contract?->numero_visible ?: '—' }}</td>
                             <td data-label="Cliente">
-                                {{ $technical_order->contract->client->name }}
-                                {{ $technical_order->contract->client->last_name }}
+                                {{ $technical_order->contract?->client?->fullName() ?: '—' }}
                             </td>
                             <td data-label="Dirección" class="romper-texto">
-                                {{ $technical_order->contract->address }}
+                                {{ $technical_order->contract?->address }}
                                 {{-- Enlace a mapas solo en el teléfono: es donde
                                      sirve, porque el técnico va a ir hasta allí. --}}
-                                @if($technical_order->contract->address)
+                                @if($technical_order->contract?->address)
                                     <a class="d-md-none d-inline-block ml-1"
-                                       href="https://www.google.com/maps/search/?api=1&query={{ urlencode($technical_order->contract->address) }}"
+                                       href="https://www.google.com/maps/search/?api=1&query={{ urlencode($technical_order->contract?->address) }}"
                                        target="_blank" rel="noopener" title="Cómo llegar">
                                         <i class="fas fa-directions"></i>
                                     </a>

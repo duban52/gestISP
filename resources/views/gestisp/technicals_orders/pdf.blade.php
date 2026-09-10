@@ -77,7 +77,7 @@
         <tr>
             <td class="label">Teléfono</td>
             <td>
-                {{ $order->contract?->client?->number_phone ?? '—' }}{{ $order->contract?->client?->aditional_phone ? ', ' . $order->contract->client->aditional_phone : '' }}
+                {{ $order->contract?->client?->number_phone ?? '—' }}{{ $order->contract?->client?->aditional_phone ? ', ' . $order->contract?->client->aditional_phone : '' }}
             </td>
             <td class="label">N.º de contrato</td>
             {{-- El consecutivo visible del contrato, NUNCA el id interno:

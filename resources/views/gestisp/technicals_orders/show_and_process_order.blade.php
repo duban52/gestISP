@@ -66,19 +66,18 @@
              ============================================================ --}}
         <div class="card p-3 mt-1 col-12 col-md-6 toque">
             <h3>Datos del cliente</h3>
-            <p><strong>Número de contrato:</strong> {{ $technicalOrder->contract->numero_visible }}</p>
-            <p><strong>Identificación del cliente:</strong> {{ $technicalOrder->contract->client->identity_number }}</p>
+            <p><strong>Número de contrato:</strong> {{ $technicalOrder->contract?->numero_visible ?: '—' }}</p>
+            <p><strong>Identificación del cliente:</strong> {{ $technicalOrder->contract?->client?->identity_number ?: '—' }}</p>
             <p><strong>Nombre y apellido:</strong>
-                {{ $technicalOrder->contract->client->name }}
-                {{ $technicalOrder->contract->client->last_name }}
+                {{ $technicalOrder->contract?->client?->fullName() ?: '—' }}
             </p>
             <p><strong>Teléfonos:</strong>
-                {{ $technicalOrder->contract->client->number_phone }}{{ $technicalOrder->contract->client->aditional_phone ? ', ' . $technicalOrder->contract->client->aditional_phone : '' }}
+                {{ $technicalOrder->contract?->client?->number_phone ?: '—' }}{{ $technicalOrder->contract?->client?->aditional_phone ? ', ' . $technicalOrder->contract?->client->aditional_phone : '' }}
             </p>
             <hr>
             <h3>Residencia</h3>
-            <p><strong>Barrio:</strong> {{ $technicalOrder->contract->neighborhood }}</p>
-            <p><strong>Dirección:</strong> {{ $technicalOrder->contract->address }}</p>
+            <p><strong>Barrio:</strong> {{ $technicalOrder->contract?->neighborhood ?: '—' }}</p>
+            <p><strong>Dirección:</strong> {{ $technicalOrder->contract?->address }}</p>
 
             {{-- ============================================================
                  Dónde queda el servicio
@@ -86,7 +85,7 @@
                  En barrios sin nomenclatura y en zona rural la dirección
                  escrita no lleva a ninguna parte: el punto en el mapa sí.
                  ============================================================ --}}
-            @if($technicalOrder->contract->isGeolocated())
+            @if($technicalOrder->contract?->isGeolocated())
                 @php
                     // Los parámetros se arman aquí y no dentro de la directiva
                     // include: Blade corta su argumento en el primer paréntesis
@@ -95,8 +94,8 @@
                         'mapId' => 'mapaViviendaOrden',
                         'height' => '260px',
                         'markers' => [[
-                            'lat' => $technicalOrder->contract->latitude,
-                            'lng' => $technicalOrder->contract->longitude,
+                            'lat' => $technicalOrder->contract?->latitude,
+                            'lng' => $technicalOrder->contract?->longitude,
                             'title' => 'Vivienda del cliente',
                             'icon' => 'fa-home',
                             'color' => 'primary',
@@ -108,7 +107,7 @@
 
                 <a class="btn btn-sm btn-outline-primary mt-2"
                    target="_blank" rel="noopener"
-                   href="https://www.google.com/maps/dir/?api=1&destination={{ $technicalOrder->contract->latitude }},{{ $technicalOrder->contract->longitude }}">
+                   href="https://www.google.com/maps/dir/?api=1&destination={{ $technicalOrder->contract?->latitude }},{{ $technicalOrder->contract?->longitude }}">
                     <i class="fas fa-directions"></i> Cómo llegar
                 </a>
             @else
@@ -268,8 +267,8 @@
                             @if($technicalOrder->contract?->napPort)
                                 <p class="mb-2 small text-muted">
                                     Antes estaba en
-                                    <strong>{{ $technicalOrder->contract->napPort->napBox->code }}</strong>,
-                                    puerto {{ $technicalOrder->contract->napPort->number }}.
+                                    <strong>{{ $technicalOrder->contract?->napPort->napBox->code }}</strong>,
+                                    puerto {{ $technicalOrder->contract?->napPort->number }}.
                                 </p>
                             @endif
 

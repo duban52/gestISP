@@ -112,16 +112,25 @@
                             <td class="celda-principal" data-label="">
                                 <strong>Orden {{ $technical_order->id }}</strong>
                                 <span class="badge badge-light border ml-1">{{ $technical_order->type }}</span>
+                                {{-- Encadenado con ?-> a proposito: vease la celda
+                                     de Cliente, mas abajo. --}}
                                 <span class="d-block d-md-none text-muted small mt-1">
-                                    {{ $technical_order->contract->client->name }}
-                                    {{ $technical_order->contract->client->last_name }}
+                                    {{ $technical_order->contract?->client?->fullName() ?: '—' }}
                                 </span>
                             </td>
                             {{-- El consecutivo del contrato, no el id interno --}}
-                            <td data-label="Contrato">{{ $technical_order->contract->numero_visible }}</td>
+                            <td data-label="Contrato">{{ $technical_order->contract?->numero_visible ?: '—' }}</td>
+                            {{-- EL ?-> NO SOBRA, AUNQUE contract_id NO SEA NULABLE.
+                                 La fila del contrato existe siempre —hay clave
+                                 ajena—, pero `Contract` y `Client` llevan el
+                                 alcance global de empresa: si su `company_id` es
+                                 nulo o de otra empresa, la relacion devuelve null
+                                 y esto revienta con «Attempt to read property on
+                                 null». Paso en produccion al filtrar por
+                                 cerradas, y no se reproducia en local porque los
+                                 datos de local estan limpios. --}}
                             <td data-label="Cliente">
-                                {{ $technical_order->contract->client->name }}
-                                {{ $technical_order->contract->client->last_name }}
+                                {{ $technical_order->contract?->client?->fullName() ?: '—' }}
                             </td>
                             <td data-label="Tipo" class="solo-escritorio">{{ $technical_order->type }}</td>
                             <td data-label="Detalle">{{ $technical_order->detail }}</td>

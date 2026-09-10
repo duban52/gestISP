@@ -17,11 +17,11 @@
             </div>
             <div class="col-md-6 mt-2" >
                 <label for="">Número de identidad</label>
-                <input class="form-control" type="text" value="{{ $contract->client->identity_number }}" disabled>
+                <input class="form-control" type="text" value="{{ $contract->client?->identity_number ?: '—' }}" disabled>
             </div>
             <div class="col-md-6 mt-2" >
                 <label for="">Nombre y apellido</label>
-                <input class="form-control" type="text" value="{{ $contract->client->name }} {{ $contract->client->last_name }}" disabled>
+                <input class="form-control" type="text" value="{{ $contract->client?->fullName() ?: '—' }}" disabled>
             </div>
             <div class="col-md-6 mt-2" >
                 <label for="">Barrio y dirección</label>
@@ -29,7 +29,7 @@
             </div>
             <div class="col-md-6 mt-2" >
                 <label for="">Plan</label>
-                <input class="form-control" type="text" value="{{ $contract->plan->name }}" disabled>
+                <input class="form-control" type="text" value="{{ $contract->plan?->name ?: '—' }}" disabled>
             </div>
 
             <div class="col-12">

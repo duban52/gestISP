@@ -5,9 +5,9 @@
      ============================================================ --}}
 <div>
     <p class="mt-2 mb-1"><strong>Datos del cliente</strong></p>
-    <div>Cliente: {{ $technical_order->contract->client->name }} {{ $technical_order->contract->client->last_name }}</div>
-    <div>Barrio y dirección: {{ $technical_order->contract->neighborhood }} {{ $technical_order->contract->address }}</div>
-    <div>Plan: {{ $technical_order->contract->plan->name ?? '—' }}</div>
+    <div>Cliente: {{ $technical_order->contract?->client?->fullName() ?: '—' }}</div>
+    <div>Barrio y dirección: {{ trim(($technical_order->contract?->neighborhood ?? '') . ' ' . ($technical_order->contract?->address ?? '')) ?: '—' }}</div>
+    <div>Plan: {{ $technical_order->contract?->plan?->name ?? '—' }}</div>
 
     <p class="mt-3 mb-1"><strong>Datos de orden</strong></p>
     <div>Tipo de orden: {{ $technical_order->type }}</div>
@@ -68,8 +68,8 @@
 
             if ($technical_order->contract?->isGeolocated()) {
                 $marcadoresOrden[] = [
-                    'lat' => $technical_order->contract->latitude,
-                    'lng' => $technical_order->contract->longitude,
+                    'lat' => $technical_order->contract?->latitude,
+                    'lng' => $technical_order->contract?->longitude,
                     'title' => 'Vivienda del cliente',
                     'icon' => 'fa-home',
                     'color' => 'primary',

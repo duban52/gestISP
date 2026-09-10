@@ -45,15 +45,13 @@
                                 <strong>Orden {{ $technical_order->id }}</strong>
                                 <span class="badge badge-light border ml-1">{{ $technical_order->type }}</span>
                                 <span class="d-block d-md-none text-muted small mt-1">
-                                    {{ $technical_order->contract->client->name }}
-                                    {{ $technical_order->contract->client->last_name }}
+                                    {{ $technical_order->contract?->client?->fullName() ?: '—' }}
                                 </span>
                             </td>
                             {{-- El consecutivo del contrato, no el id interno --}}
-                            <td data-label="Contrato">{{ $technical_order->contract->numero_visible }}</td>
+                            <td data-label="Contrato">{{ $technical_order->contract?->numero_visible ?: '—' }}</td>
                             <td data-label="Cliente">
-                                {{ $technical_order->contract->client->name }}
-                                {{ $technical_order->contract->client->last_name }}
+                                {{ $technical_order->contract?->client?->fullName() ?: '—' }}
                             </td>
                             <td data-label="Tipo" class="solo-escritorio">{{ $technical_order->type }}</td>
                             <td data-label="Detalle">{{ $technical_order->detail }}</td>
