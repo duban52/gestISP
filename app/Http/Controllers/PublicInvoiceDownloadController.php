@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Delivery\InvoicePackage;
 use App\Billing\Delivery\InvoicePdf;
 use App\Models\Invoice;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -15,7 +16,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * LO QUE LA PROTEGE ES LA FIRMA
  * -----------------------------
- * La ruta va con el middleware `signed`: la URL lleva una firma hecha
+ * Las rutas van con el middleware `signed`: la URL lleva una firma hecha
  * con la `APP_KEY` y una fecha de caducidad, y Laravel rechaza con 403
  * cualquier cosa que no cuadre. No se puede cambiar el número de la
  * factura en la barra del navegador para ver la de otro — eso
@@ -34,16 +35,43 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class PublicInvoiceDownloadController extends Controller
 {
-    public function __invoke(int $invoice, InvoicePdf $pdf): StreamedResponse
+    /** La representación gráfica. Es lo que se le manda a una factura interna. */
+    public function pdf(int $invoice, InvoicePdf $pdf): StreamedResponse
     {
-        $factura = Invoice::withoutGlobalScopes()
-            ->with(['contract.client', 'contract.branch', 'invoice_items'])
-            ->findOrFail($invoice);
+        $factura = $this->factura($invoice);
 
         return response()->streamDownload(
             fn () => print $pdf->bytes($factura),
             $pdf->nombre($factura),
             ['Content-Type' => 'application/pdf'],
         );
+    }
+
+    /**
+     * El paquete completo de una factura electrónica: XML, acuse y PDF.
+     *
+     * Si la factura no tiene documento electrónico —porque es interna, o
+     * porque todavía no se ha emitido— se responde 404 en vez de
+     * entregar un ZIP a medias. Un enlace que devuelve un paquete
+     * incompleto es peor que uno que dice que no hay nada.
+     */
+    public function paquete(int $invoice, InvoicePackage $paquete): StreamedResponse
+    {
+        $factura = $this->factura($invoice);
+
+        abort_unless($paquete->disponiblePara($factura), 404);
+
+        return response()->streamDownload(
+            fn () => print $paquete->bytes($factura),
+            $paquete->nombre($factura),
+            ['Content-Type' => 'application/zip'],
+        );
+    }
+
+    private function factura(int $id): Invoice
+    {
+        return Invoice::withoutGlobalScopes()
+            ->with(['contract.client', 'contract.branch', 'invoice_items'])
+            ->findOrFail($id);
     }
 }

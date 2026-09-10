@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Billing\Events\ElectronicDocumentAccepted;
 use App\Billing\Events\InvoiceIssued;
+use App\Listeners\DeliverElectronicInvoice;
 use App\Listeners\GenerateElectronicDocument;
 use App\Listeners\NotifyClientInvoiceIssued;
 use App\Listeners\PersistDarkModePreference;
@@ -36,6 +38,13 @@ class EventServiceProvider extends ServiceProvider
             // nadie le mande nada al cliente.
             GenerateElectronicDocument::class,
             NotifyClientInvoiceIssued::class,
+        ],
+        // Entrega de la factura electronica al adquiriente, cuando la
+        // DIAN la valida. Es otro momento distinto del de arriba:
+        // InvoiceIssued dispara al NUMERAR, antes de transmitir, y
+        // entonces todavia no hay acuse que entregar.
+        ElectronicDocumentAccepted::class => [
+            DeliverElectronicInvoice::class,
         ],
         // Tema claro/oscuro: se guarda en el usuario para que no se
         // pierda al cerrar la sesión

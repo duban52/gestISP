@@ -2,6 +2,7 @@
 
 namespace App\Billing\Dian\Transport;
 
+use App\Billing\Events\ElectronicDocumentAccepted;
 use App\Models\DocumentTransmission;
 use App\Models\ElectronicDocument;
 use Illuminate\Support\Facades\Log;
@@ -196,5 +197,19 @@ class DocumentTransmitter
         }
 
         $documento->update($cambios);
+
+        // El aviso al cliente va DESPUES de guardar, y solo si de
+        // verdad se acepto ahora.
+        //
+        // Despues de guardar porque quien escuche va a leer el acuse y
+        // la fecha de aceptacion de la base; si el evento saliera antes,
+        // leeria el documento como estaba.
+        //
+        // «Ahora» importa: un documento ya aceptado que se reprocesara
+        // no debe volver a disparar el envio. La guarda definitiva es
+        // `delivered_at`, pero no conviene ni siquiera encolar de mas.
+        if ($resultado->resultado === TransmissionResult::ACEPTADO) {
+            ElectronicDocumentAccepted::dispatch($documento->refresh());
+        }
     }
 }

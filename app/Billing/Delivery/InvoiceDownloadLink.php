@@ -44,8 +44,25 @@ class InvoiceDownloadLink
     /** La URL firmada para descargar el PDF de esta factura. */
     public function para(Invoice $factura): string
     {
+        return $this->firmar('invoices.public_pdf', $factura);
+    }
+
+    /**
+     * La URL firmada para descargar el PAQUETE: XML, acuse y PDF.
+     *
+     * Solo tiene sentido para una factura electrónica ya validada. Para
+     * una interna no hay XML ni acuse, y lo que se manda es el PDF a
+     * secas — véase `para()`.
+     */
+    public function paraElPaquete(Invoice $factura): string
+    {
+        return $this->firmar('invoices.public_zip', $factura);
+    }
+
+    private function firmar(string $ruta, Invoice $factura): string
+    {
         return URL::temporarySignedRoute(
-            'invoices.public_pdf',
+            $ruta,
             now()->addDays($this->diasDeVigencia()),
             ['invoice' => $factura->id],
         );

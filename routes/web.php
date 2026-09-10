@@ -59,10 +59,15 @@ Auth::routes(['register' => false]);
 | Se declara ARRIBA, antes del grupo `gestisp`, para que quede a la vista
 | que es publica y nadie la meta por error dentro de un grupo con sesion.
 */
-Route::get('/facturas/{invoice}/descargar', PublicInvoiceDownloadController::class)
-    ->middleware('signed')
-    ->whereNumber('invoice')
-    ->name('invoices.public_pdf');
+Route::middleware('signed')->whereNumber('invoice')->group(function () {
+    // La representacion grafica: lo que se le manda a una factura interna.
+    Route::get('/facturas/{invoice}/descargar', [PublicInvoiceDownloadController::class, 'pdf'])
+        ->name('invoices.public_pdf');
+
+    // El paquete de una electronica: XML firmado, acuse de la DIAN y PDF.
+    Route::get('/facturas/{invoice}/paquete', [PublicInvoiceDownloadController::class, 'paquete'])
+        ->name('invoices.public_zip');
+});
 
 Route::get('/', [App\Http\Controllers\AdminController::class, 'index'])->name('gestisp.index');
 

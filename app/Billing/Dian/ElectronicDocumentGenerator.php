@@ -99,7 +99,7 @@ class ElectronicDocumentGenerator
             if ($certificado) {
                 $xml = $this->firmador->firmar(
                     $xml,
-                    $this->contenidoDel($certificado),
+                    $certificado->contenido(),
                     (string) $certificado->password,
                 );
                 $firmado = true;
@@ -219,33 +219,6 @@ class ElectronicDocumentGenerator
             ->activos()
             ->get()
             ->first(fn (DianCertificate $certificado) => $certificado->vigente());
-    }
-
-    /**
-     * El .p12 en binario.
-     *
-     * El certificado se guarda como ARCHIVO fuera del directorio
-     * publico y solo su ruta va en la base: es una clave privada, y
-     * meterla en una columna la mete tambien en cada copia de
-     * seguridad de la base y en cada volcado que alguien haga.
-     */
-    private function contenidoDel(DianCertificate $certificado): string
-    {
-        $ruta = $certificado->path;
-
-        if (!is_file($ruta)) {
-            $ruta = storage_path('app/' . ltrim($certificado->path, '/'));
-        }
-
-        if (!is_file($ruta)) {
-            throw new RuntimeException(sprintf(
-                'El certificado «%s» no esta en su ruta (%s): no se puede firmar.',
-                $certificado->name,
-                $certificado->path,
-            ));
-        }
-
-        return (string) file_get_contents($ruta);
     }
 
     private function empresaDe(Invoice $factura): ?int

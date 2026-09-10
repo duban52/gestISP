@@ -6,6 +6,7 @@ use App\Billing\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use RuntimeException;
 
 /**
  * Certificado de firma de una empresa.
@@ -58,6 +59,38 @@ class DianCertificate extends Model
     public function sirveParaLaDian(): bool
     {
         return !$this->self_signed;
+    }
+
+    /**
+     * El .p12 en binario.
+     *
+     * El certificado se guarda como ARCHIVO fuera del directorio
+     * publico y solo su ruta va en la base: es una clave privada, y
+     * meterla en una columna la mete tambien en cada copia de seguridad
+     * y en cada volcado que alguien haga.
+     *
+     * La ruta se admite absoluta o relativa a `storage/app`, porque en
+     * el servidor se configuro de las dos formas.
+     *
+     * @throws RuntimeException si el archivo no esta donde dice la base.
+     */
+    public function contenido(): string
+    {
+        $ruta = (string) $this->path;
+
+        if (!is_file($ruta)) {
+            $ruta = storage_path('app/' . ltrim($ruta, '/'));
+        }
+
+        if (!is_file($ruta)) {
+            throw new RuntimeException(sprintf(
+                'El certificado «%s» no esta en su ruta (%s): no se puede firmar.',
+                $this->name,
+                $this->path,
+            ));
+        }
+
+        return (string) file_get_contents($ruta);
     }
 
     /** ¿Sirve hoy? */
