@@ -489,25 +489,43 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
             'valido' => $valido === null ? null : filter_var($valido, FILTER_VALIDATE_BOOLEAN),
             'trackId' => $texto('XmlDocumentKey') ?? $texto('TrackId'),
             'errores' => $errores,
-            'acuse' => $this->acuseDe($texto('XmlBase64Bytes')),
+            'acuse' => $this->acuseDe($cuerpo),
         ];
     }
 
     /**
      * El ApplicationResponse que devuelve la DIAN, desempaquetado.
      *
-     * Viene en `XmlBase64Bytes`, en base64. Es el XML que acredita la
-     * validacion, y hay que entregarselo al adquiriente junto con la
-     * factura: sin el, el cliente no tiene con que comprobar por su
-     * cuenta que su factura fue aceptada.
+     * Viene dentro de la respuesta SOAP, en `XmlBase64Bytes`, en base64.
+     * Es el XML que acredita la validacion, y hay que entregarselo al
+     * adquiriente junto con la factura: sin el, el cliente no tiene con
+     * que comprobar por su cuenta que su factura fue aceptada.
      *
-     * Se saca aqui y no mas adelante porque la alternativa es volver a
-     * abrir el sobre SOAP guardado en `document_transmissions`, que es
-     * una tabla candidata a purga —una fila por intento, con el envio
-     * entero dentro—.
+     * ES PUBLICO PARA PODER RECUPERARLO DESPUES
+     * -----------------------------------------
+     * La respuesta SOAP completa queda guardada en
+     * `document_transmissions.response`, asi que el acuse de un
+     * documento aceptado ANTES de que se empezara a guardar se puede
+     * recuperar sin volver a pedirle nada a la DIAN. Eso hace
+     * `dian:recuperar-acuses`, y usa este mismo metodo para no tener
+     * dos formas distintas de leer lo mismo.
      */
-    private function acuseDe(?string $base64): ?string
+    public function acuseDe(string $respuesta): ?string
     {
+        $anterior = libxml_use_internal_errors(true);
+        $doc = new \DOMDocument();
+        $leido = $doc->loadXML($respuesta);
+        libxml_clear_errors();
+        libxml_use_internal_errors($anterior);
+
+        if (!$leido) {
+            return null;
+        }
+
+        $base64 = (new \DOMXPath($doc))
+            ->query("//*[local-name()='XmlBase64Bytes']")
+            ->item(0)?->nodeValue;
+
         if (!$base64) {
             return null;
         }
