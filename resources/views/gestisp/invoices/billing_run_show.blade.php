@@ -30,14 +30,26 @@
             <h3 class="card-title mb-0">
                 <i class="fas fa-info-circle mr-1"></i> Corrida N.º {{ $run->id }}
             </h3>
+            {{-- LAS DESCARGAS ARRASTRAN EL FILTRO.
+                 Si la pantalla enseña un grupo y el archivo trae toda la
+                 corrida, lo que se le entrega a contabilidad no es lo que
+                 se revisó. --}}
+            @php
+                // BLOQUE y no `@php(...)` en linea: la forma corta con un
+                // array dentro compila mal y revienta al renderizar. Es
+                // una trampa conocida de Blade en este proyecto.
+                $filtroEnLaUrl = array_filter([
+                    'affinity_group_id' => $filtros['affinity_group_id'] ?? null,
+                ]);
+            @endphp
             <div class="btn-group">
-                <a href="{{ route('billing_runs.excel', $run) }}" class="btn btn-success btn-sm">
+                <a href="{{ route('billing_runs.excel', array_merge([$run], $filtroEnLaUrl)) }}" class="btn btn-success btn-sm">
                     <i class="fas fa-file-excel mr-1"></i> Excel
                 </a>
-                <a href="{{ route('billing_runs.csv', $run) }}" class="btn btn-info btn-sm">
+                <a href="{{ route('billing_runs.csv', array_merge([$run], $filtroEnLaUrl)) }}" class="btn btn-info btn-sm">
                     <i class="fas fa-file-csv mr-1"></i> CSV
                 </a>
-                <a href="{{ route('billing_runs.pdf', $run) }}" class="btn btn-danger btn-sm">
+                <a href="{{ route('billing_runs.pdf', array_merge([$run], $filtroEnLaUrl)) }}" class="btn btn-danger btn-sm">
                     <i class="fas fa-file-pdf mr-1"></i> PDF
                 </a>
             </div>
@@ -116,6 +128,93 @@
             @endif
         </div>
     </div>
+
+    {{-- ============================================================
+         Filtro por grupo de afinidad.
+
+         El grupo es como el negocio segmenta sus contratos, así que es
+         la pregunta natural sobre una corrida: cuánto se le facturó a
+         cada uno.
+         ============================================================ --}}
+    <div class="card shadow-sm">
+        <div class="card-body py-2">
+            <form method="GET" action="{{ route('billing_runs.show', $run) }}" class="form-row align-items-end">
+                <x-filtro-grupo-afinidad :filtros="$filtros" clase="col-md-5" />
+
+                <div class="col-md-3 form-group mb-2">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter mr-1"></i> Filtrar
+                    </button>
+
+                    @if($gruposFiltrados->isNotEmpty())
+                        <a href="{{ route('billing_runs.show', $run) }}" class="btn btn-outline-secondary btn-sm">
+                            Quitar filtro
+                        </a>
+                    @endif
+                </div>
+            </form>
+
+            @if($gruposFiltrados->isNotEmpty())
+                <p class="text-muted small mb-0">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Los totales de arriba y el listado de abajo están acotados a
+                    <strong>{{ $gruposFiltrados->pluck('name')->implode(', ') }}</strong>.
+                </p>
+            @endif
+        </div>
+    </div>
+
+    {{-- ============================================================
+         Totales POR GRUPO.
+
+         Es lo que permite leer la corrida por lo que significa para el
+         negocio. Los contratos sin grupo salen como «Sin grupo» y no se
+         omiten: si se omitieran, la suma de los grupos no daría el total
+         y el reporte se contradiría consigo mismo.
+         ============================================================ --}}
+    @if($porGrupo->count() > 0)
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-layer-group mr-1"></i> Totales por grupo de afinidad</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="thead-light">
+                    <tr>
+                        <th>Grupo</th>
+                        <th class="text-center">Facturas</th>
+                        <th class="text-right">Subtotal</th>
+                        <th class="text-right">Impuestos</th>
+                        <th class="text-right">Total</th>
+                        <th class="text-right">Saldo pendiente</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($porGrupo as $fila)
+                        <tr>
+                            <td>{{ $fila['grupo'] }}</td>
+                            <td class="text-center">{{ $fila['facturas'] }}</td>
+                            <td class="text-right">${{ number_format($fila['subtotal'], 0, ',', '.') }}</td>
+                            <td class="text-right">${{ number_format($fila['impuestos'], 0, ',', '.') }}</td>
+                            <td class="text-right font-weight-bold">${{ number_format($fila['total'], 0, ',', '.') }}</td>
+                            <td class="text-right">${{ number_format($fila['saldo_pendiente'], 0, ',', '.') }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                    <tfoot class="thead-light">
+                    <tr>
+                        <th>TOTAL</th>
+                        <th class="text-center">{{ $resumen['facturas'] }}</th>
+                        <th class="text-right">${{ number_format($resumen['subtotal'], 0, ',', '.') }}</th>
+                        <th class="text-right">${{ number_format($resumen['impuestos'], 0, ',', '.') }}</th>
+                        <th class="text-right">${{ number_format($resumen['total'], 0, ',', '.') }}</th>
+                        <th class="text-right">${{ number_format($resumen['saldo_pendiente'], 0, ',', '.') }}</th>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    @endif
 
     {{-- ============================================================
          Facturas generadas

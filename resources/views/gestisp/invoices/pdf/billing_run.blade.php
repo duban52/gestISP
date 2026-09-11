@@ -60,6 +60,40 @@
         </tr>
     </table>
 
+    {{-- ---------- Totales por grupo ----------
+         Va ANTES del detalle: es el resumen que se mira primero, y en un
+         reporte de varias páginas el detalle lo empujaría al final.
+
+         `$porGrupo` puede no llegar si alguien renderiza esta plantilla
+         desde otro sitio; entonces el bloque no se pinta, en vez de
+         reventar el PDF. --}}
+    @if(!empty($porGrupo) && count($porGrupo) > 1)
+        <div class="section-title">Totales por grupo de afinidad</div>
+
+        <table class="data">
+            <thead>
+            <tr>
+                <th style="width: 40%">Grupo</th>
+                <th style="width: 10%" class="text-right">Facturas</th>
+                <th style="width: 17%" class="text-right">Subtotal</th>
+                <th style="width: 16%" class="text-right">Impuestos</th>
+                <th style="width: 17%" class="text-right">Total</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach($porGrupo as $fila)
+                <tr>
+                    <td>{{ $fila['grupo'] }}</td>
+                    <td class="text-right">{{ $fila['facturas'] }}</td>
+                    <td class="text-right">{{ number_format($fila['subtotal'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ number_format($fila['impuestos'], 0, ',', '.') }}</td>
+                    <td class="text-right strong">{{ number_format($fila['total'], 0, ',', '.') }}</td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
+    @endif
+
     {{-- ---------- Detalle ---------- --}}
     <div class="section-title">Facturas generadas</div>
 

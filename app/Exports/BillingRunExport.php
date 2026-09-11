@@ -23,8 +23,18 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  */
 class BillingRunExport implements FromCollection, WithHeadings, WithTitle, WithStyles, ShouldAutoSize
 {
-    public function __construct(private readonly BillingRun $run)
-    {
+    /**
+     * @param int[] $grupos ids de grupo de afinidad a los que acotar.
+     *                      Vacio = la corrida entera.
+     *
+     * EL FILTRO DE LA PANTALLA VIAJA AL ARCHIVO. Si la pantalla
+     * enseñara un grupo y la descarga trajera todo, el archivo que se le
+     * entrega a contabilidad no seria el que se reviso.
+     */
+    public function __construct(
+        private readonly BillingRun $run,
+        private readonly array $grupos = [],
+    ) {
     }
 
     public function headings(): array
@@ -36,6 +46,9 @@ class BillingRunExport implements FromCollection, WithHeadings, WithTitle, WithS
             'Nombres',
             'Apellidos',
             'Plan',
+            // El grupo, para poder dinamizar por el en la hoja de
+            // calculo sin tener que cruzarlo con otra fuente.
+            'Grupo de afinidad',
             'Período facturado',
             'Detalle facturado',
             'Cargos adicionales',
@@ -51,7 +64,15 @@ class BillingRunExport implements FromCollection, WithHeadings, WithTitle, WithS
 
     public function collection()
     {
-        return $this->run->facturasDelReporte()->map(function ($factura) {
+        $facturas = $this->run->facturasDelReporte();
+
+        if ($this->grupos !== []) {
+            $facturas = $facturas->filter(
+                fn ($factura) => in_array((int) $factura->contract?->affinity_group_id, $this->grupos, true),
+            )->values();
+        }
+
+        return $facturas->map(function ($factura) {
             $cliente = $factura->contract?->client;
 
             // Se separan los ítems del plan de los cargos adicionales
@@ -74,6 +95,7 @@ class BillingRunExport implements FromCollection, WithHeadings, WithTitle, WithS
                 $cliente?->name,
                 $cliente?->last_name,
                 $factura->contract?->plan?->name,
+                $factura->contract?->affinityGroup?->name ?: 'Sin grupo',
                 $factura->billed_period ?: $factura->billed_month_name,
                 implode(' · ', $servicios),
                 implode(' · ', $cargos),

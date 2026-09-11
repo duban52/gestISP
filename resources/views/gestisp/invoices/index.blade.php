@@ -15,16 +15,26 @@
             <div class="row d-flex justify-content-between mb-4 pr-3">
                 <div class="col-md-6">
                     <h2 class="ml-2 P3">LISTADO DE FACTURAS</h2>
-                    @if($totalPendding > 0)
-                        {{-- Suma de los SALDOS de todas las facturas
-                             abiertas de la sucursal (pendientes,
-                             parciales, con riesgo y vencidas) --}}
-                        <div class="ml-2">
-                            <span class="badge badge-warning badge-lg">
-                                Por recaudar: ${{ number_format($totalPendding, 2) }}
+                    {{-- LA ETIQUETA SIGUE AL FILTRO.
+                         Suma los saldos de las facturas abiertas
+                         —pendientes, parciales, con riesgo y vencidas— de
+                         lo que se está viendo. Antes sumaba siempre toda
+                         la sucursal, así que al filtrar por grupo decía
+                         una cifra que no correspondía a la tabla de
+                         abajo.
+                         Se pinta aunque sea cero: un grupo sin nada
+                         pendiente es un dato, y esconder la etiqueta
+                         haría dudar de si el filtro se aplicó. --}}
+                    <div class="ml-2">
+                        <span class="badge badge-warning badge-lg">
+                            Por recaudar: ${{ number_format($totalPendding, 2) }}
+                        </span>
+                        @if($gruposFiltrados->isNotEmpty())
+                            <span class="badge badge-light border">
+                                solo {{ $gruposFiltrados->pluck('name')->implode(', ') }}
                             </span>
-                        </div>
-                    @endif
+                        @endif
+                    </div>
                 </div>
                 <div class="col-md-2 text-center text-md-right mb-2">
                     <a href="{{ route('invoices.billing_runs') }}" class="btn btn-info col-10" title="Historial de corridas de facturación">

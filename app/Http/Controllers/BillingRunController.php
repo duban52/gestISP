@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Exports\BillingRunExport;
+use App\Models\AffinityGroup;
 use App\Models\BillingRun;
+use App\Support\BranchFilter;
+use Illuminate\Http\Request;
 use App\Support\PdfBranding;
 use Illuminate\Http\Response;
 use Illuminate\View\View;
@@ -34,37 +37,102 @@ class BillingRunController extends Controller
     /**
      * Detalle en pantalla.
      */
-    public function show(BillingRun $billingRun): View
+    public function show(Request $request, BillingRun $billingRun): View
     {
         $this->verificarSucursal($billingRun);
 
-        $facturas = $billingRun->facturasDelReporte();
+        $gruposPedidos = BranchFilter::normalizar($request->query('affinity_group_id'));
+        $facturas = $this->facturasFiltradas($billingRun, $gruposPedidos);
 
         return view('gestisp.invoices.billing_run_show', [
             'run' => $billingRun->load('user', 'branch'),
             'facturas' => $facturas,
             'resumen' => $this->resumen($facturas),
+            'porGrupo' => $this->porGrupo($facturas),
+            'filtros' => $request->query(),
+            'gruposFiltrados' => $gruposPedidos !== []
+                ? AffinityGroup::whereIn('id', $gruposPedidos)->get()
+                : collect(),
         ]);
     }
 
+    /**
+     * Las facturas del reporte, acotadas al grupo pedido.
+     *
+     * EL FILTRO VIAJA A LAS DESCARGAS
+     * -------------------------------
+     * Excel, CSV y PDF pasan por aquí con los mismos parámetros. Si la
+     * pantalla enseñara un grupo y la descarga trajera todo, el archivo
+     * que se le entrega a contabilidad no sería el que se revisó.
+     *
+     * Se filtra en memoria y no en la consulta porque `facturasDelReporte()`
+     * tiene dos caminos —las facturas enlazadas a la corrida, o las
+     * deducidas por período en las corridas antiguas— y duplicar el
+     * filtro en los dos invita a que se separen.
+     *
+     * @param  int[]  $gruposPedidos
+     */
+    private function facturasFiltradas(BillingRun $billingRun, array $gruposPedidos)
+    {
+        $facturas = $billingRun->facturasDelReporte();
+
+        if ($gruposPedidos === []) {
+            return $facturas;
+        }
+
+        return $facturas->filter(
+            fn ($factura) => in_array((int) $factura->contract?->affinity_group_id, $gruposPedidos, true),
+        )->values();
+    }
+
+    /**
+     * Los totales DESGLOSADOS POR GRUPO DE AFINIDAD.
+     *
+     * Es lo que permite leer una corrida por lo que significa para el
+     * negocio: cuánto se le facturó a cada segmento. El total general no
+     * lo dice, y sumarlo a mano desde el listado es lo que se estaba
+     * haciendo.
+     *
+     * Los contratos SIN grupo entran como «Sin grupo» en vez de
+     * desaparecer: si se omitieran, la suma de los grupos no daría el
+     * total y el reporte se contradiría consigo mismo.
+     *
+     * @param  \Illuminate\Support\Collection  $facturas
+     */
+    private function porGrupo($facturas)
+    {
+        return $facturas
+            ->groupBy(fn ($factura) => $factura->contract?->affinityGroup?->name ?: 'Sin grupo')
+            ->map(fn ($delGrupo, $nombre) => [
+                'grupo' => $nombre,
+                'facturas' => $delGrupo->count(),
+                'subtotal' => (float) $delGrupo->sum('subtotal'),
+                'impuestos' => (float) $delGrupo->sum('tax'),
+                'total' => (float) $delGrupo->sum('total'),
+                'saldo_pendiente' => (float) $delGrupo->sum('pending_invoice_amount'),
+            ])
+            ->sortByDesc('total')
+            ->values();
+    }
+
     /** Descarga en Excel. */
-    public function excel(BillingRun $billingRun): BinaryFileResponse
+    public function excel(Request $request, BillingRun $billingRun): BinaryFileResponse
     {
         $this->verificarSucursal($billingRun);
 
         return Excel::download(
-            new BillingRunExport($billingRun),
+            new BillingRunExport($billingRun, BranchFilter::normalizar($request->query('affinity_group_id'))),
             $this->nombreArchivo($billingRun, 'xlsx'),
         );
     }
 
     /** Descarga en CSV. */
-    public function csv(BillingRun $billingRun): BinaryFileResponse
+    public function csv(Request $request, BillingRun $billingRun): BinaryFileResponse
     {
         $this->verificarSucursal($billingRun);
 
         return Excel::download(
-            new BillingRunExport($billingRun),
+            new BillingRunExport($billingRun, BranchFilter::normalizar($request->query('affinity_group_id'))),
             $this->nombreArchivo($billingRun, 'csv'),
             FormatoExcel::CSV,
             ['Content-Type' => 'text/csv'],
@@ -72,11 +140,16 @@ class BillingRunController extends Controller
     }
 
     /** Descarga en PDF. */
-    public function pdf(BillingRun $billingRun): Response
+    public function pdf(Request $request, BillingRun $billingRun): Response
     {
         $this->verificarSucursal($billingRun);
 
-        $facturas = $billingRun->facturasDelReporte();
+        $gruposPedidos = BranchFilter::normalizar($request->query('affinity_group_id'));
+        $facturas = $this->facturasFiltradas($billingRun, $gruposPedidos);
+
+        $gruposFiltrados = $gruposPedidos !== []
+            ? AffinityGroup::whereIn('id', $gruposPedidos)->pluck('name')->implode(', ')
+            : null;
 
         $pdf = PdfBranding::make(
             'gestisp.invoices.pdf.billing_run',
@@ -84,9 +157,14 @@ class BillingRunController extends Controller
                 'run' => $billingRun->load('user'),
                 'facturas' => $facturas,
                 'resumen' => $this->resumen($facturas),
+                'porGrupo' => $this->porGrupo($facturas),
+                // En el encabezado, para que no se confunda un reporte
+                // acotado con el de la corrida entera.
+                'gruposFiltrados' => $gruposFiltrados,
                 'branch' => $billingRun->branch,
                 'pdfTitle' => 'Reporte de facturación',
-                'pdfSubtitle' => 'Período ' . $billingRun->periodo_legible,
+                'pdfSubtitle' => 'Período ' . $billingRun->periodo_legible
+                    . ($gruposFiltrados ? ' — solo ' . $gruposFiltrados : ''),
             ],
             landscape: true,
         );

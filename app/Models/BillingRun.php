@@ -67,6 +67,9 @@ class BillingRun extends Model
         $relaciones = [
             'contract.client',
             'contract.plan',
+            // El grupo de afinidad: el reporte filtra y totaliza por él,
+            // y sin precargarlo seria una consulta por factura.
+            'contract.affinityGroup',
             'invoice_items',
         ];
 

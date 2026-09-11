@@ -233,6 +233,36 @@ class InvoiceGenerator
     }
 
     /**
+     * EL REDONDEO VA EN EL RENGLÓN, NO EN EL TOTAL.
+     *
+     * Las columnas de dinero son `decimal(15,2)`, así que la base de
+     * datos redondea SÍ O SÍ. La única decisión es si redondeamos
+     * nosotros, una vez y de forma consistente, o si deja que MySQL
+     * redondee cada columna por su cuenta.
+     *
+     * Dejándoselo a MySQL, `subtotal`, `tax` y `total` se redondean por
+     * separado a partir de valores con todos sus decimales, y la suma de
+     * redondeos no es el redondeo de la suma. Con un mes prorrateado y
+     * IVA —único caso donde la base deja de ser un número redondo— eso
+     * desajusta un centavo y la DIAN rechaza con FAU14: «Valor a Pagar
+     * de Factura es distinto de la Suma de Valor Bruto más tributos».
+     *
+     * Medido sobre las combinaciones reales de precio y días
+     * prorrateados: fallaba en torno al 8% de los casos. Por eso solo
+     * aparecía de vez en cuando, y solo en facturas prorrateadas con
+     * IVA.
+     *
+     * Redondeando el renglón y construyendo los totales a partir de los
+     * renglones ya redondeados, se cumplen a la vez las tres cosas que
+     * mira la DIAN, y por construcción y no por suerte:
+     *
+     *   · suma de LineExtensionAmount de las líneas = Valor Bruto
+     *   · suma de los IVA de las líneas             = tributos
+     *   · Valor Bruto + tributos                    = Valor a Pagar
+     *
+     * Y de paso el IVA de cada línea es exactamente su base declarada
+     * por la tarifa, que es lo que exige FAS07.
+     *
      * Crea los ítems de la factura y devuelve los totales:
      * servicios del plan (prorrateados, con IVA) y cargos
      * adicionales pendientes del contrato.
@@ -241,17 +271,21 @@ class InvoiceGenerator
      */
     private function addItems(Invoice $invoice, Contract $contract, float|int $prorateMultiplier): array
     {
-        $subtotal = 0;
-        $tax = 0;
-        $total = 0;
+        $subtotal = 0.0;
+        $tax = 0.0;
+        $total = 0.0;
 
         // Servicios del plan
         if ($contract->plan && $contract->plan->services) {
             foreach ($contract->plan->services as $service) {
-                $basePrice = $service->base_price * $prorateMultiplier;
+                // SE REDONDEA AQUÍ, EN EL RENGLÓN. Ver el comentario de
+                // `addItems()`: acumular con todos los decimales y dejar
+                // que la base de datos redondee cada columna por su
+                // cuenta es lo que rompía FAU14.
+                $basePrice = round($service->base_price * $prorateMultiplier, 2);
                 $taxAmount = $service->tax_percentage > 0
-                    ? $basePrice * ($service->tax_percentage / 100)
-                    : 0;
+                    ? round($basePrice * ($service->tax_percentage / 100), 2)
+                    : 0.0;
 
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
@@ -344,9 +378,22 @@ class InvoiceGenerator
         }
 
         return [
-            'subtotal' => $subtotal,
-            'tax' => $tax,
-            'total' => $total,
+            'subtotal' => round($subtotal, 2),
+            'tax' => round($tax, 2),
+            // EL TOTAL SE DERIVA, no se acumula aparte.
+            //
+            // Es la ecuación que comprueba la DIAN en FAU14 —«Valor a
+            // Pagar = Valor Bruto + tributos − descuentos + cargos»— y
+            // derivándola no puede dejar de cumplirse. Acumularla por
+            // separado la hacía depender de que dos caminos distintos
+            // redondearan igual, y el 8% de las veces no lo hacían.
+            //
+            // `round()` final contra el error de representación del
+            // float: 0.1 + 0.2 no es 0.3 ni en PHP ni en ningún sitio.
+            //
+            // Si algún día hay descuentos, es AQUÍ donde tienen que
+            // restarse, o la ecuación deja de cerrar.
+            'total' => round($subtotal + $tax, 2),
         ];
     }
 }

@@ -56,18 +56,6 @@ class InvoiceController extends Controller
         // pasará a un comando programado diario y saldrá del GET)
         $overdueProcessor->markOverdueInvoices();
 
-        $totalPendding = 0;
-
-        // Total POR RECAUDAR de la sucursal: la suma de los saldos
-        // de todas las facturas abiertas (pendientes, parciales,
-        // con riesgo y vencidas). Antes solo sumaba el total de
-        // las pendientes e ignoraba vencidas y abonos.
-        if (app(CurrentContext::class)->activo()) {
-            $totalPendding = Invoice::whereIn('status', InvoiceStatus::payable())
-                ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
-                ->sum('pending_invoice_amount');
-        }
-
         // El filtro va SOLO por la sucursal del contrato.
         //
         // Antes tambien exigia clients.branch_id, y desde que el
@@ -83,11 +71,32 @@ class InvoiceController extends Controller
         $sucursalesPedidas = BranchFilter::normalizar($request->query('branch_id'));
         $gruposPedidos = BranchFilter::normalizar($request->query('affinity_group_id'));
 
-        $invoices = Invoice::join('contracts', 'invoices.contract_id', '=', 'contracts.id')
-            ->join('clients', 'contracts.client_id', '=', 'clients.id')
+        // Una sola definición de «qué facturas entran», para el listado
+        // y para el total. Dos consultas separadas acaban divergiendo, y
+        // es justo lo que pasaba: la etiqueta sumaba TODA la sucursal
+        // aunque el listado estuviera filtrado por grupo, así que decía
+        // una cifra que no correspondía a lo que se estaba viendo.
+        $alcance = fn ($q) => $q
             ->whereIn('contracts.branch_id', app(CurrentContext::class)->branchIds())
-            ->when($sucursalesPedidas !== [], fn ($q) => $q->whereIn('contracts.branch_id', $sucursalesPedidas))
-            ->when($gruposPedidos !== [], fn ($q) => $q->whereIn('contracts.affinity_group_id', $gruposPedidos))
+            ->when($sucursalesPedidas !== [], fn ($s) => $s->whereIn('contracts.branch_id', $sucursalesPedidas))
+            ->when($gruposPedidos !== [], fn ($s) => $s->whereIn('contracts.affinity_group_id', $gruposPedidos));
+
+        // Total POR RECAUDAR de lo que se está viendo: la suma de los
+        // saldos de las facturas abiertas (pendientes, parciales, con
+        // riesgo y vencidas).
+        $totalPendding = 0;
+
+        if (app(CurrentContext::class)->activo()) {
+            $totalPendding = (float) $alcance(
+                Invoice::join('contracts', 'invoices.contract_id', '=', 'contracts.id')
+                    ->whereIn('invoices.status', InvoiceStatus::payable()),
+            )->sum('invoices.pending_invoice_amount');
+        }
+
+        $invoices = $alcance(
+            Invoice::join('contracts', 'invoices.contract_id', '=', 'contracts.id')
+                ->join('clients', 'contracts.client_id', '=', 'clients.id'),
+        )
             ->select('invoices.*')
             // El listado muestra el número de contrato y la
             // identificación del cliente: se precargan para no hacer
@@ -102,6 +111,12 @@ class InvoiceController extends Controller
             'invoices' => $invoices,
             'totalPendding' => $totalPendding,
             'filtros' => $request->query(),
+            // Para que la etiqueta pueda decir que está acotada: una
+            // cifra filtrada presentada como si fuera el total de la
+            // sucursal es peor que no enseñarla.
+            'gruposFiltrados' => $gruposPedidos !== []
+                ? \App\Models\AffinityGroup::whereIn('id', $gruposPedidos)->get()
+                : collect(),
         ]);
     }
 
