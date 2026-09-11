@@ -52,7 +52,7 @@ class WarehouseController extends Controller
     public function index(): View
     {
         $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())
-            ->with(['user', 'branch'])
+            ->with(['user', 'creator', 'branch'])
             ->withCount('inventories')
             ->get();
 
@@ -172,10 +172,16 @@ class WarehouseController extends Controller
     /**
      * Guarda un nuevo almacén.
      *
-     * El almacén queda asociado a la sucursal activa y al usuario
-     * que se elija en el formulario (su dueño: cada técnico tiene su
-     * propio almacén). Si no se elige ninguno, queda a nombre de
-     * quien lo crea.
+     * QUIEN LO CREA NO ES QUIEN LO POSEE.
+     *
+     * Antes, dejar el dueño en blanco lo ponía a nombre de quien lo
+     * creaba. Eso tenía dos consecuencias malas: un almacén creado por
+     * la oficina para un técnico quedaba a nombre de la oficina, y no
+     * había forma de dejar un almacén SIN dueño — que es justo lo que es
+     * una bodega o el de cabecera.
+     *
+     * Ahora en blanco significa GENERAL, y quien lo creó se guarda
+     * aparte.
      */
     public function store(Request $request): RedirectResponse
     {
@@ -184,7 +190,8 @@ class WarehouseController extends Controller
         Warehouse::create([
             'description' => $validated['description'],
             'branch_id'   => app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
-            'user_id'     => $validated['user_id'] ?? Auth::id(),
+            'user_id'     => $validated['user_id'] ?? null,
+            'created_by'  => Auth::id(),
         ]);
 
         return redirect()
@@ -197,6 +204,10 @@ class WarehouseController extends Controller
      */
     public function edit(Warehouse $warehouse): View
     {
+        $this->exigirMismaSucursal($warehouse);
+
+        $warehouse->loadMissing('creator');
+
         $users = User::whereHas('branches', function ($q) {
             $q->whereIn('branches.id', app(CurrentContext::class)->branchIds());
         })->orderBy('name')->get();
@@ -205,17 +216,21 @@ class WarehouseController extends Controller
     }
 
     /**
-     * Actualiza un almacén existente.
+     * Actualiza un almacén existente: su nombre y su dueño.
+     *
+     * EN BLANCO SÍ QUITA EL DUEÑO. Antes se conservaba el que hubiera,
+     * así que un almacén asignado por error no se podía devolver a
+     * «general» desde la pantalla — había que ir a la base de datos.
      */
     public function update(Request $request, Warehouse $warehouse): RedirectResponse
     {
+        $this->exigirMismaSucursal($warehouse);
+
         $validated = $this->validateWarehouse($request);
 
         $warehouse->update([
             'description' => $validated['description'],
-            // Solo se cambia el dueño si se eligió uno; en blanco se
-            // conserva el actual.
-            'user_id' => $validated['user_id'] ?? $warehouse->user_id,
+            'user_id' => $validated['user_id'] ?? null,
         ]);
 
         return redirect()
@@ -291,13 +306,30 @@ class WarehouseController extends Controller
     }
 
     /**
+     * Corta el paso a almacenes de otra sucursal.
+     *
+     * El enlace de edición nunca los ofrece, pero la ruta acepta
+     * cualquier id: sin esto bastaba con cambiar el número en la URL
+     * para reasignarle el dueño al almacén de otra sede.
+     */
+    private function exigirMismaSucursal(Warehouse $warehouse): void
+    {
+        abort_unless(
+            app(CurrentContext::class)->permiteSucursal($warehouse->branch_id),
+            403,
+            'Ese almacén pertenece a otra sucursal.',
+        );
+    }
+
+    /**
      * Reglas de validación compartidas entre store y update.
      */
     private function validateWarehouse(Request $request): array
     {
         return $request->validate([
             'description' => 'required|string|max:255',
-            // Opcional: el dueño del almacén. Se valida que exista.
+            // Opcional: el DUEÑO. En blanco significa almacén general
+            // —bodega, cabecera—, no «a nombre de quien lo crea».
             'user_id' => 'nullable|exists:users,id',
         ]);
     }

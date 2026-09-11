@@ -274,4 +274,148 @@ class ProcessOrderWarehouseTest extends TestCase
             'serial_number' => 'SN-ONT-002',
         ]);
     }
+
+    // ==================== Varios almacenes por técnico ====================
+    //
+    // Un técnico puede tener más de uno: la furgoneta y un stock aparte.
+    // Antes el sistema elegía el más antiguo, o sea ADIVINABA, y el
+    // material se descontaba de donde nadie había dicho.
+
+    /** Un segundo almacén del mismo técnico. */
+    private function segundoAlmacenDelTecnico(): Warehouse
+    {
+        return Warehouse::create([
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->tecnico->id,
+            'created_by' => $this->oficina->id,
+            'description' => 'Stock de casa del técnico',
+        ]);
+    }
+
+    public function test_con_dos_almacenes_hay_que_decir_de_cual_sale(): void
+    {
+        $segundo = $this->segundoAlmacenDelTecnico();
+        $orden = $this->orden($this->tecnico);
+        $material = $this->ontEnLosDosAlmacenes('SN-ONT-010');
+
+        // Y también en el segundo, para que ninguno sea «el evidente».
+        Inventory::create([
+            'warehouse_id' => $segundo->id,
+            'material_id' => $material->id,
+            'quantity' => 1,
+            'unit_of_measurement' => 'Unidades',
+            'serial_number' => 'SN-ONT-010',
+        ]);
+
+        $respuesta = $this->comoLaOficina()->post(
+            route('technicals_orders.process', $orden->id),
+            $this->datosReporte([
+                'material_id' => [$material->id],
+                'quantity' => [1],
+                'serial_number' => ['SN-ONT-010'],
+                // Sin `warehouse_id`: antes se resolvía solo, por el más
+                // antiguo. Ahora se niega en vez de adivinar.
+            ]),
+        );
+
+        $respuesta->assertSessionHas('error');
+        $this->assertSame('Asignada', $orden->fresh()->status);
+
+        foreach ([$this->almacenDelTecnico, $segundo] as $almacen) {
+            $this->assertDatabaseHas('inventories', [
+                'warehouse_id' => $almacen->id,
+                'serial_number' => 'SN-ONT-010',
+            ]);
+        }
+    }
+
+    public function test_se_descuenta_del_almacen_elegido(): void
+    {
+        $segundo = $this->segundoAlmacenDelTecnico();
+        $orden = $this->orden($this->tecnico);
+        $material = $this->ontEnLosDosAlmacenes('SN-ONT-011');
+
+        Inventory::create([
+            'warehouse_id' => $segundo->id,
+            'material_id' => $material->id,
+            'quantity' => 1,
+            'unit_of_measurement' => 'Unidades',
+            'serial_number' => 'SN-ONT-011',
+        ]);
+
+        $this->comoLaOficina()->post(
+            route('technicals_orders.process', $orden->id),
+            $this->datosReporte([
+                'warehouse_id' => $segundo->id,
+                'material_id' => [$material->id],
+                'quantity' => [1],
+                'serial_number' => ['SN-ONT-011'],
+            ]),
+        )->assertSessionHas('success');
+
+        // Salió del elegido...
+        $this->assertDatabaseMissing('inventories', [
+            'warehouse_id' => $segundo->id,
+            'serial_number' => 'SN-ONT-011',
+        ]);
+
+        // ...y el otro del mismo técnico quedó intacto.
+        $this->assertDatabaseHas('inventories', [
+            'warehouse_id' => $this->almacenDelTecnico->id,
+            'serial_number' => 'SN-ONT-011',
+        ]);
+    }
+
+    public function test_no_se_puede_elegir_el_almacen_de_otro(): void
+    {
+        // La petición la manipula cualquiera. Sin esta comprobación
+        // bastaba con cambiar un número para descontar del almacén
+        // principal, o del de otro técnico.
+        $this->segundoAlmacenDelTecnico();
+        $orden = $this->orden($this->tecnico);
+        $material = $this->ontEnLosDosAlmacenes('SN-ONT-012');
+
+        $respuesta = $this->comoLaOficina()->post(
+            route('technicals_orders.process', $orden->id),
+            $this->datosReporte([
+                'warehouse_id' => $this->almacenPrincipal->id, // no es suyo
+                'material_id' => [$material->id],
+                'quantity' => [1],
+                'serial_number' => ['SN-ONT-012'],
+            ]),
+        );
+
+        $respuesta->assertSessionHas('error');
+        $this->assertDatabaseHas('inventories', [
+            'warehouse_id' => $this->almacenPrincipal->id,
+            'serial_number' => 'SN-ONT-012',
+        ]);
+    }
+
+    public function test_con_un_solo_almacen_no_se_pregunta(): void
+    {
+        // Sería una pregunta con una única respuesta posible.
+        $orden = $this->orden($this->tecnico);
+
+        $respuesta = $this->comoLaOficina()
+            ->get(route('technicals_orders.show', $orden->id))
+            ->assertOk();
+
+        $respuesta->assertDontSee('Almacén del que sale el material', false);
+        $respuesta->assertSee('Furgoneta del técnico', false);
+    }
+
+    public function test_con_varios_la_pantalla_obliga_a_elegir(): void
+    {
+        $this->segundoAlmacenDelTecnico();
+        $orden = $this->orden($this->tecnico);
+
+        $respuesta = $this->comoLaOficina()
+            ->get(route('technicals_orders.show', $orden->id))
+            ->assertOk();
+
+        $respuesta->assertSee('Almacén del que sale el material', false);
+        $respuesta->assertSee('Furgoneta del técnico', false);
+        $respuesta->assertSee('Stock de casa del técnico', false);
+    }
 }

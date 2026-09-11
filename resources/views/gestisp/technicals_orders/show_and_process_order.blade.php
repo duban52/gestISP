@@ -337,6 +337,52 @@
                     </button>
                 </div>
 
+                {{-- ============================================================
+                     DE QUÉ ALMACÉN SALE EL MATERIAL.
+
+                     Un técnico puede tener varios —la furgoneta y un stock
+                     aparte, por ejemplo—. Antes el sistema elegía el más
+                     antiguo, o sea adivinaba: enseñaba las existencias de uno
+                     sin que nadie hubiera decidido cuál, y descontaba de ahí.
+
+                     Con uno solo no se pregunta: sería una pregunta con una
+                     única respuesta posible. Se manda igual en un campo oculto
+                     para que el servidor reciba siempre lo mismo.
+                     ============================================================ --}}
+                @if($almacenes->count() > 1)
+                    <div class="form-group">
+                        <label for="warehouse_id" class="font-weight-bold">
+                            Almacén del que sale el material <span class="text-danger">*</span>
+                        </label>
+                        <select name="warehouse_id" id="warehouse_id" class="form-control" required>
+                            @foreach($almacenes as $almacen)
+                                <option value="{{ $almacen->id }}" @selected(old('warehouse_id') == $almacen->id)>
+                                    {{ $almacen->description }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <small class="form-text text-muted">
+                            Al cambiarlo cambian los materiales disponibles. Si ya agregó
+                            material, revíselo: lo agregado sale del almacén que estaba elegido.
+                        </small>
+                    </div>
+                @elseif($almacenes->count() === 1)
+                    <input type="hidden" name="warehouse_id" value="{{ $almacenes->first()->id }}">
+                    <p class="text-muted small mb-2">
+                        <i class="fas fa-warehouse mr-1"></i>
+                        El material sale de <strong>{{ $almacenes->first()->description }}</strong>.
+                    </p>
+                @else
+                    {{-- Sin almacén la orden no se puede procesar con material:
+                         mejor decirlo aquí que dejar que lo descubra al enviar. --}}
+                    <div class="alert alert-warning py-2 px-3 small mb-2">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        El técnico asignado no tiene almacén propio, así que no hay de dónde
+                        descontar material. Pida que le creen uno en <strong>Almacenes</strong>
+                        y se lo asignen.
+                    </div>
+                @endif
+
                 @if($requiresMaterial)
                     <div class="alert alert-info py-2 px-3 small mb-2">
                         <i class="fas fa-info-circle mr-1"></i>
@@ -486,6 +532,15 @@
                 <div class="modal-body">
                     <div class="form-group">
                         <label>Material</label>
+                        {{-- Las existencias de TODOS los almacenes del técnico,
+                             incrustadas. El modal reconstruye las opciones al
+                             cambiar de almacén; no se piden por AJAX porque el
+                             técnico no tiene permisos sobre los endpoints de
+                             movimientos — esa llamada ya falló una vez y dejó
+                             la disponibilidad en cero con un falso «excede el
+                             stock». --}}
+                        <script type="application/json" id="materiales-por-almacen">@json($materialesPorAlmacen)</script>
+
                         <select id="modal-material-select" class="form-control material-select" required>
                             <option value="">Seleccione un material</option>
                             @foreach ($materials as $material)

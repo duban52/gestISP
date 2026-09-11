@@ -558,15 +558,19 @@ class TechnicalOrderController extends Controller
         try {
             DB::beginTransaction();
 
-            // Almacén personal del TÉCNICO ASIGNADO (de ahí sale el
-            // material). Ver almacenDelTecnico(): antes salía del
-            // almacén de quien estuviera logueado.
-            $warehouse = $this->almacenDelTecnico($technicalOrder);
+            // Almacén del TÉCNICO ASIGNADO del que sale el material.
+            // Ver almacenElegido(): ni el de quien cierra la orden, ni
+            // uno elegido a dedo entre los varios que pueda tener.
+            $warehouse = $this->almacenElegido($technicalOrder, $request->input('warehouse_id'));
 
             if (!$warehouse) {
+                $suyos = $this->almacenesDelTecnico($technicalOrder);
+
                 throw new \Exception(
-                    'El técnico asignado a esta orden no tiene almacén propio. '
-                        . 'Créele uno en Almacenes y asígneselo antes de procesarla.'
+                    $suyos->isEmpty()
+                        ? 'El técnico asignado a esta orden no tiene almacén propio. '
+                            . 'Créele uno en Almacenes y asígneselo antes de procesarla.'
+                        : 'Indique de cuál de los almacenes del técnico sale el material.'
                 );
             }
 
@@ -709,11 +713,38 @@ class TechnicalOrderController extends Controller
      */
     public function show(TechnicalOrder $technicalOrder, NapFinder $napFinder): View
     {
-        // EL MISMO ALMACÉN QUE USARÁ processOrder. Si esta pantalla
-        // enseñara la disponibilidad de otro almacén, el técnico
+        // LOS MISMOS ALMACENES QUE ACEPTARÁ processOrder. Si esta
+        // pantalla enseñara la disponibilidad de otro, el técnico
         // elegiría material que al procesar no está donde se busca.
-        $warehouse = $this->almacenDelTecnico($technicalOrder);
-        $materials = $this->getTechnicianMaterials($technicalOrder->user_assigned);
+        $almacenes = $this->almacenesDelTecnico($technicalOrder);
+        $warehouse = $almacenes->first();
+
+        // Las existencias de CADA almacén, incrustadas en la página. No
+        // por AJAX: el técnico no tiene permisos sobre los endpoints de
+        // movimientos, y esa llamada ya falló una vez dejando la
+        // disponibilidad en cero y disparando un falso «excede el stock».
+        $existencias = $almacenes->mapWithKeys(
+            fn ($almacen) => [$almacen->id => $this->materialesDe($almacen)],
+        );
+
+        // Ya en la forma que consume el modal. Se arma AQUÍ y no en la
+        // plantilla: montar esta estructura dentro de un `@json` acaba
+        // en una expresión que compila y revienta al renderizar, que es
+        // una trampa conocida de Blade en este proyecto.
+        $materialesPorAlmacen = $existencias->map(
+            fn ($materiales) => $materiales->map(fn ($m) => [
+                'id' => $m->id,
+                'name' => $m->name,
+                'is_equipment' => (bool) $m->is_equipment,
+                'unit' => $m->unit_of_measurement,
+                'available' => (int) $m->total_quantity,
+                'serials' => $m->serial_numbers,
+            ])->values(),
+        );
+
+        $materials = $almacenes->isNotEmpty()
+            ? $existencias[$almacenes->first()->id]
+            : new Collection();
 
         // Si es una instalación, la vista exige registrar material
         // antes de permitir procesar la orden.
@@ -744,7 +775,7 @@ class TechnicalOrderController extends Controller
 
         return view('gestisp.technicals_orders.show_and_process_order', compact(
             'technicalOrder', 'materials', 'warehouse', 'requiresMaterial',
-            'napSuggestions', 'napBoxes'
+            'napSuggestions', 'napBoxes', 'almacenes', 'materialesPorAlmacen'
         ));
     }
 
@@ -1127,42 +1158,78 @@ class TechnicalOrderController extends Controller
      * decide: la pantalla enseña la lista vacía, y `processOrder`
      * aborta antes de tocar nada.
      */
-    private function almacenDelTecnico(TechnicalOrder $technicalOrder): ?Warehouse
+    private function almacenesDelTecnico(TechnicalOrder $technicalOrder): Collection
     {
         if (!$technicalOrder->user_assigned) {
-            return null;
+            return new Collection();
         }
 
-        // `oldest('id')` y no `first()` a secas: si por un error de datos
-        // un usuario figura como dueño de dos almacenes, la pantalla y
-        // el descuento tienen que elegir SIEMPRE el mismo, o enseñarían
-        // una disponibilidad que no es la que luego se descuenta.
         return Warehouse::where('user_id', $technicalOrder->user_assigned)
-            ->oldest('id')
-            ->first();
+            ->orderBy('description')
+            ->get();
     }
 
     /**
-     * Materiales con stock disponible en el almacén personal de un
-     * usuario, con la cantidad total calculada.
+     * El almacén del que sale el material de ESTA orden.
      *
-     * RECIBE EL USUARIO, no lo saca de la sesión: `show()` necesita el
-     * del técnico ASIGNADO a la orden (ver `almacenDelTecnico`) y
-     * `myTechnicalOrders()` el de quien mira su propia lista.
+     * UN TÉCNICO PUEDE TENER VARIOS
+     * -----------------------------
+     * La furgoneta y un pequeño stock en casa, por ejemplo. Antes esto
+     * devolvía el más antiguo, o sea ADIVINABA: la pantalla enseñaba las
+     * existencias de uno y el descuento salía de ese mismo, pero nadie
+     * había elegido cuál, y el material se descontaba de donde no era.
      *
-     * - Equipos: total = suma de filas (una por serial)
-     * - Consumibles: total = cantidad de su fila única
+     * Con uno solo no se pregunta —sería una pregunta con una única
+     * respuesta posible—. Con varios, el formulario obliga a elegir y
+     * aquí se comprueba que lo elegido sea SUYO: la petición la puede
+     * manipular cualquiera, y sin esta comprobación bastaría con cambiar
+     * un número para descontar del almacén de otro.
+     */
+    private function almacenElegido(TechnicalOrder $technicalOrder, $solicitado): ?Warehouse
+    {
+        $suyos = $this->almacenesDelTecnico($technicalOrder);
+
+        if ($suyos->isEmpty()) {
+            return null;
+        }
+
+        if (!$solicitado) {
+            // Sin elección solo vale cuando no hay nada que elegir.
+            return $suyos->count() === 1 ? $suyos->first() : null;
+        }
+
+        return $suyos->firstWhere('id', (int) $solicitado);
+    }
+
+    /**
+     * Materiales con stock en el almacén de un usuario.
+     *
+     * Lo usa `myTechnicalOrders()`, que enseña la bandeja de quien mira
+     * y no una orden concreta. `show()` NO pasa por aquí: allí hay una
+     * orden, y con ella el técnico asignado y la posibilidad de que
+     * tenga varios almacenes (ver `almacenElegido`).
+     *
+     * Con varios se toma el primero por nombre, solo para pintar una
+     * bandeja informativa. Nada se descuenta desde ahí.
      */
     private function getTechnicianMaterials(?int $userId): Collection
     {
         $warehouse = $userId
-            ? Warehouse::where('user_id', $userId)->oldest('id')->first()
+            ? Warehouse::where('user_id', $userId)->orderBy('description')->first()
             : null;
 
-        if (!$warehouse) {
-            return new Collection();
-        }
+        return $warehouse ? $this->materialesDe($warehouse) : new Collection();
+    }
 
+    /**
+     * Materiales con stock en UN almacén concreto, con su disponibilidad
+     * y sus seriales ya calculados.
+     *
+     * - Equipos: total = suma de filas (una por serial)
+     * - Consumibles: total = cantidad de su fila única
+     */
+    private function materialesDe(Warehouse $warehouse): Collection
+    {
         $materials = Material::whereHas('inventories', function ($query) use ($warehouse) {
             $query->where('warehouse_id', $warehouse->id)
                 ->where('quantity', '>', 0);

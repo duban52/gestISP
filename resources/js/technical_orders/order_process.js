@@ -238,6 +238,81 @@ $(document).ready(function () {
         $('#materialModal').modal('show');
     });
 
+    /* ============================================================
+       DE QUÉ ALMACÉN SALE EL MATERIAL
+
+       Un técnico puede tener varios. Las existencias de todos vienen
+       incrustadas en la página —no por AJAX: el técnico no tiene
+       permisos sobre los endpoints de movimientos—, y al cambiar de
+       almacén se reconstruyen las opciones del modal.
+
+       Se RECONSTRUYEN en vez de ocultarse: el mismo material puede
+       estar en dos almacenes, así que habría opciones con el mismo
+       valor y distinta disponibilidad, y Select2 no oculta opciones de
+       forma fiable.
+       ============================================================ */
+    const existenciasPorAlmacen = leerExistencias();
+
+    function leerExistencias() {
+        const bloque = document.getElementById('materiales-por-almacen');
+
+        if (!bloque) {
+            return {};
+        }
+
+        try {
+            return JSON.parse(bloque.textContent) || {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    /** El almacén elegido, o el único que hay. */
+    function almacenActual() {
+        return $('#warehouse_id').val() || $('input[name="warehouse_id"]').val() || '';
+    }
+
+    function repintarMateriales() {
+        const select = $('#modal-material-select');
+        const materiales = existenciasPorAlmacen[almacenActual()] || [];
+
+        select.empty().append(new Option('Seleccione un material', '', false, false));
+
+        materiales.forEach(function (m) {
+            const opcion = new Option(
+                `${m.name} (Disp: ${m.available})`, m.id, false, false
+            );
+
+            $(opcion)
+                .attr('data-is-equipment', m.is_equipment ? '1' : '0')
+                .attr('data-name', m.name)
+                .attr('data-available', m.available)
+                .attr('data-unit', m.unit || '')
+                .data('serials', m.serials || []);
+
+            select.append(opcion);
+        });
+
+        select.val('').trigger('change');
+    }
+
+    // Cambiar de almacén deja sin sentido lo ya agregado: sale de un
+    // almacén que ya no es el elegido. Se avisa y se vacía, en vez de
+    // enviarlo en silencio contra el almacén equivocado.
+    $('#warehouse_id').on('change', function () {
+        if (selectedMaterials.length > 0) {
+            selectedMaterials = [];
+            updateMaterialsTable();
+            swalBootstrap.fire(
+                'Se vació la lista',
+                'El material que había agregado salía del almacén anterior. Vuelva a agregarlo.',
+                'info',
+            );
+        }
+
+        repintarMateriales();
+    });
+
     // ---- Cambio de material seleccionado ----
     $('#modal-material-select').on('change', function () {
         const option = $(this).find('option:selected');

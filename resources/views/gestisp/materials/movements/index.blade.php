@@ -57,7 +57,10 @@
                     <select name="warehouse_origin_id" id="warehouse_origin_id" class="form-control">
                         <option value="">Seleccione...</option>
                         @foreach ($warehouses as $warehouse)
-                            <option value="{{ $warehouse->id }}">{{ $warehouse->description }}</option>
+                            {{-- El dueno entre parentesis: un tecnico puede
+                                 tener varios almacenes y hay que poder
+                                 distinguir de cual se mueve el material. --}}
+                            <option value="{{ $warehouse->id }}">{{ $warehouse->description }} ({{ $warehouse->duenoVisible() }})</option>
                         @endforeach
                     </select>
                 </div>
@@ -68,7 +71,10 @@
                     <select name="warehouse_destination_id" id="warehouse_destination_id" class="form-control">
                         <option value="">Seleccione...</option>
                         @foreach ($warehouses as $warehouse)
-                            <option value="{{ $warehouse->id }}">{{ $warehouse->description }}</option>
+                            {{-- El dueno entre parentesis: un tecnico puede
+                                 tener varios almacenes y hay que poder
+                                 distinguir de cual se mueve el material. --}}
+                            <option value="{{ $warehouse->id }}">{{ $warehouse->description }} ({{ $warehouse->duenoVisible() }})</option>
                         @endforeach
                     </select>
                 </div>

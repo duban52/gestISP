@@ -50,6 +50,12 @@
                         <th>Sucursal</th>
                         <th>Descripción</th>
                         <th>Materiales en inventario</th>
+                        {{-- DOS COLUMNAS, no una. Antes solo estaba «Creado
+                             por» y era la misma columna que hacía de dueño:
+                             por eso un almacén creado por la oficina para un
+                             técnico salía a nombre de la oficina, y de ahí
+                             descargaban las órdenes que cerraba la oficina. --}}
+                        <th>Pertenece a</th>
                         <th>Creado por</th>
                         <th>Fecha de creación</th>
                         <th>Acciones</th>
@@ -72,9 +78,20 @@
                                     </span>
                             </td>
 
+                            {{-- Sin dueño NO es un dato que falte: es una
+                                 bodega, el de cabecera, uno general. Por eso
+                                 se nombra en vez de pintar un guion. --}}
                             <td>
-                                {{ $warehouse->user->name ?? '—' }}
-                                {{ $warehouse->user->last_name ?? '' }}
+                                @if($warehouse->esGeneral())
+                                    <span class="badge badge-secondary">General</span>
+                                @else
+                                    {{ $warehouse->duenoVisible() }}
+                                @endif
+                            </td>
+
+                            <td>
+                                {{ $warehouse->creator?->name ?? '—' }}
+                                {{ $warehouse->creator?->last_name ?? '' }}
                             </td>
 
                             <td>{{ $warehouse->created_at->format('Y-m-d') }}</td>
@@ -87,6 +104,16 @@
                                     <i class="far fa-eye"></i> Inventario
                                 </a>
 
+
+                                {{-- Editar: nombre y dueño. El backend ya lo
+                                     tenía, pero no estaba enlazado desde aquí,
+                                     así que reasignar un almacén exigía tocar
+                                     la base de datos. --}}
+                                <a class="btn btn-warning btn-sm"
+                                   href="{{ route('warehouses.edit', $warehouse) }}"
+                                   title="Editar nombre y dueño">
+                                    <i class="fas fa-pencil-alt"></i> Editar
+                                </a>
 
                                 {{-- Eliminar almacén (abre modal de confirmación) --}}
                                 <button
@@ -187,7 +214,7 @@
                     // la esconde cuando no hay varias sedes que distinguir.
                     { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
                     // La columna de acciones (índice 4) no es ordenable
-                    { orderable: false, targets: [5] },
+                    { orderable: false, targets: [6] },
 
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }

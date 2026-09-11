@@ -65,7 +65,12 @@ class MaterialMovementController extends Controller
         // Catálogo de ESTA sucursal: mostrar el de todas llenaba el
         // buscador de materiales que en esta bodega no existen.
         $materials  = Material::deSucursal()->with('category')->orderBy('name')->get();
-        $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())->get();
+        // Con el DUEÑO: un usuario puede tener varios almacenes, y dos
+        // «Furgoneta» sin más son indistinguibles en el desplegable.
+        $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->with('user')
+            ->orderBy('description')
+            ->get();
 
         return view('gestisp.materials.movements.index', compact('materials', 'warehouses'));
     }

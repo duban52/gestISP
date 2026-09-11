@@ -23,13 +23,52 @@ class Warehouse extends Model
     protected $fillable = [
         'branch_id',
         'user_id',
+        'created_by',
         'description',
     ];
 
-    /** Usuario que creó el almacén */
+    /**
+     * DUEÑO del almacén. Null a propósito.
+     *
+     * Null significa que el almacén no es de nadie en particular: una
+     * bodega, el de cabecera, el general. No es un dato que falte.
+     *
+     * Un usuario puede tener VARIOS almacenes; por eso las órdenes
+     * técnicas preguntan de cuál sale el material cuando hay más de uno
+     * (ver `TechnicalOrderController::almacenesDelTecnico`).
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Quién lo dio de alta. Solo informativo.
+     *
+     * Antes esto y el dueño eran la MISMA columna, y por eso un almacén
+     * creado por la oficina para un técnico quedaba a nombre de la
+     * oficina. Separarlos es lo que permite que lo cree userA y
+     * pertenezca a userB.
+     */
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** ¿Es un almacén sin dueño (bodega, cabecera, general)? */
+    public function esGeneral(): bool
+    {
+        return $this->user_id === null;
+    }
+
+    /** Cómo se nombra su pertenencia en pantalla. */
+    public function duenoVisible(): string
+    {
+        if ($this->esGeneral()) {
+            return 'General';
+        }
+
+        return trim(($this->user?->name ?? '') . ' ' . ($this->user?->last_name ?? '')) ?: 'General';
     }
 
     /** Sucursal a la que pertenece el almacén */
