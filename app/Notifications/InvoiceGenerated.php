@@ -102,11 +102,41 @@ class InvoiceGenerated extends Notification implements ShouldQueue
         // quinto hace que Meta rechace el envío entero y el cliente se
         // quede sin aviso. Por eso el interruptor arranca apagado: hay
         // que actualizar y aprobar la plantilla ANTES de encenderlo.
-        if ($enlace && config('notifications.whatsapp.meta.invoice_link_in_template', false)) {
-            $parametros[] = $enlace;
+        //
+        // Y al revés también: con el interruptor encendido van SIEMPRE
+        // cinco, aunque no haya enlace. Antes esto decía `if ($enlace
+        // && ...)`, así que una factura electrónica —que a propósito no
+        // lleva enlace aquí— o un fallo al armarlo mandaban cuatro
+        // parámetros a una plantilla de cinco: el mismo rechazo, por el
+        // otro lado.
+        if (config('notifications.whatsapp.meta.invoice_link_in_template', false)) {
+            $parametros[] = $this->fraseDeDescarga($enlace);
         }
 
         return WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
+    }
+
+    /**
+     * La frase del quinto hueco de la plantilla.
+     *
+     * CUANDO LA PLANTILLA TIENE CINCO, SIEMPRE VAN CINCO.
+     * ---------------------------------------------------
+     * Meta exige que el número de parámetros coincida EXACTAMENTE con
+     * el de la plantilla aprobada. Mandar cuatro a una de cinco falla
+     * igual que mandar cinco a una de cuatro, y el cliente se queda sin
+     * aviso. Por eso, con el interruptor encendido, este método siempre
+     * devuelve algo.
+     *
+     * Es una frase entera y no la URL pelada porque el enlace puede no
+     * poder armarse —`APP_URL` mal puesta, por ejemplo—. Con la URL
+     * suelta, el hueco quedaría vacío y Meta rechaza los parámetros
+     * vacíos; con una frase, el mensaje sigue teniendo sentido.
+     */
+    private function fraseDeDescarga(?string $enlace): string
+    {
+        return $enlace
+            ? 'Descárguela aquí: ' . $enlace
+            : 'Le enviamos los archivos a su correo.';
     }
 
     /**

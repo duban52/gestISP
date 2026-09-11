@@ -100,19 +100,32 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
         $cuerpo = "Hola {$notifiable->name}, {$this->emisor()} emitió su factura electrónica {$this->invoice->displayNumber()} por {$total}.";
         $cuerpo .= $enlace ? " Descárguela aquí: {$enlace}" : ' Le enviamos los archivos por correo.';
 
-        // Se reutiliza la MISMA plantilla que el aviso de factura, con
-        // los mismos cuatro parámetros. Registrar una plantilla nueva en
-        // Meta es un trámite de días, y este mensaje dice casi lo mismo:
-        // no vale la pena bloquear la entrega por eso.
+        // Se reutiliza la MISMA plantilla que el aviso de factura.
+        // Registrar una plantilla nueva en Meta es un trámite de días, y
+        // este mensaje dice casi lo mismo: no vale la pena bloquear la
+        // entrega por eso.
         // El cuarto hueco de la plantilla es el VENCIMIENTO. Aqui iba
         // «validada por la DIAN», que en el mensaje real habria salido
         // como «Vence el validada por la DIAN».
-        return WhatsAppMessage::make($cuerpo)->template('factura_generada', [
+        $parametros = [
             $notifiable->name,
             $this->invoice->displayNumber(),
             $total,
             optional($this->invoice->due_date)->format('d/m/Y') ?? 'la fecha indicada',
-        ]);
+        ];
+
+        // COMPARTIR PLANTILLA OBLIGA A COMPARTIR EL NÚMERO DE HUECOS.
+        //
+        // Esto mandaba cuatro parámetros siempre. En cuanto la plantilla
+        // pase a tener cinco, Meta rechazaría ESTE envío —el de la
+        // factura ya validada, justo el que más importa— mientras el
+        // aviso de generación seguiría funcionando. Un fallo a medias es
+        // peor que uno entero: nadie lo nota.
+        if (config('notifications.whatsapp.meta.invoice_link_in_template', false)) {
+            $parametros[] = $this->fraseDeDescarga($enlace);
+        }
+
+        return WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
     }
 
     /**
@@ -128,6 +141,29 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
 
         return $sucursal?->company?->nombreVisible()
             ?: ($sucursal?->name ?: config('app.name'));
+    }
+
+    /**
+     * La frase del quinto hueco de la plantilla.
+     *
+     * CUANDO LA PLANTILLA TIENE CINCO, SIEMPRE VAN CINCO.
+     * ---------------------------------------------------
+     * Meta exige que el número de parámetros coincida EXACTAMENTE con
+     * el de la plantilla aprobada. Mandar cuatro a una de cinco falla
+     * igual que mandar cinco a una de cuatro, y el cliente se queda sin
+     * aviso. Por eso, con el interruptor encendido, este método siempre
+     * devuelve algo.
+     *
+     * Es una frase entera y no la URL pelada porque el enlace puede no
+     * poder armarse —`APP_URL` mal puesta, por ejemplo—. Con la URL
+     * suelta, el hueco quedaría vacío y Meta rechaza los parámetros
+     * vacíos; con una frase, el mensaje sigue teniendo sentido.
+     */
+    private function fraseDeDescarga(?string $enlace): string
+    {
+        return $enlace
+            ? 'Descárguela aquí: ' . $enlace
+            : 'Le enviamos los archivos a su correo.';
     }
 
     /** El enlace firmado al paquete. Sin él, el mensaje sale igual. */
