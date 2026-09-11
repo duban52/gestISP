@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\MaterialsMovementsExport;
 use App\Models\Inventory;
+use App\Services\InventoryCosting;
 use App\Models\Material;
 use App\Models\MaterialMovement;
 use App\Models\Warehouse;
@@ -101,9 +102,18 @@ class MaterialMovementController extends Controller
                     Rule::exists('materials', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
                 ],
                 'materials.*.quantity'            => 'required|numeric|min:1',
-                'materials.*.unit_of_measurement' => 'required|string',
+                // LA UNIDAD YA NO SE PIDE: es del material. Si llega en
+                // la petición se ignora — aceptarla permitiría ingresar
+                // 200 «Unidades» de fibra y sacar 50 «Metros» de la
+                // misma fibra, y las existencias quedarían en una unidad
+                // que no significa nada.
                 'materials.*.serial_numbers'      => 'nullable|array',
                 'materials.*.serial_numbers.*'    => 'string',
+                // OPCIONAL, y solo se lee en las ENTRADAS: es lo que se
+                // paga al ingresar material. En un traslado el costo ya
+                // viaja con la existencia desde el almacén de origen, y
+                // en una salida no hay nada que costear.
+                'materials.*.purchase_unit_value' => 'nullable|numeric|min:0|max:99999999999.99',
                 'warehouse_origin_id'             => [
                     'nullable', 'required_if:type,Salida,Transferencia',
                     Rule::exists('warehouses', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
@@ -126,6 +136,13 @@ class MaterialMovementController extends Controller
                     $material    = Material::findOrFail($materialData['material_id']);
                     $quantity    = $materialData['quantity'];
                     $isEquipment = $material->is_equipment;
+
+                    // Del MATERIAL, no del formulario. Se sigue copiando
+                    // a la fila del movimiento y a la del inventario a
+                    // propósito: son la foto de con qué unidad se
+                    // registró aquello, y deben seguir diciendo lo mismo
+                    // aunque mañana se corrija la del catálogo.
+                    $unidad = $material->unit_of_measurement;
 
                     // ---- Validar stock en origen (salidas y transferencias) ----
                     if (in_array($request->type, ['Salida', 'Transferencia'])) {
@@ -165,6 +182,13 @@ class MaterialMovementController extends Controller
                     }
 
                     // ---- Crear movimientos y actualizar inventario ----
+                    // Lo que se pagó por cada unidad de ESTA entrada.
+                    // No cae al valor del catálogo si viene vacío: el
+                    // formulario ya lo propone, así que un campo en
+                    // blanco es un «no se sabe» deliberado, y
+                    // rellenarlo por detrás inventaría un precio.
+                    $valorUnitario = $this->valorDeCompraDeLaEntrada($request->type, $materialData);
+
                     if ($isEquipment && isset($materialData['serial_numbers'])) {
                         // Equipos: un movimiento por cada serial
                         foreach ($materialData['serial_numbers'] as $serialNumber) {
@@ -172,12 +196,13 @@ class MaterialMovementController extends Controller
                                 'type'                     => $request->type,
                                 'material_id'              => $material->id,
                                 'quantity'                 => 1,
-                                'unit_of_measurement'      => $materialData['unit_of_measurement'],
+                                'unit_of_measurement'      => $unidad,
                                 'warehouse_origin_id'      => $request->warehouse_origin_id,
                                 'warehouse_destination_id' => $request->warehouse_destination_id,
                                 'serial_number'            => $serialNumber,
                                 'user_id'                  => auth()->id(),
                                 'reason'                   => $request->reason,
+                                'purchase_unit_value'      => $valorUnitario,
                             ]);
 
                             $this->updateInventory(
@@ -186,8 +211,9 @@ class MaterialMovementController extends Controller
                                 $request->warehouse_destination_id,
                                 $material->id,
                                 1,
-                                $materialData['unit_of_measurement'],
-                                $serialNumber
+                                $unidad,
+                                $serialNumber,
+                                $valorUnitario
                             );
                         }
                     } else {
@@ -196,11 +222,12 @@ class MaterialMovementController extends Controller
                             'type'                     => $request->type,
                             'material_id'              => $material->id,
                             'quantity'                 => $quantity,
-                            'unit_of_measurement'      => $materialData['unit_of_measurement'],
+                            'unit_of_measurement'      => $unidad,
                             'warehouse_origin_id'      => $request->warehouse_origin_id,
                             'warehouse_destination_id' => $request->warehouse_destination_id,
                             'user_id'                  => auth()->id(),
                             'reason'                   => $request->reason,
+                            'purchase_unit_value'      => $valorUnitario,
                         ]);
 
                         $this->updateInventory(
@@ -209,7 +236,9 @@ class MaterialMovementController extends Controller
                             $request->warehouse_destination_id,
                             $material->id,
                             $quantity,
-                            $materialData['unit_of_measurement']
+                            $unidad,
+                            null,
+                            $valorUnitario
                         );
                     }
                 }
@@ -218,7 +247,10 @@ class MaterialMovementController extends Controller
             $this->auditarMovimiento($request, $movements);
 
             // ---- PDF de resumen del movimiento ----
-            $pdf     = \App\Support\PdfBranding::make('gestisp.materials.movements.pdf_summary', compact('movements'));
+            // El comprobante lleva los costos solo si quien registro el
+            // movimiento puede verlos: es un PDF y se guarda.
+            $verCostos = \Illuminate\Support\Facades\Gate::allows('materials.costs');
+            $pdf     = \App\Support\PdfBranding::make('gestisp.materials.movements.pdf_summary', compact('movements', 'verCostos'));
             $pdfPath = storage_path('app/public/movimiento_' . time() . '.pdf');
             $pdf->save($pdfPath);
 
@@ -268,19 +300,27 @@ class MaterialMovementController extends Controller
         int $materialId,
         int $quantity,
         string $unitOfMeasurement,
-        ?string $serialNumber = null
+        ?string $serialNumber = null,
+        ?float $purchaseUnitValue = null
     ): void {
         if ($type === 'Entrada') {
             if ($serialNumber) {
+                // EQUIPO: la fila es una unidad, así que lleva su costo
+                // exacto. Dos ONT compradas a precios distintos valen
+                // cada una lo suyo.
                 Inventory::create([
                     'warehouse_id'        => $warehouseDestinationId,
                     'material_id'         => $materialId,
                     'quantity'            => 1,
                     'unit_of_measurement' => $unitOfMeasurement,
                     'serial_number'       => $serialNumber,
+                    'purchase_unit_value' => $purchaseUnitValue,
                 ]);
             } else {
-                Inventory::updateOrCreate(
+                // CONSUMIBLE: todas las compras se acumulan en una sola
+                // fila, así que el costo se lleva por promedio
+                // ponderado. Ver App\Services\InventoryCosting.
+                $inventory = Inventory::updateOrCreate(
                     [
                         'warehouse_id'  => $warehouseDestinationId,
                         'material_id'   => $materialId,
@@ -290,6 +330,15 @@ class MaterialMovementController extends Controller
                         'quantity'            => DB::raw("COALESCE(quantity, 0) + $quantity"),
                         'unit_of_measurement' => $unitOfMeasurement,
                     ]
+                );
+
+                // `refresh()` obligatorio: con DB::raw la cantidad que
+                // queda en memoria es la EXPRESIÓN, no el número, y el
+                // promedio saldría de una cantidad inventada.
+                app(InventoryCosting::class)->registrarEntrada(
+                    $inventory->refresh(),
+                    $purchaseUnitValue,
+                    (float) $quantity,
                 );
             }
         } elseif ($type === 'Salida') {
@@ -320,11 +369,21 @@ class MaterialMovementController extends Controller
                     ->where('material_id', $materialId)
                     ->first();
 
+                // EL COSTO VIAJA CON EL MATERIAL. Se lee ANTES de
+                // descontar: trasladar 200 m de cable no los abarata, y
+                // si el destino los valorara a cero, mover material de
+                // un almacén a otro haría desaparecer dinero del
+                // inventario total sin que nadie comprara ni gastara
+                // nada.
+                $costoDeOrigen = $originInventory?->purchase_unit_value !== null
+                    ? (float) $originInventory->purchase_unit_value
+                    : null;
+
                 $originInventory?->update([
                     'quantity' => $originInventory->quantity - $quantity,
                 ]);
 
-                Inventory::updateOrCreate(
+                $destino = Inventory::updateOrCreate(
                     [
                         'warehouse_id'  => $warehouseDestinationId,
                         'material_id'   => $materialId,
@@ -335,8 +394,38 @@ class MaterialMovementController extends Controller
                         'unit_of_measurement' => $unitOfMeasurement,
                     ]
                 );
+
+                app(InventoryCosting::class)->registrarEntrada(
+                    $destino->refresh(),
+                    $costoDeOrigen,
+                    (float) $quantity,
+                );
             }
         }
+    }
+
+    /**
+     * El valor unitario de compra que se registra en una entrada.
+     *
+     * SOLO EN LAS ENTRADAS. En un traslado el costo ya viene con la
+     * existencia del almacén de origen —dejar que se reescriba desde el
+     * formulario permitiría revaluar inventario moviéndolo de sitio— y
+     * en una salida no hay nada que costear.
+     *
+     * Vacío y ausente son lo mismo: NULL. El formulario propone el
+     * valor del catálogo, así que un campo en blanco es un «no se sabe»
+     * deliberado; rellenarlo por detrás inventaría un precio, y un cero
+     * se sumaría en los totales como si el material fuera gratis.
+     */
+    private function valorDeCompraDeLaEntrada(string $type, array $materialData): ?float
+    {
+        if ($type !== 'Entrada') {
+            return null;
+        }
+
+        $valor = $materialData['purchase_unit_value'] ?? null;
+
+        return ($valor === null || $valor === '') ? null : (float) $valor;
     }
 
     /**
@@ -502,10 +591,16 @@ class MaterialMovementController extends Controller
         $from = $request->start_date;
         $to = $request->end_date;
 
-        // Horizontal: el detalle tiene 9 columnas
+        // EL PDF SE GUARDA, SE REENVÍA Y SE IMPRIME. Por eso el permiso
+        // se resuelve aquí y no dentro de la plantilla: si solo se
+        // comprobara en la pantalla, bastaría con descargar el historial
+        // para saltárselo.
+        $verCostos = \Illuminate\Support\Facades\Gate::allows('materials.costs');
+
+        // Horizontal: el detalle tiene 9 columnas (10 con el costo)
         $pdf = \App\Support\PdfBranding::make(
             'gestisp.materials.movements.pdf',
-            compact('movements', 'from', 'to'),
+            compact('movements', 'from', 'to', 'verCostos'),
             landscape: true
         );
 

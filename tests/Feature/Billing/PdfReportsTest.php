@@ -112,6 +112,12 @@ class PdfReportsTest extends BillingTestCase
     {
         $pdf = PdfBranding::make('gestisp.warehouses.pdf', [
             'inventoriesData' => [],
+            // Lo que pasa `WarehouseController::generatePdf()`. Se
+            // escribe aqui aunque la plantilla tenga valor por defecto:
+            // esta prueba renderiza la vista a mano y debe hacerlo con
+            // la misma forma que produce el controlador.
+            'verCostos' => false,
+            'resumenValor' => ['total' => 0.0, 'materiales_sin_valorar' => 0, 'completo' => true],
             'warehouse' => Warehouse::create([
                 'branch_id' => $this->branch->id,
                 'user_id' => $this->admin->id,

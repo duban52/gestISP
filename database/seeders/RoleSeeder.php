@@ -144,6 +144,11 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'materials.create', 'description' => 'Crear materiales']);
         Permission::create(['name' => 'materials.edit', 'description' => 'Editar materiales']);
         Permission::create(['name' => 'materials.destroy', 'description' => 'Eliminar materiales']);
+        // Ver lo que costo el material. Va aparte de 'materials.index'
+        // porque saber cuantas ONT hay en la bodega y saber cuanto se
+        // pago por ellas son dos cosas distintas: la segunda es
+        // informacion del negocio y no la necesita quien despacha.
+        Permission::create(['name' => 'materials.costs', 'description' => 'Ver los costos de materiales']);
 
         // Categorías de materiales
         Permission::create(['name' => 'categories.index', 'description' => 'Ver categorías de materiales']);
@@ -269,7 +274,7 @@ class RoleSeeder extends Seeder
             'cashRegisters.index', 'cashRegisters.create', 'cashRegisters.edit', 'cash_register.status', 'cash_register.open', 'cash_register.close', 'cash_register.summary',
             'transactions.index', 'transactions.store', 'transactions.history', 'transactions.export', 'transactions.export-excel',
             'warehouses.index', 'warehouses.create', 'warehouses.edit', 'warehouse.pdf',
-            'materials.index', 'materials.create', 'materials.edit',
+            'materials.index', 'materials.create', 'materials.edit', 'materials.costs',
             'categories.index', 'categories.create', 'categories.edit',
             'movements.index', 'movements.create', 'movements.edit', 'movements.query_sn', 'movements.material_quantity', 'movements.history', 'movements.history_data', 'movements.pdf', 'movements.excel',
             'technicals_orders.index', 'technicals_orders.create', 'technicals_orders.store', 'technicals_orders.update', 'technicals_orders.my_technical_orders', 'technicals_orders.process', 'technicals_orders.getSerialNumbers', 'technicals_orders.verification', 'technical_order.verification_process', 'technical_orders.reject',

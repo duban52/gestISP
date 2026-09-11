@@ -493,6 +493,13 @@
                                         data-is-equipment="{{ $material->is_equipment ? '1' : '0' }}"
                                         data-name="{{ $material->name }}"
                                         data-available="{{ $material->total_quantity }}"
+                                        {{-- La unidad viene del MATERIAL: ya no se
+                                             pregunta. Aqui ademas nunca se guardo
+                                             (`technical_order_materials` no tiene la
+                                             columna), asi que era tramite puro en un
+                                             formulario que se rellena de pie, en casa
+                                             del cliente. --}}
+                                        data-unit="{{ $material->unit_of_measurement }}"
                                         data-serials='@json($material->serial_numbers)'>
                                     {{ $material->name }} (Disp: {{ $material->total_quantity }})
                                 </option>
@@ -504,21 +511,17 @@
                         </small>
                     </div>
 
-                    {{-- Consumibles: cantidad manual --}}
+                    {{-- Consumibles: cantidad manual. La unidad se ENSEÑA
+                         al lado, para que el tecnico sepa contra que esta
+                         contando; no es un campo. --}}
                     <div class="form-group" id="modal-quantity-group">
                         <label>Cantidad</label>
-                        <input type="number" id="modal-quantity" class="form-control quantity-input" min="1" value="1">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Unidad de Medida</label>
-                        <select id="modal-unit-of-measurement" class="form-control" required>
-                            <option value="">Seleccione...</option>
-                            <option value="Unidades">Unidades</option>
-                            <option value="Metros">Metros</option>
-                            <option value="Litros">Litros</option>
-                            <option value="Paquetes">Paquetes</option>
-                        </select>
+                        <div class="input-group">
+                            <input type="number" id="modal-quantity" class="form-control quantity-input" min="1" value="1">
+                            <div class="input-group-append">
+                                <span class="input-group-text" id="modal-unit-label">—</span>
+                            </div>
+                        </div>
                     </div>
 
                     {{-- Equipos: selección de seriales (la cantidad la

@@ -98,13 +98,21 @@
             </div>
 
             {{-- Tabla de materiales agregados (filas dinámicas desde movements.js) --}}
+            {{-- `data-ver-costos` en vez de repetir el @can dentro del
+                 JS: la columna del costo la pinta movements.js al
+                 agregar cada fila, y tiene que coincidir con esta
+                 cabecera o la tabla queda descuadrada. --}}
             <div class="table-responsive">
-                <table class="table table-bordered" id="materials-table">
+                <table class="table table-bordered" id="materials-table"
+                       data-ver-costos="{{ auth()->check() && \Illuminate\Support\Facades\Gate::allows('materials.costs') ? '1' : '0' }}">
                     <thead>
                     <tr>
                         <th>Material</th>
                         <th>Cantidad</th>
                         <th>Unidad de Medida</th>
+                        @can('materials.costs')
+                            <th class="text-right">Valor unit. de compra</th>
+                        @endcan
                         <th>Números de Serie</th>
                         <th>Acciones</th>
                     </tr>
@@ -156,6 +164,12 @@
                                 <option value="{{ $material->id }}"
                                         data-is-equipment="{{ $material->is_equipment ? 1 : 0 }}"
                                         data-category="{{ $material->category->name ?? 'Sin categoría' }}"
+                                        {{-- Valor de REFERENCIA del catálogo: se propone
+                                             al elegir el material y se puede cambiar o
+                                             borrar. Lo que se guarda es lo que quede en
+                                             la casilla, no esto. --}}
+                                        data-purchase-value="{{ $material->purchase_unit_value }}"
+                                        data-unit="{{ $material->unit_of_measurement }}"
                                         data-name="{{ $material->name }}">
                                     {{ $material->name }}
                                 </option>
@@ -171,25 +185,55 @@
                         </div>
                     </div>
 
+                    {{-- LA UNIDAD YA NO SE PREGUNTA: viene del material.
+                         Se ENSEÑA junto a la cantidad para que quien
+                         registra sepa contra qué está contando, pero no es
+                         un campo: se declara al crear el material. --}}
                     <div class="row">
                         <div class="form-group col-md-6">
                             <label for="modal-quantity">Cantidad <span class="text-danger">*</span></label>
-                            <input type="number" id="modal-quantity" class="form-control quantity-input"
-                                   min="1" step="1" placeholder="0">
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label for="modal-unit-of-measurement">
-                                Unidad de medida <span class="text-danger">*</span>
-                            </label>
-                            <select id="modal-unit-of-measurement" class="form-control">
-                                <option value="">Seleccione...</option>
-                                <option value="Unidades">Unidades</option>
-                                <option value="Metros">Metros</option>
-                                <option value="Litros">Litros</option>
-                                <option value="Paquetes">Paquetes</option>
-                            </select>
+                            <div class="input-group">
+                                <input type="number" id="modal-quantity" class="form-control quantity-input"
+                                       min="1" step="1" placeholder="0">
+                                <div class="input-group-append">
+                                    <span class="input-group-text" id="modal-unit-label">—</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
+                    @can('materials.costs')
+                        {{-- ============================================================
+                             Valor unitario de compra — solo en ENTRADAS.
+
+                             En un traslado el costo ya viaja con la existencia
+                             desde el almacén de origen; dejar que se reescriba
+                             aquí permitiría revaluar inventario moviéndolo de
+                             sitio. En una salida no hay nada que costear. El
+                             servidor lo ignora igual (`valorDeCompraDeLaEntrada`),
+                             esto solo evita enseñar una casilla que no hace nada.
+                             ============================================================ --}}
+                        <div class="row d-none" id="modal-valor-compra-group">
+                            <div class="form-group col-md-6">
+                                <label for="modal-purchase-unit-value">
+                                    Valor unitario de compra <small class="text-muted">(opcional)</small>
+                                </label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">$</span>
+                                    </div>
+                                    <input type="number" id="modal-purchase-unit-value"
+                                           class="form-control" min="0" step="0.01"
+                                           placeholder="Déjelo vacío si no se conoce">
+                                </div>
+                                <small class="form-text text-muted">
+                                    Lo que se paga por CADA unidad de este ingreso. Se propone el valor
+                                    del catálogo; si lo deja vacío, el material entra sin valorar y no
+                                    se suma al total del inventario.
+                                </small>
+                            </div>
+                        </div>
+                    @endcan
 
                     {{-- ============================================================
                          Seriales — solo para EQUIPOS.

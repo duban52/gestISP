@@ -85,6 +85,28 @@ class PermissionLabels
         'receipt' => 'Imprimir el recibo de',
         'cutoff' => 'Ejecutar cortes masivos de',
         'manage' => 'Configurar',
+        // Ver lo que cuesta el material NO es lo mismo que ver el
+        // material. Quien lleva el almacen necesita saber cuantas ONT
+        // hay; lo que se pago por ellas es informacion del negocio.
+        'costs' => 'Ver los costos de',
+    ];
+
+    /**
+     * Permisos que NO se declaran como middleware en un controlador.
+     *
+     * `permissions:sync` los descubre leyendo `check.permission:` en
+     * los controladores, y eso deja fuera los que solo gobiernan lo que
+     * se ENSEÑA dentro de una pantalla a la que ya se tiene acceso.
+     * Sin registrarlos aqui nunca llegarian a la base de datos, y un
+     * `@can` contra un permiso inexistente niega siempre: la columna no
+     * aparecia para nadie y no habria forma de darla desde Roles.
+     *
+     * @var array<string, string[]> permiso => roles que lo reciben por
+     *      defecto al sincronizar (ademas del superadministrador, que
+     *      siempre los tiene todos)
+     */
+    public const SIN_RUTA = [
+        'materials.costs' => ['administrador'],
     ];
 
     /**

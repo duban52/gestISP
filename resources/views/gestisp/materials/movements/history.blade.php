@@ -135,6 +135,13 @@
                         <th>Material</th>
                         <th>Cantidad</th>
                         <th>Unidad</th>
+                        @can('materials.costs')
+                            {{-- Lo que se pago en ESE ingreso concreto. Es el
+                                 historico: la fila de inventario solo guarda el
+                                 resultado del promedio ponderado, asi que sin
+                                 esto no hay forma de auditarlo. --}}
+                            <th class="text-right">Valor unit.</th>
+                        @endcan
                         <th>Serial</th>
                         <th>Motivo</th>
                         <th>Realizado por</th>
@@ -167,6 +174,13 @@
                             <td>{{ $movement->material->name ?? '—' }}</td>
                             <td>{{ $movement->quantity }}</td>
                             <td>{{ $movement->unit_of_measurement }}</td>
+                            @can('materials.costs')
+                                <td class="text-right">
+                                    {{ $movement->purchase_unit_value !== null
+                                        ? '$' . number_format($movement->purchase_unit_value, 2)
+                                        : '—' }}
+                                </td>
+                            @endcan
                             <td>{{ $movement->serial_number ?? '—' }}</td>
                             <td>{{ $movement->reason }}</td>
                             <td>

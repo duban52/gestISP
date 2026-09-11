@@ -8,8 +8,10 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\InventoryCosting;
 use App\Tenancy\CurrentContext;
 
 /**
@@ -70,17 +72,34 @@ class WarehouseController extends Controller
      *   'quantity'            => int,        // suma de cantidades
      *   'unit_of_measurement' => string,     // unidad de medida
      *   'sns'                 => array,      // seriales (solo equipos)
+     *   'valor'               => array,      // total/unitario/sin valorar
      * ]
+     *
+     * EL INVENTARIO VALORADO
+     * ----------------------
+     * Además de CUÁNTO hay, se calcula cuánto vale. La cifra se arma
+     * aquí y no en la vista porque tiene una trampa: lo que no tiene
+     * precio no puede contarse como cero. Un almacén con 500 m de cable
+     * sin costo registrado no vale cero pesos, y un total que se lo
+     * traga como gratis es peor que no tener total, porque nadie duda
+     * de un número. Por eso `valor['total']` puede venir null y el
+     * resumen dice cuántos materiales quedaron sin valorar.
+     *
+     * Quién puede VER esas cifras lo decide la vista con el permiso
+     * `materials.costs`; aquí se calculan siempre, que es barato y
+     * evita dos caminos distintos según quién mire.
      */
     public function show(Warehouse $warehouse): View
     {
         // Traer todo el inventario del almacén con su material (evita N+1)
         $inventories = $warehouse->inventories()->with('material')->get();
 
+        $costos = app(InventoryCosting::class);
+
         // Agrupar por material y consolidar cantidades y seriales
         $inventoriesData = $inventories
             ->groupBy('material_id')
-            ->map(function ($items) {
+            ->map(function ($items) use ($costos) {
                 return [
                     'material'            => $items->first()->material,
                     'quantity'            => $items->sum('quantity'),
@@ -89,11 +108,51 @@ class WarehouseController extends Controller
                         ->filter()   // descarta nulls (material sin serial)
                         ->values()
                         ->toArray(),
+                    // En los equipos cada serial lleva su propio costo,
+                    // así que se valora fila a fila y no por la suma.
+                    'valor'               => $costos->valorarMaterial($items),
                 ];
             })
             ->values(); // reindexar la colección
 
-        return view('gestisp.warehouses.show', compact('warehouse', 'inventoriesData'));
+        $resumenValor = $this->resumirValor($inventoriesData);
+
+        return view('gestisp.warehouses.show', compact('warehouse', 'inventoriesData', 'resumenValor'));
+    }
+
+    /**
+     * Lo que vale el almacén entero, y qué parte no se pudo valorar.
+     *
+     * `materiales_sin_valorar` no es un detalle: es lo que permite leer
+     * el total como «al menos esto» en vez de como «esto exactamente».
+     *
+     * @return array{total: float, materiales_sin_valorar: int, completo: bool}
+     */
+    private function resumirValor($inventoriesData): array
+    {
+        $total = 0.0;
+        $sinValorar = 0;
+
+        foreach ($inventoriesData as $fila) {
+            if ($fila['valor']['total'] === null) {
+                $sinValorar++;
+                continue;
+            }
+
+            $total += $fila['valor']['total'];
+
+            // Un material puede estar valorado A MEDIAS: cinco ONT con
+            // precio y dos sin él. Cuenta como incompleto igual.
+            if ($fila['valor']['unidades_sin_valorar'] > 0) {
+                $sinValorar++;
+            }
+        }
+
+        return [
+            'total' => round($total, 2),
+            'materiales_sin_valorar' => $sinValorar,
+            'completo' => $sinValorar === 0,
+        ];
     }
 
     /**
@@ -195,44 +254,34 @@ class WarehouseController extends Controller
 
     {
 
+        $costos = app(InventoryCosting::class);
+
         $inventories = Inventory::where('warehouse_id', $warehouse->id)
-
             ->with('material')
-
             ->get()
-
             ->groupBy('material_id')
-
-            ->map(function ($items) {
-
+            ->map(function ($items) use ($costos) {
                 $material = $items->first()->material;
-
-                $quantity = $items->sum('quantity');
-
-                $unit = $items->first()->unit_of_measurement;
-
-                $sns = $items->pluck('serial_number')->filter()->toArray(); // Lista de SN
+                $sns = $items->pluck('serial_number')->filter()->toArray();
 
                 return [
-
-                    'material' => $material->name, // Nombre del material
-
-                    'quantity' => $quantity, // Cantidad total
-
-                    'unit_of_measurement' => $unit, // Unidad de medida
-
-                    'sns' => implode(', ', $sns) // Convertir SNs en una lista separada por comas
-
+                    'material' => $material->name,
+                    'quantity' => $items->sum('quantity'),
+                    'unit_of_measurement' => $items->first()->unit_of_measurement,
+                    'sns' => implode(', ', $sns),
+                    'valor' => $costos->valorarMaterial($items),
                 ];
-
             });
 
+        // EL PDF LLEVA COSTOS SOLO SI QUIEN LO DESCARGA PUEDE VERLOS.
+        // Un PDF se guarda, se reenvía y se imprime: si el permiso solo
+        // se comprobara en la pantalla, bastaría con descargar el
+        // inventario para saltárselo.
         $data = [
-
             'inventoriesData' => $inventories,
-
-            'warehouse' => $warehouse
-
+            'warehouse' => $warehouse,
+            'verCostos' => Gate::allows('materials.costs'),
+            'resumenValor' => $this->resumirValor($inventories),
         ];
 
         $pdf = \App\Support\PdfBranding::make('gestisp.warehouses.pdf', $data);

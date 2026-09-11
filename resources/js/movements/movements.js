@@ -155,6 +155,7 @@ $(document).ready(function () {
 
         limpiarModal();
         pintarContexto();
+        mostrarValorDeCompra();
         modal.modal('show');
     });
 
@@ -166,6 +167,34 @@ $(document).ready(function () {
     /** ¿El movimiento saca material de un almacén? */
     function esSalida() {
         return typeSelect.val() === 'Salida' || typeSelect.val() === 'Transferencia';
+    }
+
+    /**
+     * ¿Se pintan las columnas de costo?
+     *
+     * Lo decide el servidor con el permiso `materials.costs` y llega en
+     * `data-ver-costos`. Se lee de ahí y no se deduce aquí: la cabecera
+     * de la tabla la pinta Blade con el mismo @can, y si los dos no
+     * coinciden las filas quedan descuadradas.
+     */
+    function verCostos() {
+        return materialsTable.closest('table').attr('data-ver-costos') === '1';
+    }
+
+    /**
+     * El costo solo se pide en las ENTRADAS.
+     *
+     * En un traslado el costo viaja con la existencia y en una salida no
+     * hay nada que costear; el servidor lo ignora en ambos casos.
+     */
+    function mostrarValorDeCompra() {
+        const grupo = $('#modal-valor-compra-group');
+
+        if (grupo.length === 0) {
+            return; // sin permiso: la casilla ni existe
+        }
+
+        grupo.toggleClass('d-none', typeSelect.val() !== 'Entrada');
     }
 
     /** Recuerda al operador contra qué almacén está trabajando. */
@@ -206,9 +235,20 @@ $(document).ready(function () {
             return;
         }
 
-        // Un equipo se cuenta por unidades; proponerlo ahorra un clic
-        if (esEquipo && !$('#modal-unit-of-measurement').val()) {
-            $('#modal-unit-of-measurement').val('Unidades');
+        pintarUnidad();
+
+        // Se PROPONE el valor del catálogo, no se impone: quien registra
+        // la entrada sabe lo que pagó en esta compra, que puede no ser
+        // el de referencia. Y si lo borra, el material entra sin
+        // valorar, que es distinto de entrar a cero.
+        const casillaValor = $('#modal-purchase-unit-value');
+
+        if (casillaValor.length > 0 && !casillaValor.val()) {
+            const referencia = opcion.attr('data-purchase-value');
+
+            if (referencia) {
+                casillaValor.val(referencia);
+            }
         }
 
         if (esEquipo) {
@@ -237,6 +277,22 @@ $(document).ready(function () {
 
     function esEquipo() {
         return modalMaterialSelect.find('option:selected').attr('data-is-equipment') === '1';
+    }
+
+    /** La unidad en la que se mide el material elegido. */
+    function unidadDelMaterial() {
+        return modalMaterialSelect.find('option:selected').attr('data-unit') || '';
+    }
+
+    /**
+     * Enseña la unidad al lado de la cantidad.
+     *
+     * No es un campo: es para que quien registra sepa contra qué está
+     * contando. Escribir «200» sin ver si son metros o unidades es
+     * justo lo que hacía que las existencias no significaran nada.
+     */
+    function pintarUnidad() {
+        $('#modal-unit-label').text(unidadDelMaterial() || '—');
     }
 
     /* ============================================================
@@ -357,7 +413,9 @@ $(document).ready(function () {
 
         const materialId = modalMaterialSelect.val();
         const cantidad = parseInt(modalQuantity.val(), 10);
-        const unidad = $('#modal-unit-of-measurement').val();
+        // DEL MATERIAL, no de un select: la unidad se declara al crear
+        // el material. Ya no hay nada que validar aquí.
+        const unidad = unidadDelMaterial();
 
         if (!materialId) {
             return mostrarError('Elija un material.');
@@ -365,10 +423,6 @@ $(document).ready(function () {
 
         if (!cantidad || cantidad < 1) {
             return mostrarError('Indique una cantidad mayor que cero.');
-        }
-
-        if (!unidad) {
-            return mostrarError('Elija la unidad de medida.');
         }
 
         // El mismo material dos veces en un movimiento descuadraría
@@ -410,13 +464,25 @@ $(document).ready(function () {
             }
         }
 
-        agregarFila(materialId, cantidad, unidad, seriales);
+        // Vacío es «no se sabe», y así viaja: null. El servidor lo
+        // guarda como NULL y no como cero, porque un cero se suma en
+        // los totales como si el material fuera gratis.
+        const valorCrudo = $('#modal-purchase-unit-value').val();
+        const valorUnitario = (typeSelect.val() === 'Entrada' && valorCrudo !== '' && valorCrudo != null)
+            ? Number(valorCrudo)
+            : null;
+
+        if (valorUnitario !== null && (isNaN(valorUnitario) || valorUnitario < 0)) {
+            return mostrarError('El valor unitario de compra no puede ser negativo.');
+        }
+
+        agregarFila(materialId, cantidad, unidad, seriales, valorUnitario);
 
         modal.modal('hide');
     });
 
     /** Pinta la fila y sus inputs ocultos, que son los que se envían. */
-    function agregarFila(materialId, cantidad, unidad, seriales) {
+    function agregarFila(materialId, cantidad, unidad, seriales, valorUnitario) {
         const opcion = modalMaterialSelect.find('option:selected');
         const nombre = opcion.attr('data-name');
         const esEquipoMaterial = opcion.attr('data-is-equipment') === '1';
@@ -425,6 +491,18 @@ $(document).ready(function () {
         const ocultosSeriales = seriales
             .map((sn, j) => `<input type="hidden" name="materials[${i}][serial_numbers][${j}]" value="${escaparAtributo(sn)}">`)
             .join('');
+
+        // La celda solo se pinta si la cabecera también la lleva. El
+        // input oculto solo viaja si hay valor: mandarlo vacío haría que
+        // el servidor recibiera '' donde debe recibir «nada».
+        const celdaValor = verCostos()
+            ? `<td class="text-right">
+                    ${valorUnitario !== null
+                        ? `<input type="hidden" name="materials[${i}][purchase_unit_value]" value="${valorUnitario}">
+                           $${valorUnitario.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '<span class="text-muted" title="Sin valor de compra: no se sumará al inventario valorado">—</span>'}
+               </td>`
+            : '';
 
         materialsTable.append(
             `<tr data-index="${i}" data-material-id="${materialId}">
@@ -441,6 +519,7 @@ $(document).ready(function () {
                     <input type="hidden" name="materials[${i}][unit_of_measurement]" value="${escaparAtributo(unidad)}">
                     ${escaparHtml(unidad)}
                 </td>
+                ${celdaValor}
                 <td>
                     ${seriales.length ? '<small>' + seriales.map(escaparHtml).join('<br>') + '</small>' : '<span class="text-muted">—</span>'}
                     ${ocultosSeriales}
@@ -495,7 +574,8 @@ $(document).ready(function () {
     function limpiarModal() {
         modalMaterialSelect.val(null).trigger('change.select2');
         modalQuantity.val('').removeAttr('max');
-        $('#modal-unit-of-measurement').val('');
+        $('#modal-unit-label').text('—');
+        $('#modal-purchase-unit-value').val('');
         serialNumberSelect.empty().val(null).trigger('change.select2');
         serialNumberList.empty();
         $('#modal-serial-numbers-container').addClass('d-none');

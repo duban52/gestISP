@@ -414,7 +414,7 @@ class TechnicalOrderController extends Controller
      */
     public function myTechnicalOrders(): View
     {
-        $materials = $this->getTechnicianMaterials();
+        $materials = $this->getTechnicianMaterials(Auth::id());
 
         // Abrir esta bandeja cuenta como "ver" las órdenes: se
         // marcan leídas las notificaciones de asignación y las de
@@ -443,11 +443,19 @@ class TechnicalOrderController extends Controller
 
     /**
      * API JSON: seriales disponibles de un material en el almacén
-     * personal del técnico autenticado.
+     * personal de QUIEN LLAMA.
+     *
+     * OJO: el formulario de procesar orden NO usa esto. Los seriales
+     * van incrustados en las `<option>` (`data-serials`) desde
+     * `getTechnicianMaterials()`, que resuelve el almacén del técnico
+     * ASIGNADO. Este endpoint no recibe la orden, así que no puede
+     * saber de qué técnico se trata: sirve el almacén del usuario de la
+     * sesión y nada más. Si algún día vuelve a usarse desde el
+     * formulario, tiene que recibir la orden.
      */
     public function getSerialNumbers($materialId): JsonResponse
     {
-        $warehouse = Warehouse::where('user_id', Auth::id())->first();
+        $warehouse = Warehouse::where('user_id', Auth::id())->oldest('id')->first();
 
         if (!$warehouse) {
             return response()->json([]);
@@ -550,11 +558,16 @@ class TechnicalOrderController extends Controller
         try {
             DB::beginTransaction();
 
-            // Almacén personal del técnico (de ahí sale el material)
-            $warehouse = Warehouse::where('user_id', Auth::id())->first();
+            // Almacén personal del TÉCNICO ASIGNADO (de ahí sale el
+            // material). Ver almacenDelTecnico(): antes salía del
+            // almacén de quien estuviera logueado.
+            $warehouse = $this->almacenDelTecnico($technicalOrder);
 
             if (!$warehouse) {
-                throw new \Exception('No se encontró un almacén asociado al usuario.');
+                throw new \Exception(
+                    'El técnico asignado a esta orden no tiene almacén propio. '
+                        . 'Créele uno en Almacenes y asígneselo antes de procesarla.'
+                );
             }
 
             // ---- Reporte del técnico + evidencia fotográfica ----
@@ -696,8 +709,11 @@ class TechnicalOrderController extends Controller
      */
     public function show(TechnicalOrder $technicalOrder, NapFinder $napFinder): View
     {
-        $materials = $this->getTechnicianMaterials();
-        $warehouse = Warehouse::where('user_id', Auth::id())->first();
+        // EL MISMO ALMACÉN QUE USARÁ processOrder. Si esta pantalla
+        // enseñara la disponibilidad de otro almacén, el técnico
+        // elegiría material que al procesar no está donde se busca.
+        $warehouse = $this->almacenDelTecnico($technicalOrder);
+        $materials = $this->getTechnicianMaterials($technicalOrder->user_assigned);
 
         // Si es una instalación, la vista exige registrar material
         // antes de permitir procesar la orden.
@@ -1091,18 +1107,57 @@ class TechnicalOrderController extends Controller
     }
 
     /**
-     * Materiales con stock disponible en el almacén personal del
-     * técnico autenticado, con la cantidad total calculada.
+     * El almacén personal del técnico ASIGNADO a la orden.
      *
-     * Lógica extraída aquí porque myTechnicalOrders y show la
-     * duplicaban línea por línea.
+     * POR QUÉ NO VALE `Auth::id()`
+     * ----------------------------
+     * Porque quien procesa la orden no es siempre el técnico que la
+     * ejecutó: la oficina también la cierra. Resolviendo por el usuario
+     * de la sesión, el material se descontaba del almacén de quien
+     * estuviera logueado — y como `WarehouseController::store()` deja
+     * `user_id = Auth::id()` cuando no se elige dueño, el almacén
+     * PRINCIPAL queda a nombre de quien lo creó. Resultado: una
+     * instalación descargaba del almacén principal y el del técnico
+     * seguía cuadrando con material que ya no estaba en la furgoneta.
+     *
+     * El almacén del que sale el material es el del técnico que hizo el
+     * trabajo, lo cierre quien lo cierre.
+     *
+     * SIN TÉCNICO ASIGNADO NO HAY ALMACÉN. Devuelve null y quien llama
+     * decide: la pantalla enseña la lista vacía, y `processOrder`
+     * aborta antes de tocar nada.
+     */
+    private function almacenDelTecnico(TechnicalOrder $technicalOrder): ?Warehouse
+    {
+        if (!$technicalOrder->user_assigned) {
+            return null;
+        }
+
+        // `oldest('id')` y no `first()` a secas: si por un error de datos
+        // un usuario figura como dueño de dos almacenes, la pantalla y
+        // el descuento tienen que elegir SIEMPRE el mismo, o enseñarían
+        // una disponibilidad que no es la que luego se descuenta.
+        return Warehouse::where('user_id', $technicalOrder->user_assigned)
+            ->oldest('id')
+            ->first();
+    }
+
+    /**
+     * Materiales con stock disponible en el almacén personal de un
+     * usuario, con la cantidad total calculada.
+     *
+     * RECIBE EL USUARIO, no lo saca de la sesión: `show()` necesita el
+     * del técnico ASIGNADO a la orden (ver `almacenDelTecnico`) y
+     * `myTechnicalOrders()` el de quien mira su propia lista.
      *
      * - Equipos: total = suma de filas (una por serial)
      * - Consumibles: total = cantidad de su fila única
      */
-    private function getTechnicianMaterials(): Collection
+    private function getTechnicianMaterials(?int $userId): Collection
     {
-        $warehouse = Warehouse::where('user_id', Auth::id())->first();
+        $warehouse = $userId
+            ? Warehouse::where('user_id', $userId)->oldest('id')->first()
+            : null;
 
         if (!$warehouse) {
             return new Collection();

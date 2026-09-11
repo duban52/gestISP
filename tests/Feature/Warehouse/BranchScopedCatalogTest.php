@@ -139,6 +139,9 @@ class BranchScopedCatalogTest extends TestCase
             'name' => 'Conector SC/APC',
             'category_id' => $categoria->id,
             'is_equipment' => 0,
+            // La unidad se declara al crear el material: ya no se
+            // pregunta en cada movimiento.
+            'unit_of_measurement' => 'Unidades',
         ])->assertRedirect();
 
         $this->assertDatabaseHas('materials', [
@@ -156,6 +159,7 @@ class BranchScopedCatalogTest extends TestCase
             'name' => 'Material colado',
             'category_id' => $ajena->id,
             'is_equipment' => 0,
+            'unit_of_measurement' => 'Unidades',
         ])->assertSessionHasErrors('category_id');
 
         $this->assertDatabaseMissing('materials', ['name' => 'Material colado']);

@@ -247,6 +247,9 @@ $(document).ready(function () {
         $('#available-quantity').text(available);
         $('#available-quantity-text').toggle(Boolean($(this).val()));
 
+        // La unidad se ENSEÑA, no se pregunta: viene del material.
+        $('#modal-unit-label').text(option.data('unit') || '—');
+
         const serialSelect = $('#serial-number-select');
         serialSelect.empty();
 
@@ -260,7 +263,6 @@ $(document).ready(function () {
 
             $('#modal-serial-numbers-container').show();
             $('#modal-quantity-group').hide();
-            $('#modal-unit-of-measurement').val('Unidades');
         } else {
             // Consumibles: cantidad manual
             $('#modal-serial-numbers-container').hide();
@@ -276,14 +278,14 @@ $(document).ready(function () {
         const materialName = option.data('name');
         const isEquipment = option.data('is-equipment') == 1;
         const available = parseInt(option.data('available'), 10) || 0;
-        const unitOfMeasurement = $('#modal-unit-of-measurement').val();
+        // DEL MATERIAL, no de un select. Aqui ademas nunca se guardo:
+        // `technical_order_materials` no tiene la columna, asi que
+        // preguntarla era tramite puro — y una pregunta menos en un
+        // formulario que se rellena de pie, en casa del cliente.
+        const unitOfMeasurement = option.data('unit') || '';
 
         if (!materialId) {
             swalBootstrap.fire('Falta el material', 'Seleccione un material de la lista.', 'warning');
-            return;
-        }
-        if (!unitOfMeasurement) {
-            swalBootstrap.fire('Falta la unidad', 'Seleccione la unidad de medida.', 'warning');
             return;
         }
 
@@ -474,7 +476,7 @@ $(document).ready(function () {
     function resetModal() {
         $('#modal-material-select').val('').trigger('change');
         $('#modal-quantity').val(1);
-        $('#modal-unit-of-measurement').val('');
+        $('#modal-unit-label').text('—');
         $('#serial-number-select').empty().trigger('change');
         $('#modal-serial-numbers-container').hide();
         $('#modal-quantity-group').show();

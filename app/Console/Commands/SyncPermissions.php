@@ -85,6 +85,8 @@ class SyncPermissions extends Command
         // asignaron (por ejemplo, creados después del seeder)
         $granted = $this->grantAllToSuperadmin();
 
+        $this->grantDefaultRoles();
+
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->newLine();
@@ -105,6 +107,10 @@ class SyncPermissions extends Command
     {
         $permissions = collect();
 
+        // Los que solo gobiernan lo que se ENSEÑA dentro de una
+        // pantalla no aparecen como middleware en ningun controlador.
+        $permissions = $permissions->merge(array_keys(PermissionLabels::SIN_RUTA));
+
         foreach (File::allFiles(app_path('Http/Controllers')) as $file) {
             if ($file->getExtension() !== 'php') {
                 continue;
@@ -120,6 +126,37 @@ class SyncPermissions extends Command
         }
 
         return $permissions->unique()->sort()->values();
+    }
+
+    /**
+     * Reparte los permisos sin ruta a los roles que los llevan por
+     * defecto.
+     *
+     * POR QUÉ AQUÍ Y NO A MANO EN LA PANTALLA DE ROLES
+     * ------------------------------------------------
+     * Porque si no, tras cada despliegue habría que acordarse de ir a
+     * marcarlos, y lo que no está automatizado se olvida. Solo AÑADE:
+     * nunca quita un permiso que alguien haya decidido revocar, así que
+     * es idempotente y no pisa una decisión tomada desde la pantalla.
+     *
+     * Ojo: eso significa que revocar uno de estos permisos desde Roles
+     * dura hasta el siguiente `permissions:sync`. Es el precio de que
+     * el despliegue deje el sistema utilizable solo.
+     */
+    private function grantDefaultRoles(): void
+    {
+        foreach (PermissionLabels::SIN_RUTA as $permission => $roles) {
+            foreach ($roles as $roleName) {
+                $role = Role::where('name', $roleName)->first();
+
+                if (!$role || $role->checkPermissionTo($permission)) {
+                    continue;
+                }
+
+                $role->givePermissionTo($permission);
+                $this->line("  {$permission} → {$roleName}");
+            }
+        }
     }
 
     /**

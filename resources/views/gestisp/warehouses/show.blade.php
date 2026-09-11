@@ -15,11 +15,40 @@
     {{-- ============================================================
          Resumen y acciones del almacén
          ============================================================ --}}
+    @php
+        // El índice de la columna «Acciones» se mueve según haya o no
+        // columnas de costo. DataTables la marca como no ordenable por
+        // POSICIÓN, así que el número tiene que salir de aquí y no
+        // escrito a mano abajo.
+        $verCostos = auth()->check() && \Illuminate\Support\Facades\Gate::allows('materials.costs');
+        $columnaAcciones = $verCostos ? 5 : 3;
+    @endphp
+
     <div class="card">
         <div class="card-body d-flex justify-content-between align-items-center">
             <div>
                 <strong>Materiales distintos:</strong>
                 <span class="badge badge-info">{{ $inventoriesData->count() }}</span>
+
+                @can('materials.costs')
+                    {{-- EL TOTAL DICE SI ESTÁ COMPLETO.
+                         Lo que no tiene costo registrado no se suma como
+                         cero: se avisa. Un total que se traga el material
+                         sin precio como si fuera gratis es peor que no
+                         tener total, porque nadie duda de un número. --}}
+                    <span class="ml-4"><strong>Valor del inventario:</strong></span>
+                    <span class="badge badge-{{ $resumenValor['completo'] ? 'success' : 'warning' }}">
+                        {{ $resumenValor['completo'] ? '' : 'desde ' }}${{ number_format($resumenValor['total'], 2) }}
+                    </span>
+
+                    @if(!$resumenValor['completo'])
+                        <small class="text-muted ml-1">
+                            ({{ $resumenValor['materiales_sin_valorar'] }}
+                            {{ $resumenValor['materiales_sin_valorar'] === 1 ? 'material' : 'materiales' }}
+                            sin valor de compra registrado)
+                        </small>
+                    @endif
+                @endcan
             </div>
 
             {{-- Exportar el inventario completo a PDF --}}
@@ -47,6 +76,10 @@
                         <th>Artículo</th>
                         <th>Cantidad</th>
                         <th>Unidad de medida</th>
+                        @can('materials.costs')
+                            <th class="text-right">Valor unitario</th>
+                            <th class="text-right">Valor total</th>
+                        @endcan
                         <th>Acciones</th>
                     </tr>
                     </thead>
@@ -63,6 +96,31 @@
                             </td>
 
                             <td>{{ $inventoryData['unit_of_measurement'] }}</td>
+
+                            @can('materials.costs')
+                                {{-- «—» y no «$0,00»: no saber lo que costó
+                                     no es que fuera gratis, y en una cifra
+                                     que se usa para decidir esa diferencia
+                                     es la que importa. --}}
+                                <td class="text-right">
+                                    @if($inventoryData['valor']['unitario'] !== null)
+                                        ${{ number_format($inventoryData['valor']['unitario'], 2) }}
+                                    @else
+                                        <span class="text-muted" title="Sin valor de compra registrado">—</span>
+                                    @endif
+                                </td>
+                                <td class="text-right">
+                                    @if($inventoryData['valor']['total'] !== null)
+                                        ${{ number_format($inventoryData['valor']['total'], 2) }}
+                                        @if($inventoryData['valor']['unidades_sin_valorar'] > 0)
+                                            <i class="fas fa-exclamation-triangle text-warning ml-1"
+                                               title="{{ (int) $inventoryData['valor']['unidades_sin_valorar'] }} unidades sin valor de compra: el total es parcial."></i>
+                                        @endif
+                                    @else
+                                        <span class="text-muted" title="Sin valor de compra registrado">—</span>
+                                    @endif
+                                </td>
+                            @endcan
 
                             <td>
                                 {{-- Solo los equipos (con número de serie) tienen
@@ -175,8 +233,10 @@
                 // Orden inicial: por artículo ascendente
                 order: [[0, 'asc']],
                 columnDefs: [
-                    // La columna de acciones no es ordenable
-                    { orderable: false, targets: [3] },
+                    // La columna de acciones no es ordenable. El índice
+                    // se calcula en Blade porque se desplaza cuando se
+                    // pintan las columnas de costo.
+                    { orderable: false, targets: [{{ $columnaAcciones }}] },
                     // Evita el warning cuando una celda llega vacía
                     { defaultContent: '', targets: '_all' }
                 ]

@@ -33,10 +33,29 @@ class Material extends Model
         'name',
         'category_id',
         'is_equipment',
+        // LA UNIDAD ES DEL MATERIAL, no de cada operacion. Se declara
+        // al crearlo y el resto del sistema la asume: preguntarla en
+        // cada movimiento permitia ingresar 200 «Unidades» de fibra y
+        // sacar 50 «Metros» de la misma fibra.
+        'unit_of_measurement',
+        // Valor de REFERENCIA del catalogo, opcional. Se propone al
+        // registrar una entrada; no vale para valorar existencias (para
+        // eso esta el costo de cada fila de inventario).
+        'purchase_unit_value',
     ];
+
+    /**
+     * Unidades de medida que admite el catálogo.
+     *
+     * Lista cerrada y no texto libre: con texto libre acaban
+     * conviviendo «Metros», «metros» y «mts» para el mismo material, y
+     * entonces agrupar existencias deja de funcionar.
+     */
+    public const UNIDADES = ['Unidades', 'Metros', 'Litros', 'Paquetes'];
 
     protected $casts = [
         'is_equipment' => 'boolean',
+        'purchase_unit_value' => 'decimal:2',
     ];
 
     /** Sucursal dueña del material */

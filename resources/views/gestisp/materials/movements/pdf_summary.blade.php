@@ -14,6 +14,11 @@
     $first = $movementsCollection->first();
 @endphp
 
+@php
+    // Falla cerrado: sin el dato del controlador, no se ensenan costos.
+    $verCostos = $verCostos ?? false;
+@endphp
+
 @section('meta')
     <tr>
         <td style="width: 25%">
@@ -67,11 +72,14 @@
     <table class="data">
         <thead>
         <tr>
-            <th style="width: 30%">Material</th>
-            <th style="width: 11%" class="text-right">Cantidad</th>
-            <th style="width: 12%">Unidad</th>
-            <th style="width: 25%">Serial</th>
-            <th style="width: 22%">Motivo</th>
+            <th style="width: {{ $verCostos ? '25%' : '30%' }}">Material</th>
+            <th style="width: 10%" class="text-right">Cantidad</th>
+            <th style="width: 10%">Unidad</th>
+            @if($verCostos)
+                <th style="width: 13%" class="text-right">V. unit. compra</th>
+            @endif
+            <th style="width: {{ $verCostos ? '22%' : '25%' }}">Serial</th>
+            <th style="width: 20%">Motivo</th>
         </tr>
         </thead>
         <tbody>
@@ -80,12 +88,19 @@
                 <td>{{ $movement->material->name ?? '—' }}</td>
                 <td class="text-right">{{ number_format($movement->quantity, 2) }}</td>
                 <td>{{ $movement->unit_of_measurement }}</td>
+                @if($verCostos)
+                    <td class="text-right">
+                        {{ $movement->purchase_unit_value !== null
+                            ? '$' . number_format($movement->purchase_unit_value, 2)
+                            : '—' }}
+                    </td>
+                @endif
                 <td>{{ $movement->serial_number ?: '—' }}</td>
                 <td>{{ $movement->reason ?: '—' }}</td>
             </tr>
         @empty
             <tr class="empty-row">
-                <td colspan="5">El movimiento no registra materiales.</td>
+                <td colspan="{{ $verCostos ? 6 : 5 }}">El movimiento no registra materiales.</td>
             </tr>
         @endforelse
         </tbody>
@@ -94,7 +109,16 @@
             <tr>
                 <td>TOTAL DE UNIDADES</td>
                 <td class="text-right">{{ number_format($movementsCollection->sum('quantity'), 2) }}</td>
-                <td colspan="3"></td>
+                @if($verCostos)
+                    @php
+                        $conValor = $movementsCollection->filter(fn ($m) => $m->purchase_unit_value !== null);
+                        $invertido = $conValor->sum(fn ($m) => $m->quantity * (float) $m->purchase_unit_value);
+                    @endphp
+                    <td class="text-right">
+                        {{ $conValor->isEmpty() ? '—' : '$' . number_format($invertido, 2) }}
+                    </td>
+                @endif
+                <td colspan="{{ $verCostos ? 2 : 3 }}"></td>
             </tr>
             </tfoot>
         @endif

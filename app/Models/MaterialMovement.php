@@ -34,6 +34,14 @@ class MaterialMovement extends Model
         'serial_number',
         'user_id',
         'reason',
+        // Lo que costo cada unidad en ESTE ingreso. Es el historico que
+        // permite auditar o rehacer el promedio ponderado del
+        // inventario, que solo guarda el resultado.
+        'purchase_unit_value',
+    ];
+
+    protected $casts = [
+        'purchase_unit_value' => 'decimal:2',
     ];
 
     /** Material movido */

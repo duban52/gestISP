@@ -9,6 +9,11 @@
     'orientation' => 'landscape',
 ])
 
+@php
+    // Falla cerrado: sin el dato del controlador, no se ensenan costos.
+    $verCostos = $verCostos ?? false;
+@endphp
+
 @section('meta')
     <tr>
         <td style="width: 30%">
@@ -44,9 +49,16 @@
         <table class="data">
             <thead>
             <tr>
-                <th style="width: 40%">Tipo de movimiento</th>
-                <th style="width: 30%" class="text-right">Registros</th>
-                <th style="width: 30%" class="text-right">Unidades movidas</th>
+                <th style="width: {{ $verCostos ? '31%' : '40%' }}">Tipo de movimiento</th>
+                <th style="width: 23%" class="text-right">Registros</th>
+                <th style="width: 23%" class="text-right">Unidades movidas</th>
+                @if($verCostos)
+                    {{-- Solo tiene sentido en las ENTRADAS: es lo que se
+                         pagó por lo que ingresó. En traslados y salidas
+                         no hay compra, así que sale «—» en vez de un
+                         cero que parecería un dato. --}}
+                    <th style="width: 23%" class="text-right">Valor de compra</th>
+                @endif
             </tr>
             </thead>
             <tbody>
@@ -55,6 +67,16 @@
                     <td>{{ ucfirst($type ?: 'Sin especificar') }}</td>
                     <td class="text-right">{{ $rows->count() }}</td>
                     <td class="text-right">{{ number_format($rows->sum('quantity'), 2) }}</td>
+                    @if($verCostos)
+                        @php
+                            $conValor = $rows->filter(fn ($m) => $m->purchase_unit_value !== null);
+                            $invertido = $conValor->sum(fn ($m) => $m->quantity * (float) $m->purchase_unit_value);
+                        @endphp
+                        <td class="text-right">
+                            {{ $conValor->isEmpty() ? '—' : '$' . number_format($invertido, 2) }}
+                            @if($conValor->isNotEmpty() && $conValor->count() < $rows->count())*@endif
+                        </td>
+                    @endif
                 </tr>
             @endforeach
             </tbody>
@@ -63,6 +85,15 @@
                 <td>TOTAL</td>
                 <td class="text-right">{{ $movements->count() }}</td>
                 <td class="text-right">{{ number_format($movements->sum('quantity'), 2) }}</td>
+                @if($verCostos)
+                    @php
+                        $conValorTotal = $movements->filter(fn ($m) => $m->purchase_unit_value !== null);
+                        $invertidoTotal = $conValorTotal->sum(fn ($m) => $m->quantity * (float) $m->purchase_unit_value);
+                    @endphp
+                    <td class="text-right">
+                        {{ $conValorTotal->isEmpty() ? '—' : '$' . number_format($invertidoTotal, 2) }}
+                    </td>
+                @endif
             </tr>
             </tfoot>
         </table>
@@ -78,11 +109,17 @@
             <th style="width: 9%">Tipo</th>
             <th style="width: 12%">Origen</th>
             <th style="width: 12%">Destino</th>
-            <th style="width: 16%">Material</th>
-            <th style="width: 7%" class="text-right">Cant.</th>
-            <th style="width: 7%">Unidad</th>
-            <th style="width: 12%">Serial</th>
-            <th style="width: 14%">Motivo / responsable</th>
+            <th style="width: {{ $verCostos ? '14%' : '16%' }}">Material</th>
+            <th style="width: 6%" class="text-right">Cant.</th>
+            <th style="width: 6%">Unidad</th>
+            @if($verCostos)
+                {{-- Lo que se pagó en ESE ingreso. Solo lo llevan las
+                     entradas: en un traslado el costo viaja con la
+                     existencia y en una salida no hay nada que costear. --}}
+                <th style="width: 9%" class="text-right">V. unit.</th>
+            @endif
+            <th style="width: {{ $verCostos ? '10%' : '12%' }}">Serial</th>
+            <th style="width: {{ $verCostos ? '12%' : '14%' }}">Motivo / responsable</th>
         </tr>
         </thead>
         <tbody>
@@ -95,6 +132,13 @@
                 <td>{{ $movement->material->name ?? '—' }}</td>
                 <td class="text-right">{{ number_format($movement->quantity, 2) }}</td>
                 <td>{{ $movement->unit_of_measurement }}</td>
+                @if($verCostos)
+                    <td class="text-right nowrap">
+                        {{ $movement->purchase_unit_value !== null
+                            ? '$' . number_format($movement->purchase_unit_value, 2)
+                            : '—' }}
+                    </td>
+                @endif
                 <td>{{ $movement->serial_number ?: '—' }}</td>
                 <td>
                     {{ $movement->reason ?: '—' }}
@@ -106,7 +150,7 @@
             </tr>
         @empty
             <tr class="empty-row">
-                <td colspan="9">No se encontraron movimientos en el período consultado.</td>
+                <td colspan="{{ $verCostos ? 10 : 9 }}">No se encontraron movimientos en el período consultado.</td>
             </tr>
         @endforelse
         </tbody>

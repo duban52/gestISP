@@ -54,7 +54,15 @@
                         <th>Nombre</th>
                         <th>Categoría</th>
                         <th>Tipo</th>
+                        <th>Unidad</th>
                         <th>Registros en inventario</th>
+                        @can('materials.costs')
+                            {{-- Valor de REFERENCIA del catalogo, no el del
+                                 inventario: lo que suele costar, no lo que se
+                                 pago por lo que hay. El inventario valorado
+                                 esta en la ficha de cada almacen. --}}
+                            <th class="text-right">Valor unit. de compra</th>
+                        @endcan
                         <th>Acciones</th>
                     </tr>
                     </thead>
@@ -83,12 +91,22 @@
                                 @endif
                             </td>
 
+                            <td>{{ $material->unit_of_measurement }}</td>
+
                             {{-- Cantidad de registros de stock del material --}}
                             <td>
                                     <span class="badge badge-info">
                                         {{ $material->inventories_count }}
                                     </span>
                             </td>
+
+                            @can('materials.costs')
+                                <td class="text-right">
+                                    {{ $material->purchase_unit_value !== null
+                                        ? '$' . number_format($material->purchase_unit_value, 2)
+                                        : '—' }}
+                                </td>
+                            @endcan
 
                             <td>
                                 {{-- Editar material --}}
@@ -195,8 +213,10 @@
                     // columna no cambien con el modo de trabajo; DataTables
                     // la esconde cuando no hay varias sedes que distinguir.
                     { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
-                    // La columna de acciones (índice 4) no es ordenable
-                    { orderable: false, targets: [5] },
+                    // La columna de acciones no es ordenable. El indice se
+                    // desplaza cuando se pinta la columna de costo, asi que
+                    // sale de Blade y no escrito a mano.
+                    { orderable: false, targets: [{{ auth()->check() && \Illuminate\Support\Facades\Gate::allows('materials.costs') ? 7 : 6 }}] },
 
                     // Evita el warning de DataTables cuando una celda llega vacía
                     { defaultContent: '—', targets: '_all' }

@@ -66,8 +66,9 @@ class MaterialController extends Controller
     public function create(): View
     {
         $categories = Category::deSucursal()->orderBy('name')->get();
+        $unidades = Material::UNIDADES;
 
-        return view('gestisp.materials.create', compact('categories'));
+        return view('gestisp.materials.create', compact('categories', 'unidades'));
     }
 
     /**
@@ -86,6 +87,8 @@ class MaterialController extends Controller
             'name'         => $validated['name'],
             'category_id'  => $validated['category_id'],
             'is_equipment' => $request->boolean('is_equipment'),
+            'unit_of_measurement' => $validated['unit_of_measurement'],
+            'purchase_unit_value' => $this->valorDeCompra($request, $validated),
         ]);
 
         return redirect()
@@ -101,8 +104,9 @@ class MaterialController extends Controller
         $this->exigirMismaSucursal($material);
 
         $categories = Category::deSucursal()->orderBy('name')->get();
+        $unidades = Material::UNIDADES;
 
-        return view('gestisp.materials.edit', compact('material', 'categories'));
+        return view('gestisp.materials.edit', compact('material', 'categories', 'unidades'));
     }
 
     /**
@@ -122,6 +126,18 @@ class MaterialController extends Controller
             'name'         => $validated['name'],
             'category_id'  => $validated['category_id'],
             'is_equipment' => $request->boolean('is_equipment'),
+            // CAMBIARLA NO REESCRIBE EL HISTÓRICO. Los movimientos ya
+            // registrados conservan la unidad con la que se hicieron:
+            // decir hoy que la fibra son metros no convierte en metros
+            // las «unidades» que alguien ingresó el año pasado.
+            'unit_of_measurement' => $validated['unit_of_measurement'],
+            // Si el formulario llegó SIN el campo —porque quien edita no
+            // tiene permiso para ver costos— se conserva el que había.
+            // Guardar null ahí borraría un dato que esa persona ni
+            // siquiera podía ver.
+            'purchase_unit_value' => $request->has('purchase_unit_value')
+                ? $this->valorDeCompra($request, $validated)
+                : $material->purchase_unit_value,
         ]);
 
         return redirect()
@@ -177,10 +193,38 @@ class MaterialController extends Controller
                 'required',
                 Rule::exists('categories', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
             ],
+            // OBLIGATORIA: es lo que da sentido a las existencias del
+            // material. Antes se preguntaba en cada movimiento, y nada
+            // impedía que el mismo material entrara en «Unidades» y
+            // saliera en «Metros».
+            'unit_of_measurement' => ['required', Rule::in(Material::UNIDADES)],
             'is_equipment' => 'nullable|boolean',
+            // OPCIONAL, y el vacío se guarda como NULL, no como cero.
+            // Un cero se suma en los totales y hace creer que el
+            // material no costó nada; un nulo se distingue y la
+            // pantalla puede decir que falta el dato.
+            'purchase_unit_value' => 'nullable|numeric|min:0|max:99999999999.99',
         ], [
             'category_id.exists' => 'La categoría elegida no existe en esta sucursal.',
+            'unit_of_measurement.required' => 'Indique en qué unidad se mide este material.',
+            'unit_of_measurement.in' => 'Esa unidad de medida no está permitida.',
+            'purchase_unit_value.numeric' => 'El valor unitario de compra debe ser un número.',
+            'purchase_unit_value.min' => 'El valor unitario de compra no puede ser negativo.',
         ]);
+    }
+
+    /**
+     * El valor unitario de compra tal como debe guardarse.
+     *
+     * Cadena vacía y null son lo mismo aquí: «no se sabe». Se
+     * normalizan a NULL para que los totales puedan distinguir un
+     * material sin precio de uno que costó cero.
+     */
+    private function valorDeCompra(Request $request, array $validated): ?float
+    {
+        $valor = $validated['purchase_unit_value'] ?? null;
+
+        return ($valor === null || $valor === '') ? null : (float) $valor;
     }
 
     /**
