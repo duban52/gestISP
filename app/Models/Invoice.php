@@ -5,8 +5,10 @@ namespace App\Models;
 use App\Tenancy\BelongsToCompany;
 use App\Billing\Concerns\Auditable;
 use App\Billing\Enums\PaymentStatus;
+use App\Billing\Services\ElectronicInvoicingDecider;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Modelo de Factura
@@ -182,6 +184,86 @@ class Invoice extends Model
      * facturación, y sumarlo al `PayableAmount` seria declararle a la
      * DIAN un importe que no corresponde a esta venta.
      */
+    /**
+     * Su documento ante la DIAN, si lo tiene.
+     *
+     * `withoutGlobalScopes()` no: aquí el alcance de empresa es
+     * deseable — una factura de otra empresa no debería poder
+     * consultarse desde este contexto de todas formas.
+     */
+    public function electronicDocument(): HasOne
+    {
+        return $this->hasOne(ElectronicDocument::class);
+    }
+
+    /**
+     * ¿La DIAN ya la validó?
+     *
+     * Es la frontera entre «documento del sistema» y «documento
+     * fiscal». Una vez cruzada, la factura ya no es nuestra: existe en
+     * los registros de la DIAN y solo se corrige con una nota.
+     */
+    public function validadaPorLaDian(): bool
+    {
+        if ($this->document_kind !== ElectronicInvoicingDecider::ELECTRONICO) {
+            return false;
+        }
+
+        return ElectronicDocument::withoutGlobalScopes()
+            ->where('invoice_id', $this->id)
+            ->where('status', ElectronicDocument::ACEPTADO)
+            ->exists();
+    }
+
+    /**
+     * ¿Es a crédito?
+     *
+     * UNA SOLA DEFINICIÓN, PARA EL XML Y PARA EL PAPEL.
+     *
+     * El XML lo deducía por su cuenta y la representación gráfica
+     * imprimía «Crédito» escrito a mano. Con un vencimiento igual a la
+     * emisión, el XML declaraba contado y el papel decía crédito: dos
+     * documentos de la misma factura diciendo cosas distintas, que es
+     * justo lo que se mira en una revisión.
+     */
+    public function esACredito(): bool
+    {
+        return $this->due_date
+            && $this->issue_date
+            && \Carbon\Carbon::parse($this->due_date)->gt(\Carbon\Carbon::parse($this->issue_date));
+    }
+
+    /** «Crédito» o «Contado», lo mismo que declara el XML. */
+    public function formaDePagoLegible(): string
+    {
+        return $this->esACredito() ? 'Crédito' : 'Contado';
+    }
+
+    /**
+     * El medio de pago con el código que de verdad viaja en el XML.
+     *
+     * Se resuelve contra el catálogo de la DIAN en vez de escribirlo a
+     * mano: el papel tiene que decir lo mismo que el XML, y el nombre
+     * de un código lo define la DIAN, no nosotros.
+     */
+    public function medioDePagoLegible(): string
+    {
+        $codigo = $this->medioDePagoCodigo();
+
+        return FiscalCatalog::nombre(FiscalCatalog::MEDIO_PAGO, $codigo) ?: 'Efectivo';
+    }
+
+    /**
+     * El código de medio de pago que se declara.
+     *
+     * `10` (efectivo) como último recurso, que es lo que ya asumía el
+     * constructor del XML. Aquí está una sola vez.
+     */
+    public function medioDePagoCodigo(): string
+    {
+        return (string) ($this->payment_means_code ?: '10');
+    }
+
     public function saldoAnterior(): float
     {
         if (!$this->contract_id) {

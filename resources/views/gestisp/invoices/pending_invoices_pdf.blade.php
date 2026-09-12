@@ -172,14 +172,16 @@
                             <tr>
                                 <td>FECHA DE VENCIMIENTO</td>
                                 <td><strong>{{ $invoice->due_date }}</strong></td>
+                                {{-- Lo mismo que declara el XML; ver la
+                                     factura suelta. --}}
                                 <td>FORMA DE PAGO</td>
-                                <td>Crédito</td>
+                                <td>{{ $invoice->formaDePagoLegible() }}</td>
                             </tr>
                             <tr>
                                 <td>PERIODO</td>
                                 <td><strong>{{ $invoice->billed_month_name }}</strong></td>
                                 <td>METODO DE PAGO</td>
-                                <td>EFECTIVO</td>
+                                <td>{{ $invoice->medioDePagoLegible() }}</td>
                             </tr>
                             <tr>
                                 <td colspan="4" style="font-size: 8px;">

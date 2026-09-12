@@ -22,6 +22,8 @@ use RuntimeException;
  *    reversarse los pagos (una factura pagada que se anulara
  *    dejaría dinero recibido sin documento que lo soporte).
  *  - No se anula lo ya anulado ni las absorbidas históricas.
+ *  - No se anula una ELECTRÓNICA que la DIAN ya validó. Esa se
+ *    corrige con una nota crédito; ver más abajo.
  *
  * Tras anular se refrescan las suspensiones de la sucursal: si la
  * factura anulada era una vencida que sumaba para el corte, el
@@ -48,6 +50,32 @@ class InvoiceVoider
 
         if ($invoice->status === InvoiceStatus::CargadaANuevaFactura->value) {
             throw new RuntimeException('Las facturas absorbidas históricas no pueden anularse.');
+        }
+
+        // UNA ELECTRÓNICA VALIDADA NO SE ANULA: SE LE EMITE UNA NOTA.
+        //
+        // Cuando la DIAN acepta una factura, el documento deja de ser
+        // nuestro: existe en sus registros con su CUFE. Cambiarle el
+        // estado aquí no lo borra de allí — solo hace que nuestra
+        // contabilidad y la suya dejen de coincidir, y esa diferencia
+        // aparece cuando alguien cruza los dos lados.
+        //
+        // La vía correcta es la nota crédito por anulación, que sí se
+        // transmite y sí queda registrada en los dos sitios. Ya existe
+        // en el sistema (`NoteIssuer`), así que aquí solo hay que
+        // impedir el atajo y decir por dónde se va.
+        //
+        // Una electrónica RECHAZADA o sin transmitir sí se puede
+        // anular: nunca llegó a ser un documento fiscal. Deja el
+        // consecutivo quemado, que es otro asunto y se ve en el reporte
+        // de consecutivos.
+        if ($invoice->validadaPorLaDian()) {
+            throw new RuntimeException(
+                'Esta factura electrónica ya fue validada por la DIAN y no se puede anular: '
+                . 'existe en sus registros con su CUFE. Emítale una NOTA CRÉDITO por anulación '
+                . '(concepto 2) desde la ficha de la factura; eso sí se transmite y deja '
+                . 'constancia en los dos lados.'
+            );
         }
 
         $hasCompletedPayments = $invoice->payments()

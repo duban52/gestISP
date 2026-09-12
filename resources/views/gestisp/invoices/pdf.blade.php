@@ -208,14 +208,20 @@
                         <tr>
                             <td>FECHA DE VENCIMIENTO</td>
                             <td><strong>{{ $invoice->due_date }}</strong></td>
+                            {{-- LO MISMO QUE DECLARA EL XML.
+                                 Iban «Crédito» y «EFECTIVO» escritos a mano:
+                                 con un vencimiento igual a la emisión, el XML
+                                 declaraba contado y el papel decía crédito. Dos
+                                 documentos de la misma factura contradiciéndose
+                                 es lo que se mira en una revisión. --}}
                             <td>FORMA DE PAGO</td>
-                            <td>Crédito</td>
+                            <td>{{ $invoice->formaDePagoLegible() }}</td>
                         </tr>
                         <tr>
                             <td>PERIODO</td>
                             <td><strong>{{ $invoice->billed_month_name }}</strong></td>
                             <td>METODO DE PAGO</td>
-                            <td>EFECTIVO</td>
+                            <td>{{ $invoice->medioDePagoLegible() }}</td>
                         </tr>
                         <tr>
                             {{-- La fecha de validación la pone la DIAN, no nosotros.

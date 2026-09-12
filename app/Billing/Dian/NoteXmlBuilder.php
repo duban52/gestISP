@@ -359,7 +359,7 @@ class NoteXmlBuilder extends UblBuilder
             && \Illuminate\Support\Carbon::parse($factura->due_date)->gt(\Illuminate\Support\Carbon::parse($factura->issue_date));
 
         $this->hijo($doc, $nodo, 'cbc:ID', $aCredito ? '2' : '1');
-        $this->hijo($doc, $nodo, 'cbc:PaymentMeansCode', (string) ($factura->payment_means_code ?: '10'));
+        $this->hijo($doc, $nodo, 'cbc:PaymentMeansCode', $factura->medioDePagoCodigo());
 
         if ($factura->due_date) {
             $this->hijo($doc, $nodo, 'cbc:PaymentDueDate', \Illuminate\Support\Carbon::parse($factura->due_date)->format('Y-m-d'));

@@ -250,6 +250,15 @@ Route::middleware('auth')->prefix('facturacion-dian/documentos')->group(function
     Route::get('/', [App\Http\Controllers\ElectronicDocumentLogController::class, 'index'])
         ->name('dian.log.index');
 
+    // ANTES de la ruta con parametro: `consecutivos` no es un numero y
+    // `whereNumber` ya lo separaria, pero el orden lo deja explicito.
+    //
+    // La DIAN autoriza un rango y espera poder pedir cuenta de cada
+    // numero. Un consecutivo reservado que no acabo en factura, o que
+    // acabo en una rechazada, es un hueco que hay que justificar.
+    Route::get('consecutivos', [App\Http\Controllers\ElectronicDocumentLogController::class, 'consecutivos'])
+        ->name('dian.log.consecutivos');
+
     Route::get('{document}', [App\Http\Controllers\ElectronicDocumentLogController::class, 'show'])
         ->whereNumber('document')
         ->name('dian.log.show');

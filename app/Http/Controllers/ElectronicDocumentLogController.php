@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Billing\Delivery\InvoicePackage;
+use App\Billing\Reports\ConsecutiveAudit;
 use App\Billing\Events\ElectronicDocumentAccepted;
 use App\Models\Branch;
 use App\Models\ElectronicDocument;
@@ -84,6 +85,28 @@ class ElectronicDocumentLogController extends Controller
             'sucursales' => Branch::orderBy('name')->get(['id', 'name']),
             'diasPorDefecto' => self::DIAS_POR_DEFECTO,
             'usandoRangoPorDefecto' => !$request->filled('desde') && !$request->filled('hasta'),
+        ]);
+    }
+
+    /**
+     * Qué pasó con cada consecutivo autorizado.
+     *
+     * POR QUÉ ES OTRA PANTALLA Y NO UNA COLUMNA MÁS
+     * ---------------------------------------------
+     * Porque la pregunta es al revés que la del listado. Allí se parte
+     * de los documentos que existen; aquí se parte de los NÚMEROS que
+     * la DIAN autorizó, y lo interesante son precisamente los que no
+     * tienen documento detrás — que por definición no pueden aparecer
+     * en una lista de documentos.
+     *
+     * Mismo permiso que el resto del log: quien puede ver el estado de
+     * los documentos puede ver su numeración.
+     */
+    public function consecutivos(ConsecutiveAudit $auditoria): View
+    {
+        return view('gestisp.dian.log.consecutivos', [
+            'rangos' => $auditoria->rangosAutorizados(),
+            'etiquetas' => ConsecutiveAudit::etiquetas(),
         ]);
     }
 

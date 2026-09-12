@@ -113,6 +113,15 @@ class InvoiceGenerator
                 // Despues lo que vale es lo que quedo guardado: si el
                 // contrato cambia de grupo, esta factura no se entera.
                 'affinity_group_id' => $contract->affinity_group_id,
+                // EL MEDIO DE PAGO DEL GRUPO, CONGELADO AQUÍ.
+                //
+                // El grupo lo deja configurar desde hace tiempo, pero
+                // nadie lo copiaba a la factura: el XML acababa
+                // declarando siempre «10» (efectivo) aunque en el grupo
+                // dijera otra cosa. Se congela como el resto de lo
+                // fiscal — si mañana cambia el grupo, esta factura
+                // sigue diciendo lo que dijo.
+                'payment_means_code' => $contract->affinityGroup?->default_payment_means_code,
                 'document_kind' => $this->decider->tipoPara($contract),
                 // Corrida que la generó (null si se creó por otra vía)
                 'billing_run_id' => $billingRunId,

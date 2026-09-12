@@ -315,14 +315,13 @@ class InvoiceXmlBuilder extends UblBuilder
     {
         $nodo = $this->hijo($doc, $raiz, 'cac:PaymentMeans');
 
-        // 1 contado, 2 crédito. Una factura cuyo vencimiento es
-        // posterior a su emisión es a crédito.
-        $aCredito = $factura->due_date
-            && $factura->issue_date
-            && Carbon::parse($factura->due_date)->gt(Carbon::parse($factura->issue_date));
-
-        $this->hijo($doc, $nodo, 'cbc:ID', $aCredito ? '2' : '1');
-        $this->hijo($doc, $nodo, 'cbc:PaymentMeansCode', (string) ($factura->payment_means_code ?: '10'));
+        // 1 contado, 2 crédito. La regla vive en el MODELO y no aquí:
+        // la representación gráfica tiene que decir lo mismo, y con la
+        // condición escrita en dos sitios un día dirán cosas distintas
+        // — que es lo que pasaba, con el papel imprimiendo «Crédito»
+        // fijo mientras el XML declaraba contado.
+        $this->hijo($doc, $nodo, 'cbc:ID', $factura->esACredito() ? '2' : '1');
+        $this->hijo($doc, $nodo, 'cbc:PaymentMeansCode', $factura->medioDePagoCodigo());
 
         if ($factura->due_date) {
             $this->hijo($doc, $nodo, 'cbc:PaymentDueDate', Carbon::parse($factura->due_date)->format('Y-m-d'));

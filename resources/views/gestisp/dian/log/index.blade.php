@@ -3,7 +3,17 @@
 @section('title', 'Documentos ante la DIAN')
 
 @section('content_header')
-    <h1 class="mb-0"><i class="fas fa-file-invoice mr-2"></i>Documentos ante la DIAN</h1>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <h1 class="mb-0"><i class="fas fa-file-invoice mr-2"></i>Documentos ante la DIAN</h1>
+
+        {{-- La otra mitad de la pregunta: aqui se ven los documentos que
+             existen; alli, los CONSECUTIVOS que la DIAN autorizo y que
+             no acabaron en documento — que por definicion no pueden
+             aparecer en esta lista. --}}
+        <a href="{{ route('dian.log.consecutivos') }}" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-list-ol mr-1"></i>Consecutivos autorizados
+        </a>
+    </div>
 @stop
 
 @section('content')
