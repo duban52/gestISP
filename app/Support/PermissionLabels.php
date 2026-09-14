@@ -85,6 +85,9 @@ class PermissionLabels
         'receipt' => 'Imprimir el recibo de',
         'cutoff' => 'Ejecutar cortes masivos de',
         'manage' => 'Configurar',
+        // Cambiar el estado de un contrato a mano —dar de baja,
+        // anular, corregir— es otra cosa que crear o editar uno.
+        'status' => 'Cambiar el estado de',
         // Ver lo que cuesta el material NO es lo mismo que ver el
         // material. Quien lleva el almacen necesita saber cuantas ONT
         // hay; lo que se pago por ellas es informacion del negocio.

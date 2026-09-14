@@ -10,6 +10,8 @@ use App\Models\NapBox;
 use App\Models\NapPort;
 use App\Models\TechnicalOrder;
 use App\Models\User;
+use App\Billing\Enums\ContractStatus;
+use App\Billing\Services\ContractStatusFromOrder;
 use App\Models\Warehouse;
 use App\Notifications\TechnicalOrderAssignedTechnician;
 use App\Notifications\TechnicalOrderCreatedClient;
@@ -79,6 +81,10 @@ class TechnicalOrderController extends Controller
         $this->middleware('check.permission:technicals_orders.process')->only('processOrder');
         $this->middleware('check.permission:technical_order.verification_process')->only('verificationOrderProcess');
         $this->middleware('check.permission:technical_orders.reject')->only('orderReject');
+        // Permiso APARTE: una orden administrativa puede forzar
+        // cualquier estado de un contrato, incluida la baja. No es lo
+        // mismo que crear una orden de campo.
+        $this->middleware('check.permission:contracts.status')->only('storeAdministrative');
     }
 
     /**
@@ -210,38 +216,29 @@ class TechnicalOrderController extends Controller
                 'comments'    => $request->input('verification_comment'),
             ]);
 
-            // Actualizar el estado del contrato según el tipo de trabajo
-            $contract = Contract::find($technicalOrder->contract_id);
-
-            if ($contract) {
-                $activationDetails = [
-                    'Instalacion de servicio',
-                    'Reconexión',
-                    'Instalación de servicio (creación automática)',
-                ];
-
-                $suspensionDetails = [
-                    'Corte de servicio',
-                    'Suspensión temporal',
-                ];
-
-                if (in_array($technicalOrder->detail, $activationDetails)) {
-                    $contract->update([
-                        'status'          => 'Activo',
-                        'activation_date' => now(),
-                    ]);
-                } elseif (in_array($technicalOrder->detail, $suspensionDetails)) {
-                    $contract->update(['status' => 'Suspendido']);
-                }
-            }
+            // EL ESTADO DEL CONTRATO, SEGÚN LO QUE SE HIZO.
+            //
+            // Esto comparaba LITERALES contra una lista escrita a mano,
+            // así que «Instalación de servicio» —con tilde, que es como
+            // la escribe media aplicación— no activaba nada: la orden
+            // se cerraba y el contrato se quedaba en «Por Instalar».
+            // `ContractStatusFromOrder` normaliza el detalle con el
+            // mismo `OrderDetailMap` que usan los informes, y es donde
+            // se añadió que un RETIRO deja el contrato en «Retirado».
+            $estados = app(ContractStatusFromOrder::class);
+            $estados->aplicar($technicalOrder->fresh('contract'));
 
             // Avisar al cliente que su servicio quedó resuelto
             $technicalOrder->loadMissing('contract.client', 'branch');
             optional($technicalOrder->contract?->client)
                 ->notify(new TechnicalOrderFinishedClient($technicalOrder));
 
-            return redirect()->route('technicals_orders.verification')
-                ->with('success', 'La orden ha sido cerrada exitosamente.');
+            [$clave, $mensaje] = $this->avisoDeLaBaja(
+                $estados->ultimoParte(),
+                'La orden ha sido cerrada exitosamente.',
+            );
+
+            return redirect()->route('technicals_orders.verification')->with($clave, $mensaje);
         }
 
         if ($request->has('reject_order')) {
@@ -357,6 +354,141 @@ class TechnicalOrderController extends Controller
      * Regla de negocio: un contrato solo puede tener UNA orden en
      * curso (estado distinto de "Cerrada") a la vez.
      */
+
+    /**
+     * Orden ADMINISTRATIVA: un cambio de estado, con constancia.
+     *
+     * POR QUÉ SE CREA Y SE CIERRA EN EL MISMO PASO
+     * --------------------------------------------
+     * Porque no hay trabajo de campo que esperar. Pasarla por el ciclo
+     * de asignar → procesar → verificar obligaría a mandar a un técnico
+     * a «ejecutar» un cambio de papeles, y una orden abierta bloquea la
+     * creación de otras para ese contrato.
+     *
+     * Eso quita el doble control que sí tienen las de campo —quien la
+     * crea es quien la aprueba—, y a cambio se exige permiso propio y
+     * queda en la trazabilidad global con quién, cuándo, de qué estado a
+     * cuál y por qué.
+     *
+     * POR QUÉ ADMITE CUALQUIER ESTADO
+     * -------------------------------
+     * Es lo que la deja abierta a lo que haga falta mañana sin volver a
+     * tocar código: corregir un contrato mal puesto, registrar una baja,
+     * anular uno que nunca tomó el servicio. El motivo es obligatorio
+     * justamente porque el abanico es amplio.
+     */
+    public function storeAdministrative(Request $request, ContractStatusFromOrder $estados): RedirectResponse
+    {
+        $validated = $request->validate([
+            'contract_id' => 'required|exists:contracts,id',
+            'target_contract_status' => ['required', Rule::enum(ContractStatus::class)],
+            // Obligatorio: es lo único que explicará el cambio dentro de
+            // seis meses, cuando nadie recuerde por qué ese contrato
+            // quedó anulado.
+            'initial_comment' => 'required|string|max:1000',
+        ], [
+            'target_contract_status.required' => 'Indique a qué estado se lleva el contrato.',
+            'initial_comment.required' => 'Explique por qué se cambia el estado. Es lo que quedará en el historial.',
+        ]);
+
+        $contrato = Contract::findOrFail($validated['contract_id']);
+
+        abort_unless(
+            app(CurrentContext::class)->permiteSucursal($contrato->branch_id),
+            403,
+            'Ese contrato pertenece a otra sucursal.',
+        );
+
+        $anterior = $contrato->status;
+        $nuevo = $validated['target_contract_status'];
+
+        if ($anterior === $nuevo) {
+            return back()->with('error', 'El contrato ya está en «' . $nuevo . '».');
+        }
+
+        $orden = DB::transaction(function () use ($contrato, $validated, $nuevo, $estados) {
+            // Nace CERRADA: no hay nada que ejecutar. `user_assigned`
+            // queda en null a propósito — no hay técnico al que mandar.
+            $orden = TechnicalOrder::create([
+                'contract_id' => $contrato->id,
+                'branch_id' => $contrato->branch_id,
+                'created_by' => Auth::id(),
+                'type' => TechnicalOrder::ADMINISTRATIVA,
+                'detail' => 'Cambio administrativo de estado',
+                'target_contract_status' => $nuevo,
+                'status' => 'Cerrada',
+                'initial_comment' => $validated['initial_comment'],
+                'solution' => 'Estado cambiado a ' . $nuevo . '.',
+            ]);
+
+            // La verificación deja el cierre en el historial de la
+            // orden, igual que en las de campo.
+            $orden->verifications()->create([
+                'verified_by' => Auth::id(),
+                'status' => 'Cerrada',
+                'comments' => $validated['initial_comment'],
+            ]);
+
+            $estados->aplicar($orden->fresh('contract'));
+
+            return $orden;
+        });
+
+        app(AuditLogger::class)->action(
+            'contracts.status_changed',
+            sprintf(
+                'Cambió el estado del contrato %s de «%s» a «%s» por orden administrativa: %s',
+                $contrato->numero_visible ?? $contrato->id,
+                $anterior,
+                $nuevo,
+                $validated['initial_comment'],
+            ),
+            [
+                'contrato' => $contrato->id,
+                'orden' => $orden->id,
+                'estado_anterior' => $anterior,
+                'estado_nuevo' => $nuevo,
+                'motivo' => $validated['initial_comment'],
+            ],
+            $contrato,
+            'contratos',
+        );
+
+        $aviso = ContractStatus::esFinal($nuevo)
+            ? 'El contrato quedó en «' . $nuevo . '». Ya no se le generarán más facturas.'
+            : 'El contrato quedó en «' . $nuevo . '».';
+
+        [$clave, $mensaje] = $this->avisoDeLaBaja($estados->ultimoParte(), $aviso);
+
+        return redirect()->route('contracts.show', $contrato->id)->with($clave, $mensaje);
+    }
+
+
+    /**
+     * Convierte el parte de la baja en el mensaje para el usuario.
+     *
+     * LO PENDIENTE MANDA SOBRE LO HECHO. Si la OLT estaba caída, hay una
+     * ONT provisionada que alguien tiene que borrar; enterrarlo dentro
+     * de un «cerrada correctamente» en verde es la forma segura de que
+     * nadie lo haga.
+     *
+     * @param  array{hechos: string[], pendientes: string[]}|null  $parte
+     * @return array{0: string, 1: string} clave de sesión y texto
+     */
+    private function avisoDeLaBaja(?array $parte, string $exito): array
+    {
+        if (!$parte || ($parte['hechos'] === [] && $parte['pendientes'] === [])) {
+            return ['success', $exito];
+        }
+
+        if ($parte['pendientes'] !== []) {
+            return ['warning', $exito . ' Pero quedó algo sin terminar: '
+                . implode('; ', $parte['pendientes']) . '.'];
+        }
+
+        return ['success', $exito . ' Además ' . implode(', ', $parte['hechos']) . '.'];
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([

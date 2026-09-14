@@ -365,9 +365,13 @@
 
                                         @case('status')
                                             <span class="badge badge-{{
-                                                str_contains(strtolower($contract->status ?? ''), 'activo') ? 'success'
+                                                // Las bajas en gris: no son una alerta, son
+                                                // un contrato terminado. Pintarlas de amarillo
+                                                // las hacia parecer algo pendiente de resolver.
+                                                \App\Billing\Enums\ContractStatus::esFinal($contract->status) ? 'secondary'
+                                                : (str_contains(strtolower($contract->status ?? ''), 'activo') ? 'success'
                                                 : (str_contains(strtolower($contract->status ?? ''), 'suspend') ? 'danger'
-                                                : (str_contains(strtolower($contract->status ?? ''), 'reconex') ? 'info' : 'warning'))
+                                                : (str_contains(strtolower($contract->status ?? ''), 'reconex') ? 'info' : 'warning')))
                                             }}">{{ $contract->status }}</span>
                                             @break
 

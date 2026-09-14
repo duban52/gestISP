@@ -49,6 +49,9 @@ class TechnicalOrder extends Model
         'contract_id',
         'branch_id',
         'user_assigned',
+        // Solo en las administrativas: a que estado se lleva el
+        // contrato. En las de campo el estado lo decide el DETALLE.
+        'target_contract_status',
         'type',
         'status',
         'rejection_reason',
@@ -88,6 +91,25 @@ class TechnicalOrder extends Model
     }
 
     /** Técnico asignado para ejecutar la orden */
+    /** Los tres tipos de orden. */
+    public const SERVICIO = 'Servicio';
+    public const INCIDENCIA = 'Incidencia';
+    public const ADMINISTRATIVA = 'Administrativa';
+
+    /**
+     * ¿Es un cambio de papeles y no trabajo de campo?
+     *
+     * Una administrativa no lleva técnico, ni material, ni firma, ni
+     * ubicación: no hay nadie en casa del cliente. Se crea y se cierra
+     * en el mismo paso desde la oficina, y lo único que hace es dejar
+     * el contrato en el estado que se pidió, con constancia de quién lo
+     * pidió y por qué.
+     */
+    public function esAdministrativa(): bool
+    {
+        return $this->type === self::ADMINISTRATIVA;
+    }
+
     public function assignedUser()
     {
         return $this->belongsTo(User::class, 'user_assigned');

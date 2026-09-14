@@ -60,8 +60,23 @@ class InvoiceGenerator
         ?int $userId,
         ?int $billingRunId = null,
     ): array {
-        if ($contract->status === ContractStatus::Suspendido->value) {
-            return ['generated' => false, 'reason' => 'Contract suspended'];
+        // NI CORTADOS NI DADOS DE BAJA.
+        //
+        // Antes solo se miraba «Suspendido». Eso dejaba fuera a
+        // «Cortado» —el nombre viejo de lo mismo, que sigue habiendo en
+        // la base— y, sobre todo, no contemplaba las bajas, que no
+        // existían: a un contrato retirado se le seguía facturando
+        // todos los meses.
+        //
+        // La corrida mensual filtra aparte con `billable()`, pero hay
+        // una segunda puerta —generar la factura de un contrato suelto
+        // desde su ficha— que no pasa por ese filtro. Esta es la que la
+        // cierra.
+        if (!ContractStatus::facturable($contract->status)) {
+            return [
+                'generated' => false,
+                'reason' => 'Contract not billable: ' . $contract->status,
+            ];
         }
 
         $yearMonth = $today->format('Ym');

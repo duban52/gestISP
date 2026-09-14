@@ -41,7 +41,13 @@ class ContractStatusMap
         'en_riesgo' => [ContractStatus::PreSuspension->value],
         'suspendido' => [ContractStatus::Suspendido->value, 'Cortado'],
         'por_reconectar' => [ContractStatus::PorReconexion->value, 'Por Reconectar'],
-        'retirado' => ['Retirado'],
+        'retirado' => [ContractStatus::Retirado->value],
+        // ANULADO NO ES LO MISMO QUE RETIRADO y por eso es su propio
+        // grupo. Un retirado tuvo servicio y lo dejo: es un cliente
+        // perdido. Un anulado firmo y nunca lo tomo: es un contrato que
+        // nunca empezo. Juntarlos inflaria la cifra de bajas con
+        // clientes que nunca existieron.
+        'anulado' => [ContractStatus::Anulado->value],
     ];
 
     private const ETIQUETAS = [
@@ -51,6 +57,7 @@ class ContractStatusMap
         'suspendido' => 'Suspendidos',
         'por_reconectar' => 'Por reconectar',
         'retirado' => 'Retirados',
+        'anulado' => 'Anulados (nunca tomaron el servicio)',
         'otro' => 'Sin clasificar',
     ];
 
@@ -65,6 +72,7 @@ class ContractStatusMap
         'suspendido' => '#dc3545',
         'por_reconectar' => '#fd7e14',
         'retirado' => '#6c757d',
+        'anulado' => '#495057',
         'otro' => '#adb5bd',
     ];
 
@@ -90,11 +98,26 @@ class ContractStatusMap
     /**
      * Estados que representan una baja definitiva.
      *
+     * SOLO «Retirado». Un anulado nunca tomo el servicio, asi que
+     * contarlo como baja inflaria la perdida de clientes con gente que
+     * nunca llego a serlo. Para «contratos terminados», sean del tipo
+     * que sean, esta `terminados()`.
+     *
      * @return array<int, string>
      */
     public static function bajas(): array
     {
         return self::GRUPOS['retirado'];
+    }
+
+    /**
+     * Contratos terminados, por la via que sea.
+     *
+     * @return array<int, string>
+     */
+    public static function terminados(): array
+    {
+        return array_merge(self::GRUPOS['retirado'], self::GRUPOS['anulado']);
     }
 
     /**

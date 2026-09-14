@@ -460,6 +460,14 @@ Route::get('materials/movements/history/excel', [MaterialMovementController::cla
 //Ruta para la creación de una orden tecnica desde el contrato
 Route::get('technicals_orders/create/{contract}', [TechnicalOrderController::class, 'create'])->name('technicals_orders.create');
 Route::post('technicals_orders/store', [TechnicalOrderController::class, 'store'])->name('technicals_orders.store');
+
+// ORDEN ADMINISTRATIVA: no es trabajo de campo, es un cambio de estado
+// del contrato con constancia de quien lo pidio y por que. Se crea y se
+// cierra en el mismo paso, asi que no hay ruta de proceso ni de
+// verificacion. Lleva permiso propio: puede forzar cualquier estado,
+// incluida la baja.
+Route::post('technicals_orders/administrativa', [TechnicalOrderController::class, 'storeAdministrative'])
+    ->name('technicals_orders.administrative');
 Route::get('technicals_orders/index', [TechnicalOrderController::class, 'index'])->name('technicals_orders.index');
 Route::put('technicals_orders/{technicalOrder}', [TechnicalOrderController::class, 'update'])->name('technicals_orders.update');
 //órdenes exclusivasd del usuario asignado

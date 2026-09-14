@@ -61,19 +61,114 @@
         <div class="row d-flex justify-content-center">
 
             <div class="card col-md-10">
-                <div class="card-head d-flex justify-content-between p-3">
-                    <p><strong>Número de contrato:</strong> <strong class="text-info">{{$contract->contract_number}}</strong></p>
-                    <p><strong>Estado:</strong>
-                        <strong
-                            @if($contract->status == 'Activo') class="text-success"
-                            @else class="text-danger"
-                            @endif
-                        >
+                <div class="card-head d-flex justify-content-between align-items-center p-3 flex-wrap">
+                    <p class="mb-0"><strong>Número de contrato:</strong> <strong class="text-info">{{$contract->contract_number}}</strong></p>
+
+                    @php
+                        // El enum es la fuente de verdad; los estados
+                        // heredados («Cortado», «Por Reconectar») no
+                        // resuelven y se pintan tal cual, sin explicación.
+                        $estadoActual = \App\Billing\Enums\ContractStatus::tryFrom($contract->status);
+                        $esBaja = \App\Billing\Enums\ContractStatus::esFinal($contract->status);
+                    @endphp
+
+                    <p class="mb-0">
+                        <strong>Estado:</strong>
+                        <strong class="{{ $contract->status === 'Activo' ? 'text-success' : ($esBaja ? 'text-muted' : 'text-danger') }}"
+                                @if($estadoActual) title="{{ $estadoActual->descripcion() }}" @endif>
                             {{ $contract->status }}
                         </strong>
+
+                        {{-- Que se vea de una vez que a este contrato ya no
+                             se le factura: es la consecuencia que importa y
+                             la que genera preguntas si no se dice. --}}
+                        @if($esBaja)
+                            <span class="badge badge-secondary ml-1">Ya no se factura</span>
+                        @endif
                     </p>
+
+                    @can('contracts.status')
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                data-toggle="modal" data-target="#ordenAdministrativa">
+                            <i class="fas fa-exchange-alt mr-1"></i> Cambiar estado
+                        </button>
+                    @endcan
                 </div>
             </div>
+
+            @can('contracts.status')
+                {{-- ============================================================
+                     ORDEN ADMINISTRATIVA.
+
+                     No es trabajo de campo: es un cambio de papeles. Se crea
+                     y se cierra en el mismo paso, y deja constancia de quién
+                     lo pidió, de qué estado a cuál y por qué.
+
+                     El motivo es obligatorio porque es lo único que explicará
+                     el cambio dentro de seis meses.
+                     ============================================================ --}}
+                <div class="modal fade" id="ordenAdministrativa" tabindex="-1" role="dialog" aria-hidden="true">
+                    <div class="modal-dialog" role="document">
+                        <form method="POST" action="{{ route('technicals_orders.administrative') }}">
+                            @csrf
+                            <input type="hidden" name="contract_id" value="{{ $contract->id }}">
+
+                            <div class="modal-content">
+                                <div class="modal-header bg-secondary text-white">
+                                    <h5 class="modal-title">
+                                        <i class="fas fa-exchange-alt mr-1"></i> Cambiar el estado del contrato
+                                    </h5>
+                                    <button type="button" class="close text-white" data-dismiss="modal">
+                                        <span aria-hidden="true">&times;</span>
+                                    </button>
+                                </div>
+
+                                <div class="modal-body">
+                                    <p class="text-muted small">
+                                        Queda registrada una <strong>orden administrativa</strong> cerrada, con su
+                                        motivo, en el historial del contrato y en la trazabilidad del sistema.
+                                    </p>
+
+                                    <div class="form-group">
+                                        <label>Estado actual</label>
+                                        <input type="text" class="form-control" value="{{ $contract->status }}" disabled>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="target_contract_status">
+                                            Nuevo estado <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="target_contract_status" id="target_contract_status"
+                                                class="form-control" required>
+                                            <option value="">Seleccione…</option>
+                                            @foreach(\App\Billing\Enums\ContractStatus::cases() as $estado)
+                                                @continue($estado->value === $contract->status)
+                                                <option value="{{ $estado->value }}">
+                                                    {{ $estado->value }} — {{ $estado->descripcion() }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group mb-0">
+                                        <label for="initial_comment">
+                                            Motivo <span class="text-danger">*</span>
+                                        </label>
+                                        <textarea name="initial_comment" id="initial_comment" rows="3"
+                                                  class="form-control" required
+                                                  placeholder="Por qué se cambia. Ej.: el cliente solicitó el retiro el 12/09."></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-primary">Cambiar estado</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endcan
             <div class="card col-md-5 ml-md-1 mr-md-1">
                 <div class="card-header row">
                     <div class="col-md-9 col-8">
