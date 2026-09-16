@@ -235,11 +235,12 @@ class OltController extends Controller
             ->with('success', 'OLT actualizada correctamente.');
     }
 
-    public function ontsAutofind(Olt $olt): JsonResponse
+    public function ontsAutofind(Request $request, Olt $olt): JsonResponse
     {
         try {
-            $onts = $this->oltSshService->getAutoFindOnts($olt);
-            return response()->json($onts);
+            return response()->json(
+                $this->oltSshService->getAutoFindOntsCached($olt, $request->boolean('fresh'))
+            );
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Error al obtener ONTs: ' . $e->getMessage()

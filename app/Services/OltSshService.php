@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Olt;
 use App\Models\Ont;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use phpseclib3\Net\SSH2;
 
@@ -172,6 +173,33 @@ class OltSshService
     /**
      * Obtiene las ONTs en modo autofind
      */
+    /**
+     * Autofind desde cache. El SSH tarda ~40 s; esto responde al vuelo.
+     *
+     * La calienta `onts:autofind-cache` cada cinco minutos, asi que la
+     * pantalla casi siempre encuentra el dato hecho. `$fresh` fuerza la
+     * consulta: el tecnico acaba de conectar una ONT y no puede esperar
+     * al siguiente ciclo.
+     *
+     * @return array{onts: array, cached_at: string}
+     */
+    public function getAutoFindOntsCached(Olt $olt, bool $fresh = false): array
+    {
+        $clave = "olt:{$olt->id}:autofind";
+
+        if ($fresh) {
+            Cache::forget($clave);
+        }
+
+        // TTL mayor que el ciclo del scheduler: si una vuelta falla
+        // —OLT caida— se sirve lo anterior en vez de dejar la pantalla
+        // esperando 40 s por un equipo que no responde.
+        return Cache::remember($clave, 900, fn () => [
+            'onts' => $this->getAutoFindOnts($olt),
+            'cached_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function getAutoFindOnts(Olt $olt): array
     {
         $ssh = $this->connectToOlt($olt);
@@ -703,11 +731,15 @@ class OltSshService
     }
 
     /**
-     * Estado de los puertos LAN de la ONT.
+     * Puertos LAN, MAC GPON y configuracion WAN de la ONT.
      *
-     *   display ont port state <port> <ont-id> eth-port all
+     * Los tres en UNA sesion: abrir el SSH es lo que tarda (~40 s),
+     * los comandos no. Mac y wan-info van en config mode; el estado de
+     * los puertos exige entrar a la interfaz gpon.
+     *
+     * @return array{lan: array, mac: ?array, wan: array}
      */
-    public function getOntLanPorts(Olt $olt, Ont $ont): array
+    public function getOntAccessInfo(Olt $olt, Ont $ont): array
     {
         $ssh = $this->connectToOlt($olt);
 
@@ -716,20 +748,91 @@ class OltSshService
 
             $this->converse($ssh, 'enable');
             $this->converse($ssh, 'config');
+
+            $mac = self::parseMac($this->executeDisplayCommand(
+                $ssh,
+                "display mac-address port 0/{$ont->slot}/{$ont->port} ont {$ont->onu_id}"
+            ));
+
+            $wan = self::parseWan($this->executeDisplayCommand(
+                $ssh,
+                "display ont wan-info 0/{$ont->slot} {$ont->port} {$ont->onu_id}"
+            ));
+
             $this->converse($ssh, "interface gpon 0/{$ont->slot}");
 
-            $salida = $this->executeDisplayCommand(
+            $lan = self::parseLanPorts($this->executeDisplayCommand(
                 $ssh,
                 "display ont port state {$ont->port} {$ont->onu_id} eth-port all"
-            );
+            ));
 
             $this->converse($ssh, 'quit');
             $this->converse($ssh, 'quit');
 
-            return self::parseLanPorts($salida);
+            return ['lan' => $lan, 'mac' => $mac, 'wan' => $wan];
         } finally {
             $ssh->disconnect();
         }
+    }
+
+    /**
+     * MAC con la que la ONT se comunica por GPON.
+     *
+     *   SRV-P BUNDLE TYPE MAC            MAC TYPE F /S /P   VPI VCI VLAN ID
+     *    4252     -  gpon dc54-ad8c-04bc dynamic  0 /9 /0   56  1       206
+     *
+     * @return array{mac:string, tipo:string, aprendizaje:string, vlan:string}|null
+     */
+    public static function parseMac(string $salida): ?array
+    {
+        // La primera columna es SRV-P INDEX: el service-port, que hasta
+        // ahora habia que resolver con una consulta aparte.
+        $mac = '/^\s*(\d+)\s+\S+\s+(\S+)\s+([0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4})\s+(\S+).*?(\d+)\s*$/im';
+
+        if (!preg_match($mac, $salida, $m)) {
+            return null;
+        }
+
+        return [
+            // XX:XX:... en vez del dc54-ad8c-04bc de Huawei.
+            'mac' => implode(':', str_split(strtoupper(str_replace('-', '', $m[3])), 2)),
+            'tipo' => $m[2],
+            'aprendizaje' => $m[4],
+            'vlan' => $m[5],
+            'service_port' => (int) $m[1],
+        ];
+    }
+
+    /**
+     * Servicios WAN de la ONT, uno por bloque "Index : N".
+     *
+     * Se devuelven los pares tal cual los nombra la OLT en vez de
+     * traducirlos a un modelo propio: los campos cambian entre
+     * firmwares y la vista ya elige cuales pinta.
+     *
+     * @return array<int, array<string, string>>
+     */
+    public static function parseWan(string $salida): array
+    {
+        $bloques = preg_split('/^\s*Index\s*:/im', $salida);
+        array_shift($bloques); // la cabecera, antes del primer Index
+
+        return array_values(array_filter(array_map(function (string $bloque) {
+            $campos = [];
+
+            foreach (explode("\n", $bloque) as $linea) {
+                if (!preg_match('/^\s*([A-Za-z][\w\/ .-]*?)\s*:\s*(.*?)\s*$/', $linea, $m)) {
+                    continue;
+                }
+
+                // "-" es lo que pone la OLT cuando no aplica.
+                if ($m[2] !== '' && $m[2] !== '-') {
+                    $campos[$m[1]] = $m[2];
+                }
+            }
+
+            return $campos;
+        }, $bloques)));
     }
 
     /**

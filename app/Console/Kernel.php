@@ -35,6 +35,18 @@ class Kernel extends ConsoleKernel
             ->appendOutputTo(storage_path('logs/onts-poll.log'))
             ->onFailure(fn () => Log::error('La tarea programada onts:poll terminó con error. Revise storage/logs/onts-poll.log'));
 
+        // Autofind de cada OLT. Va por SSH y tarda ~40 s por equipo,
+        // asi que la pantalla de ONTs no autorizadas la encuentra hecha
+        // en vez de esperarla. El TTL de la cache (15 min) es mayor que
+        // esta cadencia: si una vuelta falla, se sigue sirviendo lo
+        // anterior en vez de dejar la pantalla colgada.
+        $schedule->command('onts:autofind-cache')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/onts-autofind.log'))
+            ->onFailure(fn () => Log::error('La tarea programada onts:autofind-cache termino con error. Revise storage/logs/onts-autofind.log'));
+
         // Tráfico de los puertos PON y de los uplinks. Cuesta dos
         // recorridos de tabla por OLT, independientemente de cuántos
         // puertos tenga, así que va con la misma cadencia.

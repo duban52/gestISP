@@ -881,18 +881,27 @@ class OntController extends Controller
      * bajo demanda y no parte de la carga de la pantalla.
      */
 
-    /** Estado de los puertos LAN de la ONT (SSH, ~40 s). */
-    public function lanPorts(Ont $ont): \Illuminate\Http\JsonResponse
+    /** Puertos LAN, MAC GPON y WAN de la ONT (SSH, ~40 s). */
+    public function accessInfo(Ont $ont): \Illuminate\Http\JsonResponse
     {
         try {
-            $puertos = $this->oltSshService->getOntLanPorts(Olt::findOrFail($ont->olt_id), $ont);
+            $info = $this->oltSshService->getOntAccessInfo(Olt::findOrFail($ont->olt_id), $ont);
         } catch (\Exception $e) {
             return response()->json(['ok' => false, 'message' => 'No se pudo consultar la OLT: ' . $e->getMessage()]);
         }
 
-        return response()->json([
+        // La OLT acaba de decir el service-port y la VLAN reales: se
+        // guardan. El service-port se resolvia con una consulta SSH
+        // aparte cada vez que hacia falta (borrar o mover la ONT).
+        if ($info['mac']) {
+            $ont->update([
+                'service_port' => $info['mac']['service_port'],
+                'vlan' => $info['mac']['vlan'],
+            ]);
+        }
+
+        return response()->json($info + [
             'ok' => true,
-            'ports' => $puertos,
             'checked_at' => now()->format('d/m/Y H:i'),
         ]);
     }

@@ -43,6 +43,16 @@
                 </select>
             </div>
 
+            {{-- La lista viene de cache: hay que decir de cuando es. Un
+                 autofind de hace diez minutos no trae la ONT que el
+                 tecnico acaba de conectar. --}}
+            <div id="autofindEdad" class="small text-muted mb-2" style="display:none;">
+                <span id="autofindEdadTexto"></span>
+                <button type="button" id="btnAutofindFresh" class="btn btn-link btn-sm p-0 ml-1">
+                    Consultar la OLT ahora
+                </button>
+            </div>
+
             <div id="loader" class="text-center my-3" style="display: none;">
                 <div class="spinner-border text-primary" role="status">
                     <span class="sr-only">Cargando...</span>
@@ -420,10 +430,57 @@
 
             if (!oltId) return;
 
-            loader.style.display = 'block';
+            cargarAutofind(oltId, false);
 
-            // ONTs Autofind + verificación de SN
-            fetch(`/olts/${oltId}/onts-autofind`)
+            // VLANs
+            fetch(`/api/vlansolt/${oltId}`)
+                .then(r => r.json())
+                .then(data => {
+                    let html = '<option value="">Seleccione una VLAN</option>';
+                    data.forEach(v => {
+                        html += `<option value="${v.id_vlan}">${v.id_vlan} - ${v.name}</option>`;
+                    });
+                    document.getElementById('vlanSelect').innerHTML = html;
+                });
+
+            // Line Profiles
+            fetch(`/api/lineprofiles/${oltId}`)
+                .then(r => r.json())
+                .then(data => {
+                    let html = '<option value="">Seleccione un Line Profile</option>';
+                    data.forEach(p => {
+                        html += `<option value="${p.id_line_profile}">${p.id_line_profile} - ${p.name}</option>`;
+                    });
+                    document.getElementById('lineProfileSelect').innerHTML = html;
+                });
+
+            // Srv Profiles
+            fetch(`/api/srvprofiles/${oltId}`)
+                .then(r => r.json())
+                .then(data => {
+                    let html = '<option value="">Seleccione un Srv Profile</option>';
+                    data.forEach(p => {
+                        html += `<option value="${p.id_srv_profile}">${p.id_srv_profile} - ${p.name}</option>`;
+                    });
+                    document.getElementById('srvProfileSelect').innerHTML = html;
+                });
+        });
+
+        // Forzar la consulta al equipo, sin esperar al proximo ciclo.
+        document.getElementById('btnAutofindFresh').addEventListener('click', function () {
+            const oltId = document.getElementById('olt').value;
+            if (oltId) cargarAutofind(oltId, true);
+        });
+
+        function cargarAutofind(oltId, fresh) {
+            const loader = document.getElementById('loader');
+            const edad = document.getElementById('autofindEdad');
+
+            autofindDT.clear().draw();
+            loader.style.display = 'block';
+            edad.style.display = 'none';
+
+            fetch(`/olts/${oltId}/onts-autofind${fresh ? '?fresh=1' : ''}`)
                 .then(r => r.json())
                 .then(data => {
                     loader.style.display = 'none';
@@ -436,7 +493,14 @@
                         return;
                     }
 
-                    if (data.length === 0) {
+                    if (data.cached_at) {
+                        const minutos = Math.floor((Date.now() - new Date(data.cached_at)) / 60000);
+                        document.getElementById('autofindEdadTexto').textContent =
+                            minutos < 1 ? 'Consultado ahora mismo.' : `Consultado hace ${minutos} min.`;
+                        edad.style.display = 'block';
+                    }
+
+                    if (data.onts.length === 0) {
                         autofindDT.row.add([
                             '<span class="text-muted">No hay ONTs en autofind.</span>',
                             '—', '—', '—', '—', '—'
@@ -445,7 +509,7 @@
                     }
 
                     // Verificar cada SN contra la DB
-                    const checks = data.map(ont =>
+                    const checks = data.onts.map(ont =>
                         fetch(`/api/onts/check-sn/${encodeURIComponent(ont.ont_sn)}`)
                             .then(r => r.json())
                             .then(check => ({ ont, check }))
@@ -498,40 +562,8 @@
                         '—', '—', '—', '—', '—'
                     ]).draw();
                 });
+        }
 
-            // VLANs
-            fetch(`/api/vlansolt/${oltId}`)
-                .then(r => r.json())
-                .then(data => {
-                    let html = '<option value="">Seleccione una VLAN</option>';
-                    data.forEach(v => {
-                        html += `<option value="${v.id_vlan}">${v.id_vlan} - ${v.name}</option>`;
-                    });
-                    document.getElementById('vlanSelect').innerHTML = html;
-                });
-
-            // Line Profiles
-            fetch(`/api/lineprofiles/${oltId}`)
-                .then(r => r.json())
-                .then(data => {
-                    let html = '<option value="">Seleccione un Line Profile</option>';
-                    data.forEach(p => {
-                        html += `<option value="${p.id_line_profile}">${p.id_line_profile} - ${p.name}</option>`;
-                    });
-                    document.getElementById('lineProfileSelect').innerHTML = html;
-                });
-
-            // Srv Profiles
-            fetch(`/api/srvprofiles/${oltId}`)
-                .then(r => r.json())
-                .then(data => {
-                    let html = '<option value="">Seleccione un Srv Profile</option>';
-                    data.forEach(p => {
-                        html += `<option value="${p.id_srv_profile}">${p.id_srv_profile} - ${p.name}</option>`;
-                    });
-                    document.getElementById('srvProfileSelect').innerHTML = html;
-                });
-        });
 
         // Botón activar → modal activación
         document.addEventListener('click', function (e) {

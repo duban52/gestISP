@@ -204,19 +204,36 @@
                  al cambiarlo, o el de la última verificación) y se
                  ofrece un botón para verificarlo contra la OLT.
                  ============================================================ --}}
-            {{-- Puertos LAN de la ONT. Se consulta a peticion: es SSH. --}}
+            {{-- Puertos LAN, MAC GPON y WAN. Un solo viaje por SSH. --}}
             <div class="card">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-ethernet"></i> Puertos LAN</span>
-                    <button id="btnLanPorts" class="btn btn-sm btn-light" title="Consultar en la OLT (tarda ~40 s)">
+                    <span><i class="fas fa-ethernet"></i> Acceso del cliente</span>
+                    <button id="btnAcceso" class="btn btn-sm btn-light" title="Consultar en la OLT (tarda ~40 s)">
                         <i class="fas fa-sync"></i> Consultar
                     </button>
                 </div>
                 <div class="card-body">
-                    <div id="lanPorts" class="d-flex flex-wrap" style="gap:.75rem;">
-                        <span class="text-muted">Pulse «Consultar» para leerlos de la OLT.</span>
+                    <div id="accesoMsg" class="text-muted">Pulse «Consultar» para leerlo de la OLT.</div>
+
+                    <div id="accesoDatos" style="display:none;">
+                        <h6 class="text-uppercase text-muted small mb-2">Puertos LAN</h6>
+                        <div id="lanPorts" class="d-flex flex-wrap mb-3" style="gap:.75rem;"></div>
+
+                        <div id="macBloque" class="mb-3" style="display:none;">
+                            <h6 class="text-uppercase text-muted small mb-2">MAC GPON</h6>
+                            <div class="d-flex align-items-center" style="gap:.75rem;">
+                                <code id="macValor" class="h5 mb-0"></code>
+                                <span id="macMeta" class="badge badge-secondary"></span>
+                            </div>
+                        </div>
+
+                        <div id="wanBloque" style="display:none;">
+                            <h6 class="text-uppercase text-muted small mb-2">Servicios WAN</h6>
+                            <div id="wanServicios"></div>
+                        </div>
                     </div>
-                    <small id="lanChecked" class="text-muted d-block mt-2"></small>
+
+                    <small id="accesoChecked" class="text-muted d-block mt-2"></small>
                 </div>
             </div>
 
@@ -606,49 +623,112 @@
         const catvStateUrl   = `{{ route('onts.catv.state', $ont) }}`;
         const csrfToken      = document.querySelector('meta[name="csrf-token"]').content;
 
-        // ---- Puertos LAN ----
-        document.getElementById('btnLanPorts').addEventListener('click', function () {
-            const caja = document.getElementById('lanPorts');
+        // ---- Acceso del cliente: LAN + MAC + WAN, una sola consulta ----
+        // Los campos WAN se pintan con el nombre que les da la OLT: cambian
+        // entre firmwares y traducirlos aqui obligaria a perseguirlos.
+        const WAN_CAMPOS = [
+            ['IPv4 address', 'Dirección IP'],
+            ['Subnet mask', 'Máscara'],
+            ['Default gateway', 'Puerta de enlace'],
+            ['IPv4 access type', 'Tipo de acceso'],
+            ['Manage VLAN', 'VLAN'],
+            ['L2 encap-type', 'Encapsulado'],
+            ['Connection type', 'Conexión'],
+            ['IPv6 address', 'Dirección IPv6'],
+        ];
+
+        document.getElementById('btnAcceso').addEventListener('click', function () {
             const boton = this;
+            const msg = document.getElementById('accesoMsg');
+            const datos = document.getElementById('accesoDatos');
 
             boton.disabled = true;
-            caja.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Consultando la OLT…</span>';
+            datos.style.display = 'none';
+            msg.style.display = 'block';
+            msg.className = 'text-muted';
+            msg.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando la OLT…';
 
-            fetch(`{{ route('onts.lan_ports', $ont) }}`)
+            fetch(`{{ route('onts.access_info', $ont) }}`)
                 .then(r => r.json())
                 .then(res => {
                     boton.disabled = false;
 
                     if (!res.ok) {
-                        caja.innerHTML = `<span class="text-danger">${res.message}</span>`;
+                        msg.className = 'text-danger';
+                        msg.textContent = res.message;
                         return;
                     }
 
-                    if (!res.ports.length) {
-                        caja.innerHTML = '<span class="text-muted">La OLT no reportó puertos LAN.</span>';
-                        return;
+                    msg.style.display = 'none';
+                    datos.style.display = 'block';
+
+                    // --- LAN ---
+                    document.getElementById('lanPorts').innerHTML = res.lan.length
+                        ? res.lan.map(p => {
+                            const up = p.estado === 'up';
+                            // Con el puerto caido la OLT manda "-": pintarlo
+                            // simularia un dato que no existe.
+                            const detalle = up && p.velocidad
+                                ? `${p.velocidad} Mbps ${p.duplex || ''}`
+                                : 'Sin enlace';
+
+                            return `<div class="border rounded text-center p-2" style="min-width:92px;">
+                                <i class="fas fa-ethernet fa-lg ${up ? 'text-success' : 'text-muted'}"></i>
+                                <div class="font-weight-bold mt-1">${p.tipo}${p.puerto}</div>
+                                <small class="${up ? 'text-success' : 'text-muted'}">${detalle}</small>
+                            </div>`;
+                        }).join('')
+                        : '<span class="text-muted">La OLT no reportó puertos LAN.</span>';
+
+                    // --- MAC ---
+                    const macBloque = document.getElementById('macBloque');
+                    if (res.mac) {
+                        document.getElementById('macValor').textContent = res.mac.mac;
+                        document.getElementById('macMeta').textContent =
+                            `${res.mac.tipo} · ${res.mac.aprendizaje} · VLAN ${res.mac.vlan}`;
+                        macBloque.style.display = 'block';
+                    } else {
+                        macBloque.style.display = 'none';
                     }
 
-                    caja.innerHTML = res.ports.map(p => {
-                        const up = p.estado === 'up';
-                        // El detalle solo cuando existe: con el puerto caido
-                        // la OLT manda "-", y pintarlo simula un dato.
-                        const detalle = up && p.velocidad
-                            ? `${p.velocidad} Mbps ${p.duplex || ''}`
-                            : 'Sin enlace';
+                    // --- WAN ---
+                    const wanBloque = document.getElementById('wanBloque');
+                    if (res.wan && res.wan.length) {
+                        document.getElementById('wanServicios').innerHTML = res.wan.map(w => {
+                            const conectado = (w['IPv4 Connection status'] || '') === 'Connected';
+                            const filas = WAN_CAMPOS
+                                .filter(([clave]) => w[clave])
+                                .map(([clave, etiqueta]) => {
+                                    // La IPv4 lleva a la interfaz web de la ONT.
+                                    const valor = clave === 'IPv4 address'
+                                        ? `<a href="http://${w[clave]}" target="_blank" rel="noopener">${w[clave]} <i class="fas fa-external-link-alt small"></i></a>`
+                                        : w[clave];
 
-                        return `<div class="border rounded text-center p-2" style="min-width:92px;">
-                            <i class="fas fa-ethernet fa-lg ${up ? 'text-success' : 'text-muted'}"></i>
-                            <div class="font-weight-bold mt-1">${p.tipo}${p.puerto}</div>
-                            <small class="${up ? 'text-success' : 'text-muted'}">${detalle}</small>
-                        </div>`;
-                    }).join('');
+                                    return `<tr><th class="text-muted font-weight-normal" style="width:45%">${etiqueta}</th><td>${valor}</td></tr>`;
+                                })
+                                .join('');
 
-                    document.getElementById('lanChecked').textContent = 'Consultado: ' + res.checked_at;
+                            return `<div class="border rounded mb-2">
+                                <div class="px-3 py-2 d-flex justify-content-between align-items-center bg-light">
+                                    <strong>${w['Service type'] || w['Name'] || 'Servicio'}</strong>
+                                    <span class="badge badge-${conectado ? 'success' : 'secondary'}">
+                                        ${w['IPv4 Connection status'] || 'Sin estado'}
+                                    </span>
+                                </div>
+                                <table class="table table-sm mb-0">${filas}</table>
+                            </div>`;
+                        }).join('');
+                        wanBloque.style.display = 'block';
+                    } else {
+                        wanBloque.style.display = 'none';
+                    }
+
+                    document.getElementById('accesoChecked').textContent = 'Consultado: ' + res.checked_at;
                 })
                 .catch(() => {
                     boton.disabled = false;
-                    caja.innerHTML = '<span class="text-danger">No se pudo consultar la OLT.</span>';
+                    msg.className = 'text-danger';
+                    msg.textContent = 'No se pudo consultar la OLT.';
                 });
         });
 

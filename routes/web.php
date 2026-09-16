@@ -551,7 +551,7 @@ Route::post('/onts/{ont}/catv/enable',  [OntController::class, 'enableCatv'])->n
 Route::post('/onts/{ont}/catv/disable', [OntController::class, 'disableCatv'])->name('onts.catv.disable');
 //Verificar contra la OLT el estado real del puerto CATV (consulta lenta, bajo demanda)
 Route::get('/onts/{ont}/catv/state', [OntController::class, 'checkCatvState'])->name('onts.catv.state');
-Route::get('/onts/{ont}/lan-ports', [OntController::class, 'lanPorts'])->name('onts.lan_ports');
+Route::get('/onts/{ont}/acceso', [OntController::class, 'accessInfo'])->name('onts.access_info');
 //Habilitar y deshabilitar la ONT completa (corta o restablece el servicio)
 Route::post('/onts/{ont}/enable',  [OntController::class, 'enableOnt'])->name('onts.enable');
 Route::post('/onts/{ont}/disable', [OntController::class, 'disableOnt'])->name('onts.disable');
