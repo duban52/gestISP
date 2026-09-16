@@ -880,6 +880,23 @@ class OntController extends Controller
      * Va por CLI y tarda unos 40 segundos, por eso es una acción
      * bajo demanda y no parte de la carga de la pantalla.
      */
+
+    /** Estado de los puertos LAN de la ONT (SSH, ~40 s). */
+    public function lanPorts(Ont $ont): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $puertos = $this->oltSshService->getOntLanPorts(Olt::findOrFail($ont->olt_id), $ont);
+        } catch (\Exception $e) {
+            return response()->json(['ok' => false, 'message' => 'No se pudo consultar la OLT: ' . $e->getMessage()]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'ports' => $puertos,
+            'checked_at' => now()->format('d/m/Y H:i'),
+        ]);
+    }
+
     public function checkCatvState(Ont $ont): \Illuminate\Http\JsonResponse
     {
         $olt = Olt::findOrFail($ont->olt_id);

@@ -701,6 +701,69 @@ class OltSshService
     {
         return $this->converse($ssh, $command, false, self::SSH_LONG_TIMEOUT);
     }
+
+    /**
+     * Estado de los puertos LAN de la ONT.
+     *
+     *   display ont port state <port> <ont-id> eth-port all
+     */
+    public function getOntLanPorts(Olt $olt, Ont $ont): array
+    {
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $this->converse($ssh, 'enable');
+            $this->converse($ssh, 'config');
+            $this->converse($ssh, "interface gpon 0/{$ont->slot}");
+
+            $salida = $this->executeDisplayCommand(
+                $ssh,
+                "display ont port state {$ont->port} {$ont->onu_id} eth-port all"
+            );
+
+            $this->converse($ssh, 'quit');
+            $this->converse($ssh, 'quit');
+
+            return self::parseLanPorts($salida);
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+
+    /**
+     * Filas de `display ont port state ... eth-port all`.
+     *
+     *   ONT-ID   ONT      ONT       Speed(Mbps)   Duplex   LinkState  RingStatus
+     *            port-ID  Port-type
+     *   --------------------------------------------------------------------
+     *        1         1         GE -             -        down       -
+     *        1         2         FE -             -        down       -
+     *
+     * Publico para poder probar el parseo sin abrir un SSH.
+     *
+     * @return array<int, array{puerto:int, tipo:string, velocidad:?string, duplex:?string, estado:string}>
+     */
+    public static function parseLanPorts(string $salida): array
+    {
+        preg_match_all(
+            '/^\s*\d+\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(up|down)\b/im',
+            $salida,
+            $filas,
+            PREG_SET_ORDER
+        );
+
+        return array_map(fn ($f) => [
+            'puerto' => (int) $f[1],
+            'tipo' => $f[2],
+            // La OLT pone "-" cuando el puerto esta caido: no es un dato.
+            'velocidad' => $f[3] === '-' ? null : $f[3],
+            'duplex' => $f[4] === '-' ? null : $f[4],
+            'estado' => strtolower($f[5]),
+        ], $filas);
+    }
+
     public function getOntOpticalInfo(Olt $olt, Ont $ont): array
     {
         $interface = "0/{$ont->slot}";

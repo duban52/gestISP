@@ -204,6 +204,22 @@
                  al cambiarlo, o el de la última verificación) y se
                  ofrece un botón para verificarlo contra la OLT.
                  ============================================================ --}}
+            {{-- Puertos LAN de la ONT. Se consulta a peticion: es SSH. --}}
+            <div class="card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-ethernet"></i> Puertos LAN</span>
+                    <button id="btnLanPorts" class="btn btn-sm btn-light" title="Consultar en la OLT (tarda ~40 s)">
+                        <i class="fas fa-sync"></i> Consultar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="lanPorts" class="d-flex flex-wrap" style="gap:.75rem;">
+                        <span class="text-muted">Pulse «Consultar» para leerlos de la OLT.</span>
+                    </div>
+                    <small id="lanChecked" class="text-muted d-block mt-2"></small>
+                </div>
+            </div>
+
             <div class="card" id="catvCard" style="display:none;">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                     <span><i class="fas fa-tv"></i> CATV (Televisión)</span>
@@ -589,6 +605,52 @@
         const catvDisableUrl = `{{ route('onts.catv.disable', $ont) }}`;
         const catvStateUrl   = `{{ route('onts.catv.state', $ont) }}`;
         const csrfToken      = document.querySelector('meta[name="csrf-token"]').content;
+
+        // ---- Puertos LAN ----
+        document.getElementById('btnLanPorts').addEventListener('click', function () {
+            const caja = document.getElementById('lanPorts');
+            const boton = this;
+
+            boton.disabled = true;
+            caja.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin"></i> Consultando la OLT…</span>';
+
+            fetch(`{{ route('onts.lan_ports', $ont) }}`)
+                .then(r => r.json())
+                .then(res => {
+                    boton.disabled = false;
+
+                    if (!res.ok) {
+                        caja.innerHTML = `<span class="text-danger">${res.message}</span>`;
+                        return;
+                    }
+
+                    if (!res.ports.length) {
+                        caja.innerHTML = '<span class="text-muted">La OLT no reportó puertos LAN.</span>';
+                        return;
+                    }
+
+                    caja.innerHTML = res.ports.map(p => {
+                        const up = p.estado === 'up';
+                        // El detalle solo cuando existe: con el puerto caido
+                        // la OLT manda "-", y pintarlo simula un dato.
+                        const detalle = up && p.velocidad
+                            ? `${p.velocidad} Mbps ${p.duplex || ''}`
+                            : 'Sin enlace';
+
+                        return `<div class="border rounded text-center p-2" style="min-width:92px;">
+                            <i class="fas fa-ethernet fa-lg ${up ? 'text-success' : 'text-muted'}"></i>
+                            <div class="font-weight-bold mt-1">${p.tipo}${p.puerto}</div>
+                            <small class="${up ? 'text-success' : 'text-muted'}">${detalle}</small>
+                        </div>`;
+                    }).join('');
+
+                    document.getElementById('lanChecked').textContent = 'Consultado: ' + res.checked_at;
+                })
+                .catch(() => {
+                    boton.disabled = false;
+                    caja.innerHTML = '<span class="text-danger">No se pudo consultar la OLT.</span>';
+                });
+        });
 
         function setText(id, value, suffix = '') {
             document.getElementById(id).innerHTML =
