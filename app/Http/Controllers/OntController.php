@@ -893,12 +893,12 @@ class OntController extends Controller
         // La OLT acaba de decir el service-port y la VLAN reales: se
         // guardan. El service-port se resolvia con una consulta SSH
         // aparte cada vez que hacia falta (borrar o mover la ONT).
-        if ($info['mac']) {
-            $ont->update([
-                'service_port' => $info['mac']['service_port'],
-                'vlan' => $info['mac']['vlan'],
-            ]);
-        }
+        $ont->update(array_filter([
+            'service_port' => $info['mac']['service_port'] ?? null,
+            'vlan' => $info['mac']['vlan'] ?? null,
+            'vendor' => $info['version']['Vendor-ID'] ?? null,
+            'model' => $info['version']['Equipment-ID'] ?? null,
+        ], fn ($v) => $v !== null));
 
         return response()->json($info + [
             'ok' => true,

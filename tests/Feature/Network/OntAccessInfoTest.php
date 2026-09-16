@@ -42,6 +42,41 @@ TXT;
   ---------------------------------------------------------------------
 TXT;
 
+    private const VERSION = <<<'TXT'
+olt_interya(config)#display ont version 0 9 0 56
+  --------------------------------------------------------------------------
+  F/S/P                    : 0/9/0
+  ONT-ID                   : 56
+  Vendor-ID                : HWTC
+  ONT Version              : V1.0
+  Product-ID               : 0
+  Equipment-ID             : ZK9004WT
+  Main Software Version    : v1.0.15
+  Standby Software Version : v1.0.13
+  OntProductDescription    :
+  Support XML Version      :
+  --------------------------------------------------------------------------
+TXT;
+
+    public function test_saca_marca_y_modelo(): void
+    {
+        $v = OltSshService::parseVersion(self::VERSION);
+
+        $this->assertSame('HWTC', $v['Vendor-ID']);
+        $this->assertSame('ZK9004WT', $v['Equipment-ID']);
+        $this->assertSame('v1.0.15', $v['Main Software Version']);
+    }
+
+    public function test_los_campos_vacios_no_se_guardan(): void
+    {
+        // "OntProductDescription :" sin valor. Guardarlo dejaria una
+        // fila vacia en la ficha.
+        $v = OltSshService::parseVersion(self::VERSION);
+
+        $this->assertArrayNotHasKey('OntProductDescription', $v);
+        $this->assertArrayNotHasKey('Support XML Version', $v);
+    }
+
     public function test_saca_la_mac_gpon(): void
     {
         $mac = OltSshService::parseMac(self::MAC);

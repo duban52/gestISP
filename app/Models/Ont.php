@@ -41,6 +41,7 @@ class Ont extends Model
         'status',
         'rx_power',
         'model',
+        'vendor',
         'vlan',
         // Últimos estados conocidos (se leen de la OLT por CLI,
         // que es lento; se guardan para mostrarlos al instante)

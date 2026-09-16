@@ -236,6 +236,36 @@
                     <small id="accesoChecked" class="text-muted d-block mt-2"></small>
                 </div>
             </div>
+        </div>
+
+        <div class="col-xl-4 col-lg-12">
+            {{-- Historial (oculta hasta que lleguen los datos) --}}
+            <div class="card" id="historyCard" style="display:none;">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-history"></i> Historial de Conexión
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive"><table class="table table-striped mb-0">
+                        <tr>
+                            <th style="width:40%">Última conexión</th>
+                            <td id="rt-last-up">—</td>
+                        </tr>
+                        <tr>
+                            <th>Última desconexión</th>
+                            <td id="rt-last-down">—</td>
+                        </tr>
+                        <tr>
+                            <th>Causa última caída</th>
+                            <td id="rt-down-cause">—</td>
+                        </tr>
+                        <tr>
+                            <th>Tiempo en línea</th>
+                            <td id="rt-online-duration">—</td>
+                        </tr>
+                    </table></div>
+                </div>
+            </div>
+
 
             <div class="card" id="catvCard" style="display:none;">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
@@ -264,35 +294,6 @@
                         <tr>
                             <th>Potencia Rx CATV</th>
                             <td id="rt-catv-power">—</td>
-                        </tr>
-                    </table></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-4 col-lg-12">
-            {{-- Historial (oculta hasta que lleguen los datos) --}}
-            <div class="card" id="historyCard" style="display:none;">
-                <div class="card-header bg-secondary text-white">
-                    <i class="fas fa-history"></i> Historial de Conexión
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive"><table class="table table-striped mb-0">
-                        <tr>
-                            <th style="width:40%">Última conexión</th>
-                            <td id="rt-last-up">—</td>
-                        </tr>
-                        <tr>
-                            <th>Última desconexión</th>
-                            <td id="rt-last-down">—</td>
-                        </tr>
-                        <tr>
-                            <th>Causa última caída</th>
-                            <td id="rt-down-cause">—</td>
-                        </tr>
-                        <tr>
-                            <th>Tiempo en línea</th>
-                            <td id="rt-online-duration">—</td>
                         </tr>
                     </table></div>
                 </div>
@@ -333,20 +334,25 @@
                         una vez que corra periódicamente, aquí verá la evolución.
                     </div>
 
-                    <div id="chartsWrapper" style="display:none;">
-                        {{-- Potencia óptica --}}
-                        <h6 class="text-muted mb-2">Potencia óptica (dBm)</h6>
-                        <canvas id="opticalChart" height="120"></canvas>
+                    {{-- Las dos en la misma fila: apiladas ocupaban el doble
+                         de alto sin aportar nada. En pantalla estrecha vuelven
+                         a apilarse solas. --}}
+                    <div id="chartsWrapper" class="row" style="display:none;">
+                        <div class="col-lg-6">
+                            <h6 class="text-muted mb-2">Potencia óptica (dBm)</h6>
+                            <canvas id="opticalChart" height="150"></canvas>
+                        </div>
 
-                        {{-- Ancho de banda --}}
-                        <h6 class="text-muted mb-2 mt-4">Ancho de banda</h6>
-                        <canvas id="trafficChart" height="120"></canvas>
+                        <div class="col-lg-6">
+                            <h6 class="text-muted mb-2">Ancho de banda</h6>
+                            <canvas id="trafficChart" height="150"></canvas>
                         <div id="trafficUnavailable" class="alert alert-secondary mt-2 mb-0" style="display:none;">
                             <i class="fas fa-info-circle"></i>
                             No hay datos de tráfico para esta ONT. Requiere que la OLT exponga
                             contadores por ONT: ejecute
                             <code>php artisan onts:poll --resolve-traffic</code> y verifique
                             con <code>php artisan olt:snmp-probe {{ $ont->olt_id }} --interfaces --filter=ONT</code>.
+                        </div>
                         </div>
                     </div>
                 </div>
@@ -371,6 +377,14 @@
                         <tr>
                             <th style="width:40%">Serial</th>
                             <td>{{ $ont->sn }}</td>
+                        </tr>
+                        <tr>
+                            <th>Marca</th>
+                            <td>{{ $ont->vendor ?: '—' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Modelo</th>
+                            <td>{{ $ont->model ?: '—' }}</td>
                         </tr>
                         <tr>
                             <th>OLT</th>

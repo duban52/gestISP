@@ -737,7 +737,7 @@ class OltSshService
      * los comandos no. Mac y wan-info van en config mode; el estado de
      * los puertos exige entrar a la interfaz gpon.
      *
-     * @return array{lan: array, mac: ?array, wan: array}
+     * @return array{lan: array, mac: ?array, wan: array, version: array}
      */
     public function getOntAccessInfo(Olt $olt, Ont $ont): array
     {
@@ -759,6 +759,13 @@ class OltSshService
                 "display ont wan-info 0/{$ont->slot} {$ont->port} {$ont->onu_id}"
             ));
 
+            // Marca y modelo. Aqui los argumentos van sueltos (frame
+            // slot port ont), no con barras como en wan-info.
+            $version = self::parseVersion($this->executeDisplayCommand(
+                $ssh,
+                "display ont version 0 {$ont->slot} {$ont->port} {$ont->onu_id}"
+            ));
+
             $this->converse($ssh, "interface gpon 0/{$ont->slot}");
 
             $lan = self::parseLanPorts($this->executeDisplayCommand(
@@ -769,7 +776,7 @@ class OltSshService
             $this->converse($ssh, 'quit');
             $this->converse($ssh, 'quit');
 
-            return ['lan' => $lan, 'mac' => $mac, 'wan' => $wan];
+            return ['lan' => $lan, 'mac' => $mac, 'wan' => $wan, 'version' => $version];
         } finally {
             $ssh->disconnect();
         }
@@ -804,6 +811,45 @@ class OltSshService
     }
 
     /**
+     * Marca, modelo y firmware.
+     *
+     *   Vendor-ID                : HWTC
+     *   Equipment-ID             : ZK9004WT
+     *   Main Software Version    : v1.0.15
+     *
+     * @return array<string, string>
+     */
+    public static function parseVersion(string $salida): array
+    {
+        return self::paresClaveValor($salida);
+    }
+
+    /**
+     * Las lineas "Clave : Valor" de una salida de la OLT.
+     *
+     * Descarta los "-" y los vacios: es lo que pone la OLT cuando el
+     * campo no aplica, y pintarlo simularia un dato.
+     *
+     * @return array<string, string>
+     */
+    private static function paresClaveValor(string $texto): array
+    {
+        $campos = [];
+
+        foreach (explode("\n", $texto) as $linea) {
+            if (!preg_match('/^\s*([A-Za-z][\w\/ .-]*?)\s*:\s*(.*?)\s*$/', $linea, $m)) {
+                continue;
+            }
+
+            if ($m[2] !== '' && $m[2] !== '-') {
+                $campos[$m[1]] = $m[2];
+            }
+        }
+
+        return $campos;
+    }
+
+    /**
      * Servicios WAN de la ONT, uno por bloque "Index : N".
      *
      * Se devuelven los pares tal cual los nombra la OLT en vez de
@@ -817,22 +863,7 @@ class OltSshService
         $bloques = preg_split('/^\s*Index\s*:/im', $salida);
         array_shift($bloques); // la cabecera, antes del primer Index
 
-        return array_values(array_filter(array_map(function (string $bloque) {
-            $campos = [];
-
-            foreach (explode("\n", $bloque) as $linea) {
-                if (!preg_match('/^\s*([A-Za-z][\w\/ .-]*?)\s*:\s*(.*?)\s*$/', $linea, $m)) {
-                    continue;
-                }
-
-                // "-" es lo que pone la OLT cuando no aplica.
-                if ($m[2] !== '' && $m[2] !== '-') {
-                    $campos[$m[1]] = $m[2];
-                }
-            }
-
-            return $campos;
-        }, $bloques)));
+        return array_values(array_filter(array_map(self::paresClaveValor(...), $bloques)));
     }
 
     /**
