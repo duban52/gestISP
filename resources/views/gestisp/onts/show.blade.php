@@ -213,6 +213,12 @@
                     </button>
                 </div>
                 <div class="card-body">
+                    {{-- Lo ultimo que se leyo del equipo, si sigue en cache: asi la
+                         ficha no aparece vacia al recargar la pagina. --}}
+                    @if($acceso)
+                        <script type="application/json" id="accesoCacheado">@json($acceso)</script>
+                    @endif
+
                     <div id="accesoMsg" class="text-muted">Pulse «Consultar» para leerlo de la OLT.</div>
 
                     <div id="accesoDatos" style="display:none;">
@@ -267,7 +273,7 @@
             </div>
 
 
-            <div class="card" id="catvCard" style="display:none;">
+            <div class="card" id="catvCard">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                     <span><i class="fas fa-tv"></i> CATV (Televisión)</span>
                     <button id="btnCheckCatv" class="btn btn-sm btn-light" title="Consultar el estado real en la OLT (tarda ~40 s)">
@@ -275,16 +281,24 @@
                     </button>
                 </div>
                 <div class="card-body">
-                    {{-- Interruptor de televisión --}}
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <strong>Servicio de televisión</strong>
-                            <small id="catv-checked" class="d-block text-muted">—</small>
-                        </div>
-                        <div id="catv-switch">
-                            {{-- Lo arma el JavaScript según el estado --}}
-                        </div>
+                    {{-- SIN MODULO DE TV LA TARJETA SE QUEDA, PERO LO DICE.
+                         Antes se ocultaba entera y no habia forma de saber si
+                         la ONT no tiene television o si la consulta fallo. --}}
+                    <div id="catv-sin-modulo" class="text-muted" style="display:none;">
+                        Esta ONT no reporta módulo de televisión.
                     </div>
+
+                    <div id="catv-contenido">
+                        {{-- Interruptor de televisión --}}
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <strong>Servicio de televisión</strong>
+                                <small id="catv-checked" class="d-block text-muted">—</small>
+                            </div>
+                            <div id="catv-switch">
+                                {{-- Lo arma el JavaScript según el estado --}}
+                            </div>
+                        </div>
 
                     <div class="table-responsive"><table class="table table-striped mb-0">
                         <tr>
@@ -296,6 +310,7 @@
                             <td id="rt-catv-power">—</td>
                         </tr>
                     </table></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -662,7 +677,7 @@
             msg.className = 'text-muted';
             msg.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando la OLT…';
 
-            fetch(`{{ route('onts.access_info', $ont) }}`)
+            fetch(`{{ route('onts.access_info', $ont) }}?fresh=1`)
                 .then(r => r.json())
                 .then(res => {
                     boton.disabled = false;
@@ -673,71 +688,7 @@
                         return;
                     }
 
-                    msg.style.display = 'none';
-                    datos.style.display = 'block';
-
-                    // --- LAN ---
-                    document.getElementById('lanPorts').innerHTML = res.lan.length
-                        ? res.lan.map(p => {
-                            const up = p.estado === 'up';
-                            // Con el puerto caido la OLT manda "-": pintarlo
-                            // simularia un dato que no existe.
-                            const detalle = up && p.velocidad
-                                ? `${p.velocidad} Mbps ${p.duplex || ''}`
-                                : 'Sin enlace';
-
-                            return `<div class="border rounded text-center p-2" style="min-width:92px;">
-                                <i class="fas fa-ethernet fa-lg ${up ? 'text-success' : 'text-muted'}"></i>
-                                <div class="font-weight-bold mt-1">${p.tipo}${p.puerto}</div>
-                                <small class="${up ? 'text-success' : 'text-muted'}">${detalle}</small>
-                            </div>`;
-                        }).join('')
-                        : '<span class="text-muted">La OLT no reportó puertos LAN.</span>';
-
-                    // --- MAC ---
-                    const macBloque = document.getElementById('macBloque');
-                    if (res.mac) {
-                        document.getElementById('macValor').textContent = res.mac.mac;
-                        document.getElementById('macMeta').textContent =
-                            `${res.mac.tipo} · ${res.mac.aprendizaje} · VLAN ${res.mac.vlan}`;
-                        macBloque.style.display = 'block';
-                    } else {
-                        macBloque.style.display = 'none';
-                    }
-
-                    // --- WAN ---
-                    const wanBloque = document.getElementById('wanBloque');
-                    if (res.wan && res.wan.length) {
-                        document.getElementById('wanServicios').innerHTML = res.wan.map(w => {
-                            const conectado = (w['IPv4 Connection status'] || '') === 'Connected';
-                            const filas = WAN_CAMPOS
-                                .filter(([clave]) => w[clave])
-                                .map(([clave, etiqueta]) => {
-                                    // La IPv4 lleva a la interfaz web de la ONT.
-                                    const valor = clave === 'IPv4 address'
-                                        ? `<a href="http://${w[clave]}" target="_blank" rel="noopener">${w[clave]} <i class="fas fa-external-link-alt small"></i></a>`
-                                        : w[clave];
-
-                                    return `<tr><th class="text-muted font-weight-normal" style="width:45%">${etiqueta}</th><td>${valor}</td></tr>`;
-                                })
-                                .join('');
-
-                            return `<div class="border rounded mb-2">
-                                <div class="px-3 py-2 d-flex justify-content-between align-items-center bg-light">
-                                    <strong>${w['Service type'] || w['Name'] || 'Servicio'}</strong>
-                                    <span class="badge badge-${conectado ? 'success' : 'secondary'}">
-                                        ${w['IPv4 Connection status'] || 'Sin estado'}
-                                    </span>
-                                </div>
-                                <table class="table table-sm mb-0">${filas}</table>
-                            </div>`;
-                        }).join('');
-                        wanBloque.style.display = 'block';
-                    } else {
-                        wanBloque.style.display = 'none';
-                    }
-
-                    document.getElementById('accesoChecked').textContent = 'Consultado: ' + res.checked_at;
+                    pintarAcceso(res);
                 })
                 .catch(() => {
                     boton.disabled = false;
@@ -745,6 +696,98 @@
                     msg.textContent = 'No se pudo consultar la OLT.';
                 });
         });
+
+        /** Vuelca una lectura del acceso en la ficha, venga del boton o de la cache. */
+        function pintarAcceso(res) {
+            const msg = document.getElementById('accesoMsg');
+            const datos = document.getElementById('accesoDatos');
+
+            msg.style.display = 'none';
+            datos.style.display = 'block';
+
+            // --- LAN ---
+            document.getElementById('lanPorts').innerHTML = res.lan.length
+                ? res.lan.map(p => {
+                    const up = p.estado === 'up';
+                    // Con el puerto caido la OLT manda "-": pintarlo
+                    // simularia un dato que no existe.
+                    const detalle = up && p.velocidad
+                        ? `${p.velocidad} Mbps ${p.duplex || ''}`
+                        : 'Sin enlace';
+
+                    return `<div class="border rounded text-center p-2" style="min-width:92px;">
+                        <i class="fas fa-ethernet fa-lg ${up ? 'text-success' : 'text-muted'}"></i>
+                        <div class="font-weight-bold mt-1">${p.tipo}${p.puerto}</div>
+                        <small class="${up ? 'text-success' : 'text-muted'}">${detalle}</small>
+                    </div>`;
+                }).join('')
+                : '<span class="text-muted">La OLT no reportó puertos LAN.</span>';
+
+            // --- MAC ---
+            const macBloque = document.getElementById('macBloque');
+            if (res.mac) {
+                document.getElementById('macValor').textContent = res.mac.mac;
+                document.getElementById('macMeta').textContent =
+                    `${res.mac.tipo} · ${res.mac.aprendizaje} · VLAN ${res.mac.vlan}`;
+                macBloque.style.display = 'block';
+            } else {
+                macBloque.style.display = 'none';
+            }
+
+            // --- WAN ---
+            const wanBloque = document.getElementById('wanBloque');
+            if (res.wan && res.wan.length) {
+                document.getElementById('wanServicios').innerHTML = res.wan.map(w => {
+                    const conectado = (w['IPv4 Connection status'] || '') === 'Connected';
+                    const filas = WAN_CAMPOS
+                        .filter(([clave]) => w[clave])
+                        .map(([clave, etiqueta]) => {
+                            // La IPv4 lleva a la interfaz web de la ONT.
+                            const valor = clave === 'IPv4 address'
+                                ? `<a href="http://${w[clave]}" target="_blank" rel="noopener">${w[clave]} <i class="fas fa-external-link-alt small"></i></a>`
+                                : w[clave];
+
+                            return `<tr><th class="text-muted font-weight-normal" style="width:45%">${etiqueta}</th><td>${valor}</td></tr>`;
+                        })
+                        .join('');
+
+                    return `<div class="border rounded mb-2">
+                        <div class="px-3 py-2 d-flex justify-content-between align-items-center bg-light">
+                            <strong>${w['Service type'] || w['Name'] || 'Servicio'}</strong>
+                            <span class="badge badge-${conectado ? 'success' : 'secondary'}">
+                                ${w['IPv4 Connection status'] || 'Sin estado'}
+                            </span>
+                        </div>
+                        <table class="table table-sm mb-0">${filas}</table>
+                    </div>`;
+                }).join('');
+                wanBloque.style.display = 'block';
+            } else {
+                wanBloque.style.display = 'none';
+            }
+
+            // Antiguedad Y fecha exacta: «hace 2 h» solo no basta
+            // para saber si el dato es de antes o despues de una
+            // visita tecnica.
+            const cuando = new Date(res.checked_at);
+            const minutos = Math.floor((Date.now() - cuando) / 60000);
+            const hace = minutos < 1 ? 'hace un momento'
+                : minutos < 60 ? `hace ${minutos} min`
+                : minutos < 1440 ? `hace ${Math.floor(minutos / 60)} h`
+                : `hace ${Math.floor(minutos / 1440)} d`;
+
+            document.getElementById('accesoChecked').textContent =
+                `Obtenido ${hace} · ${cuando.toLocaleString('es-CO')}`;
+        }
+
+        // Al abrir la ficha: lo ultimo que se consulto, si lo hay.
+        (function () {
+            const guardado = document.getElementById('accesoCacheado');
+
+            if (!guardado) return;
+
+            pintarAcceso(JSON.parse(guardado.textContent));
+        })();
 
         function setText(id, value, suffix = '') {
             document.getElementById(id).innerHTML =
@@ -759,7 +802,7 @@
             loader.style.display = 'block';
             table.style.display  = 'none';
             errBox.style.display = 'none';
-            document.getElementById('catvCard').style.display    = 'none';
+            // La tarjeta CATV ya no se oculta: su contenido dice lo que pasa.
             document.getElementById('historyCard').style.display = 'none';
 
             fetch(realtimeUrl)
@@ -840,8 +883,10 @@
 
                     // CATV: la ONT tiene módulo de televisión si la
                     // OLT reporta su potencia óptica
+                    document.getElementById('catv-sin-modulo').style.display = d.has_catv ? 'none' : 'block';
+                    document.getElementById('catv-contenido').style.display = d.has_catv ? 'block' : 'none';
+
                     if (d.has_catv) {
-                        document.getElementById('catvCard').style.display = 'block';
                         renderCatv(d.catv_enabled, d.catv_checked_at);
 
                         // Potencia CATV: -40 dBm es el valor de fondo

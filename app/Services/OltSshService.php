@@ -739,6 +739,40 @@ class OltSshService
      *
      * @return array{lan: array, mac: ?array, wan: array, version: array}
      */
+    /** Clave de cache del acceso de una ONT. */
+    public static function claveAcceso(Ont $ont): string
+    {
+        return "ont:{$ont->id}:acceso";
+    }
+
+    /**
+     * El acceso del cliente, desde cache.
+     *
+     * Consultarlo cuesta ~40 s de SSH, asi que se guarda: al recargar
+     * la ficha esta ahi, con la hora a la que se obtuvo. No es tiempo
+     * real y la pantalla lo dice.
+     *
+     * TTL largo —un dia— porque no caduca solo: lo renueva quien pulsa
+     * «Consultar». Caducarlo antes solo serviria para vaciar la ficha
+     * sin que nadie lo pidiera.
+     *
+     * @return array{lan: array, mac: ?array, wan: array, version: array, checked_at: string}
+     */
+    public function getOntAccessInfoCached(Olt $olt, Ont $ont, bool $fresh = false): array
+    {
+        $clave = self::claveAcceso($ont);
+
+        if ($fresh) {
+            Cache::forget($clave);
+        }
+
+        return Cache::remember(
+            $clave,
+            86400,
+            fn () => $this->getOntAccessInfo($olt, $ont) + ['checked_at' => now()->toIso8601String()],
+        );
+    }
+
     public function getOntAccessInfo(Olt $olt, Ont $ont): array
     {
         $ssh = $this->connectToOlt($olt);

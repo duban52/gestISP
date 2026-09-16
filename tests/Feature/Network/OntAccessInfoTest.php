@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Network;
 
+use App\Models\Olt;
+use App\Models\Ont;
 use App\Services\OltSshService;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /** Parseo de MAC GPON y WAN. Salidas reales de una OLT Huawei. */
@@ -144,5 +147,45 @@ TXT);
     public function test_sin_wan_no_inventa_servicios(): void
     {
         $this->assertSame([], OltSshService::parseWan('  Failure: ONT does not exist'));
+    }
+
+    public function test_lo_consultado_se_reutiliza_sin_volver_a_la_olt(): void
+    {
+        // Leer el acceso cuesta ~40 s de SSH. Al recargar la ficha se
+        // pinta lo guardado: si esta prueba abriera SSH reventaria,
+        // porque la OLT de mentira no existe.
+        $ont = new Ont();
+        $ont->id = 4252;
+
+        Cache::put(OltSshService::claveAcceso($ont), [
+            'lan' => [],
+            'mac' => null,
+            'wan' => [],
+            'version' => [],
+            'checked_at' => '2026-09-16T10:00:00-05:00',
+        ], 60);
+
+        $info = app(OltSshService::class)->getOntAccessInfoCached(new Olt(), $ont);
+
+        $this->assertSame('2026-09-16T10:00:00-05:00', $info['checked_at']);
+    }
+
+    public function test_consultar_de_nuevo_descarta_lo_guardado(): void
+    {
+        // El boton «Consultar» es justamente para NO usar lo guardado.
+        $ont = new Ont();
+        $ont->id = 4252;
+
+        $clave = OltSshService::claveAcceso($ont);
+        Cache::put($clave, ['checked_at' => '2026-09-16T10:00:00-05:00'], 60);
+
+        try {
+            app(OltSshService::class)->getOntAccessInfoCached(new Olt(), $ont, true);
+        } catch (\Throwable $e) {
+            // Sin OLT que responder: lo que se comprueba es que ya tiro
+            // lo guardado antes de intentarlo.
+        }
+
+        $this->assertFalse(Cache::has($clave));
     }
 }

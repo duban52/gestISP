@@ -319,6 +319,11 @@ class OntController extends Controller
             // inventario. Se comprueba que exista; que sea del puerto
             // PON correcto y esté libre lo valida el servicio.
             'nap_port_id'     => 'nullable|exists:nap_ports,id',
+            // Vienen del autofind. Nullable: una ONT vieja o de marca
+            // rara puede no reportarlos, y eso no puede impedir
+            // activarla.
+            'vendor'          => 'nullable|string|max:30',
+            'model'           => 'nullable|string|max:255',
         ], [
             'contract_id.required' => 'Seleccione el contrato o marque que la ONT no pertenece a ninguno.',
             'description.required' => 'La descripción es obligatoria: es el rótulo de la ONT en la OLT.',
@@ -352,6 +357,8 @@ class OntController extends Controller
             'sn'           => $validated['ont_sn'],
             'description'  => $validated['description'],
             'vlan'         => $validated['vlan'],
+            'vendor'       => $validated['vendor'] ?? null,
+            'model'        => $validated['model'] ?? null,
             'if_index'     => $ifIndex,
             'status'       => 1,
         ]);
@@ -684,7 +691,12 @@ class OntController extends Controller
         // Carga instantánea: solo datos de la DB
         $ont->load(['olt', 'contract.client']);
 
-        return view('gestisp.onts.show', compact('ont'));
+        // Lo ultimo que se consulto del equipo, si sigue en cache. Se
+        // LEE, no se consulta: abrir un SSH al cargar la ficha la
+        // dejaria 40 s en blanco.
+        $acceso = \Illuminate\Support\Facades\Cache::get(OltSshService::claveAcceso($ont));
+
+        return view('gestisp.onts.show', compact('ont', 'acceso'));
     }
 
     /**
@@ -881,11 +893,15 @@ class OntController extends Controller
      * bajo demanda y no parte de la carga de la pantalla.
      */
 
-    /** Puertos LAN, MAC GPON y WAN de la ONT (SSH, ~40 s). */
-    public function accessInfo(Ont $ont): \Illuminate\Http\JsonResponse
+    /** Puertos LAN, MAC GPON y WAN de la ONT (SSH, ~40 s; se cachea). */
+    public function accessInfo(Request $request, Ont $ont): \Illuminate\Http\JsonResponse
     {
         try {
-            $info = $this->oltSshService->getOntAccessInfo(Olt::findOrFail($ont->olt_id), $ont);
+            $info = $this->oltSshService->getOntAccessInfoCached(
+                Olt::findOrFail($ont->olt_id),
+                $ont,
+                $request->boolean('fresh'),
+            );
         } catch (\Exception $e) {
             return response()->json(['ok' => false, 'message' => 'No se pudo consultar la OLT: ' . $e->getMessage()]);
         }
@@ -900,10 +916,7 @@ class OntController extends Controller
             'model' => $info['version']['Equipment-ID'] ?? null,
         ], fn ($v) => $v !== null));
 
-        return response()->json($info + [
-            'ok' => true,
-            'checked_at' => now()->format('d/m/Y H:i'),
-        ]);
+        return response()->json($info + ['ok' => true]);
     }
 
     public function checkCatvState(Ont $ont): \Illuminate\Http\JsonResponse

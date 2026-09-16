@@ -15,24 +15,49 @@
 @section('title', 'ONTs Pendientes')
 
 @section('content_header')
-    <h1 class="mb-0">
-        <i class="fas fa-search mr-2"></i>ONT pendientes por activación
-    </h1>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <h1 class="mb-0">
+            <i class="fas fa-search mr-2"></i>ONT pendientes por activación
+        </h1>
+        {{-- Mismos botones y mismo sitio que en autorizadas: las dos
+             pantallas son la misma tarea vista desde sus dos lados. --}}
+        <div class="acciones-movil">
+            <a href="{{ route('onts.authorized') }}" class="btn btn-outline-primary">
+                <i class="fas fa-network-wired"></i> Autorizadas
+            </a>
+            <a href="{{ route('olts.index') }}" class="btn btn-secondary">
+                <i class="fas fa-server"></i> OLTs
+            </a>
+        </div>
+    </div>
 @endsection
 
 @section('content')
     @if(session('success'))
-        <div class="alert alert-success">{{ session('success') }}</div>
+        <div class="alert alert-success alert-dismissible shadow-sm">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <i class="fas fa-check-circle mr-1"></i> {{ session('success') }}
+        </div>
     @elseif(session('success-update'))
-        <div class="alert alert-warning">{{ session('success-update') }}</div>
+        <div class="alert alert-warning alert-dismissible shadow-sm">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            {{ session('success-update') }}
+        </div>
     @elseif(session('success-delete'))
-        <div class="alert alert-danger">{{ session('success-delete') }}</div>
+        <div class="alert alert-danger alert-dismissible shadow-sm">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            {{ session('success-delete') }}
+        </div>
     @elseif(session('error'))
-        <div class="alert alert-danger">{{ session('error') }}</div>
+        <div class="alert alert-danger alert-dismissible shadow-sm">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <i class="fas fa-exclamation-circle mr-1"></i> {{ session('error') }}
+        </div>
     @endif
 
-    <div class="card toque">
-        <div class="card-body">
+    {{-- ---------- Que OLT se consulta ---------- --}}
+    <div class="card shadow-sm toque">
+        <div class="card-body pb-2">
             <div class="form-group">
                 <label for="olt" class="mb-1">OLT a consultar</label>
                 <select class="form-control" name="olt" id="olt">
@@ -59,9 +84,20 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    {{-- ---------- Tabla ---------- --}}
+    <div class="card shadow-sm">
+        <div class="card-header py-2">
+            <h3 class="card-title mb-0">
+                <i class="fas fa-list mr-1"></i> En autofind
+            </h3>
+        </div>
+        <div class="card-body">
             <div class="table-responsive">
-                <table id="autofindTable" class="table table-hover table-bordered tabla-movil" style="width:100%">
-                    <thead>
+                <table id="autofindTable" class="table table-hover table-sm tabla-movil" style="width:100%">
+                    <thead class="thead-light">
                     <tr>
                         <th>SN</th>
                         <th>Marca</th>
@@ -100,13 +136,16 @@
                             <label>SN</label>
                             <input type="text" class="form-control" id="modalOntSnView" disabled>
                         </div>
+                        {{-- `readonly` y no `disabled`: un campo deshabilitado
+                             NO se envia. Los traia el autofind y se perdian al
+                             activar, asi que la ONT nacia sin marca ni modelo. --}}
                         <div class="form-group">
                             <label>Marca</label>
-                            <input type="text" class="form-control" id="modalVendor" disabled>
+                            <input type="text" class="form-control" id="modalVendor" name="vendor" readonly>
                         </div>
                         <div class="form-group">
                             <label>Modelo</label>
-                            <input type="text" class="form-control" id="modalModel" disabled>
+                            <input type="text" class="form-control" id="modalModel" name="model" readonly>
                         </div>
 
                         {{-- ============================================================

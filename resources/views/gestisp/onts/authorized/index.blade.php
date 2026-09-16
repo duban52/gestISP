@@ -295,8 +295,10 @@
                                 <a href="{{ route('onts.show', $ont) }}" class="font-weight-bold">
                                     <code>{{ $ont->sn }}</code>
                                 </a>
-                                @if($ont->model)
-                                    <small class="d-block text-muted">{{ $ont->model }}</small>
+                                @if($ont->model || $ont->vendor)
+                                    <small class="d-block text-muted">
+                                        {{ trim(($ont->vendor ?: '') . ' ' . ($ont->model ?: '')) }}
+                                    </small>
                                 @endif
                                 <span class="d-md-none d-block mt-1">
                                     @if($deshabilitada)
