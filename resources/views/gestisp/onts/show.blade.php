@@ -28,13 +28,7 @@
 
 @section('content')
     <div class="toque">
-    @if(session('success'))
-        <div class="alert alert-success">{{ session('success') }}</div>
-    @elseif(session('success-update'))
-        <div class="alert alert-warning">{{ session('success-update') }}</div>
-    @elseif(session('error'))
-        <div class="alert alert-danger">{{ session('error') }}</div>
-    @endif
+    @include('gestisp.partials.resultado-accion')
 
     {{-- Alerta de error en tiempo real (oculta por defecto) --}}
     <div id="realtimeError" class="alert alert-warning" style="display:none;">
@@ -650,7 +644,6 @@
         const catvEnableUrl  = `{{ route('onts.catv.enable', $ont) }}`;
         const catvDisableUrl = `{{ route('onts.catv.disable', $ont) }}`;
         const catvStateUrl   = `{{ route('onts.catv.state', $ont) }}`;
-        const csrfToken      = document.querySelector('meta[name="csrf-token"]').content;
 
         // ---- Acceso del cliente: LAN + MAC + WAN, una sola consulta ----
         // Los campos WAN se pintan con el nombre que les da la OLT: cambian
@@ -910,14 +903,25 @@
                 });
         }
 
-        function catvButton(url, btnClass, icon, label) {
-            return `
-                <form method="POST" action="${url}" class="d-inline">
-                    <input type="hidden" name="_token" value="${csrfToken}">
-                    <button type="submit" class="btn ${btnClass} btn-sm">
-                        <i class="fas ${icon}"></i> ${label}
-                    </button>
-                </form>`;
+        /*
+         * Mismo modal que reiniciar o deshabilitar la ONT: confirmar y
+         * luego «procesando». Antes era un formulario directo y al
+         * pulsarlo solo se veia la pagina cargando durante un minuto.
+         */
+        function catvButton(encender, etiqueta) {
+            const [url, color, icono, mensaje, progreso] = encender
+                ? [catvEnableUrl, 'success', 'fa-toggle-on',
+                   'Se restablecerá la señal de televisión del cliente.',
+                   'Encendiendo la televisión en la OLT...']
+                : [catvDisableUrl, 'danger', 'fa-toggle-off',
+                   'El cliente se quedará sin señal de televisión.',
+                   'Apagando la televisión en la OLT...'];
+
+            return `<button type="button" class="btn btn-${color} btn-sm btn-accion-olt"
+                        data-accion="${url}" data-titulo="${etiqueta}" data-icono="${icono}"
+                        data-color="${color}" data-mensaje="${mensaje}" data-progreso="${progreso}">
+                        <i class="fas ${icono}"></i> ${etiqueta}
+                    </button>`;
         }
 
         /**
@@ -933,17 +937,16 @@
 
             if (enabled === true) {
                 stateCell.innerHTML = '<span class="badge badge-success">Habilitado</span>';
-                switchBox.innerHTML = catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-on', 'Apagar TV');
+                switchBox.innerHTML = catvButton(false, 'Apagar TV');
             } else if (enabled === false) {
                 stateCell.innerHTML = '<span class="badge badge-danger">Deshabilitado</span>';
-                switchBox.innerHTML = catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-off', 'Encender TV');
+                switchBox.innerHTML = catvButton(true, 'Encender TV');
             } else {
                 // Nunca verificado: se ofrecen las dos acciones sin
                 // afirmar un estado que el sistema no conoce
                 stateCell.innerHTML = '<span class="badge badge-secondary">Sin verificar</span>';
                 switchBox.innerHTML =
-                    catvButton(catvEnableUrl, 'btn-success', 'fa-toggle-on', 'Encender') + ' ' +
-                    catvButton(catvDisableUrl, 'btn-danger', 'fa-toggle-off', 'Apagar');
+                    catvButton(true, 'Encender') + ' ' + catvButton(false, 'Apagar');
             }
 
             checkedTxt.textContent = checkedAt

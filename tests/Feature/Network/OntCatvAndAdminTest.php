@@ -212,6 +212,39 @@ class OntCatvAndAdminTest extends TestCase
             ->assertSee('Deshabilitada', false);
     }
 
+    public function test_si_la_olt_falla_el_modal_dice_que_no_se_pudo(): void
+    {
+        // El aviso en la cabecera pasaba desapercibido: el operador
+        // miraba el boton, abajo, y no sabia si habia funcionado.
+        $this->mock(OltSshService::class, function ($mock) {
+            $mock->shouldReceive('setCatvPort')
+                ->andThrow(new \Exception('La OLT no respondio'));
+        });
+
+        $this->from(route('onts.show', $this->ont))
+            ->followingRedirects()
+            ->post(route('onts.catv.disable', $this->ont))
+            ->assertOk()
+            ->assertSee('modalResultadoAccion', false)
+            ->assertSee('No se pudo completar')
+            ->assertSee('La OLT no respondio');
+    }
+
+    public function test_si_la_olt_aplica_el_cambio_el_modal_lo_confirma(): void
+    {
+        $this->mock(OltSshService::class, function ($mock) {
+            $mock->shouldReceive('setCatvPort')->once();
+        });
+
+        $this->from(route('onts.show', $this->ont))
+            ->followingRedirects()
+            ->post(route('onts.catv.disable', $this->ont))
+            ->assertOk()
+            ->assertSee('modalResultadoAccion', false)
+            ->assertSee('Televisión (CATV) deshabilitada.')
+            ->assertDontSee('No se pudo completar');
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();
