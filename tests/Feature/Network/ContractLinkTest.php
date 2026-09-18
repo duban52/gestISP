@@ -427,6 +427,40 @@ class ContractLinkTest extends TestCase
             ]);
     }
 
+    public function test_el_buscador_encuentra_por_numero_de_contrato_y_lo_muestra(): void
+    {
+        // Se busca y se muestra el numero que ve la gente, no el id.
+        $contrato = $this->contrato(['contract_number' => 'EGP000123']);
+
+        $this->getJson(route('contratos.buscar', ['q' => 'EGP000123']))
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment(['id' => $contrato->id])
+            ->assertJsonPath('0.label', fn ($label) => str_ends_with($label, 'Contrato EGP000123'))
+            ->assertJsonPath('0.description', fn ($d) => str_ends_with($d, '-EGP000123'));
+    }
+
+    public function test_el_buscador_encuentra_un_contrato_sin_numero_por_su_id(): void
+    {
+        // Los anteriores a la numeracion se muestran con el id: tambien
+        // hay que poder buscarlos asi.
+        $contrato = $this->contrato(['contract_number' => null]);
+
+        $this->getJson(route('contratos.buscar', ['q' => (string) $contrato->id]))
+            ->assertOk()
+            ->assertJsonFragment(['id' => $contrato->id]);
+    }
+
+    public function test_el_buscador_no_sale_de_la_sucursal(): void
+    {
+        $otra = \App\Models\Branch::factory()->create();
+        $this->contrato(['branch_id' => $otra->id, 'contract_number' => 'OTR000001']);
+
+        $this->getJson(route('contratos.buscar', ['q' => 'OTR000001']))
+            ->assertOk()
+            ->assertJsonCount(0);
+    }
+
     public function test_sin_permiso_no_se_puede_vincular(): void
     {
         $sinPermiso = User::factory()->create(['number_phone' => '3011111111']);

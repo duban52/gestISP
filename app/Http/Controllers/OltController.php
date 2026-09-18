@@ -18,6 +18,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Model;
 use App\Tenancy\CurrentContext;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Controlador de OLTs
@@ -48,6 +49,7 @@ class OltController extends Controller
         $this->middleware('check.permission:olts.edit')
             ->only('edit', 'update', 'viewVlans', 'viewLineProfiles', 'viewSrvProfiles');
         $this->middleware('check.permission:olts.vlans')->only(
+            'syncCatalog',
             'storeVlan', 'storeLineProfile', 'storeSrvProfile',
             'updateVlan', 'updateLineProfile', 'updateSrvProfile',
             'destroyVlan', 'destroyLineProfile', 'destroySrvProfile',
@@ -515,6 +517,86 @@ class OltController extends Controller
     public function destroySrvProfile(SrvProfile $srvProfile): RedirectResponse
     {
         return $this->eliminarRecurso($srvProfile, 'srvProfile');
+    }
+
+    /**
+     * Trae de la OLT sus VLANs y perfiles y deja el catalogo igual.
+     *
+     * La OLT manda: lo que falta aqui se crea, los perfiles toman el
+     * nombre del equipo y lo que el equipo ya no tiene se retira —
+     * ofrecerlo al autorizar una ONT solo serviria para que fallara.
+     * El nombre de una VLAN SI se respeta: la OLT no les pone nombre,
+     * el que tenga lo puso alguien aqui.
+     */
+    public function syncCatalog(Olt $olt): RedirectResponse
+    {
+        $this->verificarSucursal($olt->id);
+
+        try {
+            $catalogo = $this->oltSshService->getCatalogo($olt);
+        } catch (\Exception $e) {
+            return back()->with('error', 'No se pudo leer la OLT: ' . $e->getMessage());
+        }
+
+        $partes = [];
+
+        DB::transaction(function () use ($olt, $catalogo, &$partes) {
+            foreach (['vlan' => 'VLANs', 'srvProfile' => 'Perfiles de servicio', 'lineProfile' => 'Perfiles de línea'] as $tipo => $titulo) {
+                $partes[] = "{$titulo}: " . $this->sincronizarRecurso($olt, $tipo, $catalogo[$tipo]);
+            }
+        });
+
+        return back()->with('success', 'Sincronizado con la OLT. ' . implode(' · ', $partes));
+    }
+
+    /**
+     * Deja el catalogo de un tipo igual al de la OLT y cuenta lo hecho.
+     *
+     * @param  array<int, string>  $enOlt  [id => nombre (perfiles) o tipo (VLANs)]
+     */
+    private function sincronizarRecurso(Olt $olt, string $tipo, array $enOlt): string
+    {
+        // Toda OLT tiene la VLAN 1 y el perfil 0. Una lista vacia es una
+        // lectura fallida, no una OLT vacia: sincronizarla borraria el
+        // catalogo entero.
+        if ($enOlt === []) {
+            return 'no se pudo leer, no se tocó nada';
+        }
+
+        $recurso = self::RECURSOS[$tipo];
+        $columna = $recurso['columna'];
+
+        $existentes = $recurso['modelo']::where('olt_id', $olt->id)->get()->keyBy($columna);
+        $nuevos = 0;
+
+        foreach ($enOlt as $id => $nombre) {
+            $registro = $existentes->get($id);
+
+            if (!$registro) {
+                $recurso['modelo']::create([
+                    'olt_id' => $olt->id,
+                    $columna => (string) $id,
+                    'name' => $tipo === 'vlan' ? "VLAN {$id}" : $nombre,
+                ]);
+                $nuevos++;
+            } elseif ($tipo !== 'vlan' && $registro->name !== $nombre) {
+                $registro->update(['name' => $nombre]);
+            }
+        }
+
+        // Uno a uno y no con un delete masivo: cada baja queda en la
+        // auditoria. OJO: reject y no except() — en una coleccion de
+        // Eloquent except() filtra por CLAVE PRIMARIA, no por la clave
+        // del keyBy, y retiraba perfiles que si estan en la OLT.
+        $retirados = $existentes->reject(fn ($registro, $id) => isset($enOlt[$id]));
+        $retirados->each->delete();
+
+        return sprintf(
+            '%d (%d nueva(s)%s)',
+            count($enOlt),
+            $nuevos,
+            $retirados->isEmpty() ? '' : ', retiradas por no estar en la OLT: ' . $retirados->keys()->implode(', '),
+        );
     }
 
     /**

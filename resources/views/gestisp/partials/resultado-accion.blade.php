@@ -9,7 +9,36 @@
     Uso: @include('gestisp.partials.resultado-accion') donde iban los
     avisos de session('success'), session('success-update'),
     session('success-delete') y session('error').
+
+    Trae tambien el «procesando»: un <form data-procesando="Texto...">
+    lo muestra al enviarse, y la pagina queda bloqueada hasta que la
+    OLT responde y llega el resultado.
 --}}
+<div class="modal fade modal-movil" id="modalProcesando" tabindex="-1" role="dialog"
+     data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary" style="width:3.5rem;height:3.5rem;"></div>
+                <h5 class="mt-4 mb-2" id="procesandoTexto"></h5>
+                <p class="text-muted mb-0">
+                    Puede tardar hasta un minuto.<br>
+                    <strong>No cierre esta ventana ni recargue la página.</strong>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('js')
+    <script>
+        $(document).on('submit', 'form[data-procesando]', function () {
+            $('#procesandoTexto').text(this.dataset.procesando);
+            $('#modalProcesando').modal('show');
+        });
+    </script>
+@endpush
+
 @php
     $resultadoError = session('error');
     $resultadoExito = session('success') ?? session('success-update') ?? session('success-delete');

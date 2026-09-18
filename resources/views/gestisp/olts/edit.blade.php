@@ -8,12 +8,8 @@
 
 @section('content')
 
-    @if (session('success'))
-        <div class="alert alert-success alert-dismissible fade show">
-            <button type="button" class="close" data-dismiss="alert">&times;</button>
-            <i class="fas fa-check-circle mr-1"></i> {{ session('success') }}
-        </div>
-    @endif
+    {{-- Tambien los errores: antes esta pantalla solo mostraba los aciertos. --}}
+    @include('gestisp.partials.resultado-accion')
 
     <div class="card">
         <div class="card-body">
@@ -141,8 +137,8 @@
     </div>
 
     {{-- Configuración de la OLT.
-         Estas VLANs y perfiles ya existen en el equipo: aquí solo se
-         registran para poder ofrecerlos al autorizar una ONT. --}}
+         Estas VLANs y perfiles existen en el equipo; «Sincronizar» los
+         trae de la OLT y deja este catálogo igual al del equipo. --}}
     <div class="card card-primary card-outline card-outline-tabs">
         <div class="card-header p-0 border-bottom-0">
             <ul class="nav nav-tabs" id="oltConfigTabs" role="tablist">
@@ -166,6 +162,19 @@
                         <i class="fas fa-sliders-h mr-1"></i> Perfiles de línea
                         <span class="badge badge-secondary ml-1" id="line-count">0</span>
                     </a>
+                </li>
+                {{-- Uno para las tres pestañas: se leen en la misma sesión
+                     SSH, y lo que tarda es abrirla, no cada comando. --}}
+                <li class="nav-item ml-auto p-1">
+                    @can('olts.vlans')
+                        <form method="POST" action="{{ route('olts.sync_catalog', $olt) }}" class="mb-0"
+                              data-procesando="Leyendo VLANs y perfiles de la OLT...">
+                            @csrf
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-sync mr-1"></i> Sincronizar con la OLT
+                            </button>
+                        </form>
+                    @endcan
                 </li>
             </ul>
         </div>

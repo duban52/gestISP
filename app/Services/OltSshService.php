@@ -730,15 +730,6 @@ class OltSshService
         return $this->converse($ssh, $command, false, self::SSH_LONG_TIMEOUT);
     }
 
-    /**
-     * Puertos LAN, MAC GPON y configuracion WAN de la ONT.
-     *
-     * Los tres en UNA sesion: abrir el SSH es lo que tarda (~40 s),
-     * los comandos no. Mac y wan-info van en config mode; el estado de
-     * los puertos exige entrar a la interfaz gpon.
-     *
-     * @return array{lan: array, mac: ?array, wan: array, version: array}
-     */
     /** Clave de cache del acceso de una ONT. */
     public static function claveAcceso(Ont $ont): string
     {
@@ -773,6 +764,15 @@ class OltSshService
         );
     }
 
+    /**
+     * Puertos LAN, MAC GPON y configuracion WAN de la ONT.
+     *
+     * Los tres en UNA sesion: abrir el SSH es lo que tarda (~40 s),
+     * los comandos no. Mac y wan-info van en config mode; el estado de
+     * los puertos exige entrar a la interfaz gpon.
+     *
+     * @return array{lan: array, mac: ?array, wan: array, version: array}
+     */
     public function getOntAccessInfo(Olt $olt, Ont $ont): array
     {
         $ssh = $this->connectToOlt($olt);
@@ -814,6 +814,95 @@ class OltSshService
         } finally {
             $ssh->disconnect();
         }
+    }
+
+    /**
+     * VLANs y perfiles de linea y de servicio que tiene la OLT.
+     *
+     * Los tres en UNA sesion, por lo mismo que getOntAccessInfo: lo
+     * caro es abrir el SSH, no los comandos.
+     *
+     * @return array{vlan: array<int, string>, lineProfile: array<int, string>, srvProfile: array<int, string>}
+     */
+    public function getCatalogo(Olt $olt): array
+    {
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $ssh->setTimeout(self::SSH_LONG_TIMEOUT);
+
+            $this->converse($ssh, 'enable');
+            $this->converse($ssh, 'config');
+
+            return [
+                'vlan' => self::parseVlans($this->executeDisplayCommand($ssh, 'display vlan all')),
+                'lineProfile' => self::parsePerfiles($this->executeDisplayCommand($ssh, 'display ont-lineprofile gpon all')),
+                'srvProfile' => self::parsePerfiles($this->executeDisplayCommand($ssh, 'display ont-srvprofile gpon all')),
+            ];
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+
+    /**
+     * VLANs de "display vlan all", como [id => tipo].
+     *
+     *   VLAN   Type      Attribute  STND-Port NUM   SERV-Port NUM  VLAN-Con NUM
+     *    201   smart     common                 1             725             -
+     *
+     * @return array<int, string>
+     */
+    public static function parseVlans(string $salida): array
+    {
+        $vlans = [];
+
+        foreach (self::filas($salida) as $linea) {
+            if (preg_match('/^\s*(\d+)\s+([a-z]+)\s+[a-z]+\s+\d+\s+\d+/i', $linea, $m)) {
+                $vlans[(int) $m[1]] = $m[2];
+            }
+        }
+
+        return $vlans;
+    }
+
+    /**
+     * Perfiles de "display ont-lineprofile|ont-srvprofile gpon all",
+     * como [id => nombre]. Las dos salidas tienen la misma forma:
+     *
+     *   Profile-ID  Profile-name                    Binding times
+     *   200         line_profile_desemax            4661
+     *
+     * @return array<int, string>
+     */
+    public static function parsePerfiles(string $salida): array
+    {
+        $perfiles = [];
+
+        foreach (self::filas($salida) as $linea) {
+            // El nombre va entre dos numeros; (.+?) por si trae espacios.
+            if (preg_match('/^\s*(\d+)\s+(.+?)\s+\d+\s*$/', $linea, $m)) {
+                $perfiles[(int) $m[1]] = $m[2];
+            }
+        }
+
+        return $perfiles;
+    }
+
+    /**
+     * Lineas de una salida larga, sin los restos de la paginacion.
+     *
+     * Al pasar de pagina la OLT borra su "---- More ( Press 'Q' to
+     * break ) ----" con codigos de terminal y escribe la fila
+     * siguiente en ESA misma linea. Sin limpiarlos, esa fila no
+     * empezaria por su numero y se perderia sin avisar.
+     *
+     * @return string[]
+     */
+    private static function filas(string $salida): array
+    {
+        $limpia = preg_replace(['/\e\[[0-9;]*[A-Za-z]/', '/-+\s*More\b.*?-{2,}/'], '', $salida);
+
+        return preg_split('/\r?\n|\r/', $limpia);
     }
 
     /**

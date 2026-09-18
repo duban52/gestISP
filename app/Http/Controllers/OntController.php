@@ -201,17 +201,25 @@ class OntController extends Controller
     }
     public function buscarContrato(Request $request): \Illuminate\Http\JsonResponse
     {
-        $query = $request->get('q');
+        $termino = trim((string) $request->get('q'));
+        $like = "%{$termino}%";
 
         $contratos = Contract::whereIn('branch_id', app(CurrentContext::class)->branchIds())
-            ->whereHas('client', function ($q) use ($query) {
-                $q->where('identity_number', 'like', "%{$query}%")
-                    ->orWhere('name', 'like', "%{$query}%")
-                    ->orWhere('last_name', 'like', "%{$query}%");
-            })
-            ->orWhere(function ($q) use ($query) {
-                $q->whereIn('branch_id', app(CurrentContext::class)->branchIds())
-                    ->where('id', 'like', "%{$query}%");
+            ->where(function ($q) use ($termino, $like) {
+                // Por NUMERO de contrato, el que ve la gente. Antes se
+                // buscaba por el id interno: «EGP000001» no encontraba nada.
+                $q->where('contract_number', 'like', $like)
+                    ->orWhereHas('client', function ($c) use ($like) {
+                        $c->where('identity_number', 'like', $like)
+                            ->orWhere('name', 'like', $like)
+                            ->orWhere('last_name', 'like', $like);
+                    });
+
+                // Los contratos anteriores a la numeracion no tienen
+                // numero y se muestran con su id (numero_visible).
+                if (ctype_digit($termino)) {
+                    $q->orWhere(fn ($l) => $l->whereNull('contract_number')->where('id', (int) $termino));
+                }
             })
             ->with('client')
             // Equipos que ya tiene: al vincular hay que saber si el
@@ -222,8 +230,9 @@ class OntController extends Controller
 
         return response()->json($contratos->map(fn($c) => [
             'id'              => $c->id,
-            'label'           => $c->client->identity_number . ' - ' . $c->client->name . ' ' . $c->client->last_name . ' - Contrato #' . $c->id,
-            'description'     => $c->client->identity_number . '-' . $c->client->name . ' ' . $c->client->last_name . '-' . $c->id,
+            'label'           => $c->client->identity_number . ' - ' . $c->client->name . ' ' . $c->client->last_name . ' - Contrato ' . $c->numero_visible,
+            // Es la descripcion que queda en la OLT al activar la ONT.
+            'description'     => $c->client->identity_number . '-' . $c->client->name . ' ' . $c->client->last_name . '-' . $c->numero_visible,
             // Datos para autogenerar credenciales pppoe
             'client_name'     => $c->client->name,
             'client_lastname' => $c->client->last_name,
@@ -592,6 +601,10 @@ class OntController extends Controller
 
         $ont->refresh();
 
+        // La banda la decide el servidor: quien pinte la respuesta no
+        // tiene que repetir los umbrales en JavaScript.
+        $banda = $ont->rx_power !== null ? OltStatistics::bandaDe((float) $ont->rx_power) : null;
+
         return response()->json([
             'ok'       => true,
             'status'   => $ont->status,
@@ -599,7 +612,7 @@ class OntController extends Controller
             'message'  => $ont->status
                 ? "Potencia actualizada: {$ont->rx_power} dBm"
                 : 'ONT sin señal.',
-        ]);
+        ] + ($banda ? OltStatistics::bandas()[$banda] : []));
     }
     //Buscar si una ont ya existe para moverla de puerto
     public function checkSn(string $sn): \Illuminate\Http\JsonResponse

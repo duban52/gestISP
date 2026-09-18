@@ -515,6 +515,7 @@ Route::middleware('auth')->get('/api/srvprofiles/{olt}', [OltController::class, 
 
 //Configuración de la OLT: VLANs y perfiles que ya existen en el
 //equipo y se registran aquí para ofrecerlos al autorizar una ONT.
+Route::post('/olts/{olt}/sincronizar-catalogo', [OltController::class, 'syncCatalog'])->name('olts.sync_catalog');
 Route::post('/vlans', [OltController::class, 'storeVlan'])->name('olt.vlans.store');
 Route::put('/vlans/{vlan}', [OltController::class, 'updateVlan'])->name('olt.vlans.update');
 Route::delete('/vlans/{vlan}', [OltController::class, 'destroyVlan'])->name('olt.vlans.destroy');

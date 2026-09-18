@@ -179,7 +179,9 @@ class TechnicalOrderController extends Controller
 
         $technical_orders = TechnicalOrder::whereIn('branch_id', $branchIds)
             ->where('status', 'Prefinalizada')
-            ->with(['contract.client', 'assignedUser', 'materials.material'])
+            // contract.ont: la potencia para el control de calidad, de
+            // una vez y no una consulta por modal.
+            ->with(['contract.client', 'contract.ont', 'assignedUser', 'materials.material'])
             ->orderByDesc('created_at')
             ->get();
 
