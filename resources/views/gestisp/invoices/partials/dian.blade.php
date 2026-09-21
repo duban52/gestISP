@@ -48,6 +48,11 @@
              decía que estaba validada cuando todavía no lo estaba. --}}
         @if($dian['validado_en'])
             Validada por la DIAN el {{ $dian['validado_en']->format('d/m/Y H:i') }}
+        @elseif($dian['contingencia'])
+            {{-- La representación gráfica tiene que decir lo mismo que el
+                 XML: esta se expidió sin validación previa, tipo 04. --}}
+            <strong>EXPEDIDA EN CONTINGENCIA (tipo 04) el
+                {{ $dian['contingencia']->format('d/m/Y H:i') }} — pendiente de validación</strong>
         @else
             Pendiente de validación por la DIAN
         @endif

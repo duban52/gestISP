@@ -73,6 +73,129 @@
             </div>
         </div>
 
+        {{-- ============================================================
+             Configuración de facturación de la empresa.
+
+             No se guarda aparte: la que manda sigue siendo la de cada
+             sucursal, que es la que leen los servicios de facturación.
+             Esto es un «aplicar a todas» para no tener que configurar
+             cinco sedes una por una, y para VER cuáles quedaron
+             distintas — una sede con otro plazo no se nota hasta que
+             un cliente reclama.
+             ============================================================ --}}
+        @can('companies.edit')
+            @if($sucursales->isNotEmpty())
+                @php
+                    $distintas = $configuraciones->filter(fn ($config) => $config->proration_mode !== $facturacion->proration_mode
+                        || $config->billing_mode !== $facturacion->billing_mode
+                        || (int) $config->billing_day !== (int) $facturacion->billing_day
+                        || (int) $config->due_days !== (int) $facturacion->due_days
+                        || (int) $config->suspension_threshold !== (int) $facturacion->suspension_threshold
+                        || (int) $config->suspension_days !== (int) $facturacion->suspension_days);
+                @endphp
+
+                <div class="col-12">
+                    <div class="card border-primary">
+                        <div class="card-header py-2">
+                            <h3 class="card-title mb-0">
+                                <i class="fas fa-file-invoice-dollar mr-1"></i> Facturación de las sucursales
+                            </h3>
+                        </div>
+                        <div class="card-body">
+                            @if($distintas->isNotEmpty())
+                                <div class="alert alert-warning py-2">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                    {{ $distintas->count() }} de {{ $total }} sucursal(es) tienen una
+                                    configuración distinta a la de
+                                    <strong>{{ $sucursales->first()->name }}</strong>:
+                                    {{ $sucursales->whereIn('id', $distintas->keys())->pluck('name')->implode(', ') }}.
+                                </div>
+                            @endif
+
+                            <form method="POST" action="{{ route('companies.billing', $empresa) }}">
+                                @csrf
+                                <div class="row">
+                                    <div class="form-group col-12 col-md-4">
+                                        <label for="c_proration_mode">Facturación del primer mes</label>
+                                        <select name="proration_mode" id="c_proration_mode" class="form-control" required>
+                                            @foreach($prorationModes as $modo)
+                                                <option value="{{ $modo->value }}"
+                                                    {{ old('proration_mode', $facturacion->proration_mode?->value) === $modo->value ? 'selected' : '' }}>
+                                                    {{ $modo->label() }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-12 col-md-4">
+                                        <label for="c_billing_mode">Cómo se factura</label>
+                                        <select name="billing_mode" id="c_billing_mode" class="form-control" required>
+                                            @foreach($billingModes as $modo)
+                                                <option value="{{ $modo->value }}"
+                                                    {{ old('billing_mode', $facturacion->billing_mode?->value ?? 'manual') === $modo->value ? 'selected' : '' }}>
+                                                    {{ $modo->label() }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-6 col-md-2" id="c_grupo_dia">
+                                        <label for="c_billing_day">Día del mes</label>
+                                        <input type="number" min="1" max="31" class="form-control"
+                                               id="c_billing_day" name="billing_day"
+                                               value="{{ old('billing_day', $facturacion->billing_day) }}">
+                                    </div>
+                                    <div class="form-group col-6 col-md-2">
+                                        <label for="c_due_days">Días de plazo</label>
+                                        <input type="number" min="1" max="90" class="form-control"
+                                               id="c_due_days" name="due_days"
+                                               value="{{ old('due_days', $facturacion->due_days) }}" required>
+                                    </div>
+                                    <div class="form-group col-6 col-md-3">
+                                        <label for="c_suspension_threshold">Umbral de corte</label>
+                                        <input type="number" min="1" max="12" class="form-control"
+                                               id="c_suspension_threshold" name="suspension_threshold"
+                                               value="{{ old('suspension_threshold', $facturacion->suspension_threshold) }}" required>
+                                    </div>
+                                    <div class="form-group col-6 col-md-3">
+                                        <label for="c_suspension_days">Días hasta el corte</label>
+                                        <input type="number" min="1" max="90" class="form-control"
+                                               id="c_suspension_days" name="suspension_days"
+                                               value="{{ old('suspension_days', $facturacion->suspension_days) }}" required>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-copy mr-1"></i>
+                                    Aplicar a las {{ $total }} sucursales
+                                </button>
+                                <small class="text-muted d-block mt-1">
+                                    Pisa la configuración de todas. Después cada sucursal puede volver a
+                                    cambiar la suya desde su propia pantalla.
+                                </small>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                @push('js')
+                    <script>
+                        (function () {
+                            const modo = document.getElementById('c_billing_mode');
+                            const grupo = document.getElementById('c_grupo_dia');
+
+                            if (!modo) return;
+
+                            const pintar = () => {
+                                grupo.style.display = modo.value === 'automatic' ? '' : 'none';
+                            };
+
+                            modo.addEventListener('change', pintar);
+                            pintar();
+                        })();
+                    </script>
+                @endpush
+            @endif
+        @endcan
+
         <div class="col-12 col-lg-7">
             <div class="card">
                 <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap">

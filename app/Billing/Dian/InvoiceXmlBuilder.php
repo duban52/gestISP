@@ -49,7 +49,19 @@ use RuntimeException;
 class InvoiceXmlBuilder extends UblBuilder
 {
     /** Factura electrónica de venta. */
+    /** Factura electronica de venta, validada previamente. */
     private const TIPO_FACTURA = '01';
+
+    /**
+     * Factura expedida en contingencia de la DIAN (anexo §12.2).
+     *
+     * Es lo que se declara cuando el servicio de validacion no
+     * responde tras agotar los intentos: la factura se le entrega al
+     * adquiriente sin validacion previa y se transmite despues, dentro
+     * de las 48 horas. Declararla como 01 seria decir que se valido
+     * antes de entregarla, y no fue asi.
+     */
+    private const TIPO_CONTINGENCIA_DIAN = '04';
 
     public function __construct(
         private readonly CufeCalculator $cufe = new CufeCalculator(),
@@ -297,7 +309,12 @@ class InvoiceXmlBuilder extends UblBuilder
 
         $this->hijo($doc, $raiz, 'cbc:IssueDate', $momento->format('Y-m-d'));
         $this->hijo($doc, $raiz, 'cbc:IssueTime', $this->cufe->horaDe($momento));
-        $this->hijo($doc, $raiz, 'cbc:InvoiceTypeCode', self::TIPO_FACTURA);
+        $this->hijo(
+            $doc,
+            $raiz,
+            'cbc:InvoiceTypeCode',
+            $factura->contingency_at ? self::TIPO_CONTINGENCIA_DIAN : self::TIPO_FACTURA,
+        );
 
         $moneda = $this->hijo($doc, $raiz, 'cbc:DocumentCurrencyCode', self::MONEDA);
         $moneda->setAttribute('listID', 'ISO 4217 Alpha');
@@ -390,9 +407,17 @@ class InvoiceXmlBuilder extends UblBuilder
 
         $this->importe($doc, $nodo, 'cbc:TaxInclusiveAmount', (float) $factura->subtotal + (float) $factura->tax);
 
-        if ((float) $factura->discount > 0) {
-            $this->importe($doc, $nodo, 'cbc:AllowanceTotalAmount', (float) $factura->discount);
-        }
+        // AllowanceTotalAmount es el descuento DE PIE, el que se aplica
+        // a la factura entera. El de este sistema va dentro de cada
+        // linea —para que el IVA salga sobre la base descontada— y por
+        // tanto YA esta restado en LineExtensionAmount.
+        //
+        // Declararlo tambien aqui lo restaria dos veces y la DIAN
+        // rechazaria con FAU14: valor a pagar distinto de bruto mas
+        // tributos menos descuentos.
+        //
+        // Si algun dia hay descuentos de pie de verdad, van aqui, y
+        // entonces `invoices.discount` tendra que distinguir los dos.
 
         $this->importe($doc, $nodo, 'cbc:PayableAmount', (float) $factura->total);
     }
@@ -409,8 +434,26 @@ class InvoiceXmlBuilder extends UblBuilder
             $cantidad = $this->hijo($doc, $nodo, 'cbc:InvoicedQuantity', number_format((float) $item->quantity, 6, '.', ''));
             $cantidad->setAttribute('unitCode', $unidad);
 
-            $this->importe($doc, $nodo, 'cbc:LineExtensionAmount', (float) $item->unit_price * (float) $item->quantity);
+            // La base de la linea es el precio de lista MENOS su
+            // descuento: es lo que de verdad se cobra y sobre lo que se
+            // calculo el IVA.
+            $bruto = round((float) $item->unit_price * (float) $item->quantity, 2);
+            $descuento = round((float) $item->discount, 2);
+            $neto = round($bruto - $descuento, 2);
+
+            $this->importe($doc, $nodo, 'cbc:LineExtensionAmount', $neto);
             $this->hijo($doc, $nodo, 'cbc:FreeOfChargeIndicator', 'false');
+
+            // UBL exige que la cuenta cuadre dentro de la linea:
+            // PriceAmount x cantidad - descuentos = LineExtensionAmount.
+            if ($descuento > 0) {
+                $rebaja = $this->hijo($doc, $nodo, 'cac:AllowanceCharge');
+                // false = descuento (true seria un cargo).
+                $this->hijo($doc, $rebaja, 'cbc:ChargeIndicator', 'false');
+                $this->hijo($doc, $rebaja, 'cbc:AllowanceChargeReason', 'Descuento comercial');
+                $this->importe($doc, $rebaja, 'cbc:Amount', $descuento);
+                $this->importe($doc, $rebaja, 'cbc:BaseAmount', $bruto);
+            }
 
             // Igual que arriba: manda la clasificacion, no la tarifa.
             if ($this->clasificacionDe($item)->llevaBloqueDeImpuestos()) {
@@ -418,7 +461,9 @@ class InvoiceXmlBuilder extends UblBuilder
                 $this->importe($doc, $impuesto, 'cbc:TaxAmount', (float) $item->tax);
 
                 $subtotal = $this->hijo($doc, $impuesto, 'cac:TaxSubtotal');
-                $this->importe($doc, $subtotal, 'cbc:TaxableAmount', (float) $item->unit_price * (float) $item->quantity);
+                // La base gravable es la NETA: el IVA se calculo sobre
+                // ella (FAS07 compara base por tarifa contra el tributo).
+                $this->importe($doc, $subtotal, 'cbc:TaxableAmount', $neto);
                 $this->importe($doc, $subtotal, 'cbc:TaxAmount', (float) $item->tax);
 
                 $categoria = $this->hijo($doc, $subtotal, 'cac:TaxCategory');
@@ -470,8 +515,12 @@ class InvoiceXmlBuilder extends UblBuilder
     /** La suma de las bases de las líneas que sí declaran impuesto. */
     private function baseImponible(Invoice $factura): float
     {
+        // NETA, igual que en cada linea: si aqui se sumaran los precios
+        // de lista, el pie diria una base y las lineas otra — rechazo
+        // FAU04.
         return (float) $this->lineasConImpuesto($factura)->sum(
-            fn ($item) => (float) $item->unit_price * (float) $item->quantity,
+            fn ($item) => round((float) $item->unit_price * (float) $item->quantity, 2)
+                - round((float) $item->discount, 2),
         );
     }
 

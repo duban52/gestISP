@@ -3,6 +3,7 @@
 namespace App\Billing\Services;
 
 use App\Billing\Enums\ContractStatus;
+use App\Billing\Enums\DiscountType;
 use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Enums\InvoiceType;
 use App\Billing\Events\InvoiceIssued;
@@ -168,6 +169,10 @@ class InvoiceGenerator
                 'subtotal' => $totals['subtotal'],
                 'tax' => $totals['tax'],
                 'total' => $totals['total'],
+                // Informativo, para la representacion grafica y los
+                // informes: en el XML el descuento ya va DENTRO de cada
+                // linea, no como descuento de pie.
+                'discount' => $totals['discount'],
                 // Semántica única: saldo = total − pagado (recién
                 // emitida, nada pagado)
                 'pending_invoice_amount' => $totals['total'],
@@ -236,6 +241,63 @@ class InvoiceGenerator
     }
 
     /**
+     * Cuanto descuento le toca a cada servicio del plan.
+     *
+     * Devuelve un descuento por indice de servicio, ya redondeado. El
+     * ULTIMO absorbe la diferencia del reparto, igual que la ultima
+     * cuota de un cargo diferido: asi la suma de los descuentos es
+     * exactamente el valor pactado y no «casi».
+     *
+     * Nunca descuenta mas que la base: un descuento mayor que el plan
+     * lo dejaria en cero, no en negativo.
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\Service>  $servicios
+     * @return array<int, float>
+     */
+    private function repartirDescuento(
+        Contract $contract,
+        $servicios,
+        float|int $prorateMultiplier,
+        float $baseDelPlan,
+    ): array {
+        if (!$contract->descuentoVigente() || $servicios->isEmpty() || $baseDelPlan <= 0) {
+            return [];
+        }
+
+        $valor = (float) $contract->discount_value;
+
+        if ($contract->discount_type === DiscountType::Porcentaje) {
+            $total = round($baseDelPlan * min($valor, 100) / 100, 2);
+        } else {
+            $total = min(round($valor, 2), $baseDelPlan);
+        }
+
+        if ($total <= 0) {
+            return [];
+        }
+
+        $reparto = [];
+        $asignado = 0.0;
+        $ultimo = $servicios->count() - 1;
+
+        foreach ($servicios->values() as $indice => $servicio) {
+            $base = round((float) $servicio->base_price * $prorateMultiplier, 2);
+
+            $parte = $indice === $ultimo
+                ? round($total - $asignado, 2)
+                : round($total * ($base / $baseDelPlan), 2);
+
+            // Ni mas que la base del renglon ni negativo.
+            $parte = max(0.0, min($parte, $base));
+
+            $reparto[$indice] = $parte;
+            $asignado = round($asignado + $parte, 2);
+        }
+
+        return $reparto;
+    }
+
+    /**
      * ¿Hay algo que facturarle a este contrato?
      *
      * Las dos fuentes son las mismas que usa `addItems()`, y tienen que
@@ -299,17 +361,47 @@ class InvoiceGenerator
         $tax = 0.0;
         $total = 0.0;
 
+        // ---- El descuento del contrato, si le queda vigencia ----
+        //
+        // Se reparte entre los servicios del plan: un porcentaje se
+        // aplica a cada uno, y un valor fijo se prorratea en proporcion
+        // al precio para que ningun renglon quede en negativo y la suma
+        // siga siendo exactamente el valor pactado.
+        //
+        // NO toca los cargos adicionales: una promocion sobre la
+        // mensualidad no rebaja la instalacion ni un equipo.
+        $servicios = $contract->plan && $contract->plan->services
+            ? $contract->plan->services
+            : collect();
+
+        $baseDelPlan = round($servicios->sum(
+            fn ($servicio) => round((float) $servicio->base_price * $prorateMultiplier, 2),
+        ), 2);
+
+        $descuentos = $this->repartirDescuento($contract, $servicios, $prorateMultiplier, $baseDelPlan);
+        $descuentoTotal = 0.0;
+
         // Servicios del plan
         if ($contract->plan && $contract->plan->services) {
-            foreach ($contract->plan->services as $service) {
+            foreach ($contract->plan->services as $indiceServicio => $service) {
                 // SE REDONDEA AQUÍ, EN EL RENGLÓN. Ver el comentario de
                 // `addItems()`: acumular con todos los decimales y dejar
                 // que la base de datos redondee cada columna por su
                 // cuenta es lo que rompía FAU14.
-                $basePrice = round($service->base_price * $prorateMultiplier, 2);
+                $precioLista = round($service->base_price * $prorateMultiplier, 2);
+
+                // EL IVA VA SOBRE LA BASE YA DESCONTADA. Calcularlo
+                // sobre el precio de lista haria pagar impuesto por
+                // dinero que no se cobro, y la DIAN lo rechaza con
+                // FAS07: el tributo no corresponde a la base por la
+                // tarifa.
+                $descuento = $descuentos[$indiceServicio] ?? 0.0;
+                $basePrice = round($precioLista - $descuento, 2);
                 $taxAmount = $service->tax_percentage > 0
                     ? round($basePrice * ($service->tax_percentage / 100), 2)
                     : 0.0;
+
+                $descuentoTotal += $descuento;
 
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
@@ -341,7 +433,12 @@ class InvoiceGenerator
                     // Paso de verdad, con una factura de la corrida
                     // mensual. Las individuales no fallaban porque solo
                     // se prorratea el PRIMER mes de un contrato.
-                    'unit_price' => $basePrice,
+                    // El precio de LISTA, con el descuento aparte: es
+                    // lo que exige el XML (PriceAmount x cantidad menos
+                    // el descuento = LineExtensionAmount) y lo que deja
+                    // ver al cliente lo que se le rebajo.
+                    'unit_price' => $precioLista,
+                    'discount' => $descuento,
                     'percentage_tax' => $service->tax_percentage,
                     'tax' => $taxAmount,
                     'total' => $basePrice + $taxAmount,
@@ -363,18 +460,25 @@ class InvoiceGenerator
             ->get();
 
         foreach ($pendingCharges as $charge) {
+            // EL MONTO DEL CARGO ES LA BASE, el IVA va encima. Se
+            // redondea en el renglon por lo mismo que los servicios.
+            $tarifa = (float) $charge->tax_percentage;
+
             if ($charge->isDeferred()) {
                 $n = $charge->installments_billed + 1;
-                $installment = $charge->amountForInstallment($n);
+                $base = $charge->amountForInstallment($n);
+                $impuesto = $tarifa > 0 ? round($base * ($tarifa / 100), 2) : 0.0;
 
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
+                    'aditional_charge_id' => $charge->id,
                     'description' => "{$charge->description} (cuota {$n}/{$charge->installments_total})",
+                    'tax_classification' => $charge->clasificacion()->value,
                     'quantity' => 1,
-                    'unit_price' => $installment,
-                    'percentage_tax' => 0,
-                    'tax' => 0,
-                    'total' => $installment,
+                    'unit_price' => $base,
+                    'percentage_tax' => $tarifa,
+                    'tax' => $impuesto,
+                    'total' => $base + $impuesto,
                 ]);
 
                 $charge->update([
@@ -382,26 +486,42 @@ class InvoiceGenerator
                     'status' => $n >= $charge->installments_total ? 'Facturado' : 'pendiente',
                 ]);
 
-                $subtotal += $installment;
-                $total += $installment;
+                $subtotal += $base;
+                $tax += $impuesto;
+                $total += $base + $impuesto;
             } else {
+                $base = round((float) $charge->amount, 2);
+                $impuesto = $tarifa > 0 ? round($base * ($tarifa / 100), 2) : 0.0;
+
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
+                    'aditional_charge_id' => $charge->id,
                     'description' => $charge->description,
+                    'tax_classification' => $charge->clasificacion()->value,
                     'quantity' => 1,
-                    'unit_price' => $charge->amount,
-                    'percentage_tax' => 0,
-                    'tax' => 0,
-                    'total' => $charge->amount,
+                    'unit_price' => $base,
+                    'percentage_tax' => $tarifa,
+                    'tax' => $impuesto,
+                    'total' => $base + $impuesto,
                 ]);
 
                 $charge->update(['status' => 'Facturado']);
-                $subtotal += $charge->amount;
-                $total += $charge->amount;
+
+                $subtotal += $base;
+                $tax += $impuesto;
+                $total += $base + $impuesto;
             }
         }
 
+        // El descuento se gasta UNA vez por factura, no una por
+        // renglon: si no, un plan con tres servicios agotaria «dos
+        // meses» en la primera factura.
+        if ($descuentoTotal > 0) {
+            $contract->increment('discount_applied');
+        }
+
         return [
+            'discount' => round($descuentoTotal, 2),
             'subtotal' => round($subtotal, 2),
             'tax' => round($tax, 2),
             // EL TOTAL SE DERIVA, no se acumula aparte.

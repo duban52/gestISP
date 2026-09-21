@@ -71,6 +71,8 @@ class Invoice extends Model
         'service_suspension_warning',
         'service_suspension_date',
         'voided_at',
+        // Cuando se expidio en contingencia de la DIAN (anexo §12.2).
+        'contingency_at',
         'voided_by',
         'void_reason',
         'due_soon_notified_at',
@@ -79,6 +81,7 @@ class Invoice extends Model
 
     protected $casts = [
         'voided_at' => 'datetime',
+        'contingency_at' => 'datetime',
         'issue_date' => 'date',
         'due_date' => 'date',
         'suspension_date' => 'date',

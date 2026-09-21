@@ -324,6 +324,38 @@ Route::middleware('auth')->group(function () {
 Route::get('/auditoria', [App\Http\Controllers\AuditController::class, 'index'])->name('audits.index');
 Route::get('/auditoria/{audit}', [App\Http\Controllers\AuditController::class, 'show'])->name('audits.show');
 
+// Catalogo del sistema: los estados de contrato y los tipos de orden.
+//
+// Reservado al superadministrador por el middleware, no por un permiso
+// marcable: lo que se toca aqui decide a quien se le factura, que
+// contratos tienen servicio y que le pasa a los equipos de un cliente
+// al cerrar una orden.
+Route::middleware(['auth', 'superadmin'])->prefix('gestion')->group(function () {
+    Route::get('/estados-y-ordenes', [App\Http\Controllers\SystemCatalogController::class, 'index'])
+        ->name('system.catalog');
+
+    Route::post('/estados', [App\Http\Controllers\SystemCatalogController::class, 'storeStatus'])
+        ->name('system.status.store');
+    Route::put('/estados/{estado}', [App\Http\Controllers\SystemCatalogController::class, 'updateStatus'])
+        ->name('system.status.update');
+    Route::delete('/estados/{estado}', [App\Http\Controllers\SystemCatalogController::class, 'destroyStatus'])
+        ->name('system.status.destroy');
+
+    Route::post('/tipos-de-orden', [App\Http\Controllers\SystemCatalogController::class, 'storeType'])
+        ->name('system.order_type.store');
+    Route::put('/tipos-de-orden/{tipo}', [App\Http\Controllers\SystemCatalogController::class, 'updateType'])
+        ->name('system.order_type.update');
+    Route::delete('/tipos-de-orden/{tipo}', [App\Http\Controllers\SystemCatalogController::class, 'destroyType'])
+        ->name('system.order_type.destroy');
+
+    Route::post('/detalles-de-orden', [App\Http\Controllers\SystemCatalogController::class, 'storeDetail'])
+        ->name('system.order_detail.store');
+    Route::put('/detalles-de-orden/{detalle}', [App\Http\Controllers\SystemCatalogController::class, 'updateDetail'])
+        ->name('system.order_detail.update');
+    Route::delete('/detalles-de-orden/{detalle}', [App\Http\Controllers\SystemCatalogController::class, 'destroyDetail'])
+        ->name('system.order_detail.destroy');
+});
+
 // Copias de seguridad de la base de datos. También reservadas al
 // superadministrador: el archivo que se descarga es la base de datos
 // entera (clientes, documentos, contraseñas PPPoE e histórico de
@@ -357,6 +389,15 @@ Route::post('/invoices/generate', [InvoiceController::class, 'generateInvoices']
 // autoridad que hace falta es la misma —crear un documento fiscal que
 // gasta un consecutivo— y no una menor por ser de a uno.
 Route::post('/contracts/{contract}/facturar', [InvoiceController::class, 'generateForContract'])->name('contracts.invoice');
+// Descuento del contrato (promociones): va aparte de update() porque
+// alli las ramas se eligen por los campos que trae el formulario.
+Route::post('/contracts/{contract}/descuento', [ContractController::class, 'descuento'])->name('contracts.discount');
+
+// Copiar la configuracion de facturacion de una empresa a todas sus
+// sucursales: configurar cinco sedes una por una es como se separan.
+Route::middleware(['auth', 'check.permission:companies.edit'])
+    ->post('/empresas/{company}/facturacion', [App\Http\Controllers\CompanyController::class, 'aplicarFacturacion'])
+    ->name('companies.billing');
 
 // Anulación de facturas (nunca se eliminan: cambian a estado Anulada)
 Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'voidInvoice'])->name('invoices.void');

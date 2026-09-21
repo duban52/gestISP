@@ -6,6 +6,9 @@ use App\Models\AffinityGroup;
 use App\Models\Company;
 use App\Models\FiscalCatalog;
 use Illuminate\Http\RedirectResponse;
+use App\Billing\Enums\BillingMode;
+use App\Billing\Enums\ProrationMode;
+use App\Models\BranchBillingSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -103,11 +106,69 @@ class CompanyController extends Controller
             ->orderBy('name')
             ->get();
 
+        // La configuracion de facturacion de cada sucursal, para poder
+        // enseñar en cuales NO coincide: una sede que se quedo con otro
+        // plazo o sin prorrateo no se ve por ningun lado hasta que un
+        // cliente reclama.
+        $configuraciones = $sucursales->mapWithKeys(fn ($sucursal) => [
+            $sucursal->id => BranchBillingSetting::forBranch($sucursal->id),
+        ]);
+
         return view('gestisp.companies.show', [
             'empresa' => $company,
             'sucursales' => $sucursales,
             'total' => $sucursales->count(),
+            'configuraciones' => $configuraciones,
+            // La de la primera sede es la que se propone al copiar: es
+            // un dato real y no una invencion.
+            'facturacion' => $configuraciones->first() ?? new BranchBillingSetting(BranchBillingSetting::DEFAULTS),
+            'prorationModes' => ProrationMode::cases(),
+            'billingModes' => BillingMode::cases(),
         ]);
+    }
+
+    /**
+     * Copia una configuracion de facturacion a TODAS las sucursales.
+     *
+     * No hay una configuracion «de la empresa» guardada aparte, y es
+     * deliberado: la que manda sigue siendo la de cada sucursal, que es
+     * la que leen los servicios de facturacion. Si hubiera dos sitios,
+     * la pantalla de la sucursal podria estar enseñando algo que no es
+     * lo que se aplica.
+     *
+     * Esto es un «aplicar a todas», no una herencia: despues cada
+     * sucursal puede seguir cambiando la suya.
+     */
+    public function aplicarFacturacion(Request $request, Company $company): RedirectResponse
+    {
+        $datos = $request->validate([
+            'proration_mode' => ['required', Rule::enum(ProrationMode::class)],
+            'billing_mode' => ['required', Rule::enum(BillingMode::class)],
+            'billing_day' => [
+                Rule::requiredIf(fn () => $request->input('billing_mode') === BillingMode::Automatico->value),
+                'nullable', 'integer', 'min:1', 'max:31',
+            ],
+            'due_days' => 'required|integer|min:1|max:90',
+            'suspension_threshold' => 'required|integer|min:1|max:12',
+            'suspension_days' => 'required|integer|min:1|max:90',
+        ], [
+            'billing_day.required' => 'Indique el día del mes en que deben facturarse.',
+        ]);
+
+        if ($datos['billing_mode'] !== BillingMode::Automatico->value) {
+            $datos['billing_day'] = null;
+        }
+
+        $sucursales = $company->branches()->withoutGlobalScope('empresa')->get();
+
+        foreach ($sucursales as $sucursal) {
+            BranchBillingSetting::forBranch($sucursal->id)->update($datos);
+        }
+
+        return back()->with('success', sprintf(
+            'Configuración de facturación aplicada a %d sucursal(es).',
+            $sucursales->count(),
+        ));
     }
 
     public function edit(Company $company): View

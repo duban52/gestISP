@@ -96,6 +96,8 @@ class InvoiceVoider
                 'voided_by' => $userId,
                 'void_reason' => $reason,
             ]);
+
+            $this->devolverCargos($invoice);
         });
 
         // Recalcular suspensiones: la anulada puede haber sido una
@@ -107,5 +109,43 @@ class InvoiceVoider
         InvoiceVoided::dispatch($invoice);
 
         return $invoice;
+    }
+
+    /**
+     * Devuelve al contrato los cargos que esta factura consumió.
+     *
+     * Al facturar, un cargo de contado queda «Facturado» y uno diferido
+     * sube su contador de cuotas. Si la factura se anula y eso no se
+     * devuelve, el cargo queda marcado como cobrado por una factura que
+     * ya no cobra nada, y no vuelve a entrar en ninguna: se pierde el
+     * ingreso, sin que nadie se entere.
+     *
+     * Se usa el enlace que guarda el renglón (`aditional_charge_id`),
+     * no el texto de la descripción: dos cargos pueden llamarse igual.
+     */
+    private function devolverCargos(Invoice $invoice): void
+    {
+        $renglones = $invoice->invoice_items()
+            ->whereNotNull('aditional_charge_id')
+            ->with('aditionalCharge')
+            ->get();
+
+        foreach ($renglones as $renglon) {
+            $cargo = $renglon->aditionalCharge;
+
+            if (!$cargo) {
+                continue;
+            }
+
+            $cambios = ['status' => 'pendiente'];
+
+            // Diferido: se descuenta la cuota que cobraba esta factura.
+            // max(0) por si alguien ya lo devolvió por otra vía.
+            if ($cargo->isDeferred()) {
+                $cambios['installments_billed'] = max(0, (int) $cargo->installments_billed - 1);
+            }
+
+            $cargo->update($cambios);
+        }
     }
 }

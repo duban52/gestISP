@@ -339,6 +339,50 @@ class ElectronicNoteTest extends BillingTestCase
         return $this->emitirFactura(electronico: false);
     }
 
+    // ==================== Anular una nota ====================
+
+    public function test_una_nota_aceptada_por_la_dian_no_se_anula(): void
+    {
+        // Misma frontera que defiende la factura: una nota aceptada
+        // existe en los registros de la DIAN con su CUDE. Anularla
+        // solo aqui deja las dos contabilidades diciendo cosas
+        // distintas.
+        $nota = $this->emitirNota($this->emitirFactura(electronico: true));
+
+        ElectronicDocument::withoutGlobalScopes()
+            ->where('credit_debit_note_id', $nota->id)
+            ->update(['status' => ElectronicDocument::ACEPTADO]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ya fue validada por la DIAN');
+
+        app(NoteIssuer::class)->anular($nota->fresh(), 'Me equivoque');
+    }
+
+    public function test_una_nota_sin_transmitir_si_se_anula(): void
+    {
+        // Nunca llego a ser un documento fiscal: revertirla aqui no
+        // descuadra nada.
+        $factura = $this->emitirFactura(electronico: true);
+        $nota = $this->emitirNota($factura);
+        $saldoAntes = (float) $factura->fresh()->pending_invoice_amount;
+
+        app(NoteIssuer::class)->anular($nota->fresh(), 'Se emitio por error');
+
+        $this->assertSame(CreditDebitNote::ANULADA, $nota->fresh()->status);
+        // El efecto se revierte: lo que la nota resto vuelve a sumar.
+        $this->assertGreaterThan($saldoAntes, (float) $factura->fresh()->pending_invoice_amount);
+    }
+
+    public function test_una_nota_interna_se_anula_sin_mirar_a_la_dian(): void
+    {
+        $nota = $this->emitirNota($this->emitirFactura(electronico: false));
+
+        app(NoteIssuer::class)->anular($nota->fresh(), 'Se emitio por error');
+
+        $this->assertSame(CreditDebitNote::ANULADA, $nota->fresh()->status);
+    }
+
     private function emitirFactura(bool $electronico): Invoice
     {
         $grupo = AffinityGroup::factory()

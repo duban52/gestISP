@@ -2,6 +2,7 @@
 
 namespace App\Billing\Dian\Transport;
 
+use App\Billing\Dian\ElectronicDocumentGenerator;
 use App\Billing\Events\ElectronicDocumentAccepted;
 use App\Models\DocumentTransmission;
 use App\Models\ElectronicDocument;
@@ -102,7 +103,60 @@ class DocumentTransmitter
         $this->registrar($documento, $intento, $resultado);
         $this->aplicar($documento, $intento, $resultado);
 
+        if ($this->agotoLosIntentos($resultado, $intento)) {
+            $this->pasarAContingencia($documento);
+        }
+
         return $resultado;
+    }
+
+    /**
+     * Expide el documento en contingencia de la DIAN.
+     *
+     * Se llega aqui cuando se agotaron los intentos SIN respuesta de la
+     * DIAN —no cuando la DIAN rechazo, que es otra cosa y se arregla
+     * corrigiendo el documento—. El anexo (§12.2) manda expedirlo sin
+     * validacion previa declarado como tipo 04 y transmitirlo dentro de
+     * las 48 horas siguientes.
+     *
+     * Regenerar el XML no es opcional: el tipo va DENTRO del documento
+     * firmado, asi que hay que volver a armarlo y a firmarlo para que
+     * diga la verdad. El CUFE no cambia —su formula no incluye el tipo—
+     * y el numero tampoco: es la misma factura.
+     *
+     * El documento se queda FIRMADO, que es lo que busca la tarea
+     * horaria: seguira intentando transmitirlo hasta que la DIAN
+     * vuelva.
+     */
+    private function pasarAContingencia(ElectronicDocument $documento): void
+    {
+        $factura = $documento->invoice;
+
+        // Ya estaba en contingencia: no hay nada que rehacer, y
+        // regenerar en cada intento fallido seria firmar el mismo
+        // documento una y otra vez.
+        if (!$factura || $factura->contingency_at) {
+            return;
+        }
+
+        $factura->update(['contingency_at' => now()]);
+
+        Log::warning('Documento expedido en contingencia de la DIAN (tipo 04)', [
+            'documento' => $documento->id,
+            'factura' => $factura->full_number,
+            'intentos' => $documento->attempts,
+        ]);
+
+        // Que falle la regeneracion no puede tumbar la transmision: la
+        // factura ya quedo marcada y el aviso ya esta escrito.
+        try {
+            app(ElectronicDocumentGenerator::class)->generar($factura->refresh());
+        } catch (Throwable $error) {
+            Log::error('No se pudo regenerar el documento en contingencia', [
+                'documento' => $documento->id,
+                'motivo' => $error->getMessage(),
+            ]);
+        }
     }
 
     /**

@@ -12,6 +12,7 @@ use App\Models\TechnicalOrder;
 use App\Models\User;
 use App\Billing\Enums\ContractStatus;
 use App\Billing\Services\ContractStatusFromOrder;
+use App\Models\TechnicalOrderType;
 use App\Models\Warehouse;
 use App\Notifications\TechnicalOrderAssignedTechnician;
 use App\Notifications\TechnicalOrderCreatedClient;
@@ -347,7 +348,13 @@ class TechnicalOrderController extends Controller
      */
     public function create(Contract $contract): View
     {
-        return view('gestisp.technicals_orders.create', compact('contract'));
+        // Los tipos y detalles salen del catálogo, no de una lista
+        // escrita en la plantilla: lo que se cree en «Gestión del
+        // sistema» tiene que aparecer aquí sin tocar código.
+        return view('gestisp.technicals_orders.create', [
+            'contract' => $contract,
+            'tipos' => TechnicalOrderType::catalogo(),
+        ]);
     }
 
     /**
@@ -383,13 +390,21 @@ class TechnicalOrderController extends Controller
     {
         $validated = $request->validate([
             'contract_id' => 'required|exists:contracts,id',
-            'target_contract_status' => ['required', Rule::enum(ContractStatus::class)],
+            // Contra el CATÁLOGO y no contra el enum: los estados se
+            // configuran, y uno nuevo («Exonerado») no tiene caso en el
+            // enum. Solo los activos: un estado desactivado existe para
+            // que el histórico se siga entendiendo, no para asignarlo.
+            'target_contract_status' => [
+                'required',
+                Rule::exists('contract_statuses', 'name')->where('active', true),
+            ],
             // Obligatorio: es lo único que explicará el cambio dentro de
             // seis meses, cuando nadie recuerde por qué ese contrato
             // quedó anulado.
             'initial_comment' => 'required|string|max:1000',
         ], [
             'target_contract_status.required' => 'Indique a qué estado se lleva el contrato.',
+            'target_contract_status.exists' => 'Ese estado no existe en el catálogo o está desactivado.',
             'initial_comment.required' => 'Explique por qué se cambia el estado. Es lo que quedará en el historial.',
         ]);
 

@@ -101,6 +101,19 @@ class Kernel extends ConsoleKernel
             ->hourly()
             ->withoutOverlapping();
 
+        // ---- La tarea diaria de facturacion ----
+        //
+        // Marca la mora de TODAS las sucursales y lanza la corrida de
+        // las que la tengan automatica y les toque hoy.
+        //
+        // A las 5:00, ANTES de los recordatorios de las 8:00: mandar
+        // los avisos de cobro antes de marcar las vencidas seria
+        // mandarlos con el estado de ayer.
+        $schedule->command('facturacion:diaria')
+            ->dailyAt('05:00')
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/facturacion.log'));
+
         // Recordatorios de facturación al cliente (por vencer y
         // vencida). Idempotente: cada factura se avisa una sola vez.
         // A las 8:00 para que llegue en horario razonable.

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Tenancy\BelongsToCompany;
 use App\Billing\Enums\InvoiceStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Billing\Enums\DiscountType;
 use Illuminate\Database\Eloquent\Model;
 
 class Contract extends Model
@@ -45,6 +46,12 @@ class Contract extends Model
         'password_wifi',
         'comment',
         'activation_date',
+        // Descuento con vigencia (promociones). Ver descuentoVigente().
+        'discount_type',
+        'discount_value',
+        'discount_months',
+        'discount_applied',
+        'discount_reason',
         'overdue_invoices_count', //Me cuenta las facturas vencidas
         // Fecha de aviso de suspensión. Antes NO estaba en el
         // fillable y cada intento de guardarla se descartaba en
@@ -57,6 +64,10 @@ class Contract extends Model
 
     protected $casts = [
         'activation_date' => 'date',
+        'discount_type' => DiscountType::class,
+        'discount_value' => 'decimal:2',
+        'discount_months' => 'integer',
+        'discount_applied' => 'integer',
         'suspension_warning_date' => 'datetime',
         // 7 decimales: ~1 cm, la misma escala con la que se guardan
         // las cajas NAP, para que las distancias entre ambos cuadren.
@@ -226,6 +237,34 @@ class Contract extends Model
     }
 
     //Relacion con ont
+    /**
+     * ¿A este contrato le queda descuento por aplicar?
+     *
+     * Sin meses declarados el descuento no caduca: dura hasta que
+     * alguien lo quite. Con meses, se agota solo — que es de lo que se
+     * trata: «dos meses» no puede depender de que alguien se acuerde
+     * de entrar a quitarlo el tercero.
+     */
+    public function descuentoVigente(): bool
+    {
+        if (!$this->discount_type || (float) $this->discount_value <= 0) {
+            return false;
+        }
+
+        return $this->discount_months === null
+            || (int) $this->discount_applied < (int) $this->discount_months;
+    }
+
+    /** Cuántas facturas más llevará el descuento (null = sin límite). */
+    public function descuentosRestantes(): ?int
+    {
+        if ($this->discount_months === null) {
+            return null;
+        }
+
+        return max(0, (int) $this->discount_months - (int) $this->discount_applied);
+    }
+
     public function ont()
     {
         return $this->hasOne(Ont::class);

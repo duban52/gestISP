@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Enums\DiscountType;
 use App\Exports\ClientsExport;
 use App\Exports\ContractsExport;
 use App\Models\AditionalCharge;
@@ -33,7 +34,7 @@ class ContractController extends Controller
         $this->middleware('auth');
         $this->middleware('check.permission:contracts.index')->only('index');
         $this->middleware('check.permission:contracts.create')->only('create', 'store');
-        $this->middleware('check.permission:contracts.edit')->only('edit', 'update');
+        $this->middleware('check.permission:contracts.edit')->only('edit', 'update', 'descuento');
         $this->middleware('check.permission:contracts.destroy')->only('destroy');
         $this->middleware('check.permission:contracts.show')->only('show');
         $this->middleware('check.permission:contracts.export')->only('export', 'exportFiltered');
@@ -446,6 +447,64 @@ class ContractController extends Controller
     public function edit(Contract $contract)
     {
         //
+    }
+
+    /**
+     * Pone o quita el descuento del contrato.
+     *
+     * Va aparte de update() a proposito: ahi las ramas se eligen por
+     * que campos trae el formulario, y meter el descuento en esa cadena
+     * seria hacerlo depender de adivinar cual de las pantallas envio.
+     *
+     * Quitar el descuento tambien REINICIA el contador: si manana se le
+     * pone otro de dos meses, son dos meses nuevos, no los que le
+     * quedaran del anterior.
+     */
+    public function descuento(Request $request, Contract $contract)
+    {
+        $datos = $request->validate([
+            'discount_type' => ['nullable', Rule::enum(DiscountType::class)],
+            'discount_value' => 'nullable|numeric|min:0',
+            'discount_months' => 'nullable|integer|min:1|max:60',
+            'discount_reason' => 'nullable|string|max:255',
+        ], [
+            'discount_value.numeric' => 'El valor del descuento debe ser un numero.',
+            'discount_months.*' => 'Los meses del descuento deben estar entre 1 y 60.',
+        ]);
+
+        $quitar = empty($datos['discount_type']) || (float) ($datos['discount_value'] ?? 0) <= 0;
+
+        if ($quitar) {
+            $contract->update([
+                'discount_type' => null,
+                'discount_value' => null,
+                'discount_months' => null,
+                'discount_applied' => 0,
+                'discount_reason' => null,
+            ]);
+
+            return back()->with('success', 'Se quito el descuento del contrato.');
+        }
+
+        // Un porcentaje mayor que 100 dejaria la factura en negativo.
+        if ($datos['discount_type'] === DiscountType::Porcentaje->value
+            && (float) $datos['discount_value'] > 100) {
+            return back()->with('error', 'Un descuento en porcentaje no puede pasar del 100%.');
+        }
+
+        $contract->update($datos + [
+            'discount_months' => $datos['discount_months'] ?? null,
+            // Empieza de cero: es un descuento nuevo.
+            'discount_applied' => 0,
+        ]);
+
+        return back()->with('success', sprintf(
+            'Descuento aplicado: %s%s.',
+            $datos['discount_type'] === DiscountType::Porcentaje->value
+                ? $datos['discount_value'] . '%'
+                : '$' . number_format((float) $datos['discount_value'], 2, ',', '.'),
+            $datos['discount_months'] ? " durante {$datos['discount_months']} mes(es)" : ' sin limite de meses',
+        ));
     }
 
     /**

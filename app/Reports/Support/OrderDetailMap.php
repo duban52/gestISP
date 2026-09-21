@@ -81,8 +81,13 @@ class OrderDetailMap
 
     /**
      * Quita tildes, paréntesis y espacios sobrantes.
+     *
+     * Publica porque el catalogo de detalles la necesita: la clave con
+     * la que se guarda un detalle nuevo tiene que salir de las MISMAS
+     * reglas con las que se buscan los viejos, o un detalle creado hoy
+     * no se encontraria manana.
      */
-    private static function normalizar(?string $valor): string
+    public static function normalizar(?string $valor): string
     {
         $valor = mb_strtolower(trim((string) $valor));
 

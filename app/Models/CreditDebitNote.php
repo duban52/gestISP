@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Tenancy\BelongsToCompany;
 use App\Billing\Concerns\Auditable;
 use App\Billing\Enums\NoteType;
+use App\Billing\Services\ElectronicInvoicingDecider;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -56,6 +57,25 @@ class CreditDebitNote extends Model
 
     public const EMITIDA = 'Emitida';
     public const ANULADA = 'Anulada';
+
+    /**
+     * ¿La DIAN ya validó esta nota?
+     *
+     * Misma frontera que en la factura: una vez aceptada, la nota
+     * existe en los registros de la DIAN con su CUDE y anularla aquí
+     * solo descuadra las dos contabilidades.
+     */
+    public function validadaPorLaDian(): bool
+    {
+        if ($this->document_kind !== ElectronicInvoicingDecider::ELECTRONICO) {
+            return false;
+        }
+
+        return ElectronicDocument::withoutGlobalScopes()
+            ->where('credit_debit_note_id', $this->id)
+            ->where('status', ElectronicDocument::ACEPTADO)
+            ->exists();
+    }
 
     // ==================== Relaciones ====================
 

@@ -3,10 +3,13 @@
 namespace App\Billing\Services;
 
 use App\Billing\Enums\ContractStatus;
+use App\Billing\Services\ContractLiquidator;
 use App\Models\Contract;
+use App\Models\ContractStatusOption;
+use App\Models\TechnicalOrderDetail;
 use App\Models\TechnicalOrder;
-use App\Reports\Support\OrderDetailMap;
 use App\Services\ContractDecommissioner;
+use App\Services\ContractServiceSwitch;
 
 /**
  * En qué estado queda el contrato al cerrarse una orden.
@@ -45,29 +48,31 @@ class ContractStatusFromOrder
     private ?array $ultimoParte = null;
 
     /**
-     * Detalle normalizado => estado que deja en el contrato.
-     *
-     * Las claves son las de `OrderDetailMap`, ya sin tildes ni
-     * paréntesis.
-     */
-    private const POR_DETALLE = [
-        'instalacion de servicio' => ContractStatus::Activo,
-        'reconexion' => ContractStatus::Activo,
-        'corte de servicio' => ContractStatus::Suspendido,
-        'suspension temporal' => ContractStatus::Suspendido,
-        'retiro de servicio' => ContractStatus::Retirado,
-    ];
-
-    /**
      * El estado que corresponde, o null si la orden no cambia ninguno.
+     *
+     * DEVUELVE EL NOMBRE, NO UN CASO DEL ENUM. Los estados ya no son
+     * una lista fija: el catálogo deja crear «Exonerado» sin tocar
+     * código, y un estado nuevo no tiene caso en el enum. Devolver el
+     * enum obligaría a que todo estado configurable fuera además una
+     * línea de PHP, que es justo lo que se quitó de en medio.
      */
-    public function para(TechnicalOrder $orden): ?ContractStatus
+    public function para(TechnicalOrder $orden): ?string
     {
         if ($orden->esAdministrativa()) {
-            return ContractStatus::tryFrom((string) $orden->target_contract_status);
+            $pedido = (string) $orden->target_contract_status;
+
+            // Solo si existe en el catálogo: un nombre escrito a mano
+            // dejaría el contrato en un estado que nada sabe interpretar.
+            return ContractStatusOption::porNombre($pedido) ? $pedido : null;
         }
 
-        return self::POR_DETALLE[OrderDetailMap::clave($orden->detail)] ?? null;
+        return $this->detalleDe($orden)?->target_contract_status;
+    }
+
+    /** La fila del catálogo que corresponde al detalle de la orden. */
+    private function detalleDe(TechnicalOrder $orden): ?TechnicalOrderDetail
+    {
+        return TechnicalOrderDetail::paraDetalle($orden->detail);
     }
 
     /**
@@ -81,23 +86,42 @@ class ContractStatusFromOrder
      * facturación de refilón, dentro de un cambio que va de otra cosa.
      * Queda señalado.
      *
-     * @return ContractStatus|null el estado aplicado, para poder
+     * @return string|null el nombre del estado aplicado, para poder
      *         contarlo en la trazabilidad de quien llama
      */
-    public function aplicar(TechnicalOrder $orden): ?ContractStatus
+    public function aplicar(TechnicalOrder $orden): ?string
     {
         $contrato = $orden->contract;
         $nuevo = $contrato ? $this->para($orden) : null;
 
-        if (!$nuevo || $contrato->status === $nuevo->value) {
+        // LOS EFECTOS SOBRE LOS EQUIPOS VAN AUNQUE EL ESTADO NO CAMBIE.
+        //
+        // Un corte sobre un contrato que ya figuraba suspendido tiene
+        // que cortar igual: el estado dice lo que el sistema cree, y
+        // los equipos dicen lo que el cliente tiene. Son dos cosas, y
+        // esta orden se cerró para arreglar la segunda.
+        $efectos = $contrato ? $this->aplicarEnLosEquipos($orden, $contrato) : null;
+
+        if (!$nuevo || $contrato->status === $nuevo) {
+            $this->ultimoParte = $efectos;
+
             return null;
         }
 
-        $cambios = ['status' => $nuevo->value];
+        $cambios = ['status' => $nuevo];
 
-        if ($nuevo === ContractStatus::Activo) {
+        if ($nuevo === ContractStatus::Activo->value) {
             $cambios['activation_date'] = now();
         }
+
+        // LA LIQUIDACION VA ANTES DEL CAMBIO DE ESTADO.
+        //
+        // Un contrato retirado no es facturable —y esta bien que no lo
+        // sea—, asi que si se emitiera despues, el propio sistema la
+        // rechazaria. Aqui todavia esta vivo.
+        $liquidacion = ContractStatus::esFinal($nuevo)
+            ? app(ContractLiquidator::class)->liquidar($contrato)
+            : null;
 
         $contrato->update($cambios);
 
@@ -112,11 +136,63 @@ class ContractStatusFromOrder
         // El parte de lo ocurrido se guarda para que quien cerró la
         // orden pueda verlo: si la OLT estaba caída, hay algo que
         // terminar a mano.
-        $this->ultimoParte = ContractStatus::esFinal($nuevo->value)
+        $baja = ContractStatus::esFinal($nuevo)
             ? app(ContractDecommissioner::class)->liberar($contrato->fresh())
             : null;
 
+        // El parte junta las dos cosas: lo que se hizo en los equipos
+        // por el detalle de la orden y lo que se liberó por ser baja.
+        $this->ultimoParte = $this->juntar($efectos, $baja);
+
+        // Quien cerro la orden tiene que enterarse de que se emitio una
+        // factura mas: es plata que el cliente debe y alguien va a
+        // tener que cobrarle.
+        if ($liquidacion && $this->ultimoParte) {
+            $this->ultimoParte['hechos'][] = sprintf(
+                'Se emitió la factura de liquidación %s por $%s con los cargos pendientes',
+                $liquidacion->displayNumber(),
+                number_format((float) $liquidacion->total, 2, ',', '.'),
+            );
+        }
+
         return $nuevo;
+    }
+
+    /**
+     * Deshabilita o habilita los equipos, si el detalle lo pide.
+     *
+     * @return array{hechos: string[], pendientes: string[]}|null
+     */
+    private function aplicarEnLosEquipos(TechnicalOrder $orden, Contract $contrato): ?array
+    {
+        $detalle = $this->detalleDe($orden);
+
+        if (!$detalle || !$detalle->tocaEquipos()) {
+            return null;
+        }
+
+        return app(ContractServiceSwitch::class)->aplicar($contrato, $detalle);
+    }
+
+    /**
+     * @param  array{hechos: string[], pendientes: string[]}|null  $uno
+     * @param  array{hechos: string[], pendientes: string[]}|null  $otro
+     * @return array{hechos: string[], pendientes: string[]}|null
+     */
+    private function juntar(?array $uno, ?array $otro): ?array
+    {
+        if (!$uno) {
+            return $otro;
+        }
+
+        if (!$otro) {
+            return $uno;
+        }
+
+        return [
+            'hechos' => array_merge($uno['hechos'], $otro['hechos']),
+            'pendientes' => array_merge($uno['pendientes'], $otro['pendientes']),
+        ];
     }
 
     /**

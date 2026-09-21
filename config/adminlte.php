@@ -781,6 +781,18 @@ return [
                     'active' => ['copias-de-seguridad*'],
                     'solo_superadmin' => true,
                 ],
+                // Estados de contrato y tipos de orden. Mismo criterio
+                // que las dos de arriba: lo que se configura aqui decide
+                // a quien se le factura y que le pasa a los equipos de
+                // un cliente, asi que no puede depender de un permiso
+                // marcable en el modulo de roles.
+                [
+                    'text' => 'Estados y órdenes',
+                    'route' => 'system.catalog',
+                    'icon' => 'fas  fa-project-diagram',
+                    'active' => ['gestion/estados-y-ordenes*'],
+                    'solo_superadmin' => true,
+                ],
 
             ],
 

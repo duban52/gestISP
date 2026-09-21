@@ -2,6 +2,8 @@
 
 namespace App\Billing\Enums;
 
+use App\Models\ContractStatusOption;
+
 /**
  * Estados del ciclo de vida de un contrato.
  *
@@ -42,10 +44,10 @@ enum ContractStatus: string
      */
     public static function billable(): array
     {
-        return [
-            self::Activo->value,
-            self::PreSuspension->value,
-        ];
+        return self::delCatalogo(
+            fn ($estado) => $estado->auto_bills,
+            respaldo: [self::Activo->value, self::PreSuspension->value],
+        );
     }
 
     /**
@@ -72,12 +74,15 @@ enum ContractStatus: string
      */
     public static function noFacturables(): array
     {
-        return [
-            self::Suspendido->value,
-            'Cortado',
-            self::Retirado->value,
-            self::Anulado->value,
-        ];
+        return self::delCatalogo(
+            fn ($estado) => !$estado->bills,
+            respaldo: [
+                self::Suspendido->value,
+                'Cortado',
+                self::Retirado->value,
+                self::Anulado->value,
+            ],
+        );
     }
 
     /**
@@ -92,10 +97,37 @@ enum ContractStatus: string
      */
     public static function finales(): array
     {
-        return [
-            self::Retirado->value,
-            self::Anulado->value,
-        ];
+        return self::delCatalogo(
+            fn ($estado) => $estado->is_final,
+            respaldo: [self::Retirado->value, self::Anulado->value],
+        );
+    }
+
+    /**
+     * Los nombres del catálogo que cumplen una condición.
+     *
+     * EL RESPALDO NO ES DECORACIÓN. Este enum lo usan la corrida
+     * mensual, comandos de consola y migraciones, y algunos corren
+     * antes de que la tabla exista o con la base a medio migrar. Sin
+     * respaldo, una consulta fallida ahí se llevaría por delante la
+     * facturación entera; con él, el sistema sigue comportándose como
+     * lo hacía cuando estos valores estaban escritos aquí.
+     *
+     * @param  callable(\App\Models\ContractStatusOption): bool  $condicion
+     * @param  array<int, string>  $respaldo
+     * @return array<int, string>
+     */
+    private static function delCatalogo(callable $condicion, array $respaldo): array
+    {
+        try {
+            $catalogo = ContractStatusOption::catalogo();
+        } catch (\Throwable $e) {
+            return $respaldo;
+        }
+
+        return $catalogo->isEmpty()
+            ? $respaldo
+            : $catalogo->filter($condicion)->keys()->values()->all();
     }
 
     /** ¿Este estado admite que se le emita una factura? */

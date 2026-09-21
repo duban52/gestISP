@@ -48,12 +48,17 @@ class AdditionalChargeController extends Controller
             'user_id' => 'nullable|exists:users,id', // Debe existir en la tabla users
             'description' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
+            // EL IVA DEL CARGO. Sin esto todos salían declarados como
+            // excluidos ante la DIAN, incluidas las reconexiones y los
+            // equipos, que son gravados.
+            'tax_percentage' => 'nullable|numeric|min:0|max:100',
             // Cuotas: null/vacío = de contado; 2-36 = diferido
             'installments_total' => 'nullable|integer|min:2|max:36',
             'status' => 'nullable|string|in:pendiente,Facturado,Anulado', // Opcional, valores permitidos
         ], [
             'installments_total.min' => 'Para diferir, el número de cuotas debe ser al menos 2.',
             'installments_total.max' => 'El máximo de cuotas es 36.',
+            'tax_percentage.*' => 'El IVA debe ser un porcentaje entre 0 y 100.',
         ]);
 
         AditionalCharge::create($validatedData);

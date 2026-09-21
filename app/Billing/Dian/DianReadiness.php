@@ -6,6 +6,8 @@ use App\Models\Company;
 use App\Models\DianCertificate;
 use App\Models\DianConfiguration;
 use App\Models\DianResolution;
+use App\Models\ElectronicDocument;
+use App\Models\Invoice;
 use App\Models\NumberingRange;
 use App\Reports\FiscalCompletenessReport;
 
@@ -62,6 +64,7 @@ class DianReadiness
             $this->rango($empresa),
             $this->setDePruebas($empresa),
             $this->transporte($empresa),
+            $this->contingencia($empresa),
         ];
     }
 
@@ -306,6 +309,50 @@ class DianReadiness
     }
 
     // ==================== Apoyo ====================
+
+    /**
+     * Facturas expedidas en contingencia y todavia sin validar.
+     *
+     * El anexo da 48 HORAS para transmitirlas desde que se expiden.
+     * Pasado ese plazo la factura queda expedida y sin validar, que es
+     * un incumplimiento, y no hay forma de enterarse mirando pantallas:
+     * el documento sigue ahi, en su cola, reintentando en silencio.
+     *
+     * Es AVISO y no bloqueo: el problema no impide emitir, y bloquear
+     * la emision por documentos viejos agravaria la situacion.
+     */
+    private function contingencia(Company $empresa): array
+    {
+        $enContingencia = Invoice::withoutGlobalScopes()
+            ->whereNotNull('contingency_at')
+            ->whereHas('branch', fn ($q) => $q->where('company_id', $empresa->id))
+            ->whereDoesntHave('electronicDocument', fn ($q) => $q
+                ->where('status', ElectronicDocument::ACEPTADO))
+            ->get(['id', 'contingency_at']);
+
+        if ($enContingencia->isEmpty()) {
+            return $this->paso('contingencia', 'Contingencia', true, false,
+                'Ninguna factura pendiente de transmitir en contingencia.');
+        }
+
+        $vencidas = $enContingencia->filter(
+            fn (Invoice $factura) => $factura->contingency_at->diffInHours(now()) >= 48,
+        );
+
+        if ($vencidas->isNotEmpty()) {
+            return $this->paso('contingencia', 'Contingencia', false, false, sprintf(
+                '%d factura(s) llevan MAS DE 48 HORAS expedidas en contingencia sin que la DIAN '
+                . 'las valide. Es el plazo del anexo: revise la conexion con la DIAN.',
+                $vencidas->count(),
+            ));
+        }
+
+        return $this->paso('contingencia', 'Contingencia', false, false, sprintf(
+            '%d factura(s) expedidas en contingencia esperan validacion. El plazo es de 48 horas '
+            . 'desde que se expidieron.',
+            $enContingencia->count(),
+        ));
+    }
 
     private function paso(string $clave, string $titulo, bool $ok, bool $bloqueante, string $detalle): array
     {

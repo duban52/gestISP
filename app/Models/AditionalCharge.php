@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Billing\Enums\TaxClassification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -28,6 +29,11 @@ class AditionalCharge extends Model
       'user_id',
       'description',
       'amount',
+      // El IVA del cargo. Una reconexion o un equipo son gravados:
+      // antes no habia donde decirlo y salian declarados como
+      // excluidos ante la DIAN.
+      'tax_percentage',
+      'tax_classification',
       'installments_total',
       'installments_billed',
       'status'
@@ -35,9 +41,31 @@ class AditionalCharge extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'tax_percentage' => 'decimal:2',
+        'tax_classification' => TaxClassification::class,
         'installments_total' => 'integer',
         'installments_billed' => 'integer',
     ];
+
+    /**
+     * Como se trata el IVA de este cargo.
+     *
+     * Sin clasificacion puesta se deduce de la tarifa, y el defecto es
+     * EXCLUIDO —no gravado, como en los servicios— porque es lo que ya
+     * se declaro en las facturas emitidas antes de que el cargo
+     * pudiera llevar IVA. El historico tiene que seguir diciendo lo
+     * que dijo.
+     */
+    public function clasificacion(): TaxClassification
+    {
+        if ($this->tax_classification instanceof TaxClassification) {
+            return $this->tax_classification;
+        }
+
+        return (float) $this->tax_percentage > 0
+            ? TaxClassification::Gravado
+            : TaxClassification::Excluido;
+    }
 
     //Relación con usuario
     public function user()

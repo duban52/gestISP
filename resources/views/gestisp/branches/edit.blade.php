@@ -1,6 +1,8 @@
 @extends('adminlte::page')
 
 @section('title', 'Editar Sucursal')
+{{-- El buscador de los selects de departamento y municipio. --}}
+@section('plugins.Select2', true)
 @section('content_header')
     <div class="card p-3"><h2>EDITAR SUCURSAL</h2></div>
 @endsection
@@ -56,14 +58,10 @@
                         <label for="country">País</label>
                         <input type="text" name="country" class="form-control" value="{{ $branch->country }}" required>
                     </div>
-                    <div class="form-group col-md-6">
-                        <label for="department">Departamento</label>
-                        <input type="text" name="department" class="form-control" value="{{ $branch->department }}" required>
-                    </div>
-                    <div class="form-group col-md-6">
-                        <label for="municipality">Municipio</label>
-                        <input type="text" name="municipality" class="form-control" value="{{ $branch->municipality }}" required>
-                    </div>
+                    @include('gestisp.partials.departamento-municipio', [
+                        'departamento' => $branch->department,
+                        'municipio' => $branch->municipality,
+                    ])
                     <div class="form-group col-md-6">
                         <label for="address">Dirección</label>
                         <input type="text" name="address" class="form-control" value="{{ $branch->address }}" required>
@@ -133,6 +131,33 @@
                                             restantes del mes. Mes completo: paga el mes entero.
                                         </small>
                                     </div>
+                                    {{-- Manual o automática. En manual la corrida solo
+                                         sale del botón; en automática la lanza sola la
+                                         tarea diaria el día indicado. --}}
+                                    <div class="form-group col-md-4">
+                                        <label for="billing_mode">Cómo se factura</label>
+                                        <select name="billing_mode" id="billing_mode" class="form-control" required>
+                                            @foreach($billingModes as $modo)
+                                                <option value="{{ $modo->value }}"
+                                                    {{ old('billing_mode', $billingSettings->billing_mode?->value ?? 'manual') === $modo->value ? 'selected' : '' }}>
+                                                    {{ $modo->label() }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            En manual no cambia nada: se sigue generando con el botón.
+                                        </small>
+                                    </div>
+                                    <div class="form-group col-md-2" id="grupo_billing_day">
+                                        <label for="billing_day">Día del mes</label>
+                                        <input type="number" name="billing_day" id="billing_day" class="form-control"
+                                               min="1" max="31"
+                                               value="{{ old('billing_day', $billingSettings->billing_day) }}">
+                                        <small class="form-text text-muted">
+                                            Si pone 31, en los meses cortos corre el último día.
+                                        </small>
+                                    </div>
+
                                     <div class="form-group col-md-2">
                                         <label for="due_days">Días de plazo</label>
                                         <input type="number" name="due_days" id="due_days" class="form-control"
@@ -162,6 +187,24 @@
                     <div class="col-12 text-center mt-3">
                         <button  type="submit" class="btn btn-primary col-md-3">Actualizar</button>
                     </div>
+
+                    {{-- El día solo tiene sentido en automático: enseñarlo en
+                         manual haría creer que la sucursal está programada. --}}
+                    @push('js')
+                        <script>
+                            (function () {
+                                const modo = document.getElementById('billing_mode');
+                                const grupo = document.getElementById('grupo_billing_day');
+
+                                const pintar = () => {
+                                    grupo.style.display = modo.value === 'automatic' ? '' : 'none';
+                                };
+
+                                modo.addEventListener('change', pintar);
+                                pintar();
+                            })();
+                        </script>
+                    @endpush
 
                 </div>
 

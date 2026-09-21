@@ -17,4 +17,7 @@ enum InvoiceType: string
     case Reconexion = 'Reconexión';
     case Equipos = 'Equipos';
     case Manual = 'Manual';
+    // La ultima factura de un contrato que se da de baja: lo que
+    // quedaba por cobrar de sus cargos adicionales.
+    case Liquidacion = 'Liquidación';
 }

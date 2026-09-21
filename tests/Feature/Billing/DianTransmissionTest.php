@@ -297,6 +297,66 @@ class DianTransmissionTest extends TestCase
         $this->assertSame(ElectronicDocument::FIRMADO, $documento->fresh()->status);
     }
 
+    // ==================== Contingencia (§12.2) ====================
+
+    public function test_agotar_los_intentos_expide_en_contingencia(): void
+    {
+        // Sin respuesta de la DIAN tras el ultimo intento, el anexo
+        // manda expedir el documento SIN validacion previa y declararlo
+        // tipo 04. Antes se seguia declarando 01, que es el de una
+        // factura validada.
+        $documento = $this->documento(['attempts' => 2]);
+        $this->transporte->responder(TransmissionResult::error(['sin respuesta']));
+
+        $this->transmisor()->transmitir($documento);
+
+        $this->assertNotNull($documento->fresh()->invoice->contingency_at);
+        // Sigue firmado: la tarea horaria tiene que seguir intentandolo
+        // hasta que la DIAN vuelva.
+        $this->assertSame(ElectronicDocument::FIRMADO, $documento->fresh()->status);
+    }
+
+    public function test_un_rechazo_no_es_contingencia(): void
+    {
+        // Un rechazo es un documento mal armado: se corrige y se emite
+        // otro. Marcarlo como contingencia seria declarar tipo 04 un
+        // documento que la DIAN si contesto.
+        $documento = $this->documento(['attempts' => 5]);
+        $this->transporte->responder(TransmissionResult::rechazado(['FAU14']));
+
+        $this->transmisor()->transmitir($documento);
+
+        $this->assertNull($documento->fresh()->invoice->contingency_at);
+    }
+
+    public function test_un_error_con_intentos_de_sobra_todavia_no_es_contingencia(): void
+    {
+        $documento = $this->documento(['attempts' => 0]);
+        $this->transporte->responder(TransmissionResult::error(['se cayo la red']));
+
+        $this->transmisor()->transmitir($documento);
+
+        $this->assertNull($documento->fresh()->invoice->contingency_at);
+    }
+
+    public function test_la_contingencia_no_se_vuelve_a_marcar(): void
+    {
+        // Regenerar y volver a firmar el mismo documento en cada
+        // intento fallido no aporta nada y pisa la hora real en que se
+        // expidio.
+        $hace = now()->subHours(3);
+        $documento = $this->documento(['attempts' => 2]);
+        $documento->invoice->update(['contingency_at' => $hace]);
+
+        $this->transporte->responder(TransmissionResult::error(['sigue sin responder']));
+        $this->transmisor()->transmitir($documento);
+
+        $this->assertSame(
+            $hace->format('Y-m-d H:i:s'),
+            $documento->fresh()->invoice->contingency_at->format('Y-m-d H:i:s'),
+        );
+    }
+
     // ==================== Apoyo ====================
 
     private function transmisor(): DocumentTransmitter

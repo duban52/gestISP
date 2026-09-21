@@ -143,6 +143,25 @@ class NoteIssuer
             throw new RuntimeException('Esta nota ya está anulada.');
         }
 
+        // UNA NOTA VALIDADA POR LA DIAN TAMPOCO SE ANULA.
+        //
+        // Es la misma frontera que defiende InvoiceVoider para las
+        // facturas, y aquí faltaba: una nota aceptada existe en los
+        // registros de la DIAN con su CUDE. Anularla solo aquí deja
+        // nuestra contabilidad diciendo una cosa y la suya otra, y esa
+        // diferencia aparece el día que alguien cruce los dos lados.
+        //
+        // Lo que sí corrige una nota crédito de más es una nota débito
+        // por el mismo valor: eso sí se transmite y queda en los dos
+        // sitios.
+        if ($nota->validadaPorLaDian()) {
+            throw new RuntimeException(
+                'Esta nota ya fue validada por la DIAN y no se puede anular: existe en sus '
+                . 'registros con su CUDE. Para revertir su efecto emita la nota contraria '
+                . '(una nota débito por el mismo valor si esta era crédito, y al revés).'
+            );
+        }
+
         return DB::transaction(function () use ($nota, $motivo) {
             $factura = $nota->invoice()->lockForUpdate()->first();
 

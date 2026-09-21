@@ -53,6 +53,68 @@ class InvoiceXmlTest extends BillingTestCase
         );
     }
 
+    public function test_una_factura_con_descuento_valida_y_cuadra(): void
+    {
+        // El descuento va DENTRO de la linea: la base gravable baja, el
+        // IVA se calcula sobre ella y el pie NO lo vuelve a restar. Si
+        // se restara dos veces, rechazo FAU14.
+        $contrato = $this->contratoElectronico();
+        $contrato->update([
+            'discount_type' => \App\Billing\Enums\DiscountType::Porcentaje->value,
+            'discount_value' => 20,
+        ]);
+
+        $factura = $this->emitir($contrato->fresh());
+        $resultado = $this->construirXml($factura);
+
+        $this->assertSame(
+            [],
+            app(InvoiceXmlBuilder::class)->erroresDeEsquema($resultado['xml']),
+            'El XML con descuento no valida contra el XSD de la DIAN.',
+        );
+
+        // La linea lleva su descuento y la base ya descontada.
+        $this->assertStringContainsString('<cbc:ChargeIndicator>false</cbc:ChargeIndicator>', $resultado['xml']);
+
+        // Y el pie no lo resta otra vez.
+        $this->assertStringNotContainsString('AllowanceTotalAmount', $resultado['xml']);
+
+        $xml = simplexml_load_string($resultado['xml']);
+        $xml->registerXPathNamespace('cbc', 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2');
+
+        $bruto = (float) ((array) $xml->xpath('//cac:LegalMonetaryTotal/cbc:LineExtensionAmount')[0])[0];
+        $pagar = (float) ((array) $xml->xpath('//cac:LegalMonetaryTotal/cbc:PayableAmount')[0])[0];
+        $tributos = (float) ((array) $xml->xpath('//cac:TaxTotal/cbc:TaxAmount')[0])[0];
+
+        // FAU14: valor a pagar = bruto + tributos.
+        $this->assertEqualsWithDelta($bruto + $tributos, $pagar, 0.001);
+    }
+
+    public function test_una_factura_normal_se_declara_tipo_01(): void
+    {
+        $xml = $this->construirXml($this->facturaElectronica())['xml'];
+
+        $this->assertStringContainsString('<cbc:InvoiceTypeCode>01</cbc:InvoiceTypeCode>', $xml);
+    }
+
+    public function test_una_factura_en_contingencia_se_declara_tipo_04(): void
+    {
+        // §12.2: sin respuesta de la DIAN, la factura se entrega sin
+        // validacion previa y se declara 04. Decir 01 seria afirmar que
+        // se valido antes de entregarla.
+        $factura = $this->facturaElectronica();
+        $factura->update(['contingency_at' => now()]);
+
+        $resultado = $this->construirXml($factura->fresh());
+
+        $this->assertStringContainsString('<cbc:InvoiceTypeCode>04</cbc:InvoiceTypeCode>', $resultado['xml']);
+        $this->assertSame(
+            [],
+            app(InvoiceXmlBuilder::class)->erroresDeEsquema($resultado['xml']),
+            'El XML de contingencia no valida contra el XSD de la DIAN.',
+        );
+    }
+
     public function test_valida_tambien_con_varias_lineas_y_sin_impuesto(): void
     {
         // Un contrato con dos servicios, uno gravado y otro no: es el

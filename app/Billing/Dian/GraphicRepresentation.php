@@ -82,6 +82,9 @@ class GraphicRepresentation
             // creación, que decía que estaba validada cuando no lo
             // estaba.
             'validado_en' => $documento->accepted_at,
+            // Expedida sin validacion previa (anexo §12.2): el papel
+            // tiene que decir lo mismo que el XML.
+            'contingencia' => $factura->contingency_at,
             'estado' => $documento->status,
             'ambiente' => $documento->environment_code,
 

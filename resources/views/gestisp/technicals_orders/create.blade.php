@@ -40,32 +40,40 @@
             <form action="{{ route('technicals_orders.store') }}" method="post" class="row col-12">
                 @csrf
                 <input type="text" value="{{ $contract->id }}" hidden="hidden" name="contract_id">
+                {{-- Tipos y detalles salen del catálogo (Gestión del
+                     sistema → Estados y órdenes). Lo que se cree allí
+                     aparece aquí sin tocar esta plantilla.
+
+                     Las administrativas no se crean desde aquí: cambian
+                     el estado sin visita técnica y tienen su propia
+                     pantalla en la ficha del contrato. --}}
                 <div class="col-md-6">
                     <label for="order_type">Tipo de orden</label>
                     <select class="form-control" name="order_type" id="order_type">
                         <option value="">Seleccione ...</option>
-                        <option value="Servicio">Orden de servicio</option>
-                        <option value="Incidencia">Incidencia</option>
+                        @foreach($tipos as $tipo)
+                            @continue($tipo->name === \App\Models\TechnicalOrder::ADMINISTRATIVA)
+                            <option value="{{ $tipo->name }}">{{ $tipo->name }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label for="order_detail">Detalle orden</label>
                     <select class="form-control" name="order_detail" id="order_detail">
                         <option value="">Seleccione ...</option>
-                        <!-- Opciones de servicio -->
-                        <option value="Instalacion de servicio" data-type="Servicio">Instalación de servicio</option>
-                        <option value="Retiro de servicio" data-type="Servicio">Retiro de servicio</option>
-                        <option value="Corte de servicio" data-type="Servicio">Corte de servicio</option>
-                        <option value="Traslado de servicio" data-type="Servicio">Traslado de servicio</option>
-                        <option value="Adicion de servicio" data-type="Servicio">Adición de servicio</option>
-                        <option value="Suspensión temporal" data-type="Servicio">Suspensión temporal</option>
-                        <option value="Reconexión" data-type="Servicio">Reconexión</option>
-                        <!-- Opciones de incidencia -->
-                        <option value="Sin servicio de TV" data-type="Incidencia">Sin servicio de TV</option>
-                        <option value="Sin servicio de internet" data-type="Incidencia">Sin servicio de internet</option>
-                        <option value="Sin servicio" data-type="Incidencia">Sin servicio</option>
-                        <option value="Configuraciones" data-type="Incidencia">Configuraciones</option>
-                        <option value="Otros" data-type="Incidencia">Otros</option>
+                        @foreach($tipos as $tipo)
+                            @continue($tipo->name === \App\Models\TechnicalOrder::ADMINISTRATIVA)
+                            @foreach($tipo->details as $detalle)
+                                <option value="{{ $detalle->name }}" data-type="{{ $tipo->name }}"
+                                    @if($detalle->tocaEquipos())
+                                        title="Al cerrarla{{ $detalle->target_contract_status ? ', el contrato pasa a ' . $detalle->target_contract_status . ' y' : '' }} se {{ $detalle->pppoe_action === 'habilitar' ? 'habilitan' : 'deshabilitan' }} los equipos del cliente"
+                                    @elseif($detalle->target_contract_status)
+                                        title="Al cerrarla, el contrato pasa a {{ $detalle->target_contract_status }}"
+                                    @endif>
+                                    {{ $detalle->name }}
+                                </option>
+                            @endforeach
+                        @endforeach
                     </select>
                 </div>
                 <div class="col-12 mt-2">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Enums\BillingMode;
 use App\Billing\Enums\ProrationMode;
 use App\Models\Branch;
 use App\Models\Company;
@@ -60,6 +61,11 @@ class BranchController extends Controller
             // Al venir desde la ficha de una empresa llega elegida.
             'empresaElegida' => $request->integer('company') ?: null,
             'empresas' => Company::orderBy('legal_name')->get(),
+            // La sucursal todavia no existe, asi que su configuracion de
+            // facturacion son los valores por defecto.
+            'facturacion' => BranchBillingSetting::DEFAULTS,
+            'prorationModes' => ProrationMode::cases(),
+            'billingModes' => BillingMode::cases(),
         ]);
     }
 
@@ -78,7 +84,34 @@ class BranchController extends Controller
             $validated['image'] = $request->file('image')->store('branches', 'public');
         }
 
+        // La configuracion de facturacion va en su propia tabla y se
+        // valida aparte. Si el formulario no la manda —otra pantalla,
+        // una peticion armada a mano— la sucursal nace con los valores
+        // por defecto, igual que antes.
+        $facturacion = $request->validate([
+            'proration_mode' => ['sometimes', Rule::enum(ProrationMode::class)],
+            'billing_mode' => ['sometimes', Rule::enum(BillingMode::class)],
+            'billing_day' => [
+                Rule::requiredIf(fn () => $request->input('billing_mode') === BillingMode::Automatico->value),
+                'nullable', 'integer', 'min:1', 'max:31',
+            ],
+            'due_days' => 'sometimes|integer|min:1|max:90',
+            'suspension_threshold' => 'sometimes|integer|min:1|max:12',
+            'suspension_days' => 'sometimes|integer|min:1|max:90',
+        ], [
+            'billing_day.required' => 'Indique el día del mes en que debe facturarse.',
+        ]);
+
         $sucursal = Branch::create($validated);
+
+        if ($facturacion !== []) {
+            // El dia solo tiene sentido en automatico.
+            if (($facturacion['billing_mode'] ?? null) !== BillingMode::Automatico->value) {
+                $facturacion['billing_day'] = null;
+            }
+
+            BranchBillingSetting::forBranch($sucursal->id)->update($facturacion);
+        }
 
         // ACCESO A LA SUCURSAL RECIEN CREADA
         //
@@ -124,8 +157,9 @@ class BranchController extends Controller
         // históricos si la sucursal aún no tiene)
         $billingSettings = BranchBillingSetting::forBranch($branch->id);
         $prorationModes = ProrationMode::cases();
+        $billingModes = BillingMode::cases();
 
-        return view('gestisp.branches.edit', compact('branch', 'billingSettings', 'prorationModes', 'empresas'));
+        return view('gestisp.branches.edit', compact('branch', 'billingSettings', 'prorationModes', 'billingModes', 'empresas'));
     }
 
     /**
@@ -143,11 +177,25 @@ class BranchController extends Controller
         // que consumen los servicios de app/Billing/Services
         $billingValidated = $request->validate([
             'proration_mode' => ['required', Rule::enum(ProrationMode::class)],
+            // `sometimes`: por esta ruta pasan tambien payloads que no
+            // mandan la configuracion de facturacion. Exigirlo rompia
+            // esa otra pantalla sin tener nada que ver con ella; si no
+            // viene, el modo se queda como estaba.
+            'billing_mode' => ['sometimes', Rule::enum(BillingMode::class)],
+            // El día solo se exige —y solo se guarda— en automático:
+            // dejarlo puesto en una sucursal que volvió a manual haría
+            // creer que sigue programada.
+            'billing_day' => [
+                Rule::requiredIf(fn () => $request->input('billing_mode') === BillingMode::Automatico->value),
+                'nullable', 'integer', 'min:1', 'max:31',
+            ],
             'due_days' => 'required|integer|min:1|max:90',
             'suspension_threshold' => 'required|integer|min:1|max:12',
             'suspension_days' => 'required|integer|min:1|max:90',
         ], [
             'proration_mode.required' => 'Debe elegir el modo de facturación del primer mes.',
+            'billing_day.required' => 'Indique el día del mes en que debe facturarse.',
+            'billing_day.*' => 'El día de facturación debe estar entre 1 y 31.',
             'due_days.*' => 'Los días de plazo deben estar entre 1 y 90.',
             'suspension_threshold.*' => 'El umbral de suspensión debe estar entre 1 y 12 facturas.',
             'suspension_days.*' => 'Los días hasta el corte deben estar entre 1 y 90.',
@@ -163,6 +211,13 @@ class BranchController extends Controller
         }
 
         $branch->update($validated);
+
+        // Volver a manual borra el dia: dejarlo puesto haria creer que
+        // la sucursal sigue programada cuando ya no lo esta.
+        if (array_key_exists('billing_mode', $billingValidated)
+            && $billingValidated['billing_mode'] !== BillingMode::Automatico->value) {
+            $billingValidated['billing_day'] = null;
+        }
 
         BranchBillingSetting::forBranch($branch->id)->update($billingValidated);
 

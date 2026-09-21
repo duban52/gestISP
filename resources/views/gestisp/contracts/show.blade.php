@@ -65,17 +65,17 @@
                     <p class="mb-0"><strong>Número de contrato:</strong> <strong class="text-info">{{$contract->contract_number}}</strong></p>
 
                     @php
-                        // El enum es la fuente de verdad; los estados
-                        // heredados («Cortado», «Por Reconectar») no
-                        // resuelven y se pintan tal cual, sin explicación.
-                        $estadoActual = \App\Billing\Enums\ContractStatus::tryFrom($contract->status);
+                        // El catálogo es la fuente de verdad. Un estado que
+                        // no esté en él —escrito a mano en una importación—
+                        // se pinta tal cual, sin explicación.
+                        $estadoActual = \App\Models\ContractStatusOption::porNombre($contract->status);
                         $esBaja = \App\Billing\Enums\ContractStatus::esFinal($contract->status);
                     @endphp
 
                     <p class="mb-0">
                         <strong>Estado:</strong>
                         <strong class="{{ $contract->status === 'Activo' ? 'text-success' : ($esBaja ? 'text-muted' : 'text-danger') }}"
-                                @if($estadoActual) title="{{ $estadoActual->descripcion() }}" @endif>
+                                @if($estadoActual?->description) title="{{ $estadoActual->description }}" @endif>
                             {{ $contract->status }}
                         </strong>
 
@@ -141,10 +141,12 @@
                                         <select name="target_contract_status" id="target_contract_status"
                                                 class="form-control" required>
                                             <option value="">Seleccione…</option>
-                                            @foreach(\App\Billing\Enums\ContractStatus::cases() as $estado)
-                                                @continue($estado->value === $contract->status)
-                                                <option value="{{ $estado->value }}">
-                                                    {{ $estado->value }} — {{ $estado->descripcion() }}
+                                            {{-- Del catálogo: lo que se cree en «Gestión del
+                                                 sistema» se puede asignar aquí el mismo día. --}}
+                                            @foreach(\App\Models\ContractStatusOption::activos() as $estado)
+                                                @continue($estado->name === $contract->status)
+                                                <option value="{{ $estado->name }}">
+                                                    {{ $estado->name }}@if($estado->description) — {{ $estado->description }}@endif
                                                 </option>
                                             @endforeach
                                         </select>
@@ -695,6 +697,95 @@
                         Agregar Cargo Adicional
                     </button>
 
+                    {{-- Descuento del contrato: lo que hace falta para una
+                         promocion sin tener que emitir la factura completa y
+                         corregirla despues con una nota credito. --}}
+                    @can('contracts.edit')
+                        <button type="button" class="btn btn-warning mb-1 mt-1 col-8 col-md-3"
+                                data-bs-toggle="modal" data-bs-target="#modalDescuento">
+                            @if($contract->descuentoVigente())
+                                Descuento:
+                                {{ $contract->discount_type === \App\Billing\Enums\DiscountType::Porcentaje
+                                    ? rtrim(rtrim(number_format((float) $contract->discount_value, 2, ',', '.'), '0'), ',') . '%'
+                                    : '$' . number_format((float) $contract->discount_value, 0, ',', '.') }}
+                                @if($contract->descuentosRestantes() !== null)
+                                    ({{ $contract->descuentosRestantes() }} factura(s) más)
+                                @endif
+                            @else
+                                Aplicar descuento
+                            @endif
+                        </button>
+
+                        <div class="modal fade" id="modalDescuento" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Descuento del contrato</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body text-left">
+                                        <form method="POST" action="{{ route('contracts.discount', $contract) }}">
+                                            @csrf
+
+                                            <div class="form-group mb-3">
+                                                <label for="discount_type">Tipo</label>
+                                                <select name="discount_type" id="discount_type" class="form-control">
+                                                    <option value="">Sin descuento</option>
+                                                    @foreach(\App\Billing\Enums\DiscountType::cases() as $tipo)
+                                                        <option value="{{ $tipo->value }}"
+                                                            {{ old('discount_type', $contract->discount_type?->value) === $tipo->value ? 'selected' : '' }}>
+                                                            {{ $tipo->label() }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group mb-3">
+                                                <label for="discount_value">Valor</label>
+                                                <input type="number" step="0.01" min="0" class="form-control"
+                                                       id="discount_value" name="discount_value"
+                                                       value="{{ old('discount_value', $contract->discount_value) }}">
+                                                <small class="form-text text-muted">
+                                                    En porcentaje, sobre el precio de los servicios del plan.
+                                                    En valor fijo, se reparte entre ellos.
+                                                </small>
+                                            </div>
+
+                                            <div class="form-group mb-3">
+                                                <label for="discount_months">Meses</label>
+                                                <input type="number" min="1" max="60" class="form-control"
+                                                       id="discount_months" name="discount_months"
+                                                       value="{{ old('discount_months', $contract->discount_months) }}">
+                                                <small class="form-text text-muted">
+                                                    En blanco, no caduca. Con un número, se agota solo:
+                                                    lleva {{ (int) $contract->discount_applied }} factura(s) aplicado.
+                                                </small>
+                                            </div>
+
+                                            <div class="form-group mb-3">
+                                                <label for="discount_reason">Motivo</label>
+                                                <input type="text" maxlength="255" class="form-control"
+                                                       id="discount_reason" name="discount_reason"
+                                                       value="{{ old('discount_reason', $contract->discount_reason) }}"
+                                                       placeholder="Promoción de instalación, retención de cliente...">
+                                            </div>
+
+                                            <div class="alert alert-warning py-2 small mb-3">
+                                                El descuento se aplica a los servicios del plan, no a los cargos
+                                                adicionales, y el IVA se calcula sobre el valor ya descontado.
+                                            </div>
+
+                                            <div class="form-group">
+                                                <button type="submit" class="btn btn-success">Guardar</button>
+                                                <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Cerrar</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endcan
+
                     <!-- Modal -->
                     <div class="modal fade" id="staticBackdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
                         <div class="modal-dialog">
@@ -723,6 +814,23 @@
                                             <label for="amount">Monto:</label>
                                             <input type="number" step="0.01" class="form-control @error('amount') is-invalid @enderror" id="amount" name="amount" value="{{ old('amount') }}" required>
                                             @error('amount')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+
+                                        {{-- IVA del cargo. El monto de arriba es la BASE;
+                                             el IVA se calcula encima, como en los servicios.
+                                             Una reconexión o un equipo van al 19%. --}}
+                                        <div class="form-group mb-3 text-left">
+                                            <label for="tax_percentage">IVA (%):</label>
+                                            <input type="number" step="0.01" min="0" max="100"
+                                                   class="form-control @error('tax_percentage') is-invalid @enderror"
+                                                   id="tax_percentage" name="tax_percentage"
+                                                   value="{{ old('tax_percentage', 0) }}">
+                                            <small class="form-text text-muted">
+                                                0 si el cargo no lleva IVA. El monto de arriba es la base.
+                                            </small>
+                                            @error('tax_percentage')
                                             <div class="invalid-feedback">{{ $message }}</div>
                                             @enderror
                                         </div>
