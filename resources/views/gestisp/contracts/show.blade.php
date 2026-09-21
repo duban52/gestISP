@@ -40,6 +40,67 @@
         </div>
     @endif
 
+    {{-- Lo que quedó pendiente tras ceder: saldo a favor del cedente,
+         descripción de la ONT en la OLT… Quien cedió tiene que verlo,
+         no enterarse cuando reclamen. --}}
+    @if(session('cesion_avisos'))
+        <div class="alert alert-warning">
+            <strong><i class="fas fa-exclamation-triangle mr-1"></i> Queda por hacer tras la cesión:</strong>
+            <ul class="mb-0 mt-1 pl-3">
+                @foreach(session('cesion_avisos') as $aviso)
+                    <li>{{ ucfirst($aviso) }}.</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    {{-- ============================================================
+         CESIÓN: de dónde salió o a quién pasó este contrato.
+
+         Sin esto, un contrato «Cedido» parece uno más de los cerrados,
+         y el nuevo parece un alta sin historia.
+         ============================================================ --}}
+    @php
+        $cesionSaliente = $contract->cesionSaliente()->with(['toContract', 'toClient'])->first();
+        $cesionEntrante = $contract->cesionEntrante()->with(['fromContract', 'fromClient'])->first();
+    @endphp
+
+    @if($cesionSaliente)
+        <div class="alert alert-secondary d-flex align-items-center flex-wrap">
+            <i class="fas fa-exchange-alt fa-lg mr-3"></i>
+            <div>
+                <strong>Contrato cedido</strong> el {{ $cesionSaliente->ceded_at->format('d/m/Y') }}
+                a {{ trim($cesionSaliente->toClient?->name . ' ' . $cesionSaliente->toClient?->last_name) }},
+                que sigue con el servicio en el contrato
+                <a href="{{ route('contracts.show', $cesionSaliente->to_contract_id) }}">
+                    {{ $cesionSaliente->toContract?->numero_visible }}</a>.
+                <small class="d-block text-muted">
+                    Las facturas y pagos de este contrato siguen a nombre del titular anterior.
+                    Motivo: {{ $cesionSaliente->reason }}
+                </small>
+            </div>
+        </div>
+    @endif
+
+    @if($cesionEntrante)
+        <div class="alert alert-info d-flex align-items-center flex-wrap">
+            <i class="fas fa-exchange-alt fa-lg mr-3"></i>
+            <div>
+                <strong>Recibido por cesión</strong> el {{ $cesionEntrante->ceded_at->format('d/m/Y') }}
+                del contrato
+                <a href="{{ route('contracts.show', $cesionEntrante->from_contract_id) }}">
+                    {{ $cesionEntrante->fromContract?->numero_visible }}</a>,
+                de {{ trim($cesionEntrante->fromClient?->name . ' ' . $cesionEntrante->fromClient?->last_name) }}.
+                @if($contract->billing_start_date && $contract->billing_start_date->isFuture())
+                    <small class="d-block text-muted">
+                        Se le empieza a facturar desde el {{ $contract->billing_start_date->format('d/m/Y') }}:
+                        el mes de la cesión lo pagó el titular anterior.
+                    </small>
+                @endif
+            </div>
+        </div>
+    @endif
+
     @if(session('success'))
         <div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
             <div class="modal-dialog">
@@ -87,12 +148,25 @@
                         @endif
                     </p>
 
-                    @can('contracts.status')
-                        <button type="button" class="btn btn-outline-secondary btn-sm"
-                                data-toggle="modal" data-target="#ordenAdministrativa">
-                            <i class="fas fa-exchange-alt mr-1"></i> Cambiar estado
-                        </button>
-                    @endcan
+                    <div>
+                        @can('contracts.status')
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    data-toggle="modal" data-target="#ordenAdministrativa">
+                                <i class="fas fa-exchange-alt mr-1"></i> Cambiar estado
+                            </button>
+                        @endcan
+
+                        {{-- Cambio de titular sin cortar el servicio. Un
+                             contrato terminado ya no tiene nada que ceder. --}}
+                        @can('contracts.cede')
+                            @unless($esBaja)
+                                <a href="{{ route('contracts.cession.create', $contract) }}"
+                                   class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-user-friends mr-1"></i> Ceder contrato
+                                </a>
+                            @endunless
+                        @endcan
+                    </div>
                 </div>
             </div>
 

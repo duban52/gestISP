@@ -193,7 +193,9 @@
                         <label for="detalle_estado">Al cerrar la orden, el contrato queda en</label>
                         <select name="target_contract_status" id="detalle_estado" class="form-control">
                             <option value="">No cambia el estado</option>
-                            @foreach($estados as $estado)
+                            {{-- Solo los activos: «Cedido» y «Cortado» no se asignan
+                                 cerrando una orden. --}}
+                            @foreach($estados->where('active', true) as $estado)
                                 <option value="{{ $estado->name }}">{{ $estado->name }}</option>
                             @endforeach
                         </select>
@@ -203,25 +205,27 @@
                         <div class="form-group col-md-6">
                             <label for="detalle_pppoe">Cuenta PPPoE</label>
                             <select name="pppoe_action" id="detalle_pppoe" class="form-control" required>
-                                <option value="ninguna">No se toca</option>
-                                <option value="deshabilitar">Deshabilitar</option>
-                                <option value="habilitar">Habilitar</option>
+                                <option value="ninguna">Según el estado del contrato</option>
+                                <option value="deshabilitar">Deshabilitar siempre</option>
+                                <option value="habilitar">Habilitar siempre</option>
                             </select>
                         </div>
                         <div class="form-group col-md-6">
                             <label for="detalle_ont">ONT</label>
                             <select name="ont_action" id="detalle_ont" class="form-control" required>
-                                <option value="ninguna">No se toca</option>
-                                <option value="deshabilitar">Deshabilitar</option>
-                                <option value="habilitar">Habilitar</option>
+                                <option value="ninguna">Según el estado del contrato</option>
+                                <option value="deshabilitar">Deshabilitar siempre</option>
+                                <option value="habilitar">Habilitar siempre</option>
                             </select>
                         </div>
                     </div>
 
                     <div class="alert alert-info py-2 small">
-                        Deshabilitar corta el servicio pero <strong>conserva</strong> la cuenta y la ONT
-                        del cliente: es lo que hace un corte por mora, y se revierte con una reconexión.
-                        La baja definitiva es otra cosa y la decide el estado.
+                        <strong>«Según el estado»</strong>: si el contrato queda en un estado con servicio,
+                        se habilita; si queda en uno sin servicio, se deshabilita; si la orden no cambia el
+                        estado, no se toca nada.<br>
+                        Deshabilitar corta el servicio pero <strong>conserva</strong> la cuenta y la ONT del
+                        cliente. La baja definitiva es otra cosa: la decide un estado de baja.
                     </div>
 
                     <div class="row">

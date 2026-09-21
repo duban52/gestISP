@@ -48,6 +48,12 @@ class ContractStatusMap
         // nunca empezo. Juntarlos inflaria la cifra de bajas con
         // clientes que nunca existieron.
         'anulado' => [ContractStatus::Anulado->value],
+        // CEDIDO TAMPOCO ES UNA BAJA. El servicio sigue en la misma casa
+        // con otro titular: no se perdio un cliente, cambio de nombre.
+        // Contarlo en bajas inflaria la perdida de clientes con gente
+        // que sigue pagando, y contarlo en vigentes lo contaria dos
+        // veces —el viejo y el nuevo—.
+        'cedido' => [ContractStatus::Cedido->value],
     ];
 
     private const ETIQUETAS = [
@@ -58,6 +64,7 @@ class ContractStatusMap
         'por_reconectar' => 'Por reconectar',
         'retirado' => 'Retirados',
         'anulado' => 'Anulados (nunca tomaron el servicio)',
+        'cedido' => 'Cedidos (pasaron a otro titular)',
         'otro' => 'Sin clasificar',
     ];
 
@@ -73,6 +80,7 @@ class ContractStatusMap
         'por_reconectar' => '#fd7e14',
         'retirado' => '#6c757d',
         'anulado' => '#495057',
+        'cedido' => '#6f42c1',
         'otro' => '#adb5bd',
     ];
 
@@ -117,7 +125,7 @@ class ContractStatusMap
      */
     public static function terminados(): array
     {
-        return array_merge(self::GRUPOS['retirado'], self::GRUPOS['anulado']);
+        return array_merge(self::GRUPOS['retirado'], self::GRUPOS['anulado'], self::GRUPOS['cedido']);
     }
 
     /**

@@ -9,7 +9,6 @@ use App\Services\Audit\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -71,6 +70,15 @@ class SystemCatalogController extends Controller
         // guarda, y es lo que la persona venía a cambiar.
         if ($estado->is_system) {
             unset($datos['name']);
+        }
+
+        // «CEDIDO» SOLO SE DESCRIBE. Sus reglas son las que hacen segura
+        // la cesion: inactivo para que no se pueda asignar a mano —eso
+        // dispararia la baja definitiva sobre equipos que usa otro— y
+        // sin facturacion, porque su servicio lo paga ya el contrato
+        // nuevo. Tocarlas aqui romperia la cesion sin avisar.
+        if ($estado->name === \App\Billing\Enums\ContractStatus::Cedido->value) {
+            $datos = array_intersect_key($datos, array_flip(['description', 'color', 'sort_order']));
         }
 
         $estado->update($datos);
@@ -264,7 +272,15 @@ class SystemCatalogController extends Controller
         $datos = $request->validate([
             'technical_order_type_id' => 'required|exists:technical_order_types,id',
             'name' => 'required|string|max:80',
-            'target_contract_status' => ['nullable', Rule::exists('contract_statuses', 'name')],
+            // Solo estados ACTIVOS. Uno desactivado lo esta por algo:
+            // «Cedido» solo se alcanza por la cesion, y llevar un
+            // contrato ahi cerrando una orden dispararia la baja
+            // definitiva —liberar el puerto, borrar la ONT— sobre un
+            // servicio que sigue funcionando para otro.
+            'target_contract_status' => [
+                'nullable',
+                Rule::exists('contract_statuses', 'name')->where('active', true),
+            ],
             'pppoe_action' => ['required', Rule::in([
                 TechnicalOrderDetail::SIN_ACCION,
                 TechnicalOrderDetail::DESHABILITAR,
@@ -278,7 +294,7 @@ class SystemCatalogController extends Controller
             'color' => 'nullable|string|max:20',
             'sort_order' => 'nullable|integer|min:0|max:999',
         ], [
-            'target_contract_status.exists' => 'Ese estado no existe en el catálogo.',
+            'target_contract_status.exists' => 'Ese estado no existe en el catálogo o está desactivado.',
         ]);
 
         return $datos + ['active' => $request->boolean('active')];
@@ -293,7 +309,11 @@ class SystemCatalogController extends Controller
      */
     private function clave(string $nombre): string
     {
-        return Str::lower(Str::ascii(trim($nombre)));
+        // Las MISMAS reglas con las que se busca: si la clave se
+        // guardara con otras —quitar tildes pero no los paréntesis—, un
+        // detalle nuevo con paréntesis no se encontraría nunca al
+        // cerrar su orden.
+        return \App\Reports\Support\OrderDetailMap::normalizar($nombre);
     }
 
     private function anotar(string $texto, $modelo, array $datos): void

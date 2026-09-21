@@ -46,6 +46,10 @@ class Contract extends Model
         'password_wifi',
         'comment',
         'activation_date',
+        // Desde cuando se le factura. Lo usa la cesion: el mes en que
+        // ocurre lo paga el cedente, y sin esta fecha la corrida se lo
+        // cobraria tambien al contrato nuevo.
+        'billing_start_date',
         // Descuento con vigencia (promociones). Ver descuentoVigente().
         'discount_type',
         'discount_value',
@@ -64,6 +68,7 @@ class Contract extends Model
 
     protected $casts = [
         'activation_date' => 'date',
+        'billing_start_date' => 'date',
         'discount_type' => DiscountType::class,
         'discount_value' => 'decimal:2',
         'discount_months' => 'integer',
@@ -263,6 +268,26 @@ class Contract extends Model
         }
 
         return max(0, (int) $this->discount_months - (int) $this->discount_applied);
+    }
+
+    /**
+     * La cesion con la que este contrato paso a otro titular, si la hubo.
+     *
+     * Desde el contrato del CEDENTE: dice a quien y cuando.
+     */
+    public function cesionSaliente()
+    {
+        return $this->hasOne(ContractCession::class, 'from_contract_id');
+    }
+
+    /**
+     * La cesion de la que nacio este contrato, si nacio de una.
+     *
+     * Desde el contrato del CESIONARIO: dice de quien lo recibio.
+     */
+    public function cesionEntrante()
+    {
+        return $this->hasOne(ContractCession::class, 'to_contract_id');
     }
 
     public function ont()

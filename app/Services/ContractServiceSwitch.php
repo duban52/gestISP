@@ -41,20 +41,24 @@ class ContractServiceSwitch
     }
 
     /**
-     * Aplica al contrato lo que pide el detalle de la orden.
+     * Habilita o deshabilita la cuenta PPPoE y la ONT del contrato.
+     *
+     * Cada acción es `habilitar`, `deshabilitar` o `ninguna`. Si el
+     * contrato no tiene cuenta, o no tiene ONT, esa parte no hace nada:
+     * se actúa sobre lo que tenga, sea uno, el otro o los dos.
      *
      * @return array{hechos: string[], pendientes: string[]}
      */
-    public function aplicar(Contract $contrato, TechnicalOrderDetail $detalle): array
+    public function aplicar(Contract $contrato, string $accionPppoe, string $accionOnt): array
     {
         $parte = ['hechos' => [], 'pendientes' => []];
 
-        if ($detalle->pppoe_action !== TechnicalOrderDetail::SIN_ACCION) {
-            $this->cuentas($contrato, $detalle->pppoe_action === TechnicalOrderDetail::HABILITAR, $parte);
+        if ($accionPppoe !== TechnicalOrderDetail::SIN_ACCION) {
+            $this->cuentas($contrato, $accionPppoe === TechnicalOrderDetail::HABILITAR, $parte);
         }
 
-        if ($detalle->ont_action !== TechnicalOrderDetail::SIN_ACCION) {
-            $this->onts($contrato, $detalle->ont_action === TechnicalOrderDetail::HABILITAR, $parte);
+        if ($accionOnt !== TechnicalOrderDetail::SIN_ACCION) {
+            $this->onts($contrato, $accionOnt === TechnicalOrderDetail::HABILITAR, $parte);
         }
 
         return $parte;

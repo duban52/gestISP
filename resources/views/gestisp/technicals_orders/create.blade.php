@@ -65,10 +65,8 @@
                             @continue($tipo->name === \App\Models\TechnicalOrder::ADMINISTRATIVA)
                             @foreach($tipo->details as $detalle)
                                 <option value="{{ $detalle->name }}" data-type="{{ $tipo->name }}"
-                                    @if($detalle->tocaEquipos())
-                                        title="Al cerrarla{{ $detalle->target_contract_status ? ', el contrato pasa a ' . $detalle->target_contract_status . ' y' : '' }} se {{ $detalle->pppoe_action === 'habilitar' ? 'habilitan' : 'deshabilitan' }} los equipos del cliente"
-                                    @elseif($detalle->target_contract_status)
-                                        title="Al cerrarla, el contrato pasa a {{ $detalle->target_contract_status }}"
+                                    @if($efecto = $detalle->descripcionDelEfecto())
+                                        title="{{ $efecto }}"
                                     @endif>
                                     {{ $detalle->name }}
                                 </option>

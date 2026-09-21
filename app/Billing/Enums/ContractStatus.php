@@ -35,6 +35,9 @@ enum ContractStatus: string
     case PorReconexion = 'Por Reconexión';
     case Retirado = 'Retirado';
     case Anulado = 'Anulado';
+    // Paso a otro titular por cesion. Solo se llega por la cesion: no
+    // se ofrece al cambiar el estado a mano (ver ContractCessionService).
+    case Cedido = 'Cedido';
 
     /**
      * Estados que se incluyen en la generación de facturas
@@ -81,6 +84,7 @@ enum ContractStatus: string
                 'Cortado',
                 self::Retirado->value,
                 self::Anulado->value,
+                self::Cedido->value,
             ],
         );
     }
@@ -99,7 +103,7 @@ enum ContractStatus: string
     {
         return self::delCatalogo(
             fn ($estado) => $estado->is_final,
-            respaldo: [self::Retirado->value, self::Anulado->value],
+            respaldo: [self::Retirado->value, self::Anulado->value, self::Cedido->value],
         );
     }
 
@@ -153,6 +157,7 @@ enum ContractStatus: string
             self::PorReconexion => 'Pagó estando cortado; espera la visita de reconexión.',
             self::Retirado => 'Tuvo servicio y lo dejó. No se le factura más.',
             self::Anulado => 'Firmó el contrato y nunca tomó el servicio. No se le factura.',
+            self::Cedido => 'Pasó a otro titular por cesión. Sus facturas y deudas siguen a nombre del cedente.',
         };
     }
 }

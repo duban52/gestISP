@@ -55,7 +55,15 @@ class OverdueProcessor
     {
         $threshold = BranchBillingSetting::forBranch($branchId)->suspension_threshold;
 
+        // LOS TERMINADOS NO SE SUSPENDEN. Un retirado, un anulado o un
+        // cedido pueden tener facturas vencidas —el cedente que no pagó
+        // su cierre, el retirado que se fue debiendo— y se le siguen
+        // cobrando. Pero pasarlos a «Suspendido» les borraría el estado
+        // que dice que terminaron, y un cedido parecería de nuevo un
+        // contrato vivo con los equipos de otro. Con la mora corriendo
+        // sola cada madrugada, eso pasaría sin que nadie lo tocara.
         $contracts = Contract::where('branch_id', $branchId)
+            ->whereNotIn('status', ContractStatus::finales())
             ->withCount([
                 'invoices as overdue_count' => fn ($query) => $query
                     ->where('status', InvoiceStatus::Vencida->value),

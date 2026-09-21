@@ -87,10 +87,47 @@ class TechnicalOrderDetail extends Model
         return Cache::rememberForever(self::CACHE, fn () => self::orderBy('sort_order')->get()->keyBy('key'));
     }
 
-    /** ¿Este detalle toca los equipos del cliente? */
+    /** ¿Este detalle dice EXPRESAMENTE qué hacer con algún equipo? */
     public function tocaEquipos(): bool
     {
         return $this->pppoe_action !== self::SIN_ACCION || $this->ont_action !== self::SIN_ACCION;
+    }
+
+    /**
+     * Lo que hará con la cuenta y la ONT al cerrarse, ya resuelto.
+     *
+     * Lo explícito del detalle manda; lo que dice «según el estado» se
+     * resuelve con el estado al que lleva el contrato.
+     *
+     * @return array{pppoe: string, ont: string}
+     */
+    public function accionesResueltas(?string $estado = null): array
+    {
+        $porEstado = ContractStatusOption::accionDeEquipos($estado ?? $this->target_contract_status);
+
+        return [
+            'pppoe' => $this->pppoe_action !== self::SIN_ACCION ? $this->pppoe_action : $porEstado,
+            'ont' => $this->ont_action !== self::SIN_ACCION ? $this->ont_action : $porEstado,
+        ];
+    }
+
+    /** En una frase, para el formulario de crear orden. Null si no hace nada. */
+    public function descripcionDelEfecto(): ?string
+    {
+        $acciones = $this->accionesResueltas();
+        $frases = [];
+
+        if ($this->target_contract_status) {
+            $frases[] = 'el contrato pasa a ' . $this->target_contract_status;
+        }
+
+        foreach (['pppoe' => 'la cuenta PPPoE', 'ont' => 'la ONT'] as $clave => $equipo) {
+            if ($acciones[$clave] !== self::SIN_ACCION) {
+                $frases[] = ($acciones[$clave] === self::HABILITAR ? 'se habilita ' : 'se deshabilita ') . $equipo;
+            }
+        }
+
+        return $frases === [] ? null : 'Al cerrarla, ' . implode(', ', $frases) . '.';
     }
 
     protected static function booted(): void

@@ -90,6 +90,20 @@ class InvoiceGenerator
             return ['generated' => false, 'reason' => 'Invoice already exists for this period'];
         }
 
+        // ---- Todavia no le toca ----
+        //
+        // Un contrato nacido de una cesion empieza a pagar el mes
+        // siguiente: el mes en que se cedio ya lo paga el cedente, en el
+        // contrato viejo. Sin esto la corrida le cobraria al nuevo
+        // titular el mismo mes, por el mismo servicio, en la misma casa.
+        //
+        // Se compara con el FIN del periodo: si la facturacion empieza
+        // en algun dia de este mes, este mes ya le toca.
+        if ($contract->billing_start_date
+            && $contract->billing_start_date->gt($today->copy()->endOfMonth())) {
+            return ['generated' => false, 'reason' => 'Billing starts on ' . $contract->billing_start_date->toDateString()];
+        }
+
         // ---- No se emite una factura sin nada dentro ----
         //
         // Pasa cuando el contrato se quedó sin plan: `plan_id` es nulo

@@ -291,6 +291,207 @@ class OrderEquipmentEffectsTest extends TestCase
         $this->assertSame('Suspendido', $contrato->fresh()->status);
     }
 
+    // ==================== El estado decide la navegación ====================
+
+    /** Una orden administrativa: cambia el estado sin detalle ni visita. */
+    private function cambiarEstado(Contract $contrato, string $estado): ContractStatusFromOrder
+    {
+        $orden = TechnicalOrder::create([
+            'contract_id' => $contrato->id,
+            'branch_id' => $this->branch->id,
+            'user_assigned' => $this->admin->id,
+            'created_by' => $this->admin->id,
+            'type' => TechnicalOrder::ADMINISTRATIVA,
+            'detail' => 'Cambio de estado',
+            'target_contract_status' => $estado,
+            'status' => 'Cerrada',
+            'initial_comment' => 'Cambio administrativo',
+        ]);
+
+        $servicio = app(ContractStatusFromOrder::class);
+        $servicio->aplicar($orden);
+
+        return $servicio;
+    }
+
+    public function test_una_orden_administrativa_a_un_estado_sin_servicio_corta_los_dos(): void
+    {
+        // Las administrativas no tienen detalle: sin mirar el estado, el
+        // contrato quedaba «Suspendido» en el sistema y navegando.
+        $contrato = $this->contrato();
+        $cuenta = $this->cuenta($contrato);
+        $ont = $this->ont($contrato);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldReceive('setPppSecretState')
+            ->once()
+            ->withArgs(fn ($router, $c, $deshabilitar) => $deshabilitar === true));
+
+        $this->mock(OltSshService::class, fn ($m) => $m->shouldReceive('setOntAdminState')
+            ->once()
+            ->withArgs(fn ($olt, $o, $habilitar) => $habilitar === false));
+
+        $this->cambiarEstado($contrato, 'Suspendido');
+
+        $this->assertTrue($cuenta->fresh()->disabled);
+        $this->assertFalse($ont->fresh()->admin_enabled);
+    }
+
+    public function test_una_orden_administrativa_a_un_estado_con_servicio_habilita_los_dos(): void
+    {
+        $contrato = $this->contrato('Suspendido');
+        $cuenta = $this->cuenta($contrato, deshabilitada: true);
+        $ont = $this->ont($contrato, habilitada: false);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldReceive('setPppSecretState')
+            ->once()
+            ->withArgs(fn ($router, $c, $deshabilitar) => $deshabilitar === false));
+
+        $this->mock(OltSshService::class, fn ($m) => $m->shouldReceive('setOntAdminState')
+            ->once()
+            ->withArgs(fn ($olt, $o, $habilitar) => $habilitar === true));
+
+        $this->cambiarEstado($contrato, 'Activo');
+
+        $this->assertFalse($cuenta->fresh()->disabled);
+        $this->assertTrue($ont->fresh()->admin_enabled);
+    }
+
+    public function test_con_solo_cuenta_pppoe_se_actua_sobre_ella(): void
+    {
+        // «El que tenga»: sin ONT, la OLT no recibe nada.
+        $contrato = $this->contrato();
+        $cuenta = $this->cuenta($contrato);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldReceive('setPppSecretState')->once());
+        $this->mock(OltSshService::class, fn ($m) => $m->shouldNotReceive('setOntAdminState'));
+
+        $this->cambiarEstado($contrato, 'Suspendido');
+
+        $this->assertTrue($cuenta->fresh()->disabled);
+    }
+
+    public function test_con_solo_ont_se_actua_sobre_ella(): void
+    {
+        $contrato = $this->contrato();
+        $ont = $this->ont($contrato);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldNotReceive('setPppSecretState'));
+        $this->mock(OltSshService::class, fn ($m) => $m->shouldReceive('setOntAdminState')->once());
+
+        $this->cambiarEstado($contrato, 'Suspendido');
+
+        $this->assertFalse($ont->fresh()->admin_enabled);
+    }
+
+    public function test_un_estado_nuevo_con_servicio_habilita(): void
+    {
+        // Lo que se cree en el catálogo funciona sin tocar código: un
+        // «Exonerado» tiene servicio, así que la cuenta se habilita.
+        \App\Models\ContractStatusOption::create([
+            'name' => 'Exonerado',
+            'bills' => false,
+            'auto_bills' => false,
+            'has_service' => true,
+            'active' => true,
+        ]);
+
+        $contrato = $this->contrato('Suspendido');
+        $cuenta = $this->cuenta($contrato, deshabilitada: true);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldReceive('setPppSecretState')->once());
+
+        $this->cambiarEstado($contrato, 'Exonerado');
+
+        $this->assertFalse($cuenta->fresh()->disabled);
+    }
+
+    public function test_un_detalle_sin_accion_propia_sigue_al_estado(): void
+    {
+        // «Según el estado»: el detalle lleva el contrato a Suspendido y
+        // no dice nada de los equipos, así que manda el estado.
+        $tipo = \App\Models\TechnicalOrderType::where('name', 'Servicio')->firstOrFail();
+
+        TechnicalOrderDetail::create([
+            'technical_order_type_id' => $tipo->id,
+            'name' => 'Suspensión por fraude',
+            'key' => 'suspension por fraude',
+            'target_contract_status' => 'Suspendido',
+            'pppoe_action' => TechnicalOrderDetail::SIN_ACCION,
+            'ont_action' => TechnicalOrderDetail::SIN_ACCION,
+            'active' => true,
+        ]);
+
+        $contrato = $this->contrato();
+        $cuenta = $this->cuenta($contrato);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldReceive('setPppSecretState')->once());
+
+        $this->cerrar($contrato, 'Suspensión por fraude');
+
+        $this->assertTrue($cuenta->fresh()->disabled);
+    }
+
+    public function test_lo_explicito_del_detalle_manda_sobre_el_estado(): void
+    {
+        // Quien configuró el catálogo decidió algo concreto: se respeta.
+        // Este detalle deja el contrato Activo pero NO habilita la ONT
+        // —por ejemplo, porque la ONT se cambia en otra visita—.
+        $tipo = \App\Models\TechnicalOrderType::where('name', 'Servicio')->firstOrFail();
+
+        TechnicalOrderDetail::create([
+            'technical_order_type_id' => $tipo->id,
+            'name' => 'Reconexión sin ONT',
+            'key' => 'reconexion sin ont',
+            'target_contract_status' => 'Activo',
+            'pppoe_action' => TechnicalOrderDetail::SIN_ACCION,
+            'ont_action' => TechnicalOrderDetail::DESHABILITAR,
+            'active' => true,
+        ]);
+
+        $contrato = $this->contrato('Suspendido');
+        $cuenta = $this->cuenta($contrato, deshabilitada: true);
+        $ont = $this->ont($contrato, habilitada: false);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldReceive('setPppSecretState')
+            ->once()
+            ->withArgs(fn ($router, $c, $deshabilitar) => $deshabilitar === false));
+        // La ONT ya está desactivada, que es lo que pide el detalle.
+        $this->mock(OltSshService::class, fn ($m) => $m->shouldNotReceive('setOntAdminState'));
+
+        $this->cerrar($contrato, 'Reconexión sin ONT');
+
+        $this->assertFalse($cuenta->fresh()->disabled);   // por el estado
+        $this->assertFalse($ont->fresh()->admin_enabled);  // por el detalle
+    }
+
+    public function test_un_retiro_no_manda_dos_ordenes_al_router(): void
+    {
+        // La baja la hace ContractDecommissioner, que ya deshabilita la
+        // cuenta. Si el estado también pidiera deshabilitar, el router
+        // recibiría la orden dos veces.
+        $contrato = $this->contrato();
+        $this->cuenta($contrato);
+
+        $this->mock(MikrotikApiService::class, fn ($m) => $m->shouldReceive('setPppSecretState')->once());
+
+        $this->cerrar($contrato, 'Retiro de servicio');
+
+        $this->assertSame('Retirado', $contrato->fresh()->status);
+    }
+
+    public function test_el_formulario_describe_lo_que_hara_la_orden(): void
+    {
+        // Instalación no dice nada de los equipos, pero lleva a Activo:
+        // habilita por el estado, y el formulario tiene que decirlo.
+        $instalacion = TechnicalOrderDetail::paraDetalle('Instalación de servicio');
+
+        $this->assertStringContainsString('el contrato pasa a Activo', $instalacion->descripcionDelEfecto());
+        $this->assertStringContainsString('se habilita la cuenta PPPoE', $instalacion->descripcionDelEfecto());
+
+        // Una incidencia no hace nada: no hay nada que describir.
+        $this->assertNull(TechnicalOrderDetail::paraDetalle('Sin servicio de TV')->descripcionDelEfecto());
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();

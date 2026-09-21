@@ -88,6 +88,9 @@ class PermissionLabels
         // Cambiar el estado de un contrato a mano —dar de baja,
         // anular, corregir— es otra cosa que crear o editar uno.
         'status' => 'Cambiar el estado de',
+        // Ceder un contrato cierra el del cedente y abre otro con sus
+        // equipos: un acto con consecuencias legales, aparte de editar.
+        'cede' => 'Ceder',
         // Ver lo que cuesta el material NO es lo mismo que ver el
         // material. Quien lleva el almacen necesita saber cuantas ONT
         // hay; lo que se pago por ellas es informacion del negocio.

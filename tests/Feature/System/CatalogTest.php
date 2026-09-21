@@ -105,12 +105,14 @@ class CatalogTest extends TestCase
             ContractStatus::billable(),
         );
 
+        // «Cedido» llegó con la cesión: no se factura y es una baja
+        // definitiva para su titular.
         $this->assertEqualsCanonicalizing(
-            ['Suspendido', 'Cortado', 'Retirado', 'Anulado'],
+            ['Suspendido', 'Cortado', 'Retirado', 'Anulado', 'Cedido'],
             ContractStatus::noFacturables(),
         );
 
-        $this->assertEqualsCanonicalizing(['Retirado', 'Anulado'], ContractStatus::finales());
+        $this->assertEqualsCanonicalizing(['Retirado', 'Anulado', 'Cedido'], ContractStatus::finales());
     }
 
     public function test_el_catalogo_trae_los_detalles_de_orden_con_su_efecto(): void

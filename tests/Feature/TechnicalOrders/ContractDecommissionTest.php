@@ -371,8 +371,17 @@ class ContractDecommissionTest extends TestCase
         ])->assertRedirect();
 
         $this->assertNotNull($contrato->fresh()->nap_port_id);
-        $this->assertDatabaseHas('onts', ['sn' => 'HWTC12345678']);
-        $this->assertFalse((bool) PppoeAccount::where('username', 'cliente01')->first()->disabled);
+        $this->assertDatabaseHas('onts', ['sn' => 'HWTC12345678', 'contract_id' => $contrato->id]);
+
+        // SUSPENDER CORTA, PERO NO SUELTA. La cuenta queda deshabilitada
+        // —el estado «Suspendido» no tiene servicio, y la navegación
+        // tiene que decir lo mismo— pero sigue siendo de este contrato:
+        // cuando el cliente pague, la reconexión la habilita otra vez.
+        // Retirar es lo que además la desvincula.
+        $cuenta = PppoeAccount::where('username', 'cliente01')->first();
+
+        $this->assertTrue((bool) $cuenta->disabled);
+        $this->assertSame($contrato->id, $cuenta->contract_id);
     }
 
     public function test_cerrar_una_orden_de_retiro_tambien_libera(): void

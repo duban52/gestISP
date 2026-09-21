@@ -100,7 +100,7 @@ class ContractStatusFromOrder
         // que cortar igual: el estado dice lo que el sistema cree, y
         // los equipos dicen lo que el cliente tiene. Son dos cosas, y
         // esta orden se cerró para arreglar la segunda.
-        $efectos = $contrato ? $this->aplicarEnLosEquipos($orden, $contrato) : null;
+        $efectos = $contrato ? $this->aplicarEnLosEquipos($orden, $contrato, $nuevo) : null;
 
         if (!$nuevo || $contrato->status === $nuevo) {
             $this->ultimoParte = $efectos;
@@ -159,19 +159,45 @@ class ContractStatusFromOrder
     }
 
     /**
-     * Deshabilita o habilita los equipos, si el detalle lo pide.
+     * Que la navegación diga lo mismo que el estado.
+     *
+     * DOS FUENTES, Y UNA MANDA SOBRE LA OTRA
+     * --------------------------------------
+     * · El DETALLE de la orden, si dice qué hacer con un equipo: es una
+     *   decisión explícita de quien configuró el catálogo, y gana.
+     * · El ESTADO al que queda el contrato, para todo lo demás: si tiene
+     *   servicio se habilita, si no lo tiene se deshabilita.
+     *
+     * Por el estado es por donde entran las órdenes administrativas —que
+     * no tienen detalle— y cualquier estado nuevo del catálogo: un
+     * «Exonerado» con servicio habilita, un «Suspensión por fraude» sin
+     * servicio corta, sin tocar código.
+     *
+     * Se mira el estado PEDIDO aunque el contrato ya estuviera en él: si
+     * una orden lo deja «Activo» y la cuenta seguía cortada, hay que
+     * habilitarla. El estado dice lo que el sistema cree; los equipos,
+     * lo que el cliente tiene. Lo que ya está como se pide no se toca
+     * (ver ContractServiceSwitch).
      *
      * @return array{hechos: string[], pendientes: string[]}|null
      */
-    private function aplicarEnLosEquipos(TechnicalOrder $orden, Contract $contrato): ?array
+    private function aplicarEnLosEquipos(TechnicalOrder $orden, Contract $contrato, ?string $nuevo): ?array
     {
         $detalle = $this->detalleDe($orden);
 
-        if (!$detalle || !$detalle->tocaEquipos()) {
+        // Sin detalle —una administrativa— manda solo el estado. Sin
+        // estado —una incidencia, un traslado— no se pide nada: resolver
+        // una avería no reactiva a un suspendido.
+        $acciones = $detalle
+            ? $detalle->accionesResueltas($nuevo)
+            : array_fill_keys(['pppoe', 'ont'], ContractStatusOption::accionDeEquipos($nuevo));
+
+        if ($acciones['pppoe'] === TechnicalOrderDetail::SIN_ACCION
+            && $acciones['ont'] === TechnicalOrderDetail::SIN_ACCION) {
             return null;
         }
 
-        return app(ContractServiceSwitch::class)->aplicar($contrato, $detalle);
+        return app(ContractServiceSwitch::class)->aplicar($contrato, $acciones['pppoe'], $acciones['ont']);
     }
 
     /**

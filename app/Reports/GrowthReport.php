@@ -61,7 +61,9 @@ class GrowthReport
      */
     public function series(): array
     {
-        $altas = $this->period->completarSerie($this->contarPor(self::FECHA_ALTA));
+        $altas = $this->period->completarSerie(
+            $this->contarPor(self::FECHA_ALTA, fn ($q) => $this->sinCesionesRecibidas($q))
+        );
 
         $bajas = $this->period->completarSerie(
             $this->contarPor('contracts.updated_at', fn ($q) => $q->whereIn('contracts.status', ContractStatusMap::bajas()))
@@ -106,8 +108,15 @@ class GrowthReport
             ->whereRaw(self::FECHA_ALTA . ' < ?', [$this->period->from])
             ->where(function ($q) {
                 // Los que ya estaban retirados antes del rango no
-                // forman parte de la base de partida
-                $q->whereNotIn('contracts.status', ContractStatusMap::bajas())
+                // forman parte de la base de partida.
+                //
+                // Los CEDIDOS tampoco: su servicio lo sigue el contrato
+                // nuevo, que ya está en la base. Contar los dos sería
+                // contar dos veces la misma casa.
+                $q->whereNotIn('contracts.status', array_merge(
+                    ContractStatusMap::bajas(),
+                    [\App\Billing\Enums\ContractStatus::Cedido->value],
+                ))
                     ->orWhere('contracts.updated_at', '>=', $this->period->from);
             })
             ->count();
@@ -231,9 +240,26 @@ class GrowthReport
 
     private function altasEnPeriodo(ReportPeriod $periodo): int
     {
-        return (int) $this->baseQuery()
+        return (int) $this->sinCesionesRecibidas($this->baseQuery())
             ->whereRaw(self::FECHA_ALTA . ' BETWEEN ? AND ?', [$periodo->from, $periodo->to])
             ->count();
+    }
+
+    /**
+     * Quita los contratos que nacieron de una cesión.
+     *
+     * UNA CESIÓN NO ES UN CLIENTE NUEVO: es el mismo servicio, en la
+     * misma casa, con otro titular. Contar el contrato nuevo como alta
+     * inflaría el crecimiento con gente que ya estaba — y el viejo no
+     * cuenta como baja (ver ContractStatusMap), así que las dos cifras
+     * quedan honestas.
+     */
+    private function sinCesionesRecibidas($consulta)
+    {
+        return $consulta->whereNotExists(fn ($sub) => $sub
+            ->selectRaw('1')
+            ->from('contract_cessions')
+            ->whereColumn('contract_cessions.to_contract_id', 'contracts.id'));
     }
 
     private function bajasEnPeriodo(ReportPeriod $periodo): int

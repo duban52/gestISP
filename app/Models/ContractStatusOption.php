@@ -60,6 +60,31 @@ class ContractStatusOption extends Model
         return $nombre === null ? null : self::catalogo()->get($nombre);
     }
 
+    /**
+     * Qué le pide un estado a los equipos del cliente.
+     *
+     * Con servicio, habilitar; sin servicio, deshabilitar. Una BAJA no
+     * pide nada: la baja definitiva la hace ContractDecommissioner, que
+     * además desvincula la cuenta y retira la ONT, y deshabilitar antes
+     * sería mandarle dos órdenes al router. Sin estado, o con uno que no
+     * está en el catálogo, tampoco: no se adivina.
+     *
+     * Es LA regla: la usan el cierre de órdenes y la pantalla que lo
+     * describe, para que no puedan decir cosas distintas.
+     */
+    public static function accionDeEquipos(?string $nombre): string
+    {
+        $estado = self::porNombre($nombre);
+
+        if (!$estado || $estado->is_final) {
+            return TechnicalOrderDetail::SIN_ACCION;
+        }
+
+        return $estado->has_service
+            ? TechnicalOrderDetail::HABILITAR
+            : TechnicalOrderDetail::DESHABILITAR;
+    }
+
     /** Los que se pueden elegir al cambiar el estado de un contrato. */
     public static function activos()
     {
