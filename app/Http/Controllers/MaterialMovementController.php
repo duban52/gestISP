@@ -67,6 +67,15 @@ class MaterialMovementController extends Controller
         // Catálogo de ESTA sucursal: mostrar el de todas llenaba el
         // buscador de materiales que en esta bodega no existen.
         $materials  = Material::deSucursal()->with('category')->orderBy('name')->get();
+        // Los proveedores ya usados, para proponerlos al escribir: sin
+        // esto el mismo proveedor acaba escrito de tres formas y no hay
+        // manera de buscar sus entradas.
+        $proveedores = MaterialMovement::whereNotNull('supplier')
+            ->whereHas('warehouseDestination', fn ($q) => $q->whereIn('branch_id', app(CurrentContext::class)->branchIds()))
+            ->distinct()
+            ->orderBy('supplier')
+            ->limit(200)
+            ->pluck('supplier');
         // Con el DUEÑO: un usuario puede tener varios almacenes, y dos
         // «Furgoneta» sin más son indistinguibles en el desplegable.
         $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())
@@ -74,7 +83,7 @@ class MaterialMovementController extends Controller
             ->orderBy('description')
             ->get();
 
-        return view('gestisp.materials.movements.index', compact('materials', 'warehouses'));
+        return view('gestisp.materials.movements.index', compact('materials', 'warehouses', 'proveedores'));
     }
 
     /**
@@ -151,6 +160,11 @@ class MaterialMovementController extends Controller
                     Rule::exists('warehouses', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
                 ],
                 'reason'                          => 'required|string|max:100',
+                // De quién se compró y con qué factura. Solo tienen
+                // sentido en una entrada; en los demás tipos se ignoran.
+                'supplier'                        => 'nullable|string|max:150',
+                'invoice_number'                  => 'nullable|string|max:60',
+                'invoice_date'                    => 'nullable|date',
             ], [
                 'materials.*.material_id.exists' => 'Uno de los materiales no pertenece a esta sucursal.',
                 'warehouse_origin_id.exists' => 'El almacén de origen no pertenece a esta sucursal.',
@@ -159,7 +173,19 @@ class MaterialMovementController extends Controller
 
             $movements = [];
 
-            DB::transaction(function () use ($request, &$movements) {
+            // Los datos de la compra viajan con CADA renglón del
+            // movimiento: es lo que hace que buscar por número de
+            // factura encuentre el equipo, y que el comprobante los
+            // lleve sin depender de otra tabla.
+            $compra = $request->type === 'Entrada'
+                ? [
+                    'supplier' => $request->input('supplier') ?: null,
+                    'invoice_number' => $request->input('invoice_number') ?: null,
+                    'invoice_date' => $request->input('invoice_date') ?: null,
+                ]
+                : ['supplier' => null, 'invoice_number' => null, 'invoice_date' => null];
+
+            DB::transaction(function () use ($request, $compra, &$movements) {
                 foreach ($request->materials as $materialData) {
                     $material    = Material::findOrFail($materialData['material_id']);
                     $quantity    = $materialData['quantity'];
@@ -254,7 +280,7 @@ class MaterialMovementController extends Controller
                     if ($isEquipment && isset($materialData['serial_numbers'])) {
                         // Equipos: un movimiento por cada serial
                         foreach ($materialData['serial_numbers'] as $serialNumber) {
-                            $movements[] = MaterialMovement::create([
+                            $movements[] = MaterialMovement::create($compra + [
                                 'type'                     => $request->type,
                                 'material_id'              => $material->id,
                                 'quantity'                 => 1,
@@ -280,7 +306,7 @@ class MaterialMovementController extends Controller
                         }
                     } else {
                         // Consumibles: un movimiento con la cantidad total
-                        $movements[] = MaterialMovement::create([
+                        $movements[] = MaterialMovement::create($compra + [
                             'type'                     => $request->type,
                             'material_id'              => $material->id,
                             'quantity'                 => $quantity,
@@ -634,6 +660,10 @@ class MaterialMovementController extends Controller
                 'motivo' => $request->reason,
                 'almacen_origen' => $origen,
                 'almacen_destino' => $destino,
+                // De quién se compró: en una entrada es lo que después
+                // permite atar el movimiento a la factura del proveedor.
+                'proveedor' => $request->type === 'Entrada' ? $request->input('supplier') : null,
+                'factura' => $request->type === 'Entrada' ? $request->input('invoice_number') : null,
                 'materiales' => $resumen,
             ],
             null,
@@ -765,6 +795,8 @@ class MaterialMovementController extends Controller
                 case 'type':
                 case 'serial_number':
                 case 'reason':
+                case 'supplier':
+                case 'invoice_number':
                     $query->where($field, 'like', "%{$value}%");
                     break;
 

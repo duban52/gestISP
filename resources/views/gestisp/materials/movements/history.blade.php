@@ -36,6 +36,12 @@
                             <option value="material" {{ request('filter_field') == 'material' ? 'selected' : '' }}>
                                 Material
                             </option>
+                            <option value="supplier" {{ request('filter_field') == 'supplier' ? 'selected' : '' }}>
+                                Proveedor
+                            </option>
+                            <option value="invoice_number" {{ request('filter_field') == 'invoice_number' ? 'selected' : '' }}>
+                                Número de factura
+                            </option>
                             <option value="serial_number" {{ request('filter_field') == 'serial_number' ? 'selected' : '' }}>
                                 Número de serial
                             </option>
@@ -144,6 +150,9 @@
                         @endcan
                         <th>Serial</th>
                         <th>Motivo</th>
+                        {{-- De quién se compró: solo lo llevan las entradas. --}}
+                        <th>Proveedor</th>
+                        <th>Factura</th>
                         <th>Realizado por</th>
                     </tr>
                     </thead>
@@ -183,6 +192,13 @@
                             @endcan
                             <td>{{ $movement->serial_number ?? '—' }}</td>
                             <td>{{ $movement->reason }}</td>
+                            <td>{{ $movement->supplier ?: '—' }}</td>
+                            <td>
+                                {{ $movement->invoice_number ?: '—' }}
+                                @if($movement->invoice_date)
+                                    <small class="d-block text-muted">{{ $movement->invoice_date->format('d/m/Y') }}</small>
+                                @endif
+                            </td>
                             <td>
                                 {{ $movement->user->name ?? '—' }}
                                 {{ $movement->user->last_name ?? '' }}

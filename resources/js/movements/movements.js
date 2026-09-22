@@ -45,8 +45,11 @@ $(document).ready(function () {
     const serialNumberList = $('#serial-number-list');
 
     // Seriales cargados desde un archivo. Mientras los hay mandan sobre
-    // las casillas y el selector: con 500 equipos nadie los elige uno a uno.
+    // la lista y el selector: con 500 equipos nadie los teclea uno a uno.
     let serialesDeArchivo = null;
+
+    // Los que se van agregando a mano con Enter o con «+».
+    let serialesManuales = [];
 
     /* ============================================================
        Select2
@@ -119,6 +122,13 @@ $(document).ready(function () {
             warehouseOriginGroup.show();
             warehouseDestinationGroup.show();
             reasonSelect.find('.option-Transferencia').show().prop('disabled', false);
+        }
+
+        // De quién se compró solo tiene sentido en una entrada.
+        $('#datos-compra').toggleClass('d-none', tipo !== 'Entrada');
+
+        if (tipo !== 'Entrada') {
+            $('#supplier, #invoice_number, #invoice_date').val('');
         }
 
         // Cambiar de tipo cambia de dónde sale el material: lo que ya
@@ -227,6 +237,11 @@ $(document).ready(function () {
     modalMaterialSelect.on('change', function () {
         ocultarError();
         quitarArchivoDeSeriales();
+        serialesManuales = [];
+        serialNumberList.empty();
+        $('#serial-quick').val('');
+        // Un consumible se cuenta a mano; un equipo, no (prepararSeriales).
+        modalQuantity.prop('readonly', false);
 
         const opcion = $(this).find('option:selected');
         const esEquipo = opcion.attr('data-is-equipment') === '1';
@@ -263,27 +278,24 @@ $(document).ready(function () {
         cargarDisponibilidad();
     });
 
-    /** Selector (salidas) o casillas (entradas) para poner los seriales a mano. */
+    /** Selector (salidas) o caja de escritura (entradas) para los seriales. */
     function prepararSeriales() {
         if (esSalida()) {
             $('#serial-picker').removeClass('d-none');
             cargarSeriales();
         } else {
             $('#serial-inputs').removeClass('d-none');
-            generarCasillasDeSerial();
+            pintarSerialesManuales();
         }
+
+        // Un equipo vale una unidad: la cantidad son los seriales que
+        // haya, y escribirla aparte solo servía para descuadrarla.
+        modalQuantity.prop('readonly', true);
     }
 
-    // La cantidad manda sobre cuántos seriales se piden
-    modalQuantity.on('input', function () {
-        ocultarError();
-
-        if (esEquipo() && !esSalida()) {
-            generarCasillasDeSerial();
-        }
-
-        actualizarContadorDeSeriales();
-    });
+    // En consumibles la cantidad se escribe; en equipos la dan los
+    // seriales y el campo va bloqueado (ver sincronizarCantidad).
+    modalQuantity.on('input', ocultarError);
 
     function esEquipo() {
         return modalMaterialSelect.find('option:selected').attr('data-is-equipment') === '1';
@@ -358,7 +370,7 @@ $(document).ready(function () {
 
                 serialNumberSelect.val(null).trigger('change');
                 $('#serial-vacio').toggleClass('d-none', seriales.length > 0);
-                actualizarContadorDeSeriales();
+                sincronizarCantidad();
             })
             .fail(function () {
                 mostrarError('No se pudieron cargar los números de serie.');
@@ -369,52 +381,114 @@ $(document).ready(function () {
        Seriales
        ============================================================ */
 
-    /** Una casilla por unidad que entra. */
-    function generarCasillasDeSerial() {
-        const cantidad = parseInt(modalQuantity.val(), 10) || 0;
-        const anteriores = serialNumberList.find('.serial-number-input')
-            .map((i, el) => el.value).get();
+    /**
+     * Agrega uno o varios seriales a la lista.
+     *
+     * Acepta lo pegado de un Excel o de un WhatsApp: separa por saltos
+     * de línea, comas, punto y coma o tabulaciones. Avisa de los que ya
+     * estaban en vez de meterlos dos veces.
+     */
+    function agregarSerialesManuales(texto) {
+        const partes = String(texto || '')
+            .split(/[\r\n,;\t]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
 
-        serialNumberList.empty();
-
-        for (let i = 0; i < cantidad; i++) {
-            serialNumberList.append(
-                '<li class="mb-1">' +
-                '  <div class="input-group input-group-sm">' +
-                '    <div class="input-group-prepend">' +
-                '      <span class="input-group-text">#' + (i + 1) + '</span>' +
-                '    </div>' +
-                // Se conserva lo ya escrito al cambiar la cantidad:
-                // volver a teclear veinte seriales sería inaceptable.
-                '    <input type="text" class="form-control serial-number-input" ' +
-                '           value="' + (anteriores[i] || '') + '" ' +
-                '           placeholder="Número de serie">' +
-                '  </div>' +
-                '</li>'
-            );
+        if (partes.length === 0) {
+            return;
         }
 
-        actualizarContadorDeSeriales();
+        const repetidos = [];
+
+        partes.forEach(function (serial) {
+            const yaEsta = serialesManuales
+                .some((s) => s.toLowerCase() === serial.toLowerCase());
+
+            if (yaEsta) {
+                repetidos.push(serial);
+                return;
+            }
+
+            serialesManuales.push(serial);
+        });
+
+        pintarSerialesManuales();
+
+        if (repetidos.length > 0) {
+            mostrarError('Ya estaba(n) en la lista: ' + [...new Set(repetidos)].join(', '));
+        } else {
+            ocultarError();
+        }
     }
 
-    serialNumberSelect.on('change', actualizarContadorDeSeriales);
-    serialNumberList.on('input', '.serial-number-input', actualizarContadorDeSeriales);
+    /** La lista, del último agregado al primero: el recién puesto se ve. */
+    function pintarSerialesManuales() {
+        serialNumberList.empty();
 
-    /** "3 de 5": cuántos seriales van y cuántos faltan. */
-    function actualizarContadorDeSeriales() {
-        const cantidad = parseInt(modalQuantity.val(), 10) || 0;
-        const puestos = serialesDeArchivo
-            ? serialesDeArchivo.length
-            : esSalida()
-                ? (serialNumberSelect.val() || []).length
-                : serialNumberList.find('.serial-number-input').filter((i, el) => el.value.trim() !== '').length;
+        serialesManuales.slice().reverse().forEach(function (serial, posicion) {
+            const numero = serialesManuales.length - posicion;
 
-        const contador = $('#serial-counter');
+            serialNumberList.append(
+                '<li class="d-flex align-items-center border-bottom py-1">' +
+                '  <span class="badge badge-light mr-2">' + numero + '</span>' +
+                '  <span class="text-monospace flex-grow-1">' + escaparHtml(serial) + '</span>' +
+                '  <button type="button" class="btn btn-link btn-sm text-danger p-0 quitar-serial" ' +
+                '          data-serial="' + escaparAtributo(serial) + '" title="Quitar">' +
+                '    <i class="fas fa-times"></i></button>' +
+                '</li>'
+            );
+        });
 
-        contador.text(puestos + ' de ' + cantidad);
-        contador
+        sincronizarCantidad();
+    }
+
+    serialNumberList.on('click', '.quitar-serial', function () {
+        const serial = $(this).data('serial');
+
+        serialesManuales = serialesManuales.filter((s) => s !== String(serial));
+        pintarSerialesManuales();
+    });
+
+    $('#serial-add-btn').on('click', function () {
+        agregarSerialesManuales($('#serial-quick').val());
+        $('#serial-quick').val('').focus();
+    });
+
+    $('#serial-quick').on('keydown', function (e) {
+        if (e.key !== 'Enter') {
+            return;
+        }
+
+        // Enter aquí agrega el serial; sin esto enviaría el formulario
+        // entero con el movimiento a medio armar.
+        e.preventDefault();
+        agregarSerialesManuales(this.value);
+        this.value = '';
+    });
+
+    serialNumberSelect.on('change', sincronizarCantidad);
+
+    /** Cuántos seriales hay puestos, vengan de donde vengan. */
+    function cuantosSeriales() {
+        if (serialesDeArchivo) {
+            return serialesDeArchivo.length;
+        }
+
+        return esSalida() ? (serialNumberSelect.val() || []).length : serialesManuales.length;
+    }
+
+    /** En equipos, la cantidad SON los seriales. */
+    function sincronizarCantidad() {
+        const puestos = cuantosSeriales();
+
+        if (esEquipo()) {
+            modalQuantity.val(puestos || '');
+        }
+
+        $('#serial-counter')
+            .text(puestos + ' serial(es)')
             .removeClass('badge-secondary badge-success badge-warning')
-            .addClass(cantidad > 0 && puestos === cantidad ? 'badge-success' : 'badge-warning');
+            .addClass(puestos > 0 ? 'badge-success' : 'badge-secondary');
     }
 
     /* ============================================================
@@ -462,8 +536,7 @@ $(document).ready(function () {
                 ? serialesDeArchivo.slice()
                 : esSalida()
                     ? (serialNumberSelect.val() || [])
-                    : serialNumberList.find('.serial-number-input')
-                        .map((i, el) => el.value.trim()).get().filter(Boolean);
+                    : serialesManuales.slice();
 
             if (seriales.length !== cantidad) {
                 return mostrarError(
@@ -635,40 +708,77 @@ $(document).ready(function () {
             });
     });
 
+    /**
+     * El resumen de lo leído, ANTES de agregar nada.
+     *
+     * Quien sube un archivo de 500 seriales tiene que ver qué va a
+     * entrar y qué se quedó fuera antes de confirmar: después el
+     * movimiento ya está hecho y no hay botón de deshacer.
+     */
     function usarArchivoDeSeriales(r) {
         serialesDeArchivo = r.validos;
 
-        // La cantidad son los seriales que valen, y no se toca a mano
-        // mientras mande el archivo: los dos números tienen que cuadrar.
         modalQuantity.val(r.validos.length).prop('readonly', true);
         $('#serial-picker, #serial-inputs').addClass('d-none');
 
-        let html = `<div class="${r.problemas.length ? 'text-warning' : 'text-success'}">` +
-            `<i class="fas fa-file-alt"></i> <strong>${escaparHtml(r.archivo)}</strong>: ` +
-            `${r.validos.length} serial(es) válido(s) de ${r.leidos} leído(s).</div>`;
+        const material = modalMaterialSelect.find('option:selected').attr('data-name') || '';
+        const destino = typeSelect.val() === 'Salida'
+            ? 'sale de ' + warehouseOriginId.find('option:selected').text()
+            : (typeSelect.val() === 'Entrada'
+                ? 'entra a ' + warehouseDestinationId.find('option:selected').text()
+                : 'pasa de ' + warehouseOriginId.find('option:selected').text() +
+                  ' a ' + warehouseDestinationId.find('option:selected').text());
+
+        let html =
+            `<div class="card mb-0">
+                <div class="card-header py-1 px-2 ${r.problemas.length ? 'bg-warning' : 'bg-success'}">
+                    <strong>Resumen del archivo</strong> · ${escaparHtml(r.archivo)}
+                </div>
+                <div class="card-body p-2">
+                    <div>Leídos: <strong>${r.leidos}</strong> ·
+                         Válidos: <strong>${r.validos.length}</strong> ·
+                         Descartados: <strong>${r.problemas.length}</strong></div>
+                    <div class="text-muted">${escaparHtml(material)}: ${escaparHtml(destino)}</div>`;
+
+        if (r.validos.length) {
+            html += `<details class="mt-1"><summary>Ver los ${r.validos.length} seriales que entran</summary>
+                        <div class="text-monospace small mt-1" style="max-height: 160px; overflow-y: auto;">
+                            ${r.validos.slice(0, 500).map(escaparHtml).join('<br>')}
+                            ${r.validos.length > 500 ? `<br><em>… y ${r.validos.length - 500} más</em>` : ''}
+                        </div>
+                     </details>`;
+        }
 
         if (r.problemas.length) {
-            html += '<div class="mt-1 text-dark">No se tomaron:</div>' +
-                '<ul class="mb-1 pl-3 text-dark" style="max-height: 160px; overflow-y: auto;">' +
+            html += `<details class="mt-1" open><summary class="text-danger">
+                        Ver los ${r.problemas.length} que NO se toman</summary>
+                        <ul class="mb-1 pl-3" style="max-height: 160px; overflow-y: auto;">` +
                 r.problemas.slice(0, 100)
                     .map((p) => `<li><code>${escaparHtml(p.serial)}</code> — ${escaparHtml(p.motivo)}</li>`)
                     .join('') +
                 '</ul>' +
-                (r.problemas.length > 100 ? `<div>… y ${r.problemas.length - 100} más.</div>` : '');
+                (r.problemas.length > 100 ? `<div>… y ${r.problemas.length - 100} más.</div>` : '') +
+                '</details>';
         }
 
-        html += '<button type="button" class="btn btn-link btn-sm p-0" id="serial-file-remove">' +
-            'Quitar el archivo y poner los seriales a mano</button>';
+        html += `<div class="mt-2">
+                    ${r.validos.length
+                        ? 'Revise y pulse <strong>«Agregar al movimiento»</strong> para confirmar.'
+                        : '<span class="text-danger">No hay ningún serial que agregar.</span>'}
+                    <button type="button" class="btn btn-link btn-sm p-0 ml-2" id="serial-file-remove">
+                        Quitar el archivo y ponerlos a mano</button>
+                 </div>
+            </div></div>`;
 
         $('#serial-file-result').removeClass('d-none').html(html);
-        actualizarContadorDeSeriales();
+        sincronizarCantidad();
     }
 
     $(document).on('click', '#serial-file-remove', function () {
         quitarArchivoDeSeriales();
         modalQuantity.val('');
         prepararSeriales();
-        actualizarContadorDeSeriales();
+        sincronizarCantidad();
     });
 
     function quitarArchivoDeSeriales() {
@@ -706,6 +816,9 @@ $(document).ready(function () {
         $('#modal-purchase-unit-value').val('');
         serialNumberSelect.empty().val(null).trigger('change.select2');
         serialNumberList.empty();
+        serialesManuales = [];
+        $('#serial-quick').val('');
+        modalQuantity.prop('readonly', false);
         quitarArchivoDeSeriales();
         $('#modal-serial-numbers-container').addClass('d-none');
         $('#available-quantity-text').addClass('d-none');

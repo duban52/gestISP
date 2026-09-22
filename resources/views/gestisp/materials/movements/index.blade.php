@@ -96,6 +96,38 @@
                 </div>
             </div>
 
+            {{-- ============================================================
+                 De quién se compró: solo en las entradas
+
+                 Va en el movimiento y no en cada material porque una
+                 compra es UNA factura. Sale después en el comprobante,
+                 en el historial y en el Excel.
+                 ============================================================ --}}
+            <div class="row d-none" id="datos-compra">
+                <div class="form-group col-md-5">
+                    <label for="supplier">Proveedor</label>
+                    <input type="text" name="supplier" id="supplier" class="form-control" maxlength="150"
+                           list="proveedores-usados" value="{{ old('supplier') }}"
+                           placeholder="A quién se le compró">
+                    <datalist id="proveedores-usados">
+                        @foreach($proveedores as $proveedor)
+                            <option value="{{ $proveedor }}"></option>
+                        @endforeach
+                    </datalist>
+                    <small class="form-text text-muted">Se proponen los ya usados: así el mismo proveedor no queda escrito de tres formas.</small>
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="invoice_number">Número de factura</label>
+                    <input type="text" name="invoice_number" id="invoice_number" class="form-control" maxlength="60"
+                           value="{{ old('invoice_number') }}" placeholder="La del proveedor">
+                </div>
+                <div class="form-group col-md-3">
+                    <label for="invoice_date">Fecha de la factura</label>
+                    <input type="date" name="invoice_date" id="invoice_date" class="form-control"
+                           value="{{ old('invoice_date') }}">
+                </div>
+            </div>
+
             {{-- Abre el modal para agregar un material al movimiento --}}
             <div class="form-group">
                 <button type="button" class="btn btn-primary" id="open-modal-btn">
@@ -290,11 +322,24 @@
                             </div>
                         </div>
 
-                        {{-- Entrada: escribir los seriales que ingresan --}}
+                        {{-- Entrada: un solo campo que va armando la lista.
+                             Con cincuenta equipos, cincuenta casillas en
+                             pantalla son inmanejables. --}}
                         <div id="serial-inputs" class="d-none">
-                            <ul id="serial-number-list" class="list-unstyled mb-0"></ul>
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="text" id="serial-quick" class="form-control" autocomplete="off"
+                                       placeholder="Escriba o escanee el serial y pulse Enter">
+                                <div class="input-group-append">
+                                    <button type="button" class="btn btn-primary" id="serial-add-btn">
+                                        <i class="fas fa-plus"></i> Agregar
+                                    </button>
+                                </div>
+                            </div>
+                            <ul id="serial-number-list" class="list-unstyled mb-0"
+                                style="max-height: 220px; overflow-y: auto;"></ul>
                             <small class="form-text text-muted">
-                                Un serial por unidad. Se generan tantas casillas como cantidad indique.
+                                Enter agrega el serial a la lista; también puede pegar varios de una vez
+                                (uno por línea o separados por comas). La cantidad la dan los seriales.
                             </small>
                         </div>
                     </div>

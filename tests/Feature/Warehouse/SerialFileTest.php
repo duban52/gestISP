@@ -234,6 +234,113 @@ class SerialFileTest extends TestCase
             ->assertSee(route('movements.serials_file'), false);
     }
 
+    // ==================== De quién se compró ====================
+
+    public function test_una_entrada_guarda_el_proveedor_y_la_factura(): void
+    {
+        $this->post(route('movements.store'), [
+            'type' => 'Entrada',
+            'reason' => 'Compra',
+            'warehouse_destination_id' => $this->principal->id,
+            'supplier' => 'Huawei Colombia S.A.S.',
+            'invoice_number' => 'FE-4471',
+            'invoice_date' => '2026-09-18',
+            'materials' => [[
+                'material_id' => $this->ont->id,
+                'quantity' => 2,
+                'serials_text' => "HWTC00000001
+HWTC00000002",
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        // En cada renglón: es lo que hace que buscar por factura
+        // encuentre el equipo.
+        $this->assertSame(2, MaterialMovement::where('invoice_number', 'FE-4471')->count());
+        $this->assertSame('Huawei Colombia S.A.S.', MaterialMovement::first()->supplier);
+
+        // Y se ve en el historial, con su filtro.
+        $this->get(route('movements.history', ['filter_field' => 'invoice_number', 'filter_value' => 'FE-4471']))
+            ->assertOk()
+            ->assertSee('Huawei Colombia S.A.S.')
+            ->assertSee('FE-4471');
+    }
+
+    public function test_en_una_salida_no_se_guardan_datos_de_compra(): void
+    {
+        $this->existencia('HWTC00000001', $this->principal);
+
+        $this->post(route('movements.store'), [
+            'type' => 'Salida',
+            'reason' => 'Instalación',
+            'warehouse_origin_id' => $this->principal->id,
+            // Aunque alguien los mande: en una salida no hay compra.
+            'supplier' => 'Quien sea',
+            'invoice_number' => 'X-1',
+            'materials' => [[
+                'material_id' => $this->ont->id,
+                'quantity' => 1,
+                'serial_numbers' => ['HWTC00000001'],
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNull(MaterialMovement::first()->supplier);
+        $this->assertNull(MaterialMovement::first()->invoice_number);
+    }
+
+    public function test_el_formulario_pide_la_compra_y_propone_los_proveedores(): void
+    {
+        MaterialMovement::create([
+            'type' => 'Entrada',
+            'material_id' => $this->ont->id,
+            'quantity' => 1,
+            'unit_of_measurement' => 'Unidades',
+            'warehouse_destination_id' => $this->principal->id,
+            'reason' => 'Compra',
+            'supplier' => 'Proveedor Anterior S.A.',
+        ]);
+
+        $this->get(route('movements.index'))
+            ->assertOk()
+            ->assertSee('Número de factura')
+            ->assertSee('Proveedor Anterior S.A.')
+            ->assertSee('id="serial-quick"', false);
+    }
+
+    public function test_la_compra_sale_en_el_comprobante_y_en_los_reportes(): void
+    {
+        \Maatwebsite\Excel\Facades\Excel::fake();
+
+        $this->post(route('movements.store'), [
+            'type' => 'Entrada',
+            'reason' => 'Compra',
+            'warehouse_destination_id' => $this->principal->id,
+            'supplier' => 'Huawei Colombia S.A.S.',
+            'invoice_number' => 'FE-4471',
+            'invoice_date' => '2026-09-18',
+            'materials' => [[
+                'material_id' => $this->ont->id,
+                'quantity' => 1,
+                'serials_text' => 'HWTC00000001',
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        // El comprobante del ingreso se genera al registrar: si la
+        // plantilla se rompiera, el movimiento no se habría guardado.
+        $this->assertNotNull(session('pdfPath'));
+        $this->assertFileExists(session('pdfPath'));
+
+        // El PDF del historial también lo lleva.
+        $pdf = $this->get(route('movements.pdf'));
+        $pdf->assertOk();
+        $this->assertSame('application/pdf', $pdf->headers->get('Content-Type'));
+
+        $this->get(route('movements.excel'))->assertOk();
+        \Maatwebsite\Excel\Facades\Excel::assertDownloaded(
+            'listado_de_movimientos_de_almacen.xlsx',
+            fn (\App\Exports\MaterialsMovementsExport $e) => $e->map(MaterialMovement::first())[11] === 'FE-4471',
+        );
+    }
+
     // ==================== Apoyo ====================
 
     private function material(string $nombre, bool $equipo): Material

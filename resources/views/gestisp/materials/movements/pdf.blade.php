@@ -119,7 +119,7 @@
                 <th style="width: 9%" class="text-right">V. unit.</th>
             @endif
             <th style="width: {{ $verCostos ? '10%' : '12%' }}">Serial</th>
-            <th style="width: {{ $verCostos ? '12%' : '14%' }}">Motivo / responsable</th>
+            <th style="width: {{ $verCostos ? '12%' : '14%' }}">Motivo / compra / responsable</th>
         </tr>
         </thead>
         <tbody>
@@ -142,6 +142,15 @@
                 <td>{{ $movement->serial_number ?: '—' }}</td>
                 <td>
                     {{ $movement->reason ?: '—' }}
+                    {{-- La compra, si la entrada la trae: es lo que
+                         permite llegar del historial a la factura. --}}
+                    @if($movement->supplier || $movement->invoice_number)
+                        <br>
+                        <span class="muted">
+                            {{ $movement->supplier ?: '—' }}
+                            @if($movement->invoice_number) · Fact. {{ $movement->invoice_number }} @endif
+                        </span>
+                    @endif
                     <br>
                     <span class="muted">
                         {{ $movement->user->name ?? '—' }} {{ $movement->user->last_name ?? '' }}

@@ -41,6 +41,9 @@ class MaterialsMovementsExport implements FromQuery, WithHeadings, WithMapping
             'Unidad de medida',
             'Serial',
             'Motivo',
+            'Proveedor',
+            'Numero de factura',
+            'Fecha de la factura',
             'Realizado por'
         ];
     }
@@ -59,6 +62,9 @@ class MaterialsMovementsExport implements FromQuery, WithHeadings, WithMapping
             $movement->unit_of_measurement,
             $movement->serial_number ?? 'N/A',
             $movement->reason,
+            $movement->supplier ?? '',
+            $movement->invoice_number ?? '',
+            $movement->invoice_date?->format('Y-m-d') ?? '',
             $movement->user->name ?? 'N/A',
 
         ];

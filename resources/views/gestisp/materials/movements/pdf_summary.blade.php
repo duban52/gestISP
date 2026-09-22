@@ -70,6 +70,28 @@
     <div class="section-title">Materiales del movimiento</div>
 
     <table class="data">
+        @php
+            // Los datos de la compra son del movimiento entero: se toman
+            // del primer renglón, que es donde se guardaron todos.
+            $compra = collect($movements)->first(fn ($m) => $m->supplier || $m->invoice_number || $m->invoice_date);
+        @endphp
+
+        @if($compra)
+            <div class="section-title">De quién se compró</div>
+            <table class="detail">
+                <tr>
+                    <td class="label" style="width: 22%">Proveedor</td>
+                    <td style="width: 28%">{{ $compra->supplier ?: '—' }}</td>
+                    <td class="label" style="width: 22%">Número de factura</td>
+                    <td>{{ $compra->invoice_number ?: '—' }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Fecha de la factura</td>
+                    <td colspan="3">{{ $compra->invoice_date?->format('d/m/Y') ?: '—' }}</td>
+                </tr>
+            </table>
+        @endif
+
         <thead>
         <tr>
             <th style="width: {{ $verCostos ? '25%' : '30%' }}">Material</th>

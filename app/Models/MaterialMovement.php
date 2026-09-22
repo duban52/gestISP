@@ -38,10 +38,16 @@ class MaterialMovement extends Model
         // permite auditar o rehacer el promedio ponderado del
         // inventario, que solo guarda el resultado.
         'purchase_unit_value',
+        // De quién se compró y con qué factura entró. Solo en las
+        // entradas: en un traslado o una salida no hay compra.
+        'supplier',
+        'invoice_number',
+        'invoice_date',
     ];
 
     protected $casts = [
         'purchase_unit_value' => 'decimal:2',
+        'invoice_date' => 'date',
     ];
 
     /** Material movido */
