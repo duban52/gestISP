@@ -515,6 +515,29 @@ class TechnicalOrderController extends Controller
             'initial_comment' => 'nullable|string',
         ]);
 
+        // UN TRASLADO LLEVA LA DIRECCIÓN NUEVA.
+        //
+        // El técnico va a donde diga el contrato: si se pidiera el
+        // traslado sin la dirección nueva, la orden lo mandaría a la casa
+        // de la que el cliente se fue. El punto en el mapa es opcional,
+        // como en el alta.
+        $traslado = OrderDetailMap::clave($validated['order_detail']) === 'traslado de servicio'
+            ? $request->validate([
+                'department' => 'required|string|max:100',
+                'municipality' => 'required|string|max:100',
+                'neighborhood' => 'required|string|max:255',
+                'address' => 'required|string|max:255',
+                'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
+                'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
+                'location_source' => 'nullable|string|in:mapa,dispositivo',
+            ], [
+                'department.required' => 'Un traslado necesita el departamento de la dirección nueva.',
+                'municipality.required' => 'Un traslado necesita el municipio de la dirección nueva.',
+                'neighborhood.required' => 'Un traslado necesita el barrio o la vereda de la dirección nueva.',
+                'address.required' => 'Un traslado necesita la dirección nueva: sin ella el técnico iría a la casa anterior.',
+            ])
+            : null;
+
         try {
             // Bloquear si ya hay una orden en curso para el contrato
             $existingOrder = TechnicalOrder::where('contract_id', $validated['contract_id'])
@@ -531,15 +554,26 @@ class TechnicalOrderController extends Controller
             // porque este metodo solo recibe el id, no el modelo.
             $contrato = Contract::findOrFail($validated['contract_id']);
 
-            $order = TechnicalOrder::create([
-                'contract_id'     => $validated['contract_id'],
-                'branch_id'       => $contrato->branch_id,
-                'created_by'      => Auth::id(),
-                'type'            => $validated['order_type'],
-                'detail'          => $validated['order_detail'],
-                'initial_comment' => $validated['initial_comment'] ?? null,
-                'status'          => 'Pendiente',
-            ]);
+            $order = DB::transaction(function () use ($contrato, $validated, $traslado) {
+                $comentario = $validated['initial_comment'] ?? null;
+
+                if ($traslado) {
+                    $comentario = $this->trasladarDireccion($contrato, $traslado, $comentario);
+                }
+
+                return TechnicalOrder::create([
+                    'contract_id'     => $validated['contract_id'],
+                    'branch_id'       => $contrato->branch_id,
+                    'created_by'      => Auth::id(),
+                    'type'            => $validated['order_type'],
+                    'detail'          => $validated['order_detail'],
+                    // La columna no admite nulos y el formulario manda el
+                    // comentario vacío como null: sin esto, crear una orden
+                    // sin comentario fallaba.
+                    'initial_comment' => $comentario ?? '',
+                    'status'          => 'Pendiente',
+                ]);
+            });
 
             // Avisar al cliente que recibimos su solicitud de servicio
             $order->loadMissing('contract.client', 'branch');
@@ -554,6 +588,52 @@ class TechnicalOrderController extends Controller
             return redirect()->route('contracts.show', $validated['contract_id'])
                 ->with('error', 'Hubo un error al crear la orden técnica: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Pone el contrato en la dirección nueva de un traslado.
+     *
+     * Devuelve el comentario de la orden con el cambio anotado: la
+     * dirección anterior queda escrita ahí, que es donde la busca quien
+     * revise el traslado. La trazabilidad del contrato guarda además el
+     * antes y el después campo por campo.
+     *
+     * El punto viejo en el mapa ya no sirve: se reemplaza por el nuevo
+     * si se marcó, y si no se quita. Un punto en la casa anterior haría
+     * que el cierre en la casa nueva pareciera sospechoso.
+     *
+     * @param  array<string, mixed>  $nueva  lo validado en store()
+     */
+    private function trasladarDireccion(Contract $contrato, array $nueva, ?string $comentario): string
+    {
+        $describir = fn (Contract $c) => collect([$c->address, $c->neighborhood, $c->municipality, $c->department])
+            ->filter(fn ($v) => filled($v) && $v !== 'N/A')
+            ->implode(', ') ?: 'sin dirección registrada';
+
+        $anterior = $describir($contrato);
+
+        $contrato->update([
+            'department' => $nueva['department'],
+            'municipality' => $nueva['municipality'],
+            'neighborhood' => $nueva['neighborhood'],
+            'address' => $nueva['address'],
+        ]);
+
+        $geolocator = app(\App\Services\ContractGeolocator::class);
+
+        if (filled($nueva['latitude'] ?? null)) {
+            $geolocator->locate(
+                $contrato,
+                (float) $nueva['latitude'],
+                (float) $nueva['longitude'],
+                $nueva['location_source'] ?? Contract::LOCATION_SOURCE_MAP,
+            );
+        } else {
+            $geolocator->clear($contrato);
+        }
+
+        return trim(($comentario ? $comentario . "\n\n" : '')
+            . 'Traslado a: ' . $describir($contrato->fresh()) . '. Dirección anterior: ' . $anterior . '.');
     }
 
     /**

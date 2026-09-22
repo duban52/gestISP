@@ -192,7 +192,7 @@
                                 <span class="badge badge-warning">Pruebas</span>
                             @endif
                         </td>
-                        <td>{{ $documento->invoice?->contract?->client?->fullName() ?? '—' }}</td>
+                        <td>{{ $documento->invoice?->titular()?->fullName() ?? '—' }}</td>
                         <td>
                             @include('gestisp.dian.log.partials.estado', ['documento' => $documento, 'estados' => $estados])
                         </td>

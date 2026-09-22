@@ -68,7 +68,7 @@ class NoteXmlBuilder extends UblBuilder
     ): array {
         $factura = $nota->invoice;
         $empresa = $configuracion->company;
-        $cliente = $factura?->contract?->client;
+        $cliente = $factura?->titular();
 
         if (!$factura) {
             throw new RuntimeException('La nota no tiene factura: no se puede decir qué documento corrige.');

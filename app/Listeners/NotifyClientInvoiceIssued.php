@@ -17,8 +17,8 @@ class NotifyClientInvoiceIssued
 {
     public function handle(InvoiceIssued $event): void
     {
-        $invoice = $event->invoice->loadMissing('contract.client', 'branch');
-        $cliente = $invoice->contract?->client;
+        $invoice = $event->invoice->loadMissing('contract.client', 'client', 'branch');
+        $cliente = $invoice->titular();
 
         // La notificación va en cola: no demora el cierre de la
         // corrida de facturación aunque sean cientos de facturas.

@@ -49,9 +49,9 @@ class PaymentsExport implements FromQuery, WithHeadings, WithMapping
     {
         return [
             $payment->id,
-            $payment->invoice->contract->client->identity_number ?? '',
-            $payment->invoice->contract->client->name,
-            $payment->invoice->contract->client->last_name,
+            $payment->invoice?->titular()?->identity_number ?? '',
+            $payment->invoice?->titular()?->name,
+            $payment->invoice?->titular()?->last_name,
             $payment->date,
             $payment->amount ?? '',
             $payment->payment_method,

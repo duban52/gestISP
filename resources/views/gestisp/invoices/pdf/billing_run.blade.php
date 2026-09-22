@@ -115,7 +115,7 @@
         <tbody>
         @forelse($facturas as $factura)
             @php
-                $cliente = $factura->contract?->client;
+                $cliente = $factura->titular();
             @endphp
             <tr>
                 <td>{{ $factura->displayNumber() }}</td>

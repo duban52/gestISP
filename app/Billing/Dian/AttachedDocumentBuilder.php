@@ -92,7 +92,7 @@ class AttachedDocumentBuilder extends UblBuilder
         }
 
         $empresa = Company::withoutGlobalScopes()->find($documento->company_id);
-        $cliente = $factura->contract?->client;
+        $cliente = $factura->titular();
 
         if (!$empresa || !$cliente) {
             throw new RuntimeException('Falta la empresa o el cliente para armar el contenedor.');

@@ -12,7 +12,7 @@
 ])
 
 @php
-    $cliente = $nota->invoice?->contract?->client;
+    $cliente = $nota->invoice?->titular();
     $contrato = $nota->invoice?->contract;
 @endphp
 

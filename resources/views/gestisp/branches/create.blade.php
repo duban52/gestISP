@@ -66,11 +66,8 @@
 
                     @include('gestisp.partials.departamento-municipio')
 
-                    <div class="form-group col-md-6">
-                        <label for="address">Dirección <span class="text-danger">*</span></label>
-                        <input type="text" name="address" class="form-control @error('address') is-invalid @enderror"
-                               value="{{ old('address') }}" required>
-                        @error('address')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <div class="form-group col-12">
+                        @include('gestisp.partials.direccion', ['requerido' => true])
                     </div>
                     <div class="form-group col-md-6">
                         <label for="number_phone">Teléfono <span class="text-danger">*</span></label>

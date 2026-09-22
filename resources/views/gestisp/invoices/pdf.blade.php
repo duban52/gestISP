@@ -245,15 +245,15 @@
                 <td colspan="8" class="border-bottom text-center"><strong>DATOS DEL SUSCRIPTOR</strong></td>
             </tr>
             <tr>
-                <td colspan="2">C.C/NIT {{ $invoice->contract?->client?->identity_number}}</td>
-                <td colspan="3">SUSCRIPTOR {{ trim(($invoice->contract?->client?->name ?? '') . ' ' . ($invoice->contract?->client?->last_name ?? '')) ?: '—' }}</td>
+                <td colspan="2">C.C/NIT {{ $invoice->titular()?->identity_number}}</td>
+                <td colspan="3">SUSCRIPTOR {{ trim(($invoice->titular()?->name ?? '') . ' ' . ($invoice->titular()?->last_name ?? '')) ?: '—' }}</td>
                 <td>CODIGO {{ $invoice->contract->numero_visible }}</td>
-                <td colspan="2">CORREO {{ $invoice->contract?->client?->email }}</td>
+                <td colspan="2">CORREO {{ $invoice->titular()?->email }}</td>
             </tr>
             <tr>
                 <td colspan="5" class="border-bottom">DIRECCIÓN {{ $invoice->contract->address }} Barrio: {{ $invoice->contract->neighborhood }}</td>
                 <td colspan="2" class="border-bottom">{{ $invoice->contract->municipality ?? 'N/A' }}-{{ $invoice->contract->department  ?? 'N/A'}}</td>
-                <td class="border-bottom">TELÉFONO {{ $invoice->contract?->client?->number_phone }}</td>
+                <td class="border-bottom">TELÉFONO {{ $invoice->titular()?->number_phone }}</td>
             </tr>
             </tbody>
         </table>
@@ -385,14 +385,14 @@
                         <table class="border-in" style="font-size: 8px;">
                             <tbody>
                                 <tr>
-                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>C.C <strong>{{ $invoice->contract?->client?->identity_number}}</strong></p></td>
-                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;" colspan="3"><p>SUSCRIPTOR <strong>{{ trim(($invoice->contract?->client?->name ?? '') . ' ' . ($invoice->contract?->client?->last_name ?? '')) ?: '—' }}</strong></p></td>
+                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>C.C <strong>{{ $invoice->titular()?->identity_number}}</strong></p></td>
+                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;" colspan="3"><p>SUSCRIPTOR <strong>{{ trim(($invoice->titular()?->name ?? '') . ' ' . ($invoice->titular()?->last_name ?? '')) ?: '—' }}</strong></p></td>
                                     <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>PERIODO <strong>{{ $invoice->billed_year_month }}</strong></p></td>
                                     <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>FECHA VENCE <strong>{{ $invoice->due_date }}</strong></p></td>
                                 </tr>
                                 <tr>
                                     <td colspan="3" style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>DIRECCIÓN <strong>{{ $invoice->contract->address }} Barrio {{ $invoice->contract->neighborhood }}</strong></p></td>
-                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>TELÉFONO <strong>{{ $invoice->contract?->client?->number_phone}}</strong></p></td>
+                                    <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>TELÉFONO <strong>{{ $invoice->titular()?->number_phone}}</strong></p></td>
                                     <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>CÓDIGO {{ $invoice->contract->numero_visible }}</p></td>
                                     <td style="padding-top: 1px; padding-bottom: 1px; padding-left: 4px; padding-right: 2px;"><p>FECHA CORTE <strong>{{ $invoice->suspension_date }}</strong></p></td>
                                 </tr>

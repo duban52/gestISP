@@ -59,7 +59,7 @@ class ElectronicDocumentLogController extends Controller
         $hasta = $request->input('hasta');
 
         $documentos = ElectronicDocument::query()
-            ->with(['invoice.contract.client', 'note'])
+            ->with(['invoice.contract.client', 'invoice.client', 'note'])
             ->when($desde, fn ($q) => $q->whereDate('created_at', '>=', $desde))
             ->when($hasta, fn ($q) => $q->whereDate('created_at', '<=', $hasta))
             ->when($request->filled('estado'), fn ($q) => $q->where('status', $request->input('estado')))
@@ -112,7 +112,7 @@ class ElectronicDocumentLogController extends Controller
 
     public function show(ElectronicDocument $document): View
     {
-        $document->load(['invoice.contract.client', 'note', 'transmissions']);
+        $document->load(['invoice.contract.client', 'invoice.client', 'note', 'transmissions']);
 
         return view('gestisp.dian.log.show', [
             'documento' => $document,
@@ -163,7 +163,7 @@ class ElectronicDocumentLogController extends Controller
 
         $factura = $document->invoice;
 
-        if (!$factura || !$factura->contract?->client) {
+        if (!$factura || !$factura->titular()) {
             return back()->with('error', 'Esta factura no tiene cliente al que entregársela.');
         }
 
@@ -181,7 +181,7 @@ class ElectronicDocumentLogController extends Controller
 
         return back()->with(
             'success',
-            'Se encoló el envío a ' . $factura->contract->client->email . '. '
+            'Se encoló el envío a ' . $factura->titular()->email . '. '
                 . 'Si en unos minutos sigue sin entregarse, revise el registro de errores.',
         );
     }

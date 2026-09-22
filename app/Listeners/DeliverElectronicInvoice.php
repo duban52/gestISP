@@ -52,7 +52,7 @@ class DeliverElectronicInvoice
             return;
         }
 
-        $cliente = $factura->contract?->client;
+        $cliente = $factura->titular();
 
         if (!$cliente) {
             Log::warning('Factura validada sin cliente al que entregársela.', [
@@ -77,7 +77,7 @@ class DeliverElectronicInvoice
 
         try {
             $cliente->notify(new ElectronicInvoiceDelivered(
-                $factura->load(['contract.client', 'contract.branch', 'invoice_items']),
+                $factura->load(['contract.client', 'client', 'contract.branch', 'invoice_items']),
             ));
         } catch (Throwable $e) {
             // Se devuelve la marca: si no se pudo ni encolar, esto no se

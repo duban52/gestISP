@@ -66,6 +66,8 @@ class BillingRun extends Model
     {
         $relaciones = [
             'contract.client',
+            // El titular congelado en cada factura (ver Invoice::titular()).
+            'client',
             'contract.plan',
             // El grupo de afinidad: el reporte filtra y totaliza por él,
             // y sin precargarlo seria una consulta por factura.

@@ -72,11 +72,19 @@
     <h6 class="text-uppercase text-muted mt-3">Dónde está</h6>
 
     <div class="row">
+        @php
+            // La referencia tiene su propia columna en las muflas.
+            $parametrosDireccion = [
+                'valor' => $mufla->address ?? null,
+                'requerido' => true,
+                'conReferencia' => false,
+                'mapa' => 'mapaMufla',
+                'latitud' => 'latitude',
+                'longitud' => 'longitude',
+            ];
+        @endphp
         <div class="col-md-8 form-group">
-            <label for="address">Dirección <span class="text-danger">*</span></label>
-            <input type="text" name="address" id="address" class="form-control"
-                   value="{{ old('address', $mufla->address ?? '') }}"
-                   placeholder="Calle 30 # 40-50" required>
+            @include('gestisp.partials.direccion', $parametrosDireccion)
         </div>
         <div class="col-md-4 form-group">
             <label for="reference">Punto de referencia</label>
@@ -222,6 +230,10 @@
             }
 
             mapa.on('click', e => fijarPunto(e.latlng.lat, e.latlng.lng, false));
+
+            // El parcial de dirección ubica el mapa desde sus campos.
+            document.getElementById('mapaMufla')
+                .addEventListener('gestisp:fijar-punto', e => fijarPunto(e.detail.lat, e.detail.lng, true));
 
             $('#btnMiUbicacion').on('click', function () {
                 if (!navigator.geolocation) {

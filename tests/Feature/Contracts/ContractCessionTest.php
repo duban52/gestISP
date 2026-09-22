@@ -39,22 +39,22 @@ use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Cesión de contrato: el servicio pasa a otro titular sin cortarse.
+ * Cesión de contrato: el MISMO contrato pasa a otro titular.
  *
  * LO QUE SE DEFIENDE, EN ORDEN DE GRAVEDAD
  * ----------------------------------------
  * 1. El historial fiscal del cedente NO cambia de dueño. Las facturas
- *    leen al cliente en vivo del contrato: si la cesión tocara el
- *    contrato viejo, sus facturas pasarían a nombre del nuevo titular.
+ *    guardan su titular: aunque el contrato ya sea de otro, las viejas
+ *    siguen a nombre de quien las compró.
  *
- * 2. No se cobra dos veces el mismo mes. El mes de la cesión lo paga el
- *    cedente; el nuevo titular empieza el mes siguiente.
+ * 2. No se cobra dos veces el mismo mes ni se le pasa una deuda al
+ *    nuevo titular: el cierre se le factura al cedente y lo paga antes.
  *
- * 3. Los equipos cambian de contrato, NO de red. Ni el router ni la OLT
- *    reciben una sola orden.
+ * 3. Los equipos NO se tocan. Ni el router ni la OLT reciben una sola
+ *    orden: el contrato, con todo lo suyo, cambia de dueño.
  *
  * 4. Las reglas del negocio: paz y salvo, cuotas liquidadas al cedente,
- *    y nada de ceder lo que ya terminó.
+ *    el estado se conserva y nada de ceder lo que ya terminó.
  */
 class ContractCessionTest extends TestCase
 {
@@ -249,27 +249,29 @@ class ContractCessionTest extends TestCase
         );
     }
 
-    // ==================== 1. El historial no cambia de dueño ====================
+    // ==================== 1. El mismo contrato, otro titular ====================
 
-    public function test_la_cesion_crea_un_contrato_nuevo_y_cierra_el_viejo(): void
+    public function test_la_cesion_cambia_el_titular_del_mismo_contrato(): void
     {
         $cedente = $this->cliente();
         $cesionario = $this->cliente();
         $origen = $this->contrato($cedente);
         $this->facturaDelMesPagada($origen);
+        $numero = $origen->contract_number;
 
         $cesion = $this->ceder($origen, $cesionario);
 
-        $origen->refresh();
-        $nuevo = $cesion->toContract;
+        $contrato = $origen->fresh();
 
-        $this->assertSame(ContractStatus::Cedido->value, $origen->status);
-        $this->assertSame($cesionario->id, $nuevo->client_id);
-        $this->assertNotSame($origen->id, $nuevo->id);
-        $this->assertNotNull($nuevo->contract_number);
-        $this->assertNotSame($origen->contract_number, $nuevo->contract_number);
+        // Mismo id, mismo número, mismo estado: solo cambia el titular.
+        $this->assertSame($cesionario->id, $contrato->client_id);
+        $this->assertSame($numero, $contrato->contract_number);
+        $this->assertSame('Activo', $contrato->status);
+        $this->assertSame(1, Contract::count());
 
         // El registro guarda a los dos, y la razón.
+        $this->assertSame($origen->id, $cesion->from_contract_id);
+        $this->assertSame($origen->id, $cesion->to_contract_id);
         $this->assertSame($cedente->id, $cesion->from_client_id);
         $this->assertSame($cesionario->id, $cesion->to_client_id);
         $this->assertStringContainsString('arrendatario', $cesion->reason);
@@ -277,18 +279,45 @@ class ContractCessionTest extends TestCase
 
     public function test_las_facturas_del_cedente_siguen_a_su_nombre(): void
     {
-        // El punto entero de hacer un contrato nuevo: el XML, las notas
-        // y los avisos leen al cliente del contrato de la factura.
-        $cedente = $this->cliente();
+        // Lo que hace segura la cesión en el mismo contrato: el XML, el
+        // PDF, las notas y los avisos leen el titular de la FACTURA.
+        $cedente = $this->cliente(['identity_number' => '1037045539']);
+        $cesionario = $this->cliente(['identity_number' => '3573573']);
         $origen = $this->contrato($cedente);
         $factura = $this->facturaDelMesPagada($origen);
 
-        $this->ceder($origen, $this->cliente());
+        $this->ceder($origen, $cesionario);
 
-        $this->assertSame($cedente->id, $factura->fresh()->contract->client_id);
+        $this->assertSame($cedente->id, $factura->fresh()->titular()->id);
+
+        $this->get(route('invoices.show', $factura))
+            ->assertOk()
+            ->assertSee('1037045539')
+            ->assertDontSee('3573573');
     }
 
-    public function test_el_contrato_nuevo_deja_constancia_del_titular_anterior(): void
+    public function test_las_facturas_siguientes_son_del_nuevo_titular(): void
+    {
+        $origen = $this->contrato($this->cliente());
+        $this->facturaDelMesPagada($origen);
+        $cesionario = $this->cliente();
+
+        $this->ceder($origen, $cesionario);
+
+        // El mes de la cesión ya está facturado: la corrida lo salta...
+        $mismoMes = app(InvoiceGenerator::class)->generateForContract($origen->fresh(), now(), $this->admin->id);
+        $this->assertFalse($mismoMes['generated']);
+
+        // ...y el siguiente es el primero del nuevo titular, completo.
+        $siguiente = app(InvoiceGenerator::class)
+            ->generateForContract($origen->fresh(), now()->addMonthNoOverflow(), $this->admin->id);
+
+        $this->assertTrue($siguiente['generated']);
+        $this->assertEquals(80000, $siguiente['invoice']->total);
+        $this->assertSame($cesionario->id, $siguiente['invoice']->client_id);
+    }
+
+    public function test_el_contrato_deja_constancia_del_titular_anterior(): void
     {
         // Con documento Y nombre completo: dos clientes pueden llamarse
         // igual, y es con el documento con lo que se identifica a quien
@@ -308,126 +337,130 @@ class ContractCessionTest extends TestCase
         $origen = $this->contrato($cedente);
         $this->facturaDelMesPagada($origen);
 
-        $nuevo = $this->ceder($origen, $cesionario)->toContract;
+        $this->ceder($origen, $cesionario);
 
-        $comentario = \App\Models\ContractComment::where('contract_id', $nuevo->id)->value('body');
+        $comentario = \App\Models\ContractComment::where('contract_id', $origen->id)->value('body');
 
         $this->assertStringContainsString('Se realizó cesión del contrato', $comentario);
         $this->assertStringContainsString('Titular anterior: CC 1037045539 — Rebeca Arango', $comentario);
-
-        // Y el viejo dice a quién pasó.
-        $this->assertStringContainsString(
-            'Titular nuevo: CC 3573573 — Jaime Monsalve',
-            \App\Models\ContractComment::where('contract_id', $origen->id)->value('body'),
-        );
+        $this->assertStringContainsString('Titular nuevo: CC 3573573 — Jaime Monsalve', $comentario);
     }
 
-    // ==================== 2. Sin doble cobro ====================
-
-    public function test_si_el_mes_ya_estaba_facturado_no_se_factura_otra_vez(): void
+    public function test_el_estado_no_cambia(): void
     {
-        $origen = $this->contrato($this->cliente());
-        $this->facturaDelMesPagada($origen);
+        \App\Models\ContractStatusOption::create([
+            'name' => 'Exonerado',
+            'bills' => false,
+            'auto_bills' => false,
+            'has_service' => true,
+            'active' => true,
+        ]);
 
-        $cesion = $this->ceder($origen, $this->cliente());
-
-        $this->assertSame(1, Invoice::where('contract_id', $origen->id)->count());
-        $this->assertSame(0, Invoice::where('contract_id', $cesion->to_contract_id)->count());
-    }
-
-    public function test_si_el_mes_no_estaba_facturado_se_le_factura_al_cedente(): void
-    {
-        $cedente = $this->cliente();
-        $origen = $this->contrato($cedente);
+        $origen = $this->contrato($this->cliente(), 'Exonerado');
 
         $this->ceder($origen, $this->cliente());
 
-        $factura = Invoice::where('contract_id', $origen->id)
-            ->where('billed_year_month', '202609')
-            ->first();
-
-        $this->assertNotNull($factura, 'No se le facturó al cedente el mes de la cesión.');
-        $this->assertSame($cedente->id, $factura->contract->client_id);
+        $this->assertSame('Exonerado', $origen->fresh()->status);
     }
 
-    public function test_el_nuevo_titular_no_se_factura_el_mes_de_la_cesion(): void
+    public function test_los_equipos_y_el_puerto_no_se_tocan(): void
     {
-        $origen = $this->contrato($this->cliente());
-        $this->facturaDelMesPagada($origen);
-
-        $nuevo = $this->ceder($origen, $this->cliente())->toContract;
-
-        // La corrida del mismo mes lo salta...
-        $resultado = app(InvoiceGenerator::class)->generateForContract($nuevo->fresh(), now(), $this->admin->id);
-        $this->assertFalse($resultado['generated']);
-
-        // ...y la del mes siguiente le factura el mes COMPLETO: no es un
-        // contrato recién instalado para prorratear.
-        $siguiente = app(InvoiceGenerator::class)
-            ->generateForContract($nuevo->fresh(), now()->addMonthNoOverflow(), $this->admin->id);
-
-        $this->assertTrue($siguiente['generated']);
-        $this->assertEquals(80000, $siguiente['invoice']->total);
-    }
-
-    // ==================== 3. Equipos: de contrato, no de red ====================
-
-    public function test_los_equipos_y_el_puerto_pasan_al_contrato_nuevo(): void
-    {
+        // Ni el router ni la OLT reciben una orden (ver setUp), y todo
+        // sigue colgado del mismo contrato.
         $origen = $this->conEquipos($this->contrato($this->cliente()));
         $this->facturaDelMesPagada($origen);
         $puertoId = $origen->nap_port_id;
 
-        $nuevo = $this->ceder($origen, $this->cliente())->toContract->fresh();
-        $origen->refresh();
+        $this->ceder($origen, $this->cliente());
 
-        // El puerto: lo tiene el nuevo y lo soltó el viejo.
-        $this->assertSame($puertoId, $nuevo->nap_port_id);
-        $this->assertNull($origen->nap_port_id);
-        $this->assertNull($origen->nap_port);
+        $contrato = $origen->fresh();
 
-        // La cuenta PPPoE, con las MISMAS credenciales.
+        $this->assertSame($puertoId, $contrato->nap_port_id);
+        $this->assertSame('cliente01', $contrato->user_pppoe);
+        $this->assertSame('HWTC12345678', $contrato->cpe_sn);
+
         $cuenta = PppoeAccount::where('username', 'cliente01')->firstOrFail();
-        $this->assertSame($nuevo->id, $cuenta->contract_id);
+        $this->assertSame($origen->id, $cuenta->contract_id);
         $this->assertFalse($cuenta->disabled);
-        $this->assertSame('cliente01', $nuevo->user_pppoe);
 
-        // La ONT, habilitada como estaba.
         $ont = Ont::where('sn', 'HWTC12345678')->firstOrFail();
-        $this->assertSame($nuevo->id, $ont->contract_id);
+        $this->assertSame($origen->id, $ont->contract_id);
         $this->assertTrue($ont->admin_enabled);
-
-        // El viejo ya no refleja las credenciales: buscar el usuario
-        // PPPoE no puede devolver dos contratos.
-        $this->assertNull($origen->user_pppoe);
-        $this->assertNull($origen->cpe_sn);
     }
 
-    public function test_el_contrato_nuevo_hereda_los_datos_del_servicio(): void
+    // ==================== 2. El cierre del cedente ====================
+
+    public function test_sin_las_facturas_de_cierre_no_se_cede(): void
     {
-        $origen = $this->contrato($this->cliente(), 'Activo', [
-            'latitude' => 6.2442,
-            'longitude' => -75.5812,
-            'permanence_clause' => 12,
-        ]);
-        $this->facturaDelMesPagada($origen);
+        // El mes todavía no se le facturó al cedente.
+        $cedente = $this->cliente();
+        $origen = $this->contrato($cedente);
 
-        $nuevo = $this->ceder($origen, $this->cliente())->toContract;
+        try {
+            $this->ceder($origen, $this->cliente());
+            $this->fail('Se cedió sin facturarle el mes al cedente.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('facturas de cierre', $e->getMessage());
+        }
 
-        $this->assertSame($this->plan->id, $nuevo->plan_id);
-        $this->assertSame('Calle 20 # 19-30', $nuevo->address);
-        $this->assertEquals(6.2442, (float) $nuevo->latitude);
-        // El cesionario asume lo que quedaba de permanencia.
-        $this->assertSame(12, (int) $nuevo->permanence_clause);
-        $this->assertSame(ContractStatus::Activo->value, $nuevo->status);
+        $this->assertSame($cedente->id, $origen->fresh()->client_id);
     }
 
-    // ==================== 4. Las reglas del negocio ====================
+    public function test_el_cierre_le_factura_al_cedente_y_despues_de_pagarlo_se_cede(): void
+    {
+        $cedente = $this->cliente();
+        $cesionario = $this->cliente();
+        $origen = $this->contrato($cedente);
+
+        AditionalCharge::create([
+            'contract_id' => $origen->id,
+            'user_id' => $this->admin->id,
+            'description' => 'Router WiFi',
+            'amount' => 300000,
+            'tax_percentage' => 0,
+            'installments_total' => 6,
+            'installments_billed' => 2,
+            'status' => 'pendiente',
+        ]);
+
+        $hechos = app(ContractCessionService::class)->emitirCierre($origen, $this->admin->id);
+        $this->assertCount(2, $hechos);
+
+        $delMes = Invoice::where('contract_id', $origen->id)->where('billed_year_month', '202609')->firstOrFail();
+        $liquidacion = Invoice::where('contract_id', $origen->id)
+            ->where('type', InvoiceType::Liquidacion->value)
+            ->firstOrFail();
+
+        // Las dos son del cedente. La del mes ya cobró la tercera cuota,
+        // así que la liquidación trae las tres que quedaban.
+        $this->assertSame($cedente->id, $delMes->client_id);
+        $this->assertSame($cedente->id, $liquidacion->client_id);
+        $this->assertEquals(150000, $liquidacion->total);
+
+        // Emitidas, falta que las pague.
+        try {
+            $this->ceder($origen, $cesionario);
+            $this->fail('Se cedió con las facturas de cierre sin pagar.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('paz y salvo', $e->getMessage());
+        }
+
+        Invoice::where('contract_id', $origen->id)
+            ->update(['pending_invoice_amount' => 0, 'status' => InvoiceStatus::Pagada->value]);
+
+        $this->ceder($origen->fresh(), $cesionario);
+
+        $this->assertSame($cesionario->id, $origen->fresh()->client_id);
+        $this->assertSame(0, $origen->additionalCharges()->where('status', 'pendiente')->count());
+    }
 
     public function test_no_se_cede_con_deuda(): void
     {
-        // Decisión del negocio: paz y salvo.
-        $origen = $this->contrato($this->cliente());
+        // Decisión del negocio: paz y salvo. Con el mismo contrato es,
+        // además, lo que impide que la mora le corte al nuevo titular.
+        $cedente = $this->cliente();
+        $origen = $this->contrato($cedente);
+        $this->facturaDelMesPagada($origen);
 
         Invoice::create([
             'contract_id' => $origen->id,
@@ -447,35 +480,8 @@ class ContractCessionTest extends TestCase
             $this->assertStringContainsString('paz y salvo', $e->getMessage());
         }
 
-        $this->assertSame('Activo', $origen->fresh()->status);
+        $this->assertSame($cedente->id, $origen->fresh()->client_id);
         $this->assertSame(0, ContractCession::count());
-    }
-
-    public function test_las_cuotas_pendientes_se_le_liquidan_al_cedente(): void
-    {
-        $origen = $this->contrato($this->cliente());
-        $this->facturaDelMesPagada($origen);
-
-        AditionalCharge::create([
-            'contract_id' => $origen->id,
-            'user_id' => $this->admin->id,
-            'description' => 'Router WiFi',
-            'amount' => 300000,
-            'tax_percentage' => 0,
-            'installments_total' => 6,
-            'installments_billed' => 2,
-            'status' => 'pendiente',
-        ]);
-
-        $nuevo = $this->ceder($origen, $this->cliente())->toContract;
-
-        $liquidacion = Invoice::where('contract_id', $origen->id)
-            ->where('type', InvoiceType::Liquidacion->value)
-            ->first();
-
-        $this->assertNotNull($liquidacion);
-        $this->assertEquals(200000, $liquidacion->total);   // 4 cuotas de 50.000
-        $this->assertSame(0, $nuevo->additionalCharges()->count());
     }
 
     public function test_el_descuento_no_pasa_al_nuevo_titular(): void
@@ -486,27 +492,25 @@ class ContractCessionTest extends TestCase
         ]);
         $this->facturaDelMesPagada($origen);
 
-        $nuevo = $this->ceder($origen, $this->cliente())->toContract;
+        $cesion = $this->ceder($origen, $this->cliente());
 
-        $this->assertFalse($nuevo->descuentoVigente());
+        $this->assertFalse($origen->fresh()->descuentoVigente());
+        $this->assertStringContainsString('descuento', implode(' ', $cesion->summary['hechos']));
     }
 
-    public function test_un_estado_con_servicio_que_no_factura_nace_activo(): void
+    public function test_se_avisa_del_saldo_a_favor_que_queda_en_el_contrato(): void
     {
-        // «Exonerado» era un beneficio de esa persona, no de la casa.
-        \App\Models\ContractStatusOption::create([
-            'name' => 'Exonerado',
-            'bills' => false,
-            'auto_bills' => false,
-            'has_service' => true,
-            'active' => true,
-        ]);
+        $origen = $this->contrato($this->cliente());
+        $this->facturaDelMesPagada($origen);
 
-        $origen = $this->contrato($this->cliente(), 'Exonerado');
+        app(\App\Billing\Services\CreditBalanceService::class)
+            ->abonar($origen, 50000, \App\Models\AccountCredit::ORIGEN_ANTICIPO, 'Pago por adelantado');
 
-        $nuevo = $this->ceder($origen, $this->cliente())->toContract;
+        $this->assertEquals(50000, app(ContractCessionService::class)->revisar($origen)['saldo_a_favor']);
 
-        $this->assertSame(ContractStatus::Activo->value, $nuevo->status);
+        $cesion = $this->ceder($origen, $this->cliente());
+
+        $this->assertStringContainsString('saldo a favor de $50.000,00', implode(' ', $cesion->summary['avisos']));
     }
 
     public function test_no_se_cede_un_contrato_terminado(): void
@@ -530,6 +534,7 @@ class ContractCessionTest extends TestCase
     {
         $cedente = $this->cliente();
         $origen = $this->contrato($cedente);
+        $this->facturaDelMesPagada($origen);
 
         $this->expectException(RuntimeException::class);
         $this->ceder($origen, $cedente);
@@ -566,24 +571,31 @@ class ContractCessionTest extends TestCase
         $this->ceder($origen, $this->cliente());
     }
 
-    public function test_un_contrato_solo_se_cede_una_vez(): void
+    public function test_un_contrato_se_puede_ceder_mas_de_una_vez(): void
     {
-        $origen = $this->contrato($this->cliente());
+        $primero = $this->cliente();
+        $segundo = $this->cliente();
+        $tercero = $this->cliente();
+        $origen = $this->contrato($primero);
         $this->facturaDelMesPagada($origen);
 
-        $this->ceder($origen, $this->cliente());
+        $this->ceder($origen, $segundo);
+        $this->ceder($origen->fresh(), $tercero);
 
-        // Ya está «Cedido»: es un estado final.
-        $this->expectException(RuntimeException::class);
-        $this->ceder($origen->fresh(), $this->cliente());
+        $this->assertSame($tercero->id, $origen->fresh()->client_id);
+        $this->assertSame(
+            [[$primero->id, $segundo->id], [$segundo->id, $tercero->id]],
+            $origen->cambiosDeTitular()->get()->map(fn ($c) => [$c->from_client_id, $c->to_client_id])->all(),
+        );
     }
 
     public function test_si_algo_falla_no_queda_nada_a_medias(): void
     {
         // Un cesionario de otra sucursal falla en la validación, que va
-        // DENTRO de la transacción tras bloquear: ni factura del mes, ni
-        // contrato nuevo, ni estado cambiado.
-        $origen = $this->contrato($this->cliente());
+        // DENTRO de la transacción tras bloquear.
+        $cedente = $this->cliente();
+        $origen = $this->contrato($cedente);
+        $this->facturaDelMesPagada($origen);
         $ajeno = $this->cliente(['branch_id' => Branch::factory()->create()->id]);
 
         try {
@@ -591,20 +603,19 @@ class ContractCessionTest extends TestCase
         } catch (RuntimeException) {
         }
 
-        $this->assertSame('Activo', $origen->fresh()->status);
-        $this->assertSame(0, Invoice::where('contract_id', $origen->id)->count());
-        $this->assertSame(1, Contract::count());
+        $this->assertSame($cedente->id, $origen->fresh()->client_id);
+        $this->assertSame(0, ContractCession::count());
+        $this->assertSame(0, \App\Models\ContractComment::where('contract_id', $origen->id)->count());
     }
 
     // ==================== Lo que viene después ====================
 
-    public function test_la_mora_no_resucita_un_contrato_cedido(): void
+    public function test_la_mora_no_resucita_un_contrato_cedido_de_los_de_antes(): void
     {
-        // El cedente no paga sus facturas de cierre. La mora diaria le
-        // marca vencidas, pero no puede pasar su contrato a
+        // Las cesiones de antes dejaban el contrato viejo «Cedido». Si el
+        // cedente no pagó su cierre, la mora no puede devolverlo a
         // «Suspendido»: parecería de nuevo vivo, con los equipos de otro.
-        $origen = $this->contrato($this->cliente());
-        $this->ceder($origen, $this->cliente());
+        $origen = $this->contrato($this->cliente(), ContractStatus::Cedido->value);
 
         foreach (['202607' => '2026-07-21', '202608' => '2026-08-21'] as $periodo => $vence) {
             Invoice::create([
@@ -650,8 +661,8 @@ class ContractCessionTest extends TestCase
 
     public function test_cedido_no_se_ofrece_al_cambiar_el_estado_a_mano(): void
     {
-        // Llegar a «Cedido» sin la cesión dispararía la baja definitiva
-        // sobre equipos que usa otro.
+        // Llegar a «Cedido» dispararía la baja definitiva sobre equipos
+        // que siguen dando servicio.
         $origen = $this->contrato($this->cliente());
 
         $this->post(route('technicals_orders.administrative'), [
@@ -672,12 +683,30 @@ class ContractCessionTest extends TestCase
 
         $this->ceder($origen, $this->cliente());
 
-        $periodo = \App\Reports\Support\ReportPeriod::fromRequest('2026-09-01', '2026-09-30', 'month');
-
-        $resumen = (new \App\Reports\GrowthReport($periodo, $this->branch->id))->resumen();
+        $resumen = $this->crecimientoDeSeptiembre();
 
         $this->assertSame(0, $resumen['altas']);
         $this->assertSame(0, $resumen['bajas']);
+    }
+
+    public function test_un_alta_del_mes_sigue_contando_aunque_se_ceda(): void
+    {
+        // Las cesiones de antes excluían de las altas el contrato que
+        // NACÍA de una cesión. Hoy el contrato es el mismo: su alta fue
+        // real y no puede desaparecer del informe por cederlo.
+        $origen = $this->contrato($this->cliente(), 'Activo', ['activation_date' => '2026-09-05']);
+        $this->facturaDelMesPagada($origen);
+
+        $this->ceder($origen, $this->cliente());
+
+        $this->assertSame(1, $this->crecimientoDeSeptiembre()['altas']);
+    }
+
+    private function crecimientoDeSeptiembre(): array
+    {
+        $periodo = \App\Reports\Support\ReportPeriod::fromRequest('2026-09-01', '2026-09-30', 'month');
+
+        return (new \App\Reports\GrowthReport($periodo, $this->branch->id))->resumen();
     }
 
     // ==================== La pantalla ====================
@@ -692,37 +721,59 @@ class ContractCessionTest extends TestCase
             ->assertDontSee('name="client_id"', false);
     }
 
-    public function test_se_cede_desde_la_pantalla_y_lleva_al_contrato_nuevo(): void
+    public function test_desde_la_pantalla_se_emiten_las_facturas_de_cierre(): void
     {
-        $origen = $this->contrato($this->cliente());
-        $this->facturaDelMesPagada($origen);
-        $cesionario = $this->cliente();
+        $cedente = $this->cliente();
+        $origen = $this->contrato($cedente);
 
-        $respuesta = $this->post(route('contracts.cession.store', $origen), [
+        $this->get(route('contracts.cession.create', $origen))
+            ->assertOk()
+            ->assertSee('Emitir las facturas de cierre al titular actual');
+
+        $this->post(route('contracts.cession.closing', $origen))
+            ->assertSessionHas('success');
+
+        $this->assertSame(
+            $cedente->id,
+            Invoice::where('contract_id', $origen->id)->where('billed_year_month', '202609')->value('client_id'),
+        );
+    }
+
+    public function test_se_cede_desde_la_pantalla_y_vuelve_al_mismo_contrato(): void
+    {
+        $cedente = $this->cliente(['name' => 'Rebeca', 'last_name' => 'Arango']);
+        $origen = $this->contrato($cedente);
+        $this->facturaDelMesPagada($origen);
+        $cesionario = $this->cliente(['name' => 'Jaime', 'last_name' => 'Monsalve']);
+
+        $this->post(route('contracts.cession.store', $origen), [
             'client_id' => $cesionario->id,
             'reason' => 'Cambio de arrendatario',
             'confirmar' => 1,
-        ]);
+        ])->assertRedirect(route('contracts.show', $origen));
 
-        $nuevo = Contract::where('client_id', $cesionario->id)->firstOrFail();
+        $this->assertSame($cesionario->id, $origen->fresh()->client_id);
 
-        $respuesta->assertRedirect(route('contracts.show', $nuevo));
-
-        // Las dos fichas cuentan la historia.
-        $this->get(route('contracts.show', $nuevo))->assertSee('Recibido por cesión');
-        $this->get(route('contracts.show', $origen))->assertSee('Contrato cedido');
+        // La ficha cuenta la historia.
+        $this->get(route('contracts.show', $origen))
+            ->assertOk()
+            ->assertSee('Contrato cedido')
+            ->assertSee('de Rebeca Arango')
+            ->assertSee('a Jaime Monsalve');
     }
 
     public function test_sin_confirmar_no_se_cede(): void
     {
-        $origen = $this->contrato($this->cliente());
+        $cedente = $this->cliente();
+        $origen = $this->contrato($cedente);
+        $this->facturaDelMesPagada($origen);
 
         $this->post(route('contracts.cession.store', $origen), [
             'client_id' => $this->cliente()->id,
             'reason' => 'Cambio de arrendatario',
         ])->assertSessionHasErrors('confirmar');
 
-        $this->assertSame('Activo', $origen->fresh()->status);
+        $this->assertSame($cedente->id, $origen->fresh()->client_id);
     }
 
     public function test_el_buscador_solo_ofrece_clientes_de_la_sucursal_y_no_al_titular(): void

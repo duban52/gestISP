@@ -37,6 +37,9 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            // Las direcciones que llegan por partes se arman aquí, para
+            // todos los formularios a la vez (ver App\Support\Direccion).
+            \App\Http\Middleware\ComponerDirecciones::class,
             // Repone la sucursal y el rol activos si la sesión los
             // perdió (restablecimiento de contraseña, "recordarme").
             // Va ANTES de TrackUserActivity y de check.permission.

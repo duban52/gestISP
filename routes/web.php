@@ -393,13 +393,15 @@ Route::post('/contracts/{contract}/facturar', [InvoiceController::class, 'genera
 // alli las ramas se eligen por los campos que trae el formulario.
 Route::post('/contracts/{contract}/descuento', [ContractController::class, 'descuento'])->name('contracts.discount');
 
-// Cesion de contrato: cambio de titular sin cortar el servicio. Tiene su
-// propio permiso (contracts.cede): cierra el contrato del cedente, le
-// factura el cierre y le pasa los equipos a otra persona.
+// Cesion de contrato: el mismo contrato cambia de titular sin cortar el
+// servicio. Tiene su propio permiso (contracts.cede): le factura el
+// cierre al cedente y pone el contrato a nombre de otra persona.
 Route::get('/contracts/{contract}/ceder', [App\Http\Controllers\ContractCessionController::class, 'create'])
     ->name('contracts.cession.create');
 Route::get('/contracts/{contract}/ceder/clientes', [App\Http\Controllers\ContractCessionController::class, 'clientes'])
     ->name('contracts.cession.clients');
+Route::post('/contracts/{contract}/ceder/cierre', [App\Http\Controllers\ContractCessionController::class, 'cierre'])
+    ->name('contracts.cession.closing');
 Route::post('/contracts/{contract}/ceder', [App\Http\Controllers\ContractCessionController::class, 'store'])
     ->name('contracts.cession.store');
 

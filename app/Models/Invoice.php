@@ -45,6 +45,8 @@ class Invoice extends Model
         'payment_means_code',
         'payment_method_code',
         'contract_id',
+        // El titular, congelado igual que el grupo (ver client()).
+        'client_id',
         'branch_id',
         'billing_run_id',
         'type',
@@ -128,10 +130,48 @@ class Invoice extends Model
         return $this->hasMany(InvoiceItem::class, 'invoice_id');
     }
 
+    protected static function booted(): void
+    {
+        // Se congela AQUÍ y no en cada sitio que crea facturas —la
+        // corrida, la liquidación, la importación, la manual—: así
+        // ninguno se puede olvidar de hacerlo.
+        static::creating(function (self $factura) {
+            if (!$factura->client_id && $factura->contract_id) {
+                $factura->client_id = Contract::withoutGlobalScopes()
+                    ->whereKey($factura->contract_id)
+                    ->value('client_id');
+            }
+        });
+    }
+
     /** Contrato facturado */
     public function contract()
     {
         return $this->belongsTo(Contract::class);
+    }
+
+    /**
+     * A quién se le emitió, CONGELADO al crearla.
+     *
+     * No es lo mismo que el cliente del contrato: la cesión cambia el
+     * titular dentro del mismo contrato, y esta factura sigue siendo de
+     * quien la compró. Para leerlo, `titular()`.
+     */
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * El adquiriente de esta factura: el que tenía el contrato al
+     * emitirla. Es el que va en el XML, en el PDF y en los avisos.
+     *
+     * Cae al cliente del contrato solo si la factura no lo guardó —una
+     * insertada por fuera del modelo—: no hay otro dato mejor.
+     */
+    public function titular(): ?Client
+    {
+        return $this->client ?? $this->contract?->client;
     }
 
     /** Pagos aplicados a la factura */

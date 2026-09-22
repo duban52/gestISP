@@ -19,7 +19,6 @@ use App\Services\ContractDiagnostics;
 use App\Services\ContractGeolocator;
 use App\Services\ContractNumberGenerator;
 use App\Services\ContractQuery;
-use App\Support\ColombiaLocations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -174,11 +173,8 @@ class ContractController extends Controller
         $hayQueElegirSucursal = $contexto->hayQueElegirSucursal();
         $sucursales = $hayQueElegirSucursal ? $contexto->sucursalesElegibles() : collect();
 
-        // Devolver la vista con los datos necesarios
-        $colombiaLocations = ColombiaLocations::departmentsWithMunicipalities();
-
         return view('gestisp.contracts.create', compact(
-            'clients', 'plans', 'users', 'client', 'colombiaLocations',
+            'clients', 'plans', 'users', 'client',
             'hayQueElegirSucursal', 'sucursales',
             'gruposAfinidad', 'grupoPorDefecto'
         ));

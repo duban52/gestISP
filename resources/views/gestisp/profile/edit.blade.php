@@ -212,15 +212,7 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="address">Dirección <span class="text-danger">*</span></label>
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
-                                        </div>
-                                        <input type="text" name="address" id="address" maxlength="255"
-                                               class="form-control @error('address') is-invalid @enderror"
-                                               value="{{ old('address', $user->address) }}" required>
-                                    </div>
+                                    @include('gestisp.partials.direccion', ['valor' => $user->address, 'requerido' => true])
                                 </div>
 
                                 <button type="submit" class="btn btn-primary">

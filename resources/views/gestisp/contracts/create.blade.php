@@ -103,30 +103,7 @@
 
             <div class="card-body">
                 <div class="row">
-                    <div class="form-group col-md-6">
-                        <label for="department">Departamento <span class="text-danger">*</span></label>
-                        <select class="form-control" id="department" name="department" required>
-                            <option value="">Seleccione un departamento</option>
-                            @foreach($colombiaLocations as $department => $municipalities)
-                                <option value="{{ $department }}" @selected(old('department') === $department)>
-                                    {{ $department }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('department')
-                            <span class="text-danger small">* {{ $message }}</span>
-                        @enderror
-                    </div>
-
-                    <div class="form-group col-md-6">
-                        <label for="municipality">Ciudad / Municipio <span class="text-danger">*</span></label>
-                        <select class="form-control" id="municipality" name="municipality" required disabled>
-                            <option value="">Primero seleccione un departamento</option>
-                        </select>
-                        @error('municipality')
-                            <span class="text-danger small">* {{ $message }}</span>
-                        @enderror
-                    </div>
+                    @include('gestisp.partials.departamento-municipio')
 
                     <div class="form-group col-md-6">
                         <label for="neighborhood">Barrio / Vereda</label>
@@ -138,14 +115,8 @@
                         @enderror
                     </div>
 
-                    <div class="form-group col-md-6">
-                        <label for="address">Dirección</label>
-                        <input type="text" class="form-control" id="address" name="address"
-                               placeholder="Ingrese la dirección" maxlength="255"
-                               value="{{ old('address') }}">
-                        @error('address')
-                            <span class="text-danger small">* {{ $message }}</span>
-                        @enderror
+                    <div class="form-group col-12">
+                        @include('gestisp.partials.direccion', ['mapa' => 'mapaContratoNuevo'])
                     </div>
 
                     <div class="form-group col-md-6">
@@ -457,94 +428,6 @@
 
 @section('js')
     @include('gestisp.partials.leaflet-script')
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const municipalitiesByDepartment = @json($colombiaLocations, JSON_UNESCAPED_UNICODE);
-            const $departmentSelect = $('#department');
-            const $municipalitySelect = $('#municipality');
-            const previousMunicipality = @json(old('municipality'));
-
-            // Select2 mantiene el formulario compacto y agrega búsqueda
-            // por texto, útil especialmente para los 1.104 municipios.
-            $departmentSelect.select2({
-                width: '100%',
-                placeholder: 'Busque o seleccione un departamento',
-                allowClear: true
-            });
-
-            $municipalitySelect.select2({
-                width: '100%',
-                placeholder: 'Primero seleccione un departamento',
-                allowClear: true
-            });
-
-            function loadMunicipalities(selectedMunicipality = '') {
-                const department = $departmentSelect.val();
-                const municipalities = municipalitiesByDepartment[department] || [];
-
-                $municipalitySelect.empty();
-
-                if (!department) {
-                    $municipalitySelect
-                        .prop('disabled', true)
-                        .append(new Option('Primero seleccione un departamento', ''))
-                        .trigger('change');
-                    return;
-                }
-
-                $municipalitySelect
-                    .prop('disabled', false)
-                    .append(new Option('Busque o seleccione una ciudad o municipio', ''));
-
-                municipalities.forEach(function (municipality) {
-                    $municipalitySelect.append(new Option(
-                        municipality,
-                        municipality,
-                        false,
-                        municipality === selectedMunicipality
-                    ));
-                });
-
-                $municipalitySelect.trigger('change');
-            }
-
-            $departmentSelect.on('change', function () {
-                loadMunicipalities();
-            });
-
-            loadMunicipalities(previousMunicipality);
-
-            /* --------------------------------------------------------
-               Sugerir la búsqueda de dirección con lo ya escrito
-
-               Ahorra volver a teclear la dirección dentro del mapa, que
-               es el motivo por el que casi nadie usaba el buscador.
-               -------------------------------------------------------- */
-            function proposeSearchText() {
-                const search = document.getElementById('mapaContratoNuevoBuscar');
-
-                if (!search || search.value.trim() !== '') {
-                    return;
-                }
-
-                const parts = [
-                    $('#address').val(),
-                    $('#neighborhood').val(),
-                    $municipalitySelect.val(),
-                    $departmentSelect.val(),
-                    'Colombia',
-                ].filter(function (part) { return part; });
-
-                if (parts.length > 1) {
-                    search.value = parts.join(', ');
-                }
-            }
-
-            $('#address, #neighborhood').on('blur', proposeSearchText);
-            $municipalitySelect.on('change', proposeSearchText);
-        });
-    </script>
 
     {{-- ============================================================
          Los planes son de UNA sucursal

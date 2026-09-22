@@ -71,7 +71,7 @@ class PublicInvoiceDownloadController extends Controller
     private function factura(int $id): Invoice
     {
         return Invoice::withoutGlobalScopes()
-            ->with(['contract.client', 'contract.branch', 'invoice_items'])
+            ->with(['contract.client', 'client', 'contract.branch', 'invoice_items'])
             ->findOrFail($id);
     }
 }

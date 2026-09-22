@@ -73,9 +73,7 @@
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="address" class="form-label">Dirección</label>
-                            <input type="text" class="form-control" id="address" name="address"
-                                   value="{{ old('address') }}" required>
+                            @include('gestisp.partials.direccion', ['requerido' => true])
                         </div>
                     </div>
                     <div class="col-md-6">

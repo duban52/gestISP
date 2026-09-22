@@ -72,11 +72,11 @@ class SystemCatalogController extends Controller
             unset($datos['name']);
         }
 
-        // «CEDIDO» SOLO SE DESCRIBE. Sus reglas son las que hacen segura
-        // la cesion: inactivo para que no se pueda asignar a mano —eso
-        // dispararia la baja definitiva sobre equipos que usa otro— y
-        // sin facturacion, porque su servicio lo paga ya el contrato
-        // nuevo. Tocarlas aqui romperia la cesion sin avisar.
+        // «CEDIDO» SOLO SE DESCRIBE. Es el de las cesiones de antes, que
+        // abrian un contrato nuevo: inactivo para que no se pueda asignar
+        // a mano —eso dispararia la baja definitiva sobre equipos que usa
+        // otro— y sin facturacion, porque ese servicio lo paga el
+        // contrato nuevo. Tocar sus reglas le cobraria dos veces.
         if ($estado->name === \App\Billing\Enums\ContractStatus::Cedido->value) {
             $datos = array_intersect_key($datos, array_flip(['description', 'color', 'sort_order']));
         }
@@ -273,7 +273,7 @@ class SystemCatalogController extends Controller
             'technical_order_type_id' => 'required|exists:technical_order_types,id',
             'name' => 'required|string|max:80',
             // Solo estados ACTIVOS. Uno desactivado lo esta por algo:
-            // «Cedido» solo se alcanza por la cesion, y llevar un
+            // «Cedido» es de las cesiones de antes, y llevar un
             // contrato ahi cerrando una orden dispararia la baja
             // definitiva —liberar el puerto, borrar la ONT— sobre un
             // servicio que sigue funcionando para otro.

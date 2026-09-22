@@ -20,6 +20,8 @@
                      ['lat' => , 'lng' => , 'title' => ].
      $allowClear     Muestra el botón de quitar la ubicación.
      $help           Texto de ayuda bajo el mapa.
+     $busqueda       Texto con el que arranca el buscador (la dirección ya
+                     registrada, lista para buscarla).
 
      La inicialización la hace partials/leaflet-script, que la pantalla
      debe incluir en @section('js'); aquí solo se deja la configuración.
@@ -53,6 +55,7 @@
             'searchInput' => $mapId . 'Buscar',
             'searchButton' => $mapId . 'BtnBuscar',
             'clear' => $allowClear ? $mapId . 'BtnQuitar' : null,
+            'note' => $mapId . 'Nota',
         ],
         'references' => $references,
     ];
@@ -81,7 +84,7 @@
 
     <div class="form-inline mb-1">
         <input type="text" id="{{ $mapId }}Buscar" class="form-control form-control-sm mr-1"
-               placeholder="Buscar una dirección…" style="width: 240px;">
+               value="{{ $busqueda ?? '' }}" placeholder="Buscar una dirección…" style="width: 240px;">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="{{ $mapId }}BtnBuscar">
             <i class="fas fa-search"></i>
         </button>
@@ -91,5 +94,6 @@
 <div id="{{ $mapId }}" class="gestisp-map" style="height: {{ $height }};"></div>
 
 <small class="form-text text-muted">{{ $help }}</small>
+<small class="form-text text-info" id="{{ $mapId }}Nota"></small>
 
 <script type="application/json" data-gestisp-map="{{ $mapId }}">@json($pickerConfig, JSON_HEX_TAG | JSON_HEX_AMP)</script>

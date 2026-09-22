@@ -62,9 +62,8 @@
                         'departamento' => $branch->department,
                         'municipio' => $branch->municipality,
                     ])
-                    <div class="form-group col-md-6">
-                        <label for="address">Dirección</label>
-                        <input type="text" name="address" class="form-control" value="{{ $branch->address }}" required>
+                    <div class="form-group col-12">
+                        @include('gestisp.partials.direccion', ['valor' => $branch->address, 'requerido' => true])
                     </div>
                     <div class="form-group col-md-6">
                         <label for="number_phone">Teléfono</label>

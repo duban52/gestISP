@@ -20,6 +20,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
+@include('gestisp.partials.geocodificador')
+
 <script>
     (function () {
         'use strict';
@@ -159,6 +161,11 @@
                 setPoint(event.latlng.lat, event.latlng.lng, false);
             });
 
+            // El parcial de dirección ubica el mapa desde sus campos.
+            container.addEventListener('gestisp:fijar-punto', function (event) {
+                setPoint(event.detail.lat, event.detail.lng, true);
+            });
+
             // Cajas NAP ya documentadas alrededor: se pintan como
             // referencia para no marcar la casa en la otra manzana.
             (config.references || []).forEach(function (item) {
@@ -260,6 +267,8 @@
             const searchInput = document.getElementById(config.controls.searchInput);
             const searchButton = document.getElementById(config.controls.searchButton);
 
+            const note = document.getElementById(config.controls.note);
+
             function search() {
                 const text = (searchInput.value || '').trim();
 
@@ -267,15 +276,23 @@
                     return;
                 }
 
-                fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(text))
-                    .then(function (response) { return response.json(); })
-                    .then(function (results) {
-                        if (!results.length) {
+                // Si no encuentra la dirección exacta va aflojando la
+                // consulta —sin placa, el barrio, el municipio— y dice
+                // hasta dónde llegó (ver partials/geocodificador).
+                window.GestispGeo.buscar(text)
+                    .then(function (r) {
+                        if (!r) {
                             alert('No se encontró esa dirección. Marque el punto a mano sobre el mapa.');
                             return;
                         }
 
-                        setPoint(parseFloat(results[0].lat), parseFloat(results[0].lon), true);
+                        setPoint(r.lat, r.lng, true);
+
+                        if (note) {
+                            note.textContent = r.aproximado
+                                ? 'No se encontró la dirección exacta: el punto quedó en ' + r.nivel + '. Llévelo hasta la puerta.'
+                                : 'Punto ubicado según la búsqueda. Confirme que quedó sobre la vivienda.';
+                        }
                     })
                     .catch(function () {
                         alert('No se pudo consultar el buscador de direcciones.');

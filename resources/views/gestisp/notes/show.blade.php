@@ -130,11 +130,11 @@
                         </tr>
                         <tr>
                             <th>Cliente</th>
-                            <td>{{ $nota->invoice?->contract?->client?->name }} {{ $nota->invoice?->contract?->client?->last_name }}</td>
+                            <td>{{ $nota->invoice?->titular()?->name }} {{ $nota->invoice?->titular()?->last_name }}</td>
                         </tr>
                         <tr>
                             <th>Identificación</th>
-                            <td>{{ $nota->invoice?->contract?->client?->identity_number ?? '—' }}</td>
+                            <td>{{ $nota->invoice?->titular()?->identity_number ?? '—' }}</td>
                         </tr>
                         <tr>
                             <th>N.º de contrato</th>

@@ -259,7 +259,11 @@ class GrowthReport
         return $consulta->whereNotExists(fn ($sub) => $sub
             ->selectRaw('1')
             ->from('contract_cessions')
-            ->whereColumn('contract_cessions.to_contract_id', 'contracts.id'));
+            ->whereColumn('contract_cessions.to_contract_id', 'contracts.id')
+            // Solo los que NACIERON de una cesión, como se cedía antes.
+            // Hoy la cesión cambia el titular del mismo contrato, que sí
+            // fue un alta el día que se creó.
+            ->whereColumn('contract_cessions.from_contract_id', '!=', 'contract_cessions.to_contract_id'));
     }
 
     private function bajasEnPeriodo(ReportPeriod $periodo): int

@@ -101,7 +101,7 @@ class InvoiceXmlBuilder extends UblBuilder
         }
 
         $empresa = $rango->resolution->company;
-        $cliente = $factura->contract?->client;
+        $cliente = $factura->titular();
 
         $this->exigirDatos($empresa, $cliente);
 

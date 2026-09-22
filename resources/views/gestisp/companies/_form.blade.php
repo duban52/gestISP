@@ -77,15 +77,14 @@
 </div>
 
 <div class="form-row">
-    <div class="form-group col-md-6">
-        <label>Dirección</label>
-        <input type="text" name="address" class="form-control" value="{{ old('address', $empresa->address) }}">
+    <div class="form-group col-12">
+        @include('gestisp.partials.direccion', ['valor' => $empresa->address])
     </div>
-    <div class="form-group col-md-3">
+    <div class="form-group col-md-6">
         <label>Correo</label>
         <input type="email" name="email" class="form-control" value="{{ old('email', $empresa->email) }}">
     </div>
-    <div class="form-group col-md-3">
+    <div class="form-group col-md-6">
         <label>Teléfono</label>
         <input type="text" name="phone" class="form-control" value="{{ old('phone', $empresa->phone) }}">
     </div>

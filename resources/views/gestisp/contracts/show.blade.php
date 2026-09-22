@@ -1,6 +1,8 @@
 @extends('adminlte::page')
 
 @section('title', 'Detalles de contrato')
+{{-- Departamento y municipio del modal de residencia. --}}
+@section('plugins.Select2', true)
 
 @section('content_header')
     <h4 class="text-center">DETALLES DEL CONTRATO</h4>
@@ -61,9 +63,30 @@
          y el nuevo parece un alta sin historia.
          ============================================================ --}}
     @php
+        $cambiosDeTitular = $contract->cambiosDeTitular()->with(['fromClient', 'toClient'])->get();
         $cesionSaliente = $contract->cesionSaliente()->with(['toContract', 'toClient'])->first();
         $cesionEntrante = $contract->cesionEntrante()->with(['fromContract', 'fromClient'])->first();
     @endphp
+
+    @if($cambiosDeTitular->isNotEmpty())
+        <div class="alert alert-info d-flex align-items-start flex-wrap">
+            <i class="fas fa-exchange-alt fa-lg mr-3 mt-1"></i>
+            <div>
+                <strong>Contrato cedido</strong>
+                @foreach($cambiosDeTitular as $cambio)
+                    <div class="small">
+                        {{ $cambio->ceded_at->format('d/m/Y') }}:
+                        de {{ $cambio->fromClient?->fullName() ?? '—' }}
+                        a {{ $cambio->toClient?->fullName() ?? '—' }}.
+                        <span class="text-muted">Motivo: {{ $cambio->reason }}</span>
+                    </div>
+                @endforeach
+                <small class="d-block text-muted">
+                    Las facturas emitidas antes de cada cesión siguen a nombre de quien era el titular.
+                </small>
+            </div>
+        </div>
+    @endif
 
     @if($cesionSaliente)
         <div class="alert alert-secondary d-flex align-items-center flex-wrap">
@@ -333,7 +356,7 @@
 
                     <!-- Modal -->
                     <div class="modal fade" id="editAddressData" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-                        <div class="modal-dialog">
+                        <div class="modal-dialog modal-lg">
                             <div class="modal-content">
                                 <div class="modal-header">
                                     <h5 class="modal-title" id="exampleModalLabel">Modificar datos de residencia</h5>
@@ -343,22 +366,27 @@
                                     <form action="{{ route('contracts.update', $contract->id) }}" method="post">
                                         @csrf
                                         @method('put')
-                                        <div class="form-group">
-                                            <label for="">Departamento:</label>
-                                            <input type="text" name="department" class="form-control" value="{{ $contract->department ?? 'N/A' }}">
-                                        </div>
-
-                                        <div class="form-group">
-                                            <label for="">Municipio:</label>
-                                            <input type="text" name="municipality" class="form-control" value="{{ $contract->municipality ?? 'N/A' }}">
+                                        <div class="row">
+                                            @include('gestisp.partials.departamento-municipio', [
+                                                'departamento' => $contract->department,
+                                                'municipio' => $contract->municipality,
+                                                'modal' => '#editAddressData',
+                                            ])
                                         </div>
                                         <div class="form-group">
-                                            <label for="">Barrio:</label>
-                                            <input type="text" name="neighborhood" class="form-control" value="{{ $contract->neighborhood }}">
+                                            <label for="neighborhood">Barrio / Vereda:</label>
+                                            <input type="text" name="neighborhood" id="neighborhood" class="form-control" value="{{ $contract->neighborhood }}">
                                         </div>
+                                        @php
+                                            // Sin mapa en este modal: la sugerencia sale de la
+                                            // ubicación ya guardada, si la hay.
+                                            $parametrosDireccion = [
+                                                'valor' => $contract->address,
+                                                'coordenadas' => $contract->isGeolocated() ? [$contract->latitude, $contract->longitude] : null,
+                                            ];
+                                        @endphp
                                         <div class="form-group">
-                                            <label for="">Dirección:</label>
-                                            <input type="text" name="address" class="form-control" value="{{ $contract->address }}">
+                                            @include('gestisp.partials.direccion', $parametrosDireccion)
                                         </div>
                                         <div class="form-group">
                                             <label for="">Tipo de vivienda:</label>
@@ -429,6 +457,8 @@
                                                 'longitude' => $contract->longitude,
                                                 'height' => '380px',
                                                 'allowClear' => $contract->isGeolocated(),
+                                                // La dirección registrada, lista para buscarla en el mapa.
+                                                'busqueda' => \App\Support\Direccion::paraBuscar($contract->address, $contract->municipality, $contract->department),
                                                 'help' => 'Marque la puerta de la vivienda. Si está en sitio, "Estoy aquí" toma la posición del dispositivo, que es la más fiable.',
                                             ];
                                         @endphp

@@ -64,7 +64,7 @@ class InvoicePdf
      */
     public function documento(Invoice $factura)
     {
-        $factura->loadMissing(['contract.client', 'contract.branch', 'invoice_items']);
+        $factura->loadMissing(['contract.client', 'client', 'contract.branch', 'invoice_items']);
 
         $codigo = $this->codigoDeBarras($factura);
 

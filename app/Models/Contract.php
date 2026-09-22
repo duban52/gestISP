@@ -46,9 +46,9 @@ class Contract extends Model
         'password_wifi',
         'comment',
         'activation_date',
-        // Desde cuando se le factura. Lo usa la cesion: el mes en que
-        // ocurre lo paga el cedente, y sin esta fecha la corrida se lo
-        // cobraria tambien al contrato nuevo.
+        // Desde cuando se le factura. Lo ponian las cesiones de antes,
+        // que abrian un contrato nuevo: el mes de la cesion lo pagaba el
+        // cedente en el viejo, y sin esta fecha se cobraria dos veces.
         'billing_start_date',
         // Descuento con vigencia (promociones). Ver descuentoVigente().
         'discount_type',
@@ -271,23 +271,35 @@ class Contract extends Model
     }
 
     /**
-     * La cesion con la que este contrato paso a otro titular, si la hubo.
-     *
-     * Desde el contrato del CEDENTE: dice a quien y cuando.
+     * Los cambios de titular de este contrato, del mas antiguo al mas
+     * reciente. Es como se cede hoy: el mismo contrato, otro cliente.
      */
-    public function cesionSaliente()
+    public function cambiosDeTitular()
     {
-        return $this->hasOne(ContractCession::class, 'from_contract_id');
+        return $this->hasMany(ContractCession::class, 'from_contract_id')
+            ->whereColumn('from_contract_id', 'to_contract_id')
+            ->orderBy('ceded_at');
     }
 
     /**
-     * La cesion de la que nacio este contrato, si nacio de una.
-     *
-     * Desde el contrato del CESIONARIO: dice de quien lo recibio.
+     * HISTORICO: la cesion con la que este contrato se cerro y paso a
+     * uno nuevo. Asi se cedia antes; los contratos que se cedieron asi
+     * siguen mostrandolo.
+     */
+    public function cesionSaliente()
+    {
+        return $this->hasOne(ContractCession::class, 'from_contract_id')
+            ->whereColumn('from_contract_id', '!=', 'to_contract_id');
+    }
+
+    /**
+     * HISTORICO: la cesion de la que nacio este contrato, cuando ceder
+     * abria un contrato nuevo.
      */
     public function cesionEntrante()
     {
-        return $this->hasOne(ContractCession::class, 'to_contract_id');
+        return $this->hasOne(ContractCession::class, 'to_contract_id')
+            ->whereColumn('from_contract_id', '!=', 'to_contract_id');
     }
 
     public function ont()

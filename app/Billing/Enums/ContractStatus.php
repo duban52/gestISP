@@ -35,8 +35,10 @@ enum ContractStatus: string
     case PorReconexion = 'Por Reconexión';
     case Retirado = 'Retirado';
     case Anulado = 'Anulado';
-    // Paso a otro titular por cesion. Solo se llega por la cesion: no
-    // se ofrece al cambiar el estado a mano (ver ContractCessionService).
+    // Lo dejaban las cesiones de antes, que cerraban el contrato y
+    // abrian uno nuevo. Hoy la cesion cambia el titular del MISMO
+    // contrato y ya no lo usa; sigue por los contratos que se cedieron
+    // asi. No se ofrece al cambiar el estado a mano.
     case Cedido = 'Cedido';
 
     /**

@@ -87,7 +87,7 @@ class ContractCessionController extends Controller
             'reason' => 'required|string|max:500',
             'affinity_group_id' => ['nullable', 'integer', Rule::exists('affinity_groups', 'id')],
             // La casilla es la confirmación de que se leyó lo que va a
-            // pasar: se cierra el contrato y se le factura al cedente.
+            // pasar: el contrato y sus equipos pasan a otra persona.
             'confirmar' => 'accepted',
         ], [
             'client_id.required' => 'Elija a quién se le cede el contrato.',
@@ -103,12 +103,29 @@ class ContractCessionController extends Controller
             return back()->withInput()->with('error', $e->getMessage());
         }
 
-        // Se lleva al contrato NUEVO: es el que sigue vivo, y en su
-        // ficha queda el enlace al anterior.
         return redirect()
-            ->route('contracts.show', $cesion->to_contract_id)
-            ->with('success', 'Contrato cedido. ' . ucfirst(implode('; ', $cesion->summary['hechos'] ?? [])) . '.')
+            ->route('contracts.show', $contract)
+            ->with('success', 'Contrato cedido: ' . implode('; ', $cesion->summary['hechos'] ?? []) . '.')
             ->with('cesion_avisos', $cesion->summary['avisos'] ?? []);
+    }
+
+    /**
+     * Emite las facturas de cierre del cedente: el mes en curso y la
+     * liquidación de sus cuotas. Es el paso previo a ceder; después el
+     * cedente las paga y ya se puede ceder.
+     */
+    public function cierre(Request $request, Contract $contract): RedirectResponse
+    {
+        $this->exigirSucursal($contract);
+
+        try {
+            $hechos = $this->cesiones->emitirCierre($contract, $request->user()?->id);
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Se le emitieron al titular actual: ' . implode('; ', $hechos)
+            . '. Cuando las pague se podrá ceder el contrato.');
     }
 
     private function exigirSucursal(Contract $contract): void

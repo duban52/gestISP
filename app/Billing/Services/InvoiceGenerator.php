@@ -92,7 +92,8 @@ class InvoiceGenerator
 
         // ---- Todavia no le toca ----
         //
-        // Un contrato nacido de una cesion empieza a pagar el mes
+        // Un contrato nacido de una cesion (de las de antes, que abrian
+        // un contrato nuevo) empieza a pagar el mes
         // siguiente: el mes en que se cedio ya lo paga el cedente, en el
         // contrato viejo. Sin esto la corrida le cobraria al nuevo
         // titular el mismo mes, por el mismo servicio, en la misma casa.

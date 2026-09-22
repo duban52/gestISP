@@ -45,4 +45,33 @@ final class ColombiaLocations
 
         return $result;
     }
+
+    /**
+     * El departamento y el municipio tal como los escribe el catálogo.
+     *
+     * Antes se escribían a mano: hay contratos con «ANTIOQUIA» y
+     * «Medellin». Se reconocen sin mirar mayúsculas ni tildes para que
+     * el select los muestre elegidos; lo que no está en el catálogo se
+     * devuelve tal cual, y el select lo ofrece aparte en vez de perderlo.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    public static function resolver(?string $departamento, ?string $municipio): array
+    {
+        $plano = fn (?string $v) => mb_strtolower(\Illuminate\Support\Str::ascii(trim((string) $v)));
+        $catalogo = self::departmentsWithMunicipalities();
+
+        // «N/A» lo guardaba la pantalla vieja cuando el campo venía vacío.
+        [$departamento, $municipio] = array_map(
+            fn (?string $v) => $plano($v) === 'n/a' ? null : $v,
+            [$departamento, $municipio],
+        );
+
+        $dep = collect(array_keys($catalogo))->first(fn ($d) => $plano($d) === $plano($departamento))
+            ?? (filled($departamento) ? $departamento : null);
+        $mun = collect($catalogo[$dep] ?? [])->first(fn ($m) => $plano($m) === $plano($municipio))
+            ?? (filled($municipio) ? $municipio : null);
+
+        return [$dep, $mun];
+    }
 }

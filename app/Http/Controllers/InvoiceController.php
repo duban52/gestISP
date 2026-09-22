@@ -103,7 +103,7 @@ class InvoiceController extends Controller
             // dos consultas por cada fila de la tabla.
             // El grupo se precarga porque el listado lo muestra: sin
             // esto seria una consulta por fila.
-            ->with(['contract.client', 'contract.affinityGroup', 'branch'])
+            ->with(['contract.client', 'client', 'contract.affinityGroup', 'branch'])
             ->orderBy('invoices.created_at', 'desc')
             ->get(); // Cambiado de simplePaginate(10) a get()
 

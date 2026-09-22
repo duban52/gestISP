@@ -83,7 +83,7 @@
                         </tr>
                         <tr>
                             <th>Cliente</th>
-                            <td>{{ $documento->invoice?->contract?->client?->fullName() ?? '—' }}</td>
+                            <td>{{ $documento->invoice?->titular()?->fullName() ?? '—' }}</td>
                         </tr>
                         <tr>
                             <th>Ambiente</th>

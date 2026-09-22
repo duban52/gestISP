@@ -244,7 +244,7 @@
                     <tbody>
                     @foreach($facturas as $factura)
                         @php
-                            $cliente = $factura->contract?->client;
+                            $cliente = $factura->titular();
                         @endphp
                         <tr>
                             <td><strong>{{ $factura->displayNumber() }}</strong></td>

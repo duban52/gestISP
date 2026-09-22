@@ -13,6 +13,13 @@
       $departamento  valor actual (null al crear)
       $municipio     valor actual (null al crear)
       $requerido     si los campos son obligatorios (por defecto, sí)
+      $modal         selector del modal que lo contiene, si va en uno. Select2
+                     pinta su lista fuera del modal y el foco del modal no deja
+                     escribir en el buscador: con esto la pinta dentro.
+
+    Un valor viejo escrito a mano («ANTIOQUIA», «Medellin») se reconoce
+    sin mirar mayúsculas ni tildes. Si no está en el catálogo se ofrece
+    como opción aparte: guardar el formulario no puede borrarlo.
 
     La página que lo incluya tiene que activar Select2:
         @section('plugins.Select2', true)
@@ -20,8 +27,12 @@
 @php
     $ubicaciones = \App\Support\ColombiaLocations::departmentsWithMunicipalities();
     $requerido = $requerido ?? true;
-    $departamentoActual = old('department', $departamento ?? null);
-    $municipioActual = old('municipality', $municipio ?? null);
+    [$departamentoActual, $municipioActual] = \App\Support\ColombiaLocations::resolver(
+        old('department', $departamento ?? null),
+        old('municipality', $municipio ?? null),
+    );
+    $departamentoFuera = $departamentoActual && !isset($ubicaciones[$departamentoActual]);
+    $municipioFuera = $municipioActual && !in_array($municipioActual, $ubicaciones[$departamentoActual] ?? [], true);
 @endphp
 
 <div class="form-group col-md-6">
@@ -29,6 +40,9 @@
     <select class="form-control @error('department') is-invalid @enderror"
             id="department" name="department" @if($requerido) required @endif>
         <option value="">Seleccione un departamento</option>
+        @if($departamentoFuera)
+            <option value="{{ $departamentoActual }}" selected>{{ $departamentoActual }} (registrado, no está en el catálogo)</option>
+        @endif
         @foreach($ubicaciones as $departamentoNombre => $municipios)
             <option value="{{ $departamentoNombre }}" @selected($departamentoActual === $departamentoNombre)>
                 {{ $departamentoNombre }}
@@ -45,6 +59,9 @@
             @if($requerido) required @endif
             @if(!$departamentoActual) disabled @endif>
         <option value="">Primero seleccione un departamento</option>
+        @if($municipioFuera)
+            <option value="{{ $municipioActual }}" selected>{{ $municipioActual }} (registrado, no está en el catálogo)</option>
+        @endif
         @if($departamentoActual)
             @foreach($ubicaciones[$departamentoActual] ?? [] as $municipioNombre)
                 <option value="{{ $municipioNombre }}" @selected($municipioActual === $municipioNombre)>
@@ -62,6 +79,7 @@
             const municipiosPorDepartamento = @json($ubicaciones, JSON_UNESCAPED_UNICODE);
             const $departamento = $('#department');
             const $municipio = $('#municipality');
+            const $contenedor = @json($modal ?? null) ? $(@json($modal ?? null)) : $(document.body);
 
             // Select2 añade el buscador, que es lo que hace usable una
             // lista de 1.104 municipios.
@@ -69,12 +87,14 @@
                 width: '100%',
                 placeholder: 'Busque o seleccione un departamento',
                 allowClear: true,
+                dropdownParent: $contenedor,
             });
 
             $municipio.select2({
                 width: '100%',
                 placeholder: 'Busque o seleccione una ciudad o municipio',
                 allowClear: true,
+                dropdownParent: $contenedor,
             });
 
             function cargarMunicipios(seleccionado = '') {

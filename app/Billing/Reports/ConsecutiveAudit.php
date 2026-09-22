@@ -171,7 +171,7 @@ class ConsecutiveAudit
         $facturas = Invoice::withoutGlobalScopes()
             ->where('prefix', $rango->prefix)
             ->whereBetween('number', [$desde, $hasta])
-            ->with('contract.client')
+            ->with('contract.client', 'client')
             ->get()
             ->keyBy('number');
 

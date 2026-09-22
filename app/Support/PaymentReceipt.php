@@ -53,6 +53,7 @@ class PaymentReceipt
 
         $payments->loadMissing([
             'invoice.contract.client',
+            'invoice.client',
             'invoice.contract.branch',
             'invoice.invoice_items',
             'retentions',
@@ -100,7 +101,9 @@ class PaymentReceipt
                 'hora' => $primero->created_at,
                 'branch' => $contrato?->branch ?? PdfBranding::branch(),
                 'contrato' => $contrato,
-                'cliente' => $contrato?->client,
+                // El de la factura: el pago lo hizo quien la debía, aunque
+                // el contrato haya cambiado de titular después (cesión).
+                'cliente' => $primero->invoice?->titular() ?? $contrato?->client,
                 'cajero' => $primero->user,
                 'caja' => $primero->cashRegister,
                 'metodo' => $primero->payment_method,

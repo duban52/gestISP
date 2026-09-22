@@ -87,16 +87,17 @@
             </div>
         </div>
 
+        @php
+            $parametrosDireccionFiscal = [
+                'campo' => 'fiscal_address',
+                'valor' => $cliente?->fiscal_address,
+                'etiqueta' => 'Dirección fiscal',
+                'ayuda' => 'Dónde recibe correspondencia el contribuyente. No es la del contrato, '
+                    . 'que es la dirección donde está instalado el servicio.',
+            ];
+        @endphp
         <div class="form-group">
-            <label for="fiscal_address">Dirección fiscal</label>
-            <input type="text" name="fiscal_address" id="fiscal_address" maxlength="255"
-                   class="form-control @error('fiscal_address') is-invalid @enderror"
-                   value="{{ old('fiscal_address', $cliente?->fiscal_address) }}">
-            @error('fiscal_address')<div class="invalid-feedback">{{ $message }}</div>@enderror
-            <small class="form-text text-muted">
-                Dónde recibe correspondencia el contribuyente. <strong>No es la del contrato</strong>,
-                que es la dirección donde está instalado el servicio.
-            </small>
+            @include('gestisp.partials.direccion', $parametrosDireccionFiscal)
         </div>
 
         <div class="form-row">

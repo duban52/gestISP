@@ -162,7 +162,7 @@
                                             <small class="d-block text-muted">{{ $fila['factura']->void_reason }}</small>
                                         @endif
                                     </td>
-                                    <td>{{ $fila['factura']?->contract?->client?->fullName() ?? '—' }}</td>
+                                    <td>{{ $fila['factura']?->titular()?->fullName() ?? '—' }}</td>
                                     <td>{{ optional($fila['factura']?->issue_date)->format('d/m/Y') ?? '—' }}</td>
                                     <td class="text-right">
                                         @if($fila['factura'])

@@ -44,44 +44,37 @@
                 </div>
             </div>
 
-            {{-- Lo que va a pasar, dicho ANTES de confirmar: quien cede
-                 tiene que saber qué se le va a facturar al cedente. --}}
+            {{-- Lo que va a pasar, dicho ANTES de confirmar. --}}
             <div class="card card-outline card-info">
                 <div class="card-header py-2"><strong>Lo que va a pasar</strong></div>
                 <div class="card-body">
                     <ul class="mb-0 pl-3">
                         <li>
-                            Este contrato quedará <strong>«Cedido»</strong>. Sus facturas, pagos y
-                            órdenes siguen a nombre del titular actual.
+                            Este mismo contrato pasa a nombre del nuevo titular. Conserva su número
+                            <strong>{{ $contract->numero_visible }}</strong>, su estado
+                            <strong>«{{ $contract->status }}»</strong>, su plan, su dirección y su historial.
                         </li>
                         <li>
-                            Se crea un <strong>contrato nuevo</strong> para el nuevo titular, con el mismo
-                            plan, dirección y ubicación. Nace
-                            <strong>«{{ $revision['estado_nuevo'] }}»</strong>.
+                            La ONT, la cuenta PPPoE (con sus mismas credenciales) y el puerto NAP siguen en el
+                            contrato. <strong>No se toca la red</strong>: el servicio no se corta.
                         </li>
                         <li>
-                            La ONT, la cuenta PPPoE (con sus mismas credenciales) y el puerto NAP pasan al
-                            contrato nuevo. <strong>No se toca la red</strong>: el servicio no se corta.
+                            Las facturas ya emitidas siguen a nombre del titular actual, que es quien las
+                            compró. El nuevo titular recibe su primera factura <strong>el mes siguiente</strong>.
                         </li>
-                        @if($revision['factura_del_mes'])
-                            <li class="text-primary">
-                                Se le factura <strong>al titular actual</strong> el mes en curso, que todavía
-                                no tenía facturado.
+                        <li>Queda un comentario en el contrato con el titular anterior (documento y nombre).</li>
+                        @if($contract->discount_type)
+                            <li class="text-primary">Se quita el descuento: era una condición del titular actual.</li>
+                        @endif
+                        @if($revision['saldo_a_favor'] > 0)
+                            <li class="text-warning">
+                                Hay un saldo a favor de
+                                <strong>${{ number_format($revision['saldo_a_favor'], 2, ',', '.') }}</strong>.
+                                Se queda en el contrato y pagará las próximas facturas <strong>del nuevo
+                                titular</strong>: si es dinero del titular actual, arréglenlo entre ellos antes
+                                de ceder.
                             </li>
                         @endif
-                        @if($revision['cuotas_pendientes'] > 0)
-                            <li class="text-primary">
-                                Se le emite <strong>al titular actual</strong> una factura de liquidación con
-                                lo que le queda de {{ $revision['cuotas_pendientes'] }} cargo(s) diferido(s).
-                            </li>
-                        @endif
-                        <li>
-                            El nuevo titular recibe su primera factura <strong>el mes siguiente</strong>:
-                            este mes lo paga quien cede.
-                        </li>
-                        <li class="text-muted">
-                            No se pasa el descuento, si lo había: era una condición del titular actual.
-                        </li>
                     </ul>
                 </div>
             </div>
@@ -98,6 +91,20 @@
                         @endforeach
                     </ul>
                 </div>
+
+                {{-- El primer paso lo puede dar desde aquí: emitirle al
+                     cedente lo que es suyo. Después lo paga en caja y
+                     vuelve a esta pantalla. --}}
+                @if($revision['cierre_pendiente'])
+                    <form method="POST" action="{{ route('contracts.cession.closing', $contract) }}"
+                          data-procesando="Emitiendo las facturas de cierre...">
+                        @csrf
+                        <button type="submit" class="btn btn-primary"
+                                onclick="return confirm('Se le emitirán al titular actual sus facturas de cierre. ¿Continuar?')">
+                            <i class="fas fa-file-invoice-dollar mr-1"></i> Emitir las facturas de cierre al titular actual
+                        </button>
+                    </form>
+                @endif
             @else
                 <div class="card card-outline card-success">
                     <div class="card-header py-2"><strong>El nuevo titular</strong></div>
@@ -119,7 +126,7 @@
                             </div>
 
                             <div class="form-group">
-                                <label for="affinity_group_id">Grupo de afinidad del contrato nuevo</label>
+                                <label for="affinity_group_id">Grupo de afinidad del contrato</label>
                                 <select name="affinity_group_id" id="affinity_group_id" class="form-control">
                                     <option value="">Sin grupo</option>
                                     @foreach($grupos as $grupo)
@@ -146,8 +153,8 @@
                                 <div class="custom-control custom-checkbox">
                                     <input type="checkbox" class="custom-control-input" id="confirmar" name="confirmar" value="1" required>
                                     <label class="custom-control-label" for="confirmar">
-                                        Leí lo que va a pasar: este contrato se cierra y el titular actual
-                                        recibirá sus facturas de cierre.
+                                        Leí lo que va a pasar: este contrato, con su servicio y sus equipos,
+                                        pasa a nombre del nuevo titular.
                                     </label>
                                 </div>
                                 @error('confirmar')<span class="text-danger small">{{ $message }}</span>@enderror

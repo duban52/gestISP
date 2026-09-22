@@ -53,11 +53,11 @@ class NotifyInvoiceReminders extends Command
                 ->whereNull('due_soon_notified_at')
                 ->whereDate('due_date', $objetivo)
                 ->where('pending_invoice_amount', '>', 0)
-                ->with('contract.client', 'branch')
+                ->with('contract.client', 'client', 'branch')
                 ->get();
 
             foreach ($facturas as $factura) {
-                $cliente = $factura->contract?->client;
+                $cliente = $factura->titular();
 
                 if ($cliente) {
                     $cliente->notify(new InvoiceDueSoon($factura, (int) $n));
@@ -82,11 +82,11 @@ class NotifyInvoiceReminders extends Command
             ->where('status', InvoiceStatus::Vencida->value)
             ->whereNull('overdue_notified_at')
             ->where('pending_invoice_amount', '>', 0)
-            ->with('contract.client', 'branch')
+            ->with('contract.client', 'client', 'branch')
             ->get();
 
         foreach ($facturas as $factura) {
-            $cliente = $factura->contract?->client;
+            $cliente = $factura->titular();
 
             if ($cliente) {
                 $cliente->notify(new InvoiceOverdue($factura));

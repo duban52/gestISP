@@ -73,7 +73,7 @@ class BillingRunExport implements FromCollection, WithHeadings, WithTitle, WithS
         }
 
         return $facturas->map(function ($factura) {
-            $cliente = $factura->contract?->client;
+            $cliente = $factura->titular();
 
             // Se separan los ítems del plan de los cargos adicionales
             // para que en el reporte se vea de dónde sale cada peso.
