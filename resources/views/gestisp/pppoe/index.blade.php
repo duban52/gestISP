@@ -4,7 +4,7 @@
 @section('content_header')
     {{-- Solo el título: las acciones van todas en la barra que hay
          debajo de los filtros. Tenerlas en dos sitios hacía que
-         "Cortes masivos" saliera dos veces en la misma pantalla. --}}
+         "Cortes de PPPoE" saliera dos veces en la misma pantalla. --}}
     <h1 class="mb-0"><i class="fas fa-user-lock mr-2"></i>Cuentas PPPoE</h1>
 @endsection
 
@@ -217,7 +217,7 @@
                 </a>
                 @can('pppoe.cutoff')
                     <a href="{{ route('pppoe.cutoff') }}" class="btn btn-outline-danger">
-                        <i class="fas fa-user-slash"></i> Cortes masivos
+                        <i class="fas fa-user-slash"></i> Cortes de PPPoE
                     </a>
                 @endcan
             </div>

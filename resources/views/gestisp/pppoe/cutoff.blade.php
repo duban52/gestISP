@@ -9,10 +9,10 @@
      ============================================================ --}}
 @extends('adminlte::page')
 
-@section('title', 'Cortes masivos')
+@section('title', 'Cortes de PPPoE')
 
 @section('content_header')
-    <h1 class="mb-0"><i class="fas fa-user-slash mr-2"></i>Cortes masivos de servicio</h1>
+    <h1 class="mb-0"><i class="fas fa-user-slash mr-2"></i>Cortes de PPPoE</h1>
 @endsection
 
 @section('content')

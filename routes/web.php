@@ -522,6 +522,23 @@ Route::post('technicals_orders/store', [TechnicalOrderController::class, 'store'
 Route::post('technicals_orders/administrativa', [TechnicalOrderController::class, 'storeAdministrative'])
     ->name('technicals_orders.administrative');
 Route::get('technicals_orders/index', [TechnicalOrderController::class, 'index'])->name('technicals_orders.index');
+// Cortes masivos por mora: por numero de contrato, en el sistema y en la
+// red. Van antes de las rutas con {technicalOrder} para que «cortes» no
+// se lea como el id de una orden.
+Route::get('technicals_orders/cortes', [App\Http\Controllers\ContractCutoffController::class, 'index'])
+    ->name('technicals_orders.cutoffs');
+Route::post('technicals_orders/cortes/revisar', [App\Http\Controllers\ContractCutoffController::class, 'preview'])
+    ->name('technicals_orders.cutoffs.preview');
+Route::post('technicals_orders/cortes', [App\Http\Controllers\ContractCutoffController::class, 'store'])
+    ->name('technicals_orders.cutoffs.store');
+Route::get('technicals_orders/cortes/exportar', [App\Http\Controllers\ContractCutoffController::class, 'export'])
+    ->name('technicals_orders.cutoffs.export');
+Route::get('technicals_orders/cortes/{corte}', [App\Http\Controllers\ContractCutoffController::class, 'show'])
+    ->whereNumber('corte')->name('technicals_orders.cutoffs.show');
+Route::get('technicals_orders/cortes/{corte}/excel', [App\Http\Controllers\ContractCutoffController::class, 'excel'])
+    ->whereNumber('corte')->name('technicals_orders.cutoffs.excel');
+Route::get('technicals_orders/cortes/{corte}/pdf', [App\Http\Controllers\ContractCutoffController::class, 'pdf'])
+    ->whereNumber('corte')->name('technicals_orders.cutoffs.pdf');
 Route::put('technicals_orders/{technicalOrder}', [TechnicalOrderController::class, 'update'])->name('technicals_orders.update');
 //órdenes exclusivasd del usuario asignado
 Route::get('technicals_orders/my_technical_orders', [TechnicalOrderController::class, 'myTechnicalOrders'])->name('technicals_orders.my_technical_orders');

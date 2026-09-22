@@ -131,7 +131,7 @@ class PppoeMassCutoffTest extends TestCase
             // la pantalla de cortes, no el id interno.
             ->assertSee('ENG000500')
             ->assertSee($cuenta->username)
-            ->assertSee('Cortes masivos');
+            ->assertSee('Cortes de PPPoE');
     }
 
     // ============ Revisar no toca nada ============

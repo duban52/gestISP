@@ -423,33 +423,7 @@ class TechnicalOrderController extends Controller
             return back()->with('error', 'El contrato ya está en «' . $nuevo . '».');
         }
 
-        $orden = DB::transaction(function () use ($contrato, $validated, $nuevo, $estados) {
-            // Nace CERRADA: no hay nada que ejecutar. `user_assigned`
-            // queda en null a propósito — no hay técnico al que mandar.
-            $orden = TechnicalOrder::create([
-                'contract_id' => $contrato->id,
-                'branch_id' => $contrato->branch_id,
-                'created_by' => Auth::id(),
-                'type' => TechnicalOrder::ADMINISTRATIVA,
-                'detail' => 'Cambio administrativo de estado',
-                'target_contract_status' => $nuevo,
-                'status' => 'Cerrada',
-                'initial_comment' => $validated['initial_comment'],
-                'solution' => 'Estado cambiado a ' . $nuevo . '.',
-            ]);
-
-            // La verificación deja el cierre en el historial de la
-            // orden, igual que en las de campo.
-            $orden->verifications()->create([
-                'verified_by' => Auth::id(),
-                'status' => 'Cerrada',
-                'comments' => $validated['initial_comment'],
-            ]);
-
-            $estados->aplicar($orden->fresh('contract'));
-
-            return $orden;
-        });
+        $orden = $estados->ordenAdministrativa($contrato, $nuevo, $validated['initial_comment'], Auth::id());
 
         app(AuditLogger::class)->action(
             'contracts.status_changed',

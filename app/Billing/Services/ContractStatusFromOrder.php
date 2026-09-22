@@ -10,6 +10,7 @@ use App\Models\TechnicalOrderDetail;
 use App\Models\TechnicalOrder;
 use App\Services\ContractDecommissioner;
 use App\Services\ContractServiceSwitch;
+use Illuminate\Support\Facades\DB;
 
 /**
  * En qué estado queda el contrato al cerrarse una orden.
@@ -233,5 +234,48 @@ class ContractStatusFromOrder
     public function ultimoParte(): ?array
     {
         return $this->ultimoParte;
+    }
+
+    /**
+     * Crea una orden administrativa ya cerrada y la aplica: el estado
+     * del contrato y lo que ese estado pide a sus equipos.
+     *
+     * Nace CERRADA: no hay visita que hacer. `user_assigned` queda en
+     * null a propósito, no hay técnico al que mandarla. La verificación
+     * deja el cierre en el historial, igual que en las de campo.
+     *
+     * Es el camino del cambio de estado a mano y del corte masivo: los
+     * dos tienen que dejar la misma huella en el contrato.
+     */
+    public function ordenAdministrativa(
+        Contract $contrato,
+        string $estado,
+        string $motivo,
+        ?int $userId,
+        string $detalle = 'Cambio administrativo de estado',
+    ): TechnicalOrder {
+        return DB::transaction(function () use ($contrato, $estado, $motivo, $userId, $detalle) {
+            $orden = TechnicalOrder::create([
+                'contract_id' => $contrato->id,
+                'branch_id' => $contrato->branch_id,
+                'created_by' => $userId,
+                'type' => TechnicalOrder::ADMINISTRATIVA,
+                'detail' => $detalle,
+                'target_contract_status' => $estado,
+                'status' => 'Cerrada',
+                'initial_comment' => $motivo,
+                'solution' => 'Estado cambiado a ' . $estado . '.',
+            ]);
+
+            $orden->verifications()->create([
+                'verified_by' => $userId,
+                'status' => 'Cerrada',
+                'comments' => $motivo,
+            ]);
+
+            $this->aplicar($orden->fresh('contract'));
+
+            return $orden;
+        });
     }
 }

@@ -619,6 +619,15 @@ return [
                     'icon' => 'fas  fa-check-square',
                     'can' => 'technicals_orders.verification',
                 ],
+                // Suspende en el sistema y corta en la red, por lista de
+                // contratos. Permiso propio.
+                [
+                    'text' => 'Cortes masivos',
+                    'route' => 'technicals_orders.cutoffs',
+                    'active' => ['gestisp/technicals_orders/cortes*'],
+                    'icon' => 'fas  fa-cut',
+                    'can' => 'technicals_orders.cutoff',
+                ],
             ],
 
 
@@ -646,7 +655,9 @@ return [
                 // sin internet a media sucursal no es lo mismo que
                 // consultar el listado de cuentas.
                 [
-                    'text' => 'Cortes masivos',
+                    // «de PPPoE» para distinguirlo de los cortes masivos por
+                    // mora de Gestión técnica, que cortan también la ONT.
+                    'text' => 'Cortes de PPPoE',
                     'route' => 'pppoe.cutoff',
                     'active' => ['pppoe/cortes*'],
                     'icon' => 'fas  fa-user-slash',
