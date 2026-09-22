@@ -510,6 +510,11 @@ Route::get('/warehouse/{warehouse}/pdf', [WarehouseController::class, 'generateP
 Route::get('materials/movements/history', [MaterialMovementController::class, 'history'])->name('movements.history');
 Route::get('movements/history', [MaterialMovementController::class, 'history'])->name('movements.history_data');
 //Exportar historial de movimientos en pdf y excel
+// El detalle de UNA operación de almacén (el id es el del primer renglón).
+Route::get('materials/movements/operacion/{operacion}', [MaterialMovementController::class, 'operation'])
+    ->whereNumber('operacion')->name('movements.operation');
+Route::get('materials/movements/operacion/{operacion}/pdf', [MaterialMovementController::class, 'operationPdf'])
+    ->whereNumber('operacion')->name('movements.operation_pdf');
 Route::get('materials/movements/history/pdf', [MaterialMovementController::class, 'exportMovementsPDF'])->name('movements.pdf');
 Route::get('materials/movements/history/excel', [MaterialMovementController::class, 'export'])->name('movements.excel');
 //Ruta para la creación de una orden tecnica desde el contrato

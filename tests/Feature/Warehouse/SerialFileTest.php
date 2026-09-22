@@ -324,10 +324,17 @@ HWTC00000002",
             ]],
         ])->assertSessionHasNoErrors();
 
-        // El comprobante del ingreso se genera al registrar: si la
-        // plantilla se rompiera, el movimiento no se habría guardado.
-        $this->assertNotNull(session('pdfPath'));
-        $this->assertFileExists(session('pdfPath'));
+        // Se va al detalle de la operación recién registrada.
+        $operacion = MaterialMovement::first()->operation_id;
+        $this->get(route('movements.operation', $operacion))
+            ->assertOk()
+            ->assertSee('Huawei Colombia S.A.S.')
+            ->assertSee('FE-4471');
+
+        // Y su comprobante se imprime desde ahí.
+        $comprobante = $this->get(route('movements.operation_pdf', $operacion));
+        $comprobante->assertOk();
+        $this->assertSame('application/pdf', $comprobante->headers->get('Content-Type'));
 
         // El PDF del historial también lo lleva.
         $pdf = $this->get(route('movements.pdf'));
@@ -337,8 +344,64 @@ HWTC00000002",
         $this->get(route('movements.excel'))->assertOk();
         \Maatwebsite\Excel\Facades\Excel::assertDownloaded(
             'listado_de_movimientos_de_almacen.xlsx',
-            fn (\App\Exports\MaterialsMovementsExport $e) => $e->map(MaterialMovement::first())[11] === 'FE-4471',
+            fn (\App\Exports\MaterialsMovementsExport $e) => $e->map(MaterialMovement::first())[12] === 'FE-4471',
         );
+    }
+
+    // ==================== El historial ====================
+
+    public function test_el_historial_muestra_una_fila_por_movimiento(): void
+    {
+        // Una entrada de 3 equipos son 3 renglones, pero UN movimiento.
+        $this->post(route('movements.store'), [
+            'type' => 'Entrada',
+            'reason' => 'Compra',
+            'warehouse_destination_id' => $this->principal->id,
+            'materials' => [[
+                'material_id' => $this->ont->id,
+                'quantity' => 3,
+                'serials_text' => "HWTC00000001
+HWTC00000002
+HWTC00000003",
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        $operacion = MaterialMovement::first()->operation_id;
+
+        $this->assertSame(3, MaterialMovement::where('operation_id', $operacion)->count());
+
+        $historial = $this->get(route('movements.history'))->assertOk();
+
+        // Una sola fila, con el resumen de lo que se movió...
+        $this->assertSame(1, substr_count($historial->getContent(), 'movements/operacion/' . $operacion . '"'));
+        $historial->assertSee('3 con serial');
+        $historial->assertSee('ONT Huawei');
+
+        // ...y los seriales, en el detalle.
+        $this->get(route('movements.operation', $operacion))
+            ->assertOk()
+            ->assertSee('HWTC00000002')
+            ->assertSee('3 serial(es)');
+    }
+
+    public function test_el_detalle_de_otra_sucursal_no_se_ve(): void
+    {
+        $ajeno = Warehouse::create([
+            'branch_id' => Branch::factory()->create(['company_id' => $this->sucursal->company_id])->id,
+            'description' => 'Almacén de otra sede',
+        ]);
+
+        $movimiento = MaterialMovement::create([
+            'type' => 'Entrada',
+            'material_id' => $this->ont->id,
+            'quantity' => 1,
+            'unit_of_measurement' => 'Unidades',
+            'warehouse_destination_id' => $ajeno->id,
+            'reason' => 'Compra',
+        ]);
+        $movimiento->update(['operation_id' => $movimiento->id]);
+
+        $this->get(route('movements.operation', $movimiento->id))->assertForbidden();
     }
 
     // ==================== Apoyo ====================

@@ -51,7 +51,8 @@ class MaterialMovementController extends Controller
         $this->middleware('check.permission:movements.create')->only('create', 'store', 'serialesDesdeArchivo');
         $this->middleware('check.permission:movements.query_sn')->only('getAvailableSerialNumbers');
         $this->middleware('check.permission:movements.material_quantity')->only('getAvailableQuantity');
-        $this->middleware('check.permission:movements.history')->only('history');
+        $this->middleware('check.permission:movements.history')->only('history', 'operation');
+        $this->middleware('check.permission:movements.pdf')->only('operationPdf');
         $this->middleware('check.permission:movements.pdf')->only('exportMovementsPDF');
         $this->middleware('check.permission:movements.excel')->only('export');
     }
@@ -185,7 +186,12 @@ class MaterialMovementController extends Controller
                 ]
                 : ['supplier' => null, 'invoice_number' => null, 'invoice_date' => null];
 
-            DB::transaction(function () use ($request, $compra, &$movements) {
+            // El PRIMER renglón bautiza la operación y los demás nacen
+            // con su número: así una entrada de mil seriales es UN
+            // movimiento en el historial, sin mil actualizaciones extra.
+            $operacion = null;
+
+            DB::transaction(function () use ($request, $compra, &$movements, &$operacion) {
                 foreach ($request->materials as $materialData) {
                     $material    = Material::findOrFail($materialData['material_id']);
                     $quantity    = $materialData['quantity'];
@@ -280,7 +286,8 @@ class MaterialMovementController extends Controller
                     if ($isEquipment && isset($materialData['serial_numbers'])) {
                         // Equipos: un movimiento por cada serial
                         foreach ($materialData['serial_numbers'] as $serialNumber) {
-                            $movements[] = MaterialMovement::create($compra + [
+                            $renglon = MaterialMovement::create($compra + [
+                                'operation_id'             => $operacion,
                                 'type'                     => $request->type,
                                 'material_id'              => $material->id,
                                 'quantity'                 => 1,
@@ -292,6 +299,9 @@ class MaterialMovementController extends Controller
                                 'reason'                   => $request->reason,
                                 'purchase_unit_value'      => $valorUnitario,
                             ]);
+
+                            $operacion ??= $renglon->operation_id;
+                            $movements[] = $renglon;
 
                             $this->updateInventory(
                                 $request->type,
@@ -306,7 +316,8 @@ class MaterialMovementController extends Controller
                         }
                     } else {
                         // Consumibles: un movimiento con la cantidad total
-                        $movements[] = MaterialMovement::create($compra + [
+                        $renglon = MaterialMovement::create($compra + [
+                            'operation_id'             => $operacion,
                             'type'                     => $request->type,
                             'material_id'              => $material->id,
                             'quantity'                 => $quantity,
@@ -317,6 +328,9 @@ class MaterialMovementController extends Controller
                             'reason'                   => $request->reason,
                             'purchase_unit_value'      => $valorUnitario,
                         ]);
+
+                        $operacion ??= $renglon->operation_id;
+                        $movements[] = $renglon;
 
                         $this->updateInventory(
                             $request->type,
@@ -334,18 +348,13 @@ class MaterialMovementController extends Controller
 
             $this->auditarMovimiento($request, $movements);
 
-            // ---- PDF de resumen del movimiento ----
-            // El comprobante lleva los costos solo si quien registro el
-            // movimiento puede verlos: es un PDF y se guarda.
-            $verCostos = \Illuminate\Support\Facades\Gate::allows('materials.costs');
-            $pdf     = \App\Support\PdfBranding::make('gestisp.materials.movements.pdf_summary', compact('movements', 'verCostos'));
-            $pdfPath = storage_path('app/public/movimiento_' . time() . '.pdf');
-            $pdf->save($pdfPath);
-
-            return redirect()->route('movements.index')->with([
-                'success-create' => 'Movimiento registrado exitosamente.',
-                'pdfPath'        => $pdfPath,
-            ]);
+            // Al detalle de la operación recién registrada: ahí está el
+            // resumen y desde ahí se imprime el comprobante. El PDF ya no
+            // se guarda en disco al registrar —se iban acumulando— sino
+            // que se genera cuando alguien lo pide.
+            return redirect()
+                ->route('movements.operation', $operacion)
+                ->with('success-create', 'Movimiento registrado exitosamente.');
 
         } catch (ValidationException $e) {
             // Debe salir con el detalle POR CAMPO: si se tragara aquí,
@@ -692,17 +701,122 @@ class MaterialMovementController extends Controller
             ]);
         }
 
-        $movements = $query
-            ->with([
-                // Los almacenes traen su sucursal: el listado la
-                // muestra en panel consolidado.
-                'warehouseOrigin.branch', 'warehouseDestination.branch',
-                'material', 'user',
-            ])
-            ->orderByDesc('created_at')
+        $operaciones = $this->operaciones($query);
+
+        return view('gestisp.materials.movements.history', [
+            'operaciones' => $operaciones,
+            'materialesPorOperacion' => $this->materialesDe($operaciones->pluck('operacion')),
+            'usingDefaultRange' => $usingDefaultRange,
+        ]);
+    }
+
+    /**
+     * Las operaciones que hay detrás de los renglones filtrados.
+     *
+     * UNA FILA POR OPERACIÓN, no por renglón: una entrada de mil ONT es
+     * un movimiento, no mil. Los totales se calculan sobre TODOS los
+     * renglones de esas operaciones y no solo sobre los que casaron con
+     * el filtro — buscar un serial tiene que enseñar el movimiento
+     * entero, no un pedazo que diga «1 unidad».
+     */
+    private function operaciones(Builder $filtrada)
+    {
+        $ids = (clone $filtrada)->distinct()->pluck('operation_id')->filter();
+
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return MaterialMovement::whereIn('operation_id', $ids)
+            ->selectRaw('operation_id as operacion, MIN(created_at) as fecha, type, '
+                . 'warehouse_origin_id, warehouse_destination_id, reason, supplier, invoice_number, '
+                . 'invoice_date, user_id, COUNT(*) as renglones, SUM(quantity) as unidades, '
+                . 'COUNT(DISTINCT material_id) as materiales, COUNT(serial_number) as seriales, '
+                // Lo invertido en la operación y cuántos renglones traen
+                // precio: sin lo segundo, un total parecería completo
+                // cuando media entrada quedó sin valorar.
+                . 'SUM(CASE WHEN purchase_unit_value IS NULL THEN 0 ELSE quantity * purchase_unit_value END) as invertido, '
+                . 'COUNT(purchase_unit_value) as con_valor')
+            ->groupBy('operation_id', 'type', 'warehouse_origin_id', 'warehouse_destination_id',
+                'reason', 'supplier', 'invoice_number', 'invoice_date', 'user_id')
+            ->with(['warehouseOrigin.branch', 'warehouseDestination.branch', 'user'])
+            ->orderByDesc('fecha')
+            ->get();
+    }
+
+    /**
+     * Qué se movió en cada operación, por material.
+     *
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection>
+     */
+    private function materialesDe($operacionIds)
+    {
+        if (collect($operacionIds)->isEmpty()) {
+            return collect();
+        }
+
+        return MaterialMovement::whereIn('operation_id', $operacionIds)
+            ->selectRaw('operation_id, material_id, unit_of_measurement, SUM(quantity) as cantidad, COUNT(serial_number) as seriales')
+            ->groupBy('operation_id', 'material_id', 'unit_of_measurement')
+            ->with('material')
+            ->get()
+            ->groupBy('operation_id');
+    }
+
+    /**
+     * El detalle de una operación: qué se movió y con qué seriales.
+     *
+     * Recibe el id del PRIMER renglón, que es el número del movimiento.
+     */
+    public function operation(int $operacion): View
+    {
+        $movements = $this->renglonesDeLaOperacion($operacion);
+
+        return view('gestisp.materials.movements.operation', [
+            'operacion' => $operacion,
+            'cabecera' => $movements->first(),
+            'movements' => $movements,
+            'porMaterial' => $movements->groupBy('material_id'),
+            'verCostos' => \Illuminate\Support\Facades\Gate::allows('materials.costs'),
+        ]);
+    }
+
+    /** El comprobante de una operación, cuando alguien lo pide. */
+    public function operationPdf(int $operacion)
+    {
+        $movements = $this->renglonesDeLaOperacion($operacion)->all();
+
+        // El comprobante lleva los costos solo si quien lo descarga
+        // puede verlos: es un PDF, se guarda y se reenvía.
+        $verCostos = \Illuminate\Support\Facades\Gate::allows('materials.costs');
+
+        return \App\Support\PdfBranding::make(
+            'gestisp.materials.movements.pdf_summary',
+            compact('movements', 'verCostos') + ['operacion' => $operacion],
+        )->stream("movimiento-{$operacion}.pdf");
+    }
+
+    /**
+     * Los renglones de una operación, comprobando la sucursal: el id
+     * viaja por la URL y sin esto se vería el movimiento de otra sede.
+     */
+    private function renglonesDeLaOperacion(int $operacion)
+    {
+        $movements = MaterialMovement::where('operation_id', $operacion)
+            ->with(['material', 'user', 'warehouseOrigin.branch', 'warehouseDestination.branch'])
+            ->orderBy('id')
             ->get();
 
-        return view('gestisp.materials.movements.history', compact('movements', 'usingDefaultRange'));
+        abort_if($movements->isEmpty(), 404, 'Ese movimiento no existe.');
+
+        $sucursales = app(CurrentContext::class)->branchIds();
+        $primero = $movements->first();
+        $suya = in_array($primero->warehouseOrigin?->branch_id, $sucursales, true)
+            || in_array($primero->warehouseDestination?->branch_id, $sucursales, true);
+
+        abort_unless($suya, 403, 'Ese movimiento es de otra sucursal.');
+
+        return $movements;
     }
 
     /**
@@ -712,15 +826,10 @@ class MaterialMovementController extends Controller
      */
     public function exportMovementsPDF(Request $request)
     {
-        $movements = $this->applyFilters($request)
-            ->with([
-                // Los almacenes traen su sucursal: el listado la
-                // muestra en panel consolidado.
-                'warehouseOrigin.branch', 'warehouseDestination.branch',
-                'material', 'user',
-            ])
-            ->orderByDesc('created_at')
-            ->get();
+        // Una fila por operación, igual que la pantalla: un PDF con mil
+        // renglones de la misma entrada no lo lee nadie.
+        $operaciones = $this->operaciones($this->applyFilters($request));
+        $materialesPorOperacion = $this->materialesDe($operaciones->pluck('operacion'));
 
         // El PDF informa el período consultado en su encabezado
         $from = $request->start_date;
@@ -735,7 +844,7 @@ class MaterialMovementController extends Controller
         // Horizontal: el detalle tiene 9 columnas (10 con el costo)
         $pdf = \App\Support\PdfBranding::make(
             'gestisp.materials.movements.pdf',
-            compact('movements', 'from', 'to', 'verCostos'),
+            compact('operaciones', 'materialesPorOperacion', 'from', 'to', 'verCostos'),
             landscape: true
         );
 

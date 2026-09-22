@@ -122,10 +122,12 @@
     @endif
 
     {{-- ============================================================
-         Tabla de movimientos (DataTables)
+         Tabla de OPERACIONES (DataTables)
 
-         Las relaciones vienen precargadas con with() desde el
-         controlador para evitar consultas N+1.
+         Una fila por movimiento, no por renglón: un equipo con serial
+         genera un renglón por serial, así que una entrada de mil ONT
+         llenaba mil filas y el historial no servía. El detalle —con los
+         seriales y su comprobante— está a un clic, en «Ver».
          ============================================================ --}}
     <div class="card">
         <div class="card-body">
@@ -135,73 +137,87 @@
                     <tr>
                         <th>Sucursal</th>
                         <th>Fecha</th>
+                        <th>N.º</th>
                         <th>Tipo</th>
                         <th>Almacén origen</th>
                         <th>Almacén destino</th>
-                        <th>Material</th>
-                        <th>Cantidad</th>
-                        <th>Unidad</th>
-                        @can('materials.costs')
-                            {{-- Lo que se pago en ESE ingreso concreto. Es el
-                                 historico: la fila de inventario solo guarda el
-                                 resultado del promedio ponderado, asi que sin
-                                 esto no hay forma de auditarlo. --}}
-                            <th class="text-right">Valor unit.</th>
-                        @endcan
-                        <th>Serial</th>
-                        <th>Motivo</th>
-                        {{-- De quién se compró: solo lo llevan las entradas. --}}
+                        <th>Qué se movió</th>
+                        <th class="text-right">Unidades</th>
                         <th>Proveedor</th>
                         <th>Factura</th>
                         <th>Realizado por</th>
+                        <th></th>
                     </tr>
                     </thead>
                     <tbody>
-                    @foreach($movements as $movement)
+                    @foreach($operaciones as $operacion)
                         <tr>
                             {{-- El movimiento no tiene sucursal propia: es la de
                                  sus almacenes. Se mira primero el de origen y,
                                  si es una entrada, el de destino. --}}
-                            <td>{{ $movement->warehouseOrigin?->branch?->name
-                                    ?? $movement->warehouseDestination?->branch?->name
+                            <td>{{ $operacion->warehouseOrigin?->branch?->name
+                                    ?? $operacion->warehouseDestination?->branch?->name
                                     ?: '—' }}</td>
-                            <td>{{ $movement->created_at->format('Y-m-d H:i') }}</td>
+                            <td>{{ \Illuminate\Support\Carbon::parse($operacion->fecha)->format('Y-m-d H:i') }}</td>
+                            <td class="text-monospace">{{ $operacion->operacion }}</td>
 
                             {{-- Tipo con badge de color según la operación --}}
                             <td>
-                                @if($movement->type === 'Entrada')
+                                @if($operacion->type === 'Entrada')
                                     <span class="badge badge-success">Entrada</span>
-                                @elseif($movement->type === 'Salida')
+                                @elseif($operacion->type === 'Salida')
                                     <span class="badge badge-danger">Salida</span>
                                 @else
                                     <span class="badge badge-info">Transferencia</span>
                                 @endif
                             </td>
 
-                            <td>{{ $movement->warehouseOrigin->description ?? '—' }}</td>
-                            <td>{{ $movement->warehouseDestination->description ?? '—' }}</td>
-                            <td>{{ $movement->material->name ?? '—' }}</td>
-                            <td>{{ $movement->quantity }}</td>
-                            <td>{{ $movement->unit_of_measurement }}</td>
-                            @can('materials.costs')
-                                <td class="text-right">
-                                    {{ $movement->purchase_unit_value !== null
-                                        ? '$' . number_format($movement->purchase_unit_value, 2)
-                                        : '—' }}
-                                </td>
-                            @endcan
-                            <td>{{ $movement->serial_number ?? '—' }}</td>
-                            <td>{{ $movement->reason }}</td>
-                            <td>{{ $movement->supplier ?: '—' }}</td>
+                            <td>{{ $operacion->warehouseOrigin->description ?? '—' }}</td>
+                            <td>{{ $operacion->warehouseDestination->description ?? '—' }}</td>
+
+                            {{-- Qué se movió: los materiales de la operación,
+                                 con lo que entró o salió de cada uno. --}}
                             <td>
-                                {{ $movement->invoice_number ?: '—' }}
-                                @if($movement->invoice_date)
-                                    <small class="d-block text-muted">{{ $movement->invoice_date->format('d/m/Y') }}</small>
+                                @php
+                                    $lineas = $materialesPorOperacion[$operacion->operacion] ?? collect();
+                                @endphp
+                                @foreach($lineas->take(3) as $linea)
+                                    <div>
+                                        {{ $linea->material?->name ?? '—' }}:
+                                        <strong>{{ rtrim(rtrim(number_format($linea->cantidad, 2, ',', '.'), '0'), ',') }}</strong>
+                                        {{ $linea->unit_of_measurement }}
+                                        @if($linea->seriales > 0)
+                                            <small class="text-muted">({{ $linea->seriales }} con serial)</small>
+                                        @endif
+                                    </div>
+                                @endforeach
+                                @if($lineas->count() > 3)
+                                    <small class="text-muted">… y {{ $lineas->count() - 3 }} material(es) más</small>
+                                @endif
+                            </td>
+
+                            <td class="text-right">
+                                {{ rtrim(rtrim(number_format($operacion->unidades, 2, ',', '.'), '0'), ',') }}
+                                <small class="d-block text-muted">{{ $operacion->renglones }} renglón(es)</small>
+                            </td>
+                            <td>{{ $operacion->supplier ?: '—' }}</td>
+                            <td>
+                                {{ $operacion->invoice_number ?: '—' }}
+                                @if($operacion->invoice_date)
+                                    <small class="d-block text-muted">
+                                        {{ \Illuminate\Support\Carbon::parse($operacion->invoice_date)->format('d/m/Y') }}
+                                    </small>
                                 @endif
                             </td>
                             <td>
-                                {{ $movement->user->name ?? '—' }}
-                                {{ $movement->user->last_name ?? '' }}
+                                {{ $operacion->user->name ?? '—' }}
+                                {{ $operacion->user->last_name ?? '' }}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ route('movements.operation', $operacion->operacion) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Ver el detalle">
+                                    <i class="fas fa-eye"></i> Ver
+                                </a>
                             </td>
                         </tr>
                     @endforeach
@@ -258,6 +274,8 @@
                 warehouse_origin:      'Nombre del almacén de origen',
                 warehouse_destination: 'Nombre del almacén de destino',
                 material:              'Nombre del material',
+                supplier:              'Nombre del proveedor',
+                invoice_number:        'Número de la factura del proveedor',
                 serial_number:         'Número de serial',
             };
 

@@ -31,7 +31,10 @@ class MaterialsMovementsExport implements FromQuery, WithHeadings, WithMapping
     public function headings(): array
     {
         return [
-            'Id del movimiento',
+            // El renglón y la OPERACIÓN a la que pertenece: un equipo con
+            // serial genera un renglón por serial, pero el movimiento es uno.
+            'Id del renglon',
+            'Movimiento',
             'Fecha del movimiento',
             'Tipo de movimiento',
             'Almacen de origen',
@@ -53,6 +56,7 @@ class MaterialsMovementsExport implements FromQuery, WithHeadings, WithMapping
     {
         return [
             $movement->id,
+            $movement->operation_id,
             $movement->created_at,
             $movement->type,
             $movement->warehouseOrigin->description ?? 'N/A',

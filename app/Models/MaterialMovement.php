@@ -25,6 +25,10 @@ class MaterialMovement extends Model
     use HasFactory;
 
     protected $fillable = [
+        // Los renglones de una misma operación. Vale el id del primero:
+        // un equipo con serial genera un renglón por serial, pero el
+        // movimiento es uno solo (ver la migración que lo introdujo).
+        'operation_id',
         'warehouse_origin_id',
         'warehouse_destination_id',
         'material_id',
@@ -49,6 +53,18 @@ class MaterialMovement extends Model
         'purchase_unit_value' => 'decimal:2',
         'invoice_date' => 'date',
     ];
+
+    protected static function booted(): void
+    {
+        // Un renglón sin operación sería un renglón que el historial
+        // —que agrupa por operación— no enseñaría. Si nadie se la puso,
+        // el movimiento es su propia operación.
+        static::created(function (self $movimiento) {
+            if (!$movimiento->operation_id) {
+                $movimiento->forceFill(['operation_id' => $movimiento->id])->saveQuietly();
+            }
+        });
+    }
 
     /** Material movido */
     public function material()

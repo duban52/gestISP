@@ -7,6 +7,7 @@
      ============================================================ --}}
 @extends('gestisp.pdf.layout', [
     'pdfTitle' => 'Comprobante de movimiento de almacén',
+    'pdfSubtitle' => isset($operacion) ? 'Movimiento n.º ' . $operacion : null,
 ])
 
 @php
