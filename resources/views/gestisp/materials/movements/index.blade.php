@@ -311,37 +311,57 @@
                             <div id="serial-file-result" class="small mt-2 d-none"></div>
                         </div>
 
-                        {{-- Salida / Transferencia: elegir de los que hay --}}
-                        <div id="serial-picker" class="d-none">
+                        {{-- Salida / Transferencia: elegir de los que hay.
+                             Lo elegido pasa a la lista de abajo, que es la
+                             que se envía. --}}
+                        <div id="serial-picker" class="d-none mb-2">
                             <select id="serial-number-select" class="form-control" multiple></select>
                             <small class="form-text text-muted">
-                                Escriba para filtrar. Debe elegir tantos seriales como unidades.
+                                Escriba para filtrar. Lo que elija se agrega a la lista.
                             </small>
                             <div class="alert alert-warning py-2 mt-2 d-none" id="serial-vacio">
                                 Este equipo no tiene unidades con serial en el almacén de origen.
                             </div>
                         </div>
 
-                        {{-- Entrada: un solo campo que va armando la lista.
-                             Con cincuenta equipos, cincuenta casillas en
-                             pantalla son inmanejables. --}}
-                        <div id="serial-inputs" class="d-none">
-                            <div class="input-group input-group-sm mb-2">
-                                <input type="text" id="serial-quick" class="form-control" autocomplete="off"
-                                       placeholder="Escriba o escanee el serial y pulse Enter">
-                                <div class="input-group-append">
-                                    <button type="button" class="btn btn-primary" id="serial-add-btn">
-                                        <i class="fas fa-plus"></i> Agregar
-                                    </button>
-                                </div>
+                        {{-- Escribir o escanear: cada Enter agrega uno --}}
+                        <div class="input-group input-group-sm mb-2">
+                            <input type="text" id="serial-quick" class="form-control" autocomplete="off"
+                                   placeholder="Escriba o escanee el serial y pulse Enter">
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-primary" id="serial-add-btn">
+                                    <i class="fas fa-plus"></i> Agregar
+                                </button>
                             </div>
-                            <ul id="serial-number-list" class="list-unstyled mb-0"
-                                style="max-height: 220px; overflow-y: auto;"></ul>
-                            <small class="form-text text-muted">
-                                Enter agrega el serial a la lista; también puede pegar varios de una vez
-                                (uno por línea o separados por comas). La cantidad la dan los seriales.
-                            </small>
                         </div>
+
+                        {{-- ---------- La lista, que es lo que se envía ----------
+                             Paginada y con buscador: una entrada de 500 equipos
+                             dejaba una pantalla imposible de recorrer. --}}
+                        <div class="input-group input-group-sm mb-2 d-none" id="serial-filtro-grupo">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            </div>
+                            <input type="text" id="serial-filtro" class="form-control"
+                                   placeholder="Buscar un serial de la lista">
+                        </div>
+
+                        <ul id="serial-number-list" class="list-unstyled mb-0"></ul>
+
+                        <div class="d-flex justify-content-between align-items-center mt-1 d-none" id="serial-paginador">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="serial-anterior">
+                                <i class="fas fa-chevron-left"></i> Anterior
+                            </button>
+                            <small class="text-muted" id="serial-pagina-texto"></small>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="serial-siguiente">
+                                Siguiente <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+
+                        <small class="form-text text-muted">
+                            Enter agrega el serial a la lista; también puede pegar varios de una vez
+                            (uno por línea o separados por comas). La cantidad la dan los seriales.
+                        </small>
                     </div>
 
                     {{-- Los errores se muestran aquí, junto al campo que
