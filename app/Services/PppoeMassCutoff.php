@@ -10,7 +10,6 @@ use App\Services\Audit\AuditLogger;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use Maatwebsite\Excel\Facades\Excel;
 use RuntimeException;
 
 /**
@@ -137,26 +136,7 @@ class PppoeMassCutoff
      */
     public function identificadoresDesdeArchivo(UploadedFile $archivo): array
     {
-        $ruta = $archivo->getRealPath();
-        $extension = strtolower($archivo->getClientOriginalExtension());
-
-        $filas = in_array($extension, ['txt', 'csv'], true)
-            ? $this->leerTexto($ruta)
-            : $this->leerHoja($ruta);
-
-        if ($filas->isEmpty()) {
-            return [];
-        }
-
-        $columna = $this->columnaConIdentificadores($filas->first());
-
-        // Sin encabezado reconocible se lee todo desde la primera fila
-        $datos = $columna === null ? $filas : $filas->skip(1);
-        $indice = $columna ?? 0;
-
-        return $this->normalizarLista(
-            $datos->map(fn ($fila) => $fila[$indice] ?? null)->all()
-        );
+        return $this->normalizarLista(\App\Support\ListaDesdeArchivo::valores($archivo, self::ENCABEZADOS));
     }
 
     /**
@@ -865,82 +845,4 @@ class PppoeMassCutoff
     }
 
     // ==================== Lectura de archivos ====================
-
-    /**
-     * Lee un .txt o .csv como filas de celdas.
-     *
-     * No se usa la librería de Excel para estos: convierte los
-     * valores y un identificador como "00123" perdería los ceros.
-     *
-     * @return Collection<int, array<int, string>>
-     */
-    private function leerTexto(string $ruta): Collection
-    {
-        $manejador = fopen($ruta, 'r');
-
-        if ($manejador === false) {
-            return collect();
-        }
-
-        $primeraLinea = fgets($manejador) ?: '';
-        // BOM que agrega Excel al guardar en UTF-8
-        $primeraLinea = preg_replace('/^\xEF\xBB\xBF/', '', $primeraLinea);
-
-        $separador = substr_count($primeraLinea, ';') > substr_count($primeraLinea, ',') ? ';' : ',';
-
-        rewind($manejador);
-
-        $filas = collect();
-        $primera = true;
-
-        while (($fila = fgetcsv($manejador, 0, $separador)) !== false) {
-            if ($primera) {
-                $fila[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) ($fila[0] ?? ''));
-                $primera = false;
-            }
-
-            $filas->push(array_map(fn ($v) => (string) $v, $fila));
-        }
-
-        fclose($manejador);
-
-        return $filas->reject(fn ($fila) => collect($fila)->filter(fn ($v) => trim($v) !== '')->isEmpty())
-            ->values();
-    }
-
-    /**
-     * Lee un .xlsx o .xls como filas de celdas.
-     *
-     * @return Collection<int, array<int, string>>
-     */
-    private function leerHoja(string $ruta): Collection
-    {
-        $hoja = Excel::toCollection(null, $ruta)->first() ?? collect();
-
-        return $hoja
-            ->map(fn ($fila) => collect($fila)->map(fn ($v) => (string) $v)->all())
-            ->reject(fn ($fila) => collect($fila)->filter(fn ($v) => trim($v) !== '')->isEmpty())
-            ->values();
-    }
-
-    /**
-     * Índice de la columna con los identificadores, o null si la
-     * primera fila no parece un encabezado.
-     *
-     * @param  array<int, string>  $primeraFila
-     */
-    private function columnaConIdentificadores(array $primeraFila): ?int
-    {
-        foreach ($primeraFila as $indice => $titulo) {
-            $normalizado = preg_replace('/[^a-z]/', '', mb_strtolower(
-                iconv('UTF-8', 'ASCII//TRANSLIT', (string) $titulo) ?: (string) $titulo
-            ));
-
-            if (in_array($normalizado, self::ENCABEZADOS, true)) {
-                return (int) $indice;
-            }
-        }
-
-        return null;
-    }
 }

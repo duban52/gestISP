@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Exports\MaterialsMovementsExport;
 use App\Models\Inventory;
 use App\Services\InventoryCosting;
+use App\Services\SerialesDeMovimiento;
+use App\Support\ListaDesdeArchivo;
 use App\Models\Material;
 use App\Models\MaterialMovement;
 use App\Models\Warehouse;
@@ -46,7 +48,7 @@ class MaterialMovementController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('check.permission:movements.index')->only('index');
-        $this->middleware('check.permission:movements.create')->only('create', 'store');
+        $this->middleware('check.permission:movements.create')->only('create', 'store', 'serialesDesdeArchivo');
         $this->middleware('check.permission:movements.query_sn')->only('getAvailableSerialNumbers');
         $this->middleware('check.permission:movements.material_quantity')->only('getAvailableQuantity');
         $this->middleware('check.permission:movements.history')->only('history');
@@ -96,6 +98,27 @@ class MaterialMovementController extends Controller
      */
     public function store(Request $request)
     {
+        // Los seriales cargados desde un archivo llegan en UN campo de
+        // texto, uno por línea, y no en un input por serial: con 500
+        // equipos PHP cortaría la petición en silencio al pasar de
+        // max_input_vars (1.000 por defecto) y se perderían seriales.
+        $request->merge(['materials' => collect($request->input('materials', []))
+            ->map(function ($linea) {
+                if (is_array($linea) && filled($linea['serials_text'] ?? null)) {
+                    $linea['serial_numbers'] = array_values(array_filter(
+                        array_map('trim', SerialesDeMovimiento::desdeTexto($linea['serials_text'])),
+                        fn ($s) => $s !== '',
+                    ));
+                }
+
+                if (is_array($linea)) {
+                    unset($linea['serials_text']);
+                }
+
+                return $linea;
+            })
+            ->all()]);
+
         try {
             $request->validate([
                 'type'                            => 'required|in:Entrada,Salida,Transferencia',
@@ -113,7 +136,7 @@ class MaterialMovementController extends Controller
                 // misma fibra, y las existencias quedarían en una unidad
                 // que no significa nada.
                 'materials.*.serial_numbers'      => 'nullable|array',
-                'materials.*.serial_numbers.*'    => 'string',
+                'materials.*.serial_numbers.*'    => 'string|max:255',
                 // OPCIONAL, y solo se lee en las ENTRADAS: es lo que se
                 // paga al ingresar material. En un traslado el costo ya
                 // viaja con la existencia desde el almacén de origen, y
@@ -149,6 +172,47 @@ class MaterialMovementController extends Controller
                     // aunque mañana se corrija la del catálogo.
                     $unidad = $material->unit_of_measurement;
 
+                    // ---- Seriales: tantos como unidades, y que valgan ----
+                    //
+                    // En una entrada, que no estén ya en el inventario; en
+                    // una salida o un traslado, que estén en el almacén de
+                    // origen. La regla es la misma que enseñó la carga del
+                    // archivo, y se vuelve a aplicar aquí porque lo que
+                    // llega del navegador no es de fiar.
+                    if ($isEquipment) {
+                        $seriales = $materialData['serial_numbers'] ?? [];
+
+                        if (count($seriales) != $quantity) {
+                            throw new \Exception(sprintf(
+                                'Los números de serie de %s tienen que ser tantos como unidades: indicó %d y hay %d.',
+                                $material->name,
+                                $quantity,
+                                count($seriales),
+                            ));
+                        }
+
+                        $revision = app(SerialesDeMovimiento::class)
+                            ->revisar($seriales, $request->type, $material, $request->warehouse_origin_id);
+
+                        if ($revision['problemas'] !== []) {
+                            $muestra = array_slice($revision['problemas'], 0, 5);
+                            $resto = count($revision['problemas']) - count($muestra);
+
+                            throw new \Exception(sprintf(
+                                'Hay %d serial(es) de %s que no se pueden %s: %s%s',
+                                count($revision['problemas']),
+                                $material->name,
+                                $request->type === 'Entrada' ? 'ingresar' : 'mover',
+                                implode(' ', array_map(fn ($p) => "«{$p['serial']}»: {$p['motivo']}", $muestra)),
+                                $resto > 0 ? " Y {$resto} más." : '',
+                            ));
+                        }
+
+                        // Los guardados, con sus mayúsculas: son los que
+                        // se buscan después en el inventario.
+                        $materialData['serial_numbers'] = $revision['validos'];
+                    }
+
                     // ---- Validar stock en origen (salidas y transferencias) ----
                     if (in_array($request->type, ['Salida', 'Transferencia'])) {
                         if ($isEquipment) {
@@ -161,13 +225,6 @@ class MaterialMovementController extends Controller
                                 throw new \Exception(
                                     "Cantidad insuficiente de equipos en el almacén de origen. " .
                                     "Disponibles: {$availableQuantity}, Solicitados: {$quantity}"
-                                );
-                            }
-
-                            // Los seriales seleccionados deben coincidir con la cantidad
-                            if (!isset($materialData['serial_numbers']) || count($materialData['serial_numbers']) != $quantity) {
-                                throw new \Exception(
-                                    'La cantidad de números de serie seleccionados debe ser igual a la cantidad solicitada.'
                                 );
                             }
                         } else {
@@ -280,6 +337,49 @@ class MaterialMovementController extends Controller
                 ->withErrors(['error' => $e->getMessage()])
                 ->withInput();
         }
+    }
+
+    /**
+     * Lee los seriales de un archivo y dice cuáles valen, SIN mover nada.
+     *
+     * El formulario lo llama al elegir el archivo, para que quien carga
+     * 500 equipos vea antes de agregarlos cuáles sirven y por qué no los
+     * demás. Al guardar, store() vuelve a revisarlos todos.
+     */
+    public function serialesDesdeArchivo(Request $request, SerialesDeMovimiento $reglas): JsonResponse
+    {
+        $sucursales = app(CurrentContext::class)->branchIds();
+
+        $datos = $request->validate([
+            'archivo' => 'required|file|max:5120|mimes:txt,csv,xlsx,xls',
+            'type' => 'required|in:Entrada,Salida,Transferencia',
+            'material_id' => ['required', Rule::exists('materials', 'id')->whereIn('branch_id', $sucursales)],
+            'warehouse_origin_id' => [
+                'nullable', 'required_if:type,Salida,Transferencia',
+                Rule::exists('warehouses', 'id')->whereIn('branch_id', $sucursales),
+            ],
+        ], [
+            'archivo.mimes' => 'El archivo debe ser .txt, .csv, .xlsx o .xls.',
+            'archivo.max' => 'El archivo no puede pesar más de 5 MB.',
+            'warehouse_origin_id.required_if' => 'Elija primero el almacén de origen.',
+        ]);
+
+        $material = Material::findOrFail($datos['material_id']);
+
+        if (!$material->is_equipment) {
+            return response()->json(['ok' => false, 'error' => 'Ese material no lleva número de serie.'], 422);
+        }
+
+        $leidos = ListaDesdeArchivo::valores($request->file('archivo'), SerialesDeMovimiento::ENCABEZADOS);
+        $revision = $reglas->revisar($leidos, $datos['type'], $material, $datos['warehouse_origin_id'] ?? null);
+
+        return response()->json([
+            'ok' => true,
+            'archivo' => $request->file('archivo')->getClientOriginalName(),
+            'leidos' => count(array_filter($leidos, fn ($s) => trim($s) !== '')),
+            'validos' => $revision['validos'],
+            'problemas' => $revision['problemas'],
+        ]);
     }
 
     /**

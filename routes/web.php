@@ -501,6 +501,8 @@ Route::get('cashRegisters/transactions/report-pdf', [CashRegisterTransactionCont
 Route::get('cashRegisters/transactions/export-excel', [CashRegisterTransactionController::class, 'export'])->name('transactions.export-excel');
 //Movimiento de material (consulta SN)
 Route::get('inventories/{warehouse}/materials/{material}/serial-numbers', [MaterialMovementController::class, 'getAvailableSerialNumbers'])->name('movements.query_sn');
+// Leer los seriales de un archivo (txt/csv/xlsx) y decir cuáles valen. No mueve nada.
+Route::post('movements/serials/archivo', [MaterialMovementController::class, 'serialesDesdeArchivo'])->name('movements.serials_file');
 Route::get('inventories/{warehouse}/materials/{material}/quantity', [MaterialMovementController::class, 'getAvailableQuantity'])->name('movements.material_quantity');;
 //Pdf de inventarios
 Route::get('/warehouse/{warehouse}/pdf', [WarehouseController::class, 'generatePdf'])->name('warehouse.pdf');

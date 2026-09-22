@@ -142,7 +142,8 @@
          - /movements/quantity/{warehouse}/{material}: disponibilidad
          - /movements/serials/{warehouse}/{material}: seriales (equipos)
          ============================================================ --}}
-    <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel" aria-hidden="true">
+    <div class="modal fade" id="materialModal" tabindex="-1" aria-labelledby="materialModalLabel" aria-hidden="true"
+         data-url-seriales="{{ route('movements.serials_file') }}">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
@@ -257,6 +258,25 @@
                                 <i class="fas fa-barcode mr-1"></i> Números de serie
                             </label>
                             <span class="badge badge-secondary" id="serial-counter">0 de 0</span>
+                        </div>
+
+                        {{-- Muchos equipos: los seriales desde un archivo. Sirve
+                             para los tres tipos; en salidas y transferencias
+                             el servidor comprueba que cada uno esté en el
+                             almacén de origen, y en entradas que no esté ya
+                             en el inventario. --}}
+                        <div class="border rounded p-2 mb-2 bg-light">
+                            <label for="serial-file" class="small font-weight-bold mb-1">
+                                <i class="fas fa-file-upload mr-1"></i> Cargar los seriales desde un archivo
+                            </label>
+                            <input type="file" id="serial-file" class="form-control-file form-control-sm"
+                                   accept=".txt,.csv,.xlsx,.xls">
+                            <small class="form-text text-muted">
+                                <code>.txt</code>, <code>.csv</code>, <code>.xlsx</code> o <code>.xls</code>: un serial por fila.
+                                Si la primera fila dice «Serial» o «SN» se usa esa columna. La cantidad se ajusta sola
+                                a los seriales válidos.
+                            </small>
+                            <div id="serial-file-result" class="small mt-2 d-none"></div>
                         </div>
 
                         {{-- Salida / Transferencia: elegir de los que hay --}}
