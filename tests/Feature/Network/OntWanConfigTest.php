@@ -192,21 +192,22 @@ class OntWanConfigTest extends TestCase
 
     // ==================== El perfil WAN ====================
 
-    public function test_al_activar_se_ata_el_perfil_wan_por_defecto(): void
+    public function test_al_activar_se_manda_el_perfil_wan_que_se_eligio(): void
     {
-        $this->cuentaPppoe('egp000005_duban', 'clave123');
-
         $this->mock(OltSshService::class, function ($mock) {
             $mock->shouldReceive('activateOnt')->andReturn(['ont_id' => 7, 'service_port' => 123]);
             $mock->shouldReceive('getOntIfIndexes')->andReturn([]);
             $mock->shouldReceive('setOntWanConfig')
                 ->once()
-                ->withArgs(fn ($olt, $ont, $datos) => $datos['profile_id'] === OltSshService::PERFIL_WAN)
+                ->withArgs(fn ($olt, $ont, $datos) => $datos['profile_id'] === 3)
                 ->andReturn(['aplicado' => true, 'estado' => [], 'aviso' => null]);
         });
 
-        $this->post(route('onts.activate'), $this->datosDeActivacion(['enviar_wan' => 1]))
-            ->assertRedirect();
+        $this->post(route('onts.activate'), $this->datosDeActivacion([
+            'enviar_wan' => 1,
+            'wan_modo' => 'dhcp',
+            'wan_profile_id' => 3,
+        ]))->assertRedirect();
     }
 
     public function test_el_perfil_wan_se_puede_dejar_vacio(): void
@@ -459,7 +460,7 @@ class OntWanConfigTest extends TestCase
                 ->andReturn(['aplicado' => true, 'estado' => [], 'aviso' => null]);
         });
 
-        $this->post(route('onts.activate'), $this->datosDeActivacion(['enviar_wan' => 1]))
+        $this->post(route('onts.activate'), $this->datosDeActivacion(['enviar_wan' => 1, 'wan_modo' => 'pppoe', 'wan_username' => 'egp000005_duban', 'wan_password' => 'clave123']))
             ->assertRedirect();
 
         $this->assertStringContainsString('egp000005_duban', session('success'));
@@ -494,7 +495,7 @@ class OntWanConfigTest extends TestCase
             $mock->shouldReceive('setOntWanConfig')->andThrow(new \Exception('La OLT rechazó la configuración WAN'));
         });
 
-        $this->post(route('onts.activate'), $this->datosDeActivacion(['enviar_wan' => 1]))
+        $this->post(route('onts.activate'), $this->datosDeActivacion(['enviar_wan' => 1, 'wan_modo' => 'pppoe', 'wan_username' => 'egp000005_duban', 'wan_password' => 'clave123']))
             ->assertRedirect()
             ->assertSessionHasNoErrors();
 
@@ -502,7 +503,40 @@ class OntWanConfigTest extends TestCase
         $this->assertStringContainsString('NO se pudo enviar', session('success'));
     }
 
-    public function test_sin_contrato_no_se_intenta_mandar_nada(): void
+    /**
+     * Una ONT sin contrato también puede necesitar WAN.
+     *
+     * Un repetidor propio o un enlace a una sede de la empresa no le
+     * facturan a nadie, pero navegan igual. Lo único que no tienen es
+     * cuenta PPPoE que proponer.
+     */
+    public function test_sin_contrato_se_puede_configurar_por_dhcp(): void
+    {
+        $this->mock(OltSshService::class, function ($mock) {
+            $mock->shouldReceive('activateOnt')->andReturn(['ont_id' => 7, 'service_port' => 123]);
+            $mock->shouldReceive('getOntIfIndexes')->andReturn([]);
+            $mock->shouldReceive('setOntWanConfig')
+                ->once()
+                ->withArgs(fn ($olt, $ont, $datos) => $datos['modo'] === 'dhcp')
+                ->andReturn(['aplicado' => true, 'estado' => ['ONT config type' => 'DHCP'], 'aviso' => null]);
+        });
+
+        $this->post(route('onts.activate'), $this->datosDeActivacion([
+            'enviar_wan' => 1,
+            'wan_modo' => 'dhcp',
+            'sin_contrato' => 1,
+            'contract_id' => null,
+            'description' => 'Repetidor de la empresa',
+        ]))->assertRedirect();
+    }
+
+    /**
+     * Un dato torcido de la WAN no puede tumbar la autorización.
+     *
+     * La ONT ya quedó dada de alta en la OLT cuando se llega aquí:
+     * devolver un error de validación haría creer que no se hizo.
+     */
+    public function test_una_wan_mal_pedida_no_impide_activar(): void
     {
         $this->mock(OltSshService::class, function ($mock) {
             $mock->shouldReceive('activateOnt')->andReturn(['ont_id' => 7, 'service_port' => 123]);
@@ -512,10 +546,12 @@ class OntWanConfigTest extends TestCase
 
         $this->post(route('onts.activate'), $this->datosDeActivacion([
             'enviar_wan' => 1,
-            'sin_contrato' => 1,
-            'contract_id' => null,
-            'description' => 'Repetidor de la empresa',
-        ]))->assertRedirect();
+            'wan_modo' => 'static',
+            'wan_ip_address' => 'no es una ip',
+        ]))->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertNotNull(Ont::where('sn', 'HWTC-NUEVA-WAN')->first());
+        $this->assertStringContainsString('NO se envió la configuración WAN', session('success'));
     }
 
     /** @param array<string, mixed> $extra */

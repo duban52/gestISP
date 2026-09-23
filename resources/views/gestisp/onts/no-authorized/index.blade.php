@@ -95,7 +95,11 @@
 
     {{-- Modal Activar ONT --}}
     <div class="modal fade modal-movil" id="activarOntModal" tabindex="-1" role="dialog">
-        <div class="modal-dialog" role="document">
+        {{-- Ancho en pantallas grandes: el formulario tiene tres bloques
+             —el equipo, a quién es, y cómo queda configurado— y en una
+             sola columna obligaba a desplazarse para verlos. En móvil las
+             columnas se apilan solas y queda como estaba. --}}
+        <div class="modal-dialog modal-xl" role="document">
             <form id="formActivarOnt" method="POST" action="{{ route('onts.activate') }}">
                 @csrf
                 <div class="modal-content">
@@ -107,176 +111,237 @@
                     </div>
                     <div class="modal-body toque" id="activarCampos">
                         <input type="hidden" name="ont_sn" id="modalOntSn">
+                        <input type="hidden" name="contract_id" id="selectedContractId">
+                        <input type="hidden" id="selectedOltId" name="olt_id">
 
-                        <div class="form-group">
-                            <label>Ubicación</label>
-                            <input type="text" class="form-control" id="modalOntLocationView" name="ont_location" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>SN</label>
-                            <input type="text" class="form-control" id="modalOntSnView" disabled>
-                        </div>
-                        {{-- `readonly` y no `disabled`: un campo deshabilitado
-                             NO se envia. Los traia el autofind y se perdian al
-                             activar, asi que la ONT nacia sin marca ni modelo. --}}
-                        <div class="form-group">
-                            <label>Marca</label>
-                            <input type="text" class="form-control" id="modalVendor" name="vendor" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>Modelo</label>
-                            <input type="text" class="form-control" id="modalModel" name="model" readonly>
-                        </div>
+                        <div class="row">
 
-                        {{-- ============================================================
-                             ¿A quién pertenece la ONT?
+                            {{-- ============ El equipo y su servicio ============ --}}
+                            <div class="col-lg-6">
+                                <h6 class="text-uppercase text-muted mb-3">
+                                    <i class="fas fa-hdd mr-1"></i> El equipo
+                                </h6>
 
-                             Lo normal es que sea de un contrato. Pero hay
-                             equipos que no le facturan a nadie —pruebas de
-                             laboratorio, repetidores propios, enlaces a una
-                             sede de la empresa— y antes había que inventarles
-                             un contrato para poder autorizarlos.
-
-                             La casilla llega DESMARCADA a propósito: el caso
-                             con contrato es la norma y no debe costar un clic
-                             extra. Marcarla es declarar una excepción, y como
-                             tal queda anotada en la trazabilidad.
-                             ============================================================ --}}
-                        <div class="custom-control custom-switch mb-3">
-                            <input type="checkbox" class="custom-control-input"
-                                   id="ontSinContrato" name="sin_contrato" value="1">
-                            <label class="custom-control-label" for="ontSinContrato">
-                                Esta ONT <strong>no pertenece a un contrato</strong>
-                            </label>
-                        </div>
-
-                        <div id="ontBloqueContrato">
-                            <div class="form-group">
-                                <label>Buscar Contrato</label>
-                                <input
-                                    type="text"
-                                    id="buscarContrato"
-                                    class="form-control"
-                                    placeholder="Buscar por identificación, nombre o # contrato...">
-                                <div id="resultadosContrato"
-                                     class="list-group mt-1"
-                                     style="display:none; position:absolute; z-index:9999; width:90%;">
+                                <div class="form-row">
+                                    <div class="form-group col-sm-6">
+                                        <label>Ubicación</label>
+                                        <input type="text" class="form-control" id="modalOntLocationView"
+                                               name="ont_location" readonly>
+                                    </div>
+                                    <div class="form-group col-sm-6">
+                                        <label>SN</label>
+                                        <input type="text" class="form-control" id="modalOntSnView" disabled>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Cliente seleccionado</label>
-                                <input
-                                    type="text"
-                                    id="clienteSeleccionadoView"
-                                    class="form-control"
-                                    disabled
-                                    placeholder="Ninguno seleccionado">
-                            </div>
 
-                            {{-- ============================================================
-                                 Dónde queda conectada físicamente
+                                {{-- `readonly` y no `disabled`: un campo deshabilitado
+                                     NO se envia. Los traia el autofind y se perdian al
+                                     activar, asi que la ONT nacia sin marca ni modelo. --}}
+                                <div class="form-row">
+                                    <div class="form-group col-sm-6">
+                                        <label>Marca</label>
+                                        <input type="text" class="form-control" id="modalVendor"
+                                               name="vendor" readonly>
+                                    </div>
+                                    <div class="form-group col-sm-6">
+                                        <label>Modelo</label>
+                                        <input type="text" class="form-control" id="modalModel"
+                                               name="model" readonly>
+                                    </div>
+                                </div>
 
-                                 Solo se ofrecen las cajas que cuelgan del MISMO puerto
-                                 PON donde se está activando la ONT: son las únicas
-                                 donde puede estar conectada de verdad. Y dentro de la
-                                 caja, solo los puertos libres.
+                                <h6 class="text-uppercase text-muted mb-3 mt-4">
+                                    <i class="fas fa-network-wired mr-1"></i> Servicio en la OLT
+                                </h6>
 
-                                 Es OPCIONAL: hay instalaciones que no pasan por una
-                                 caja documentada, y obligar aquí bloquearía la
-                                 activación de la ONT por un dato de inventario.
-
-                                 Va dentro del bloque de contrato porque el puerto de
-                                 la caja lo ocupa un CONTRATO, no un equipo: sin
-                                 contrato no hay a quién asignárselo.
-                                 ============================================================ --}}
-                            <div class="form-row">
-                                <div class="form-group col-md-7">
-                                    <label>
-                                        Caja NAP
-                                        <small class="text-muted">(opcional)</small>
-                                    </label>
-                                    <select class="form-control" id="ontNapBox">
-                                        <option value="">Sin registrar</option>
+                                <div class="form-group">
+                                    <label>VLAN</label>
+                                    <select name="vlan" id="vlanSelect" class="form-control" required>
+                                        <option value="">Seleccione una VLAN</option>
                                     </select>
-                                    <small class="form-text text-muted" id="ontNapAyuda">
-                                        Se cargan al elegir la ONT.
+                                </div>
+                                <div class="form-group">
+                                    <label>Line Profile</label>
+                                    <select name="ont_lineprofile" id="lineProfileSelect" class="form-control" required>
+                                        <option value="">Seleccione un Line Profile</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Srv Profile</label>
+                                    <select name="ont_srvprofile" id="srvProfileSelect" class="form-control" required>
+                                        <option value="">Seleccione un Srv Profile</option>
+                                    </select>
+                                </div>
+
+                                {{-- La descripción es el rótulo con el que la ONT queda
+                                     escrita en la OLT. Antes era un campo oculto que se
+                                     llenaba solo y nadie veía qué se iba a mandar al
+                                     equipo; ahora se muestra siempre: de solo lectura
+                                     cuando sale del contrato, y editable cuando no hay
+                                     contrato que la provea. --}}
+                                <div class="form-group">
+                                    <label>
+                                        Descripción en la OLT <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" name="description" id="selectedDescription"
+                                           class="form-control" maxlength="64" readonly required>
+                                    <small class="form-text text-muted" id="ontAyudaDescripcion">
+                                        Se toma del contrato seleccionado.
                                     </small>
                                 </div>
-                                <div class="form-group col-md-5">
-                                    <label>Puerto de la caja</label>
-                                    <select class="form-control" name="nap_port_id" id="ontNapPort" disabled>
-                                        <option value="">—</option>
-                                    </select>
+                            </div>
+
+                            {{-- ============ De quién es y cómo se configura ============ --}}
+                            <div class="col-lg-6 border-left-lg">
+                                <h6 class="text-uppercase text-muted mb-3">
+                                    <i class="fas fa-user mr-1"></i> A quién pertenece
+                                </h6>
+
+                                {{-- ============================================================
+                                     ¿A quién pertenece la ONT?
+
+                                     Lo normal es que sea de un contrato. Pero hay
+                                     equipos que no le facturan a nadie —pruebas de
+                                     laboratorio, repetidores propios, enlaces a una
+                                     sede de la empresa— y antes había que inventarles
+                                     un contrato para poder autorizarlos.
+
+                                     La casilla llega DESMARCADA a propósito: el caso
+                                     con contrato es la norma y no debe costar un clic
+                                     extra. Marcarla es declarar una excepción, y como
+                                     tal queda anotada en la trazabilidad.
+                                     ============================================================ --}}
+                                <div class="custom-control custom-switch mb-3">
+                                    <input type="checkbox" class="custom-control-input"
+                                           id="ontSinContrato" name="sin_contrato" value="1">
+                                    <label class="custom-control-label" for="ontSinContrato">
+                                        Esta ONT <strong>no pertenece a un contrato</strong>
+                                    </label>
+                                </div>
+
+                                <div id="ontBloqueContrato">
+                                    {{-- position-relative: la lista de resultados se
+                                         posiciona sobre ESTE campo. Sin ancla propia se
+                                         colocaba respecto al modal y, en dos columnas,
+                                         aparecía cruzada sobre la otra mitad. --}}
+                                    <div class="form-group position-relative">
+                                        <label>Buscar Contrato</label>
+                                        <input
+                                            type="text"
+                                            id="buscarContrato"
+                                            class="form-control"
+                                            placeholder="Buscar por identificación, nombre o # contrato...">
+                                        <div id="resultadosContrato"
+                                             class="list-group mt-1"
+                                             style="display:none; position:absolute; z-index:9999; width:100%;">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Cliente seleccionado</label>
+                                        <input
+                                            type="text"
+                                            id="clienteSeleccionadoView"
+                                            class="form-control"
+                                            disabled
+                                            placeholder="Ninguno seleccionado">
+                                    </div>
+
+                                    {{-- ============================================================
+                                         Dónde queda conectada físicamente
+
+                                         Solo se ofrecen las cajas que cuelgan del MISMO puerto
+                                         PON donde se está activando la ONT: son las únicas
+                                         donde puede estar conectada de verdad. Y dentro de la
+                                         caja, solo los puertos libres.
+
+                                         Es OPCIONAL: hay instalaciones que no pasan por una
+                                         caja documentada, y obligar aquí bloquearía la
+                                         activación de la ONT por un dato de inventario.
+
+                                         Va dentro del bloque de contrato porque el puerto de
+                                         la caja lo ocupa un CONTRATO, no un equipo: sin
+                                         contrato no hay a quién asignárselo.
+                                         ============================================================ --}}
+                                    <div class="form-row">
+                                        <div class="form-group col-md-7">
+                                            <label>
+                                                Caja NAP
+                                                <small class="text-muted">(opcional)</small>
+                                            </label>
+                                            <select class="form-control" id="ontNapBox">
+                                                <option value="">Sin registrar</option>
+                                            </select>
+                                            <small class="form-text text-muted" id="ontNapAyuda">
+                                                Se cargan al elegir la ONT.
+                                            </small>
+                                        </div>
+                                        <div class="form-group col-md-5">
+                                            <label>Puerto de la caja</label>
+                                            <select class="form-control" name="nap_port_id" id="ontNapPort" disabled>
+                                                <option value="">—</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-info py-2 d-none" id="ontAvisoSinContrato">
+                                    <i class="fas fa-info-circle"></i>
+                                    La ONT quedará registrada <strong>sin cliente asociado</strong>.
+                                    Escriba la descripción: será lo único que la identifique.
+                                </div>
+
+                                {{-- ============================================================
+                                     ¿Y la configuración WAN?
+
+                                     Antes esto se daba por hecho: si el contrato tenía
+                                     cuenta PPPoE, se mandaba esa. Pero no siempre es lo
+                                     que se quiere —hay instalaciones por DHCP, y equipos
+                                     con direccionamiento fijo—, así que se pregunta.
+
+                                     Llega APAGADO: encenderlo es decidir configurar el
+                                     equipo del cliente, y eso no puede pasar por no
+                                     haber mirado. Al elegir un contrato con cuenta se
+                                     enciende solo, que es el caso normal, y se ve
+                                     cuál se va a mandar.
+
+                                     Va fuera del bloque de contrato porque una ONT sin
+                                     contrato —un repetidor propio, un enlace a una sede—
+                                     también puede necesitar DHCP o una IP fija.
+                                     ============================================================ --}}
+                                <h6 class="text-uppercase text-muted mb-3 mt-4">
+                                    <i class="fas fa-globe mr-1"></i> Configuración WAN
+                                </h6>
+
+                                <div class="custom-control custom-switch mb-2">
+                                    <input type="checkbox" class="custom-control-input"
+                                           id="ontEnviarWan" name="enviar_wan" value="1">
+                                    <label class="custom-control-label" for="ontEnviarWan">
+                                        Configurar la <strong>WAN</strong> de la ONT al activarla
+                                        <small class="d-block text-muted" id="ontWanCuenta"></small>
+                                    </label>
+                                </div>
+
+                                <div id="ontBloqueWan" class="d-none border rounded p-3">
+                                    <div class="alert alert-warning py-2">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <strong>Solo se aplica a ONT compatibles.</strong>
+                                        Los equipos en modo puente o sin gestión remota aceptan
+                                        el comando en la OLT y lo ignoran. Al terminar se le dirá
+                                        si la ONT lo tomó o no.
+                                    </div>
+
+                                    @include('gestisp.onts.partials.campos-wan', [
+                                        'prefijo' => 'wan_',
+                                        'cuenta' => null,
+                                        'conVlan' => false,
+                                    ])
+
+                                    <small class="form-text text-muted mt-2">
+                                        Se usa la VLAN elegida a la izquierda para el servicio.
+                                    </small>
                                 </div>
                             </div>
                         </div>
-
-                            {{-- ============================================================
-                                 ¿Le mandamos también la cuenta al equipo?
-
-                                 Aparece SOLO si el contrato elegido tiene cuenta
-                                 PPPoE: sin cuenta no hay nada que enviar, y
-                                 ofrecerlo sería prometer algo que no va a pasar.
-
-                                 Llega marcado porque es lo que se quiere casi
-                                 siempre —activar y dejar al cliente navegando—,
-                                 y desmarcarlo es la excepción: una ONT en modo
-                                 puente detrás de un router del cliente.
-                                 ============================================================ --}}
-                            <div class="custom-control custom-switch mb-3 d-none" id="ontBloqueWan">
-                                <input type="checkbox" class="custom-control-input"
-                                       id="ontEnviarWan" name="enviar_wan" value="1" checked>
-                                <label class="custom-control-label" for="ontEnviarWan">
-                                    Enviar la <strong>configuración WAN</strong> a la ONT al activarla
-                                    <small class="d-block text-muted" id="ontWanCuenta"></small>
-                                </label>
-                            </div>
-
-                        <div class="alert alert-info py-2 d-none" id="ontAvisoSinContrato">
-                            <i class="fas fa-info-circle"></i>
-                            La ONT quedará registrada <strong>sin cliente asociado</strong>.
-                            Escriba abajo para qué es: será lo único que la identifique.
-                        </div>
-
-                        {{-- La descripción es el rótulo con el que la ONT queda
-                             escrita en la OLT. Antes era un campo oculto que se
-                             llenaba solo y nadie veía qué se iba a mandar al
-                             equipo; ahora se muestra siempre: de solo lectura
-                             cuando sale del contrato, y editable cuando no hay
-                             contrato que la provea. --}}
-                        <div class="form-group">
-                            <label>
-                                Descripción en la OLT <span class="text-danger">*</span>
-                            </label>
-                            <input type="text" name="description" id="selectedDescription"
-                                   class="form-control" maxlength="64" readonly required>
-                            <small class="form-text text-muted" id="ontAyudaDescripcion">
-                                Se toma del contrato seleccionado.
-                            </small>
-                        </div>
-
-                        <input type="hidden" name="contract_id" id="selectedContractId">
-
-                        <div class="form-group">
-                            <label>VLAN</label>
-                            <select name="vlan" id="vlanSelect" class="form-control" required>
-                                <option value="">Seleccione una VLAN</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Line Profile</label>
-                            <select name="ont_lineprofile" id="lineProfileSelect" class="form-control" required>
-                                <option value="">Seleccione un Line Profile</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Srv Profile</label>
-                            <select name="ont_srvprofile" id="srvProfileSelect" class="form-control" required>
-                                <option value="">Seleccione un Srv Profile</option>
-                            </select>
-                        </div>
-
-                        <input type="hidden" id="selectedOltId" name="olt_id">
                     </div>
 
                     {{-- ============================================================
@@ -403,6 +468,14 @@
 @endsection
 
 @section('css')
+    <style>
+        /* Separador entre las dos mitades del modal de activación.
+           Solo desde lg: por debajo las columnas se apilan y una línea
+           a la izquierda quedaría colgando sin nada al lado. */
+        @media (min-width: 992px) {
+            .border-left-lg { border-left: 1px solid #dee2e6; }
+        }
+    </style>
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
     <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
 @endsection
@@ -828,17 +901,57 @@
         });
 
         /**
-         * Esconde el envío de la WAN mientras no haya contrato elegido.
+         * Propone la cuenta del contrato recién elegido.
          *
-         * Se llama al abrir el modal y al cambiar de modo: sin esto, el
-         * interruptor de la ONT anterior seguiría marcado y prometería
-         * mandar una cuenta que ya no viene al caso.
+         * Con cuenta, se enciende: configurar la WAN con la cuenta del
+         * contrato es lo que se quiere casi siempre. Sin cuenta se deja
+         * apagado, pero el bloque sigue disponible: puede que ese
+         * cliente vaya por DHCP o con IP fija.
          */
-        function ocultarEnvioWan() {
-            document.getElementById('ontBloqueWan').classList.add('d-none');
-            document.getElementById('ontEnviarWan').checked = false;
-            document.getElementById('ontWanCuenta').textContent = '';
+        function proponerCuentaWan(usuario) {
+            const enviar = document.getElementById('ontEnviarWan');
+            const campos = document.querySelector('#ontBloqueWan .wan-campos');
+
+            campos.querySelector('[name="wan_username"]').value = usuario || '';
+            document.getElementById('ontWanCuenta').textContent = usuario
+                ? 'Cuenta del contrato: ' + usuario + '.'
+                : 'Este contrato no tiene cuenta PPPoE.';
+
+            enviar.checked = !!usuario;
+            enviar.dispatchEvent(new Event('change'));
         }
+
+        /** Vuelve al estado inicial: sin configurar nada. */
+        function ocultarEnvioWan() {
+            const enviar = document.getElementById('ontEnviarWan');
+
+            enviar.checked = false;
+            enviar.dispatchEvent(new Event('change'));
+            document.getElementById('ontWanCuenta').textContent = '';
+            document.querySelector('#ontBloqueWan .wan-campos [name="wan_username"]').value = '';
+        }
+
+        // El bloque solo estorba cuando no se va a usar: se despliega
+        // al encender el interruptor.
+        document.getElementById('ontEnviarWan').addEventListener('change', function () {
+            document.getElementById('ontBloqueWan').classList.toggle('d-none', !this.checked);
+
+            // Los campos ocultos no pueden quedar como obligatorios: el
+            // navegador bloquearía el envío por algo que nadie ve.
+            document.querySelectorAll('#ontBloqueWan .wan-campos [required]').forEach(function (campo) {
+                campo.required = false;
+            });
+
+            if (this.checked) {
+                $('#ontBloqueWan .wan-modo').trigger('change');
+            }
+        });
+
+        // Al cargar, los campos de la WAN viven escondidos dentro del
+        // MISMO formulario de la activación. Si quedaran como
+        // obligatorios, el navegador bloquearía el envío quejándose de
+        // un campo que nadie puede ver ni rellenar.
+        ocultarEnvioWan();
 
         function aplicarModoContratoOnt(sinContrato) {
             const bloque      = document.getElementById('ontBloqueContrato');
@@ -917,16 +1030,7 @@
                                 document.getElementById('clienteSeleccionadoView').value = contrato.label;
                                 document.getElementById('buscarContrato').value          = '';
 
-                                // Solo se ofrece mandar la WAN si hay cuenta
-                                // que mandar, y se dice cuál.
-                                const bloqueWan = document.getElementById('ontBloqueWan');
-                                const hayCuenta = !!contrato.pppoe_username;
-
-                                bloqueWan.classList.toggle('d-none', !hayCuenta);
-                                document.getElementById('ontEnviarWan').checked = hayCuenta;
-                                document.getElementById('ontWanCuenta').textContent = hayCuenta
-                                    ? 'Se enviará la cuenta ' + contrato.pppoe_username + '.'
-                                    : '';
+                                proponerCuentaWan(contrato.pppoe_username);
 
                                 resultados.style.display = 'none';
                                 resultados.innerHTML     = '';

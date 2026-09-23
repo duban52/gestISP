@@ -579,96 +579,10 @@
                             la ONT después de enviarlo y le dice si lo tomó o no.
                         </div>
 
-                        <div class="form-group">
-                            <label>Tipo de conexión</label>
-                            <select name="modo" id="wanModo" class="form-control">
-                                <option value="pppoe" selected>PPPoE (cuenta del cliente)</option>
-                                <option value="dhcp">DHCP</option>
-                                <option value="static">IP estática</option>
-                            </select>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group col-7">
-                                <label>VLAN</label>
-                                <input type="number" name="vlan" class="form-control"
-                                       value="{{ old('vlan', $ont->vlan) }}" min="1" max="4094" required>
-                            </div>
-                            <div class="form-group col-5">
-                                <label>Prioridad</label>
-                                <input type="number" name="priority" class="form-control"
-                                       value="{{ old('priority', 0) }}" min="0" max="7" required>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Perfil WAN <small class="text-muted">(profile-id)</small></label>
-                            <input type="number" name="profile_id" class="form-control"
-                                   value="{{ old('profile_id', \App\Services\OltSshService::PERFIL_WAN) }}"
-                                   min="1" max="1024">
-                            <small class="form-text text-muted">
-                                El perfil WAN de la OLT al que se ata la conexión.
-                                Déjelo vacío si su OLT no usa perfiles WAN.
-                            </small>
-                        </div>
-
-                        <div id="wanCamposPppoe">
-                            <div class="form-group">
-                                <label>Usuario PPPoE</label>
-                                <input type="text" name="username" class="form-control"
-                                       value="{{ old('username', $cuentaPppoe->username ?? '') }}" maxlength="64">
-                                @if($cuentaPppoe)
-                                    <small class="form-text text-muted">
-                                        Cuenta del contrato {{ $ont->contract?->numero_visible }}.
-                                    </small>
-                                @elseif($ont->contract)
-                                    <small class="form-text text-danger">
-                                        Este contrato no tiene cuenta PPPoE registrada.
-                                    </small>
-                                @endif
-                            </div>
-                            <div class="form-group mb-0">
-                                <label>Contraseña PPPoE</label>
-                                <input type="text" name="password" class="form-control"
-                                       value="{{ old('password', $cuentaPppoe->password ?? '') }}" maxlength="64">
-                            </div>
-                        </div>
-
-                        {{-- Direccionamiento fijo. Un dato mal puesto aquí deja
-                             la ONT incomunicada y obliga a ir hasta el sitio,
-                             así que el servidor comprueba que sean IPs de
-                             verdad antes de mandar nada al equipo. --}}
-                        <div id="wanCamposEstatica" class="d-none">
-                            <div class="form-row">
-                                <div class="form-group col-md-6">
-                                    <label>Dirección IP</label>
-                                    <input type="text" name="ip_address" class="form-control"
-                                           value="{{ old('ip_address') }}" placeholder="192.168.150.50">
-                                </div>
-                                <div class="form-group col-md-6">
-                                    <label>Máscara</label>
-                                    <input type="text" name="mask" class="form-control"
-                                           value="{{ old('mask', '255.255.255.0') }}" placeholder="255.255.255.0">
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Puerta de enlace</label>
-                                <input type="text" name="gateway" class="form-control"
-                                       value="{{ old('gateway') }}" placeholder="192.168.150.1">
-                            </div>
-                            <div class="form-row mb-0">
-                                <div class="form-group col-md-6 mb-0">
-                                    <label>DNS primario</label>
-                                    <input type="text" name="pri_dns" class="form-control"
-                                           value="{{ old('pri_dns', '8.8.8.8') }}">
-                                </div>
-                                <div class="form-group col-md-6 mb-0">
-                                    <label>DNS secundario <small class="text-muted">(opcional)</small></label>
-                                    <input type="text" name="slave_dns" class="form-control"
-                                           value="{{ old('slave_dns', '1.1.1.1') }}">
-                                </div>
-                            </div>
-                        </div>
+                        @include('gestisp.onts.partials.campos-wan', [
+                            'cuenta' => $cuentaPppoe,
+                            'vlan' => $ont->vlan,
+                        ])
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
@@ -735,25 +649,6 @@
 @section('js')
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
-        /* ============================================================
-           Configuración WAN: DHCP no lleva cuenta
-
-           Dejar los campos visibles invitaría a llenarlos para nada: en
-           DHCP la ONT no autentica, y el comando que se manda a la OLT
-           ni siquiera los admite.
-           ============================================================ */
-        $('#wanModo').on('change', function () {
-            const esPppoe = this.value === 'pppoe';
-            const esEstatica = this.value === 'static';
-
-            $('#wanCamposPppoe').toggleClass('d-none', !esPppoe);
-            $('#wanCamposPppoe input').prop('required', esPppoe);
-
-            $('#wanCamposEstatica').toggleClass('d-none', !esEstatica);
-            // El DNS secundario es lo único opcional de la estática.
-            $('#wanCamposEstatica input').not('[name="slave_dns"]').prop('required', esEstatica);
-        }).trigger('change');
-
         /* ============================================================
            Acciones sobre la OLT (reiniciar / habilitar / deshabilitar)
 
