@@ -34,6 +34,21 @@
     <script>
         $(document).on('submit', 'form[data-procesando]', function () {
             $('#procesandoTexto').text(this.dataset.procesando);
+
+            // SI EL FORMULARIO VIVE DENTRO DE UN MODAL, ese modal se
+            // cierra primero. Con los dos abiertos, el aviso de
+            // progreso quedaba por debajo del formulario que se acaba
+            // de enviar y parecia que no habia pasado nada.
+            const $suyo = $(this).closest('.modal');
+
+            if ($suyo.length) {
+                $suyo.one('hidden.bs.modal', function () {
+                    $('#modalProcesando').modal('show');
+                }).modal('hide');
+
+                return;
+            }
+
             $('#modalProcesando').modal('show');
         });
     </script>

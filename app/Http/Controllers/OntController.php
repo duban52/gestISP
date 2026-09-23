@@ -245,8 +245,12 @@ class OntController extends Controller
             'tiene_ont'       => (int) $c->onts_count > 0,
             'cuentas_pppoe'   => (int) $c->pppoe_count,
             // Para ofrecer el envio de la WAN al activar la ONT sin
-            // que haya que adivinar que cuenta se va a mandar.
+            // que haya que adivinar que cuenta se va a mandar. Va
+            // tambien la clave: es la que se le escribe a la ONT, y
+            // pedirsela a mano a quien activa seria copiarla de otra
+            // pantalla para pegarla aqui.
             'pppoe_username'  => $c->pppoeAccounts->first()?->username,
+            'pppoe_password'  => $c->pppoeAccounts->first()?->password,
         ]));
     }
 
@@ -444,11 +448,19 @@ class OntController extends Controller
         }
 
         // Fuera el prefijo: el servicio habla de "modo", no de
-        // "wan_modo". La VLAN es la del servicio que se acaba de crear.
+        // "wan_modo".
         $datos = collect($validador->validated())
             ->mapWithKeys(fn ($valor, $clave) => [str_replace('wan_', '', $clave) => $valor])
-            ->put('vlan', $ont->vlan)
             ->all();
+
+        // LO QUE EL FORMULARIO DE ACTIVACIÓN NO PREGUNTA. La VLAN es la
+        // del servicio que se acaba de crear, y la prioridad no se pide
+        // ahí para no recargar la pantalla. Sin estos dos por defecto,
+        // el comando reventaba con un «Undefined array key» DESPUÉS de
+        // haber autorizado la ONT: el equipo quedaba activo y la WAN a
+        // medias.
+        $datos += ['priority' => 0, 'profile_id' => OltSshService::PERFIL_WAN];
+        $datos['vlan'] = $ont->vlan;
 
         try {
             $resultado = $this->oltSshService->setOntWanConfig($olt, $ont, $datos);

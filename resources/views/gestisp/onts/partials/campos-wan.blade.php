@@ -11,6 +11,10 @@
                 "wan_" al activar, donde el formulario ya tiene su
                 propia vlan y descripción y los nombres chocarían.
       $cuenta   Cuenta PPPoE que se propone (la del contrato), o null.
+      $ayuda    Si se explica de dónde sale la cuenta. Al activar NO:
+                ahí el contrato se elige después de pintar el
+                formulario, y un «no tiene cuenta» fijo mentiría en
+                cuanto se eligiera uno que sí la tiene.
       $vlan     VLAN que se propone. Al activar la elige el formulario
                 de arriba, así que allí va oculta.
 --}}
@@ -18,6 +22,7 @@
     $prefijo = $prefijo ?? '';
     $cuenta = $cuenta ?? null;
     $conVlan = $conVlan ?? true;
+    $ayuda = $ayuda ?? true;
 @endphp
 
 <div class="wan-campos">
@@ -63,12 +68,14 @@
             <label>Usuario PPPoE</label>
             <input type="text" name="{{ $prefijo }}username" class="form-control"
                    value="{{ old($prefijo . 'username', $cuenta->username ?? '') }}" maxlength="64">
-            @if($cuenta)
-                <small class="form-text text-muted">Cuenta registrada del contrato.</small>
-            @else
-                <small class="form-text text-danger">
-                    El contrato no tiene cuenta PPPoE registrada: escríbala o elija otro tipo de conexión.
-                </small>
+            @if($ayuda)
+                @if($cuenta)
+                    <small class="form-text text-muted">Cuenta registrada del contrato.</small>
+                @else
+                    <small class="form-text text-danger">
+                        El contrato no tiene cuenta PPPoE registrada: escríbala o elija otro tipo de conexión.
+                    </small>
+                @endif
             @endif
         </div>
         <div class="form-group mb-0">

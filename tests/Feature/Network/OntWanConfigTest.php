@@ -504,6 +504,47 @@ class OntWanConfigTest extends TestCase
     }
 
     /**
+     * El formulario de activación NO pregunta la VLAN ni la prioridad
+     * de la WAN: la VLAN es la del servicio que se acaba de crear y la
+     * prioridad no se pide para no recargar la pantalla.
+     *
+     * Sin rellenarlas, el comando reventaba con un «Undefined array
+     * key» DESPUÉS de autorizar la ONT: el equipo quedaba activo y la
+     * WAN a medias. Por eso aquí se arma el comando de verdad.
+     */
+    public function test_la_activacion_completa_lo_que_su_formulario_no_pregunta(): void
+    {
+        $comandos = [];
+
+        $this->mock(OltSshService::class, function ($mock) use (&$comandos) {
+            $mock->shouldReceive('activateOnt')->andReturn(['ont_id' => 7, 'service_port' => 123]);
+            $mock->shouldReceive('getOntIfIndexes')->andReturn([]);
+            $mock->shouldReceive('setOntWanConfig')
+                ->once()
+                ->andReturnUsing(function ($olt, $ont, $datos) use (&$comandos) {
+                    $comandos[] = OltSshService::comandoWan($ont, $datos);
+
+                    return ['aplicado' => true, 'estado' => [], 'aviso' => null];
+                });
+        });
+
+        $this->post(route('onts.activate'), $this->datosDeActivacion([
+            'enviar_wan' => 1,
+            'wan_modo' => 'pppoe',
+            'wan_username' => 'egp000005_duban',
+            'wan_password' => 'clave123',
+        ]))->assertRedirect();
+
+        // 7 es el ONT-ID que devolvió la OLT al darla de alta, no el
+        // de la ONT del montaje: es la recién activada.
+        $this->assertSame(
+            'ont ipconfig 13 7 pppoe vlan 150 priority 0'
+            . ' user-account username egp000005_duban password clave123',
+            $comandos[0],
+        );
+    }
+
+    /**
      * Una ONT sin contrato también puede necesitar WAN.
      *
      * Un repetidor propio o un enlace a una sede de la empresa no le

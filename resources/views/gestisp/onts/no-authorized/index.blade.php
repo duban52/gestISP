@@ -334,6 +334,7 @@
                                         'prefijo' => 'wan_',
                                         'cuenta' => null,
                                         'conVlan' => false,
+                                        'ayuda' => false,
                                     ])
 
                                     <small class="form-text text-muted mt-2">
@@ -908,11 +909,12 @@
          * apagado, pero el bloque sigue disponible: puede que ese
          * cliente vaya por DHCP o con IP fija.
          */
-        function proponerCuentaWan(usuario) {
+        function proponerCuentaWan(usuario, clave) {
             const enviar = document.getElementById('ontEnviarWan');
             const campos = document.querySelector('#ontBloqueWan .wan-campos');
 
             campos.querySelector('[name="wan_username"]').value = usuario || '';
+            campos.querySelector('[name="wan_password"]').value = clave || '';
             document.getElementById('ontWanCuenta').textContent = usuario
                 ? 'Cuenta del contrato: ' + usuario + '.'
                 : 'Este contrato no tiene cuenta PPPoE.';
@@ -928,7 +930,8 @@
             enviar.checked = false;
             enviar.dispatchEvent(new Event('change'));
             document.getElementById('ontWanCuenta').textContent = '';
-            document.querySelector('#ontBloqueWan .wan-campos [name="wan_username"]').value = '';
+            document.querySelectorAll('#ontBloqueWan .wan-campos [name="wan_username"], #ontBloqueWan .wan-campos [name="wan_password"]')
+                .forEach(function (campo) { campo.value = ''; });
         }
 
         // El bloque solo estorba cuando no se va a usar: se despliega
@@ -1030,7 +1033,7 @@
                                 document.getElementById('clienteSeleccionadoView').value = contrato.label;
                                 document.getElementById('buscarContrato').value          = '';
 
-                                proponerCuentaWan(contrato.pppoe_username);
+                                proponerCuentaWan(contrato.pppoe_username, contrato.pppoe_password);
 
                                 resultados.style.display = 'none';
                                 resultados.innerHTML     = '';
