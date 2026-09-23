@@ -27,6 +27,16 @@ class WhatsAppMessage
      */
     public ?string $templateLanguage = null;
 
+    /**
+     * El documento que acompaña al mensaje: la URL PÚBLICA desde la que
+     * Meta lo descarga —sus servidores son los que van a buscarlo, así
+     * que no puede exigir sesión— y el nombre con el que le llega al
+     * cliente.
+     */
+    public ?string $documentUrl = null;
+
+    public ?string $documentName = null;
+
     public function __construct(
         public string $body = '',
         public ?string $templateName = null,
@@ -65,6 +75,22 @@ class WhatsAppMessage
      * Define el idioma de esta plantilla sin afectar el de las
      * notificaciones operativas restantes.
      */
+    /**
+     * Adjunta un documento al mensaje.
+     *
+     * Lo que se haga con él depende de cómo se envíe, y eso lo decide
+     * la pasarela: en una plantilla va como cabecera —solo si la
+     * plantilla aprobada la tiene—, y en texto libre el mensaje entero
+     * se manda como documento con el texto de pie.
+     */
+    public function document(string $url, ?string $name = null): self
+    {
+        $this->documentUrl = $url;
+        $this->documentName = $name;
+
+        return $this;
+    }
+
     public function templateLanguage(string $language): self
     {
         $this->templateLanguage = $language;

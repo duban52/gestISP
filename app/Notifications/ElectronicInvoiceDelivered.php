@@ -122,10 +122,34 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
         // aviso de generación seguiría funcionando. Un fallo a medias es
         // peor que uno entero: nadie lo nota.
         if (config('notifications.whatsapp.meta.invoice_link_in_template', false)) {
-            $parametros[] = $this->fraseDeDescarga($enlace);
+            $parametros[] = $this->enlaceParaLaPlantilla($enlace);
         }
 
-        return WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
+        $mensaje = WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
+
+        // Por WhatsApp va el PDF y no el paquete: un ZIP no está entre
+        // los tipos de archivo que WhatsApp acepta. El XML y el acuse
+        // viajan por correo y por el enlace del propio mensaje.
+        $pdf = $this->enlaceDelPdf();
+
+        return $pdf
+            ? $mensaje->document($pdf, 'factura-' . str_replace(['/', ' '], '-', (string) $this->invoice->displayNumber()) . '.pdf')
+            : $mensaje;
+    }
+
+    /** El enlace firmado al PDF, para adjuntarlo por WhatsApp. */
+    private function enlaceDelPdf(): ?string
+    {
+        try {
+            return app(\App\Billing\Delivery\InvoiceDownloadLink::class)->para($this->invoice);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('No se pudo armar el enlace del PDF para WhatsApp.', [
+                'factura' => $this->invoice->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**
@@ -144,26 +168,21 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
     }
 
     /**
-     * La frase del quinto hueco de la plantilla.
+     * El quinto hueco de la plantilla: LA URL PELADA.
      *
-     * CUANDO LA PLANTILLA TIENE CINCO, SIEMPRE VAN CINCO.
-     * ---------------------------------------------------
-     * Meta exige que el número de parámetros coincida EXACTAMENTE con
-     * el de la plantilla aprobada. Mandar cuatro a una de cinco falla
-     * igual que mandar cinco a una de cuatro, y el cliente se queda sin
-     * aviso. Por eso, con el interruptor encendido, este método siempre
-     * devuelve algo.
+     * La plantilla aprobada ya dice «Descárgala aquí: {{5}} ¡Gracias!»,
+     * así que el parámetro es solo el enlace; mandar la frase entera
+     * haría que el cliente leyera «Descárgala aquí: Descárguela aquí:
+     * https://…».
      *
-     * Es una frase entera y no la URL pelada porque el enlace puede no
-     * poder armarse —`APP_URL` mal puesta, por ejemplo—. Con la URL
-     * suelta, el hueco quedaría vacío y Meta rechaza los parámetros
-     * vacíos; con una frase, el mensaje sigue teniendo sentido.
+     * NUNCA VACÍO: Meta rechaza los parámetros en blanco y el cliente
+     * se quedaría sin aviso. Si el enlace no se pudo armar —`APP_URL`
+     * mal puesta, por ejemplo— va la dirección del sitio, que al menos
+     * lleva a alguna parte.
      */
-    private function fraseDeDescarga(?string $enlace): string
+    private function enlaceParaLaPlantilla(?string $enlace): string
     {
-        return $enlace
-            ? 'Descárguela aquí: ' . $enlace
-            : 'Le enviamos los archivos a su correo.';
+        return $enlace ?: rtrim((string) config('app.url'), '/');
     }
 
     /** El enlace firmado al paquete. Sin él, el mensaje sale igual. */

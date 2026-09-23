@@ -82,9 +82,12 @@ class InvoiceGenerated extends Notification implements ShouldQueue
         $total = '$' . number_format((float) $this->invoice->total, 0, ',', '.');
         $vence = optional($this->invoice->due_date)->format('d/m/Y') ?? 'la fecha indicada';
 
-        // El enlace solo para la interna, por el mismo motivo que el
-        // adjunto del correo: la electrónica todavía no está validada.
-        $enlace = $this->esElectronica() ? null : $this->enlaceDeDescarga();
+        // EL ENLACE VA SIEMPRE, sea electrónica o interna (pedido del
+        // usuario, 2026-09-23). Antes se omitía en la electrónica
+        // porque en ese momento la DIAN todavía no la ha validado; el
+        // cliente prefiere tener su factura de una vez, y cuando la DIAN
+        // la acepta le llega además el paquete completo.
+        $enlace = $this->enlaceDeDescarga();
 
         $cuerpo = "Hola {$notifiable->name}, se generó su factura {$this->invoice->displayNumber()} por {$total}. Vence el {$vence}.";
         $cuerpo .= $enlace ? " Descárguela aquí: {$enlace}" : ' ¡Gracias!';
@@ -110,33 +113,41 @@ class InvoiceGenerated extends Notification implements ShouldQueue
         // parámetros a una plantilla de cinco: el mismo rechazo, por el
         // otro lado.
         if (config('notifications.whatsapp.meta.invoice_link_in_template', false)) {
-            $parametros[] = $this->fraseDeDescarga($enlace);
+            $parametros[] = $this->enlaceParaLaPlantilla($enlace);
         }
 
-        return WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
+        $mensaje = WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
+
+        // El PDF mismo: la pasarela decide si puede mandarlo —como
+        // cabecera de la plantilla o como documento con pie— según lo
+        // que la plantilla aprobada permita.
+        return $enlace
+            ? $mensaje->document($enlace, $this->nombreDelArchivo())
+            : $mensaje;
+    }
+
+    /** Con el que le llega el archivo al cliente. */
+    private function nombreDelArchivo(): string
+    {
+        return 'factura-' . str_replace(['/', ' '], '-', (string) $this->invoice->displayNumber()) . '.pdf';
     }
 
     /**
-     * La frase del quinto hueco de la plantilla.
+     * El quinto hueco de la plantilla: LA URL PELADA.
      *
-     * CUANDO LA PLANTILLA TIENE CINCO, SIEMPRE VAN CINCO.
-     * ---------------------------------------------------
-     * Meta exige que el número de parámetros coincida EXACTAMENTE con
-     * el de la plantilla aprobada. Mandar cuatro a una de cinco falla
-     * igual que mandar cinco a una de cuatro, y el cliente se queda sin
-     * aviso. Por eso, con el interruptor encendido, este método siempre
-     * devuelve algo.
+     * La plantilla aprobada ya dice «Descárgala aquí: {{5}} ¡Gracias!»,
+     * así que el parámetro es solo el enlace; mandar la frase entera
+     * haría que el cliente leyera «Descárgala aquí: Descárguela aquí:
+     * https://…».
      *
-     * Es una frase entera y no la URL pelada porque el enlace puede no
-     * poder armarse —`APP_URL` mal puesta, por ejemplo—. Con la URL
-     * suelta, el hueco quedaría vacío y Meta rechaza los parámetros
-     * vacíos; con una frase, el mensaje sigue teniendo sentido.
+     * NUNCA VACÍO: Meta rechaza los parámetros en blanco y el cliente
+     * se quedaría sin aviso. Si el enlace no se pudo armar —`APP_URL`
+     * mal puesta, por ejemplo— va la dirección del sitio, que al menos
+     * lleva a alguna parte.
      */
-    private function fraseDeDescarga(?string $enlace): string
+    private function enlaceParaLaPlantilla(?string $enlace): string
     {
-        return $enlace
-            ? 'Descárguela aquí: ' . $enlace
-            : 'Le enviamos los archivos a su correo.';
+        return $enlace ?: rtrim((string) config('app.url'), '/');
     }
 
     /**

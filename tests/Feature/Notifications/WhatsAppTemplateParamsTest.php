@@ -98,10 +98,9 @@ class WhatsAppTemplateParamsTest extends BillingTestCase
 
     public function test_van_cinco_aunque_no_haya_enlace(): void
     {
-        // Una ELECTRÓNICA recién generada no lleva enlace en el aviso de
-        // generación —su PDF diría «pendiente de validación»—. Antes ese
-        // caso mandaba cuatro parámetros con el interruptor encendido, y
-        // Meta lo rechazaba.
+        // Con el interruptor encendido van SIEMPRE cinco, haya enlace o
+        // no: mandar cuatro a una plantilla de cinco lo rechaza Meta
+        // igual que mandar seis.
         $this->conElInterruptor(true);
 
         $electronica = $this->facturaElectronica();
@@ -113,15 +112,22 @@ class WhatsAppTemplateParamsTest extends BillingTestCase
 
     public function test_ningun_parametro_va_vacio(): void
     {
-        // Meta rechaza los parámetros vacíos. Por eso el quinto hueco es
-        // una FRASE y no la URL pelada: sin enlace, sigue diciendo algo.
+        // Meta rechaza los parámetros vacíos y el cliente se quedaría
+        // sin aviso. El quinto es la URL pelada —la plantilla aprobada
+        // ya dice «Descárgala aquí: {{5}}»— y, si no se pudo armar, la
+        // dirección del sitio.
         $this->conElInterruptor(true);
 
         $electronica = $this->facturaElectronica();
+        $parametros = (new InvoiceGenerated($electronica))->toWhatsApp($electronica->contract->client)->templateParams;
 
-        foreach ((new InvoiceGenerated($electronica))->toWhatsApp($electronica->contract->client)->templateParams as $i => $parametro) {
+        foreach ($parametros as $i => $parametro) {
             $this->assertNotSame('', trim((string) $parametro), "El parámetro {{" . ($i + 1) . "}} va vacío.");
         }
+
+        // Y el quinto es un enlace, no una frase: si no, el cliente
+        // leería «Descárgala aquí: Descárguela aquí: https://…».
+        $this->assertStringStartsWith('http', $parametros[4]);
     }
 
     public function test_el_cuerpo_libre_no_depende_del_interruptor(): void

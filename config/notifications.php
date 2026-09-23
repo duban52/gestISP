@@ -89,6 +89,24 @@ return [
             // cuerpo del mensaje, que es lo que se usa con el driver
             // `log` y cuando `use_templates` está en false.
             'invoice_link_in_template' => (bool) env('WHATSAPP_META_INVOICE_LINK', false),
+
+            // ¿La plantilla `factura_generada` tiene CABECERA DE
+            // DOCUMENTO aprobada en Meta?
+            //
+            // Con ella, al cliente le llega el PDF de la factura
+            // adjunto al aviso. Arranca en false por lo mismo que el
+            // interruptor de arriba: mandar una cabecera a una
+            // plantilla que no la tiene hace que Meta rechace el envío
+            // ENTERO, y el cliente se queda sin aviso, que es peor que
+            // quedarse sin el archivo.
+            //
+            // Orden correcto: agregar la cabecera de documento a la
+            // plantilla en Meta, esperar la aprobación, y entonces
+            // poner WHATSAPP_META_INVOICE_DOC=true.
+            //
+            // Fuera de plantilla (ventana de 24 h) el PDF se manda
+            // siempre, sin depender de esto.
+            'invoice_document_in_template' => (bool) env('WHATSAPP_META_INVOICE_DOC', false),
         ],
     ],
 

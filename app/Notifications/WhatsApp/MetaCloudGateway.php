@@ -90,8 +90,23 @@ class MetaCloudGateway implements WhatsAppGateway
                             ?? $config['template_language']
                             ?? 'es',
                     ],
-                    'components' => $this->templateComponents($message->templateParams),
+                    'components' => $this->templateComponents($message, $config),
                 ],
+            ];
+        }
+
+        // FUERA DE PLANTILLA SÍ SE PUEDE MANDAR EL ARCHIVO. Un mensaje
+        // de tipo documento lleva el texto como pie, así que el cliente
+        // recibe el PDF y la explicación en uno solo. (Solo funciona
+        // dentro de la ventana de 24 h, igual que el texto libre.)
+        if ($message->documentUrl) {
+            return $base + [
+                'type' => 'document',
+                'document' => array_filter([
+                    'link' => $message->documentUrl,
+                    'filename' => $message->documentName,
+                    'caption' => $message->body,
+                ]),
             ];
         }
 
@@ -102,24 +117,45 @@ class MetaCloudGateway implements WhatsAppGateway
     }
 
     /**
-     * Convierte los parámetros en la estructura de "components" que
-     * Meta espera para el cuerpo de una plantilla.
+     * Los "components" de la plantilla: la cabecera con el documento,
+     * si la plantilla la tiene, y el cuerpo con sus parámetros.
      *
-     * @param  array<int, string>  $params
+     * LA CABECERA SOLO SI LA PLANTILLA APROBADA LA LLEVA. Mandar una
+     * cabecera de documento a una plantilla que no la tiene hace que
+     * Meta rechace el envío entero y el cliente se quede sin aviso, que
+     * es peor que quedarse sin el archivo. Por eso va tras un
+     * interruptor que se enciende DESPUÉS de aprobar la plantilla.
+     *
+     * @param  array<string, mixed>  $config
      * @return array<int, array>
      */
-    private function templateComponents(array $params): array
+    private function templateComponents(WhatsAppMessage $message, array $config): array
     {
-        if (empty($params)) {
-            return [];
+        $components = [];
+
+        if ($message->documentUrl && ($config['invoice_document_in_template'] ?? false)) {
+            $components[] = [
+                'type' => 'header',
+                'parameters' => [[
+                    'type' => 'document',
+                    'document' => array_filter([
+                        'link' => $message->documentUrl,
+                        'filename' => $message->documentName,
+                    ]),
+                ]],
+            ];
         }
 
-        return [[
-            'type' => 'body',
-            'parameters' => array_map(
-                fn ($valor) => ['type' => 'text', 'text' => (string) $valor],
-                $params,
-            ),
-        ]];
+        if (!empty($message->templateParams)) {
+            $components[] = [
+                'type' => 'body',
+                'parameters' => array_map(
+                    fn ($valor) => ['type' => 'text', 'text' => (string) $valor],
+                    $message->templateParams,
+                ),
+            ];
+        }
+
+        return $components;
     }
 }

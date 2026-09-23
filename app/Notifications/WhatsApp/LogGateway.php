@@ -21,6 +21,7 @@ class LogGateway implements WhatsAppGateway
             'para' => $to,
             'plantilla' => $message->templateName,
             'parametros' => $message->templateParams,
+            'documento' => $message->documentUrl,
             'texto' => $message->body,
         ]);
 

@@ -13,7 +13,6 @@ use App\Models\CashRegisterTransaction;
 use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\TechnicalOrder;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -273,26 +272,12 @@ class PaymentRegistrar
                 'overdue_invoices_count' => 0,
                 'suspension_warning_date' => null,
             ]);
-        } elseif ($contract->status === ContractStatus::Suspendido->value) {
-            // Ya cortado: requiere visita técnica de reconexión
-            TechnicalOrder::create([
-                'contract_id' => $contract->id,
-                // La sede del CONTRATO, no la de quien cobra: es el
-                // tecnico de esa zona el que tiene que ir a reconectar.
-                // Coinciden salvo en panel consolidado, donde antes se
-                // pasaba null y la orden quedaba sin sucursal —
-                // invisible en el listado de ordenes de toda sede.
-                'branch_id' => $contract->branch_id ?? $branchId,
-                'type' => 'Servicio',
-                'detail' => 'Reconexión',
-                'initial_comment' => 'Orden de reconexión automática por pago',
-            ]);
-
-            $contract->update([
-                'status' => ContractStatus::PorReconexion->value,
-                'overdue_invoices_count' => 0,
-                'suspension_warning_date' => null,
-            ]);
+        } elseif (app(ServiceReconnection::class)->estaCortado($contract)) {
+            // Cortado y al día: se le cobra la reconexión y se le
+            // devuelve el servicio en el acto. Si la red no responde,
+            // el propio servicio deja la orden para que vaya un técnico
+            // (ver App\Billing\Services\ServiceReconnection).
+            app(ServiceReconnection::class)->alPagar($contract, auth()->id(), $branchId);
         }
     }
 }
