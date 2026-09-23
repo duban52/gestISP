@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Notifications\Messages\WhatsAppMessage;
+use App\Notifications\WhatsApp\MetaCloudGateway;
 use App\Notifications\WhatsApp\WhatsAppGateway;
 use App\Support\PhoneNumber;
 use Illuminate\Console\Command;
@@ -72,6 +73,17 @@ class TestWhatsAppTemplate extends Command
 
         if (!$gateway->send($phone, $message)) {
             $this->error('Meta no aceptó el envío. Revise storage/logs/laravel.log para el detalle exacto.');
+
+            return self::FAILURE;
+        }
+
+        // ACEPTADO NO ES LO MISMO QUE ENVIADO COMO SE PIDIÓ. El
+        // conector reintenta cuando la plantilla no calza, y sin esto
+        // la prueba diría que todo salió bien mientras al cliente le
+        // llega el mensaje sin el enlace.
+        if ($gateway instanceof MetaCloudGateway && $gateway->ultimoAjuste) {
+            $this->warn('OJO: ' . $gateway->ultimoAjuste);
+            $this->line('El mensaje llegó, pero NO como se pidió. Corrija la plantilla en Meta.');
 
             return self::FAILURE;
         }

@@ -73,12 +73,41 @@ class WhatsAppPlantillasCommandTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), '/123456789/message_templates'));
     }
 
-    public function test_sin_la_cuenta_de_negocio_dice_donde_encontrarla(): void
+    /**
+     * El token sabe a qué cuentas alcanza, así que no hay por qué
+     * pedirle el dato a nadie. Importa cuando la plantilla está
+     * aprobada en una cuenta y el número envía desde otra: ahí Meta
+     * resuelve la versión vieja y nada lo explica.
+     */
+    public function test_si_no_esta_configurada_se_la_pregunta_al_token(): void
     {
         $this->configurar(['notifications.whatsapp.meta.business_account_id' => null]);
 
+        Http::fake([
+            'graph.facebook.com/*/debug_token*' => Http::response(['data' => [
+                'granular_scopes' => [
+                    ['scope' => 'whatsapp_business_messaging', 'target_ids' => ['777888999']],
+                ],
+            ]], 200),
+            'graph.facebook.com/*' => Http::response(['data' => []], 200),
+        ]);
+
         $this->artisan('whatsapp:plantillas')
-            ->expectsOutputToContain('WHATSAPP_META_WABA_ID')
+            ->expectsOutputToContain('777888999')
+            ->assertSuccessful();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/777888999/message_templates'));
+    }
+
+    public function test_sin_token_ni_cuenta_dice_que_falta(): void
+    {
+        $this->configurar([
+            'notifications.whatsapp.meta.token' => null,
+            'notifications.whatsapp.meta.business_account_id' => null,
+        ]);
+
+        $this->artisan('whatsapp:plantillas')
+            ->expectsOutputToContain('WHATSAPP_META_TOKEN')
             ->assertFailed();
     }
 }

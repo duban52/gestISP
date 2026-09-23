@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Notifications;
 
+use App\Notifications\WhatsApp\MetaCloudGateway;
 use App\Notifications\WhatsApp\WhatsAppGateway;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
@@ -35,6 +37,41 @@ class TestWhatsAppTemplateCommandTest extends TestCase
         ])
             ->expectsOutputToContain('Meta aceptó')
             ->assertSuccessful();
+    }
+
+    /**
+     * «Meta aceptó» mientras el cliente recibe el mensaje sin enlace es
+     * la peor salida posible: se probó media mañana contra una plantilla
+     * de 4 variables creyendo que el fallo estaba en gestISP.
+     */
+    public function test_si_hubo_que_recortar_parametros_la_prueba_no_pasa(): void
+    {
+        config([
+            'notifications.whatsapp.driver' => 'meta',
+            'notifications.whatsapp.meta.phone_number_id' => '123456',
+            'notifications.whatsapp.meta.token' => 'un-token',
+            'notifications.whatsapp.meta.api_version' => 'v21.0',
+            'notifications.whatsapp.meta.use_templates' => true,
+            'notifications.whatsapp.meta.template_language' => 'es_CO',
+        ]);
+
+        Http::fakeSequence()
+            ->push(['error' => [
+                'code' => 132000,
+                'error_data' => ['details' => 'body: number of localizable_params (5) does not match the expected number of params (4)'],
+            ]], 400)
+            ->push(['messages' => [['id' => 'wamid.x']]], 200);
+
+        $this->app->singleton(WhatsAppGateway::class, fn () => new MetaCloudGateway());
+
+        $this->artisan('whatsapp:test', [
+            'phone' => '315 555 4433',
+            '--template' => 'factura_generada',
+            '--language' => 'es_CO',
+            '--param' => ['Ana', 'FAC-1', '$80.000', '13/10/2026', 'https://gestisp.test/f/abc'],
+        ])
+            ->expectsOutputToContain('solo acepta 4 variables')
+            ->assertFailed();
     }
 
     public function test_avisa_si_a_este_servidor_le_faltan_las_credenciales(): void

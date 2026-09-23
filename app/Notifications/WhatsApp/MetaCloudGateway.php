@@ -21,9 +21,20 @@ use Illuminate\Support\Facades\Log;
  */
 class MetaCloudGateway implements WhatsAppGateway
 {
+    /**
+     * Qué hubo que recortar para que Meta aceptara el último envío.
+     *
+     * El reintento salva el aviso, pero lo salva DEGRADADO: si nadie lo
+     * cuenta, `whatsapp:test` dice «Meta aceptó» y uno se pasa la mañana
+     * probando la misma plantilla rota. Aquí queda para que el comando
+     * lo diga en pantalla.
+     */
+    public ?string $ultimoAjuste = null;
+
     public function send(string $to, WhatsAppMessage $message): bool
     {
         $config = config('notifications.whatsapp.meta');
+        $this->ultimoAjuste = null;
 
         if (empty($config['phone_number_id']) || empty($config['token'])) {
             Log::warning('WhatsApp Meta: faltan credenciales (WHATSAPP_META_PHONE_ID / WHATSAPP_META_TOKEN). No se envió el mensaje.');
@@ -194,6 +205,9 @@ class MetaCloudGateway implements WhatsAppGateway
             return false;
         }
 
+        $this->ultimoAjuste = "la plantilla {$message->templateName} solo acepta {$esperados} variables"
+            . " y se le mandaron {$enviados}: se reenvió sin la última.";
+
         $recortado = clone $message;
         $recortado->templateParams = array_slice($message->templateParams, 0, $esperados);
 
@@ -237,6 +251,10 @@ class MetaCloudGateway implements WhatsAppGateway
             'reintento' => $idioma,
             'accion' => 'cree la traducción en Meta o ajuste WHATSAPP_META_TEMPLATE_LANG',
         ]);
+
+        $this->ultimoAjuste = "la plantilla {$message->templateName} no existe en "
+            . ($message->templateLanguage ?? $config['template_language'] ?? 'es')
+            . ": se reenvió en {$idioma}.";
 
         $otro = clone $message;
         $otro->templateLanguage = $idioma;
