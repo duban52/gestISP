@@ -47,6 +47,22 @@ class MetaCloudGateway implements WhatsAppGateway
                 return true;
             }
 
+            // LA PLANTILLA CAMBIÓ Y NADIE SE ENTERÓ.
+            //
+            // Meta rechaza el envío entero si el número de parámetros no
+            // es el que espera la plantilla aprobada, y el cliente se
+            // queda SIN AVISO. Pasó de verdad: se encendió el enlace
+            // —cinco parámetros— contra una plantilla de cuatro y cada
+            // factura generada dejó de avisarse.
+            //
+            // Meta dice cuántos esperaba, así que se reintenta UNA vez
+            // con esos, recortando por el final —el último es el añadido
+            // opcional—. El aviso sale sin el enlace, que es mucho mejor
+            // que no salir.
+            if ($esperados = $this->parametrosQueEsperaba($response->json())) {
+                return $this->reintentarConMenosParametros($to, $message, $config, $url, $esperados);
+            }
+
             // Un fallo del proveedor no debe tumbar el flujo de
             // negocio: se registra con detalle y se devuelve false.
             Log::error('WhatsApp Meta: el envío falló.', [
@@ -114,6 +130,78 @@ class MetaCloudGateway implements WhatsAppGateway
             'type' => 'text',
             'text' => ['body' => $message->body],
         ];
+    }
+
+    /**
+     * Cuántos parámetros esperaba la plantilla, si el rechazo fue por
+     * eso y mandamos de más. Null en cualquier otro caso.
+     *
+     * @param  array<string, mixed>|null  $respuesta
+     */
+    private function parametrosQueEsperaba(?array $respuesta): ?int
+    {
+        if (($respuesta['error']['code'] ?? null) !== 132000) {
+            return null;
+        }
+
+        $detalle = (string) ($respuesta['error']['error_data']['details'] ?? '');
+
+        return preg_match('/expected number of params \((\d+)\)/', $detalle, $m)
+            ? (int) $m[1]
+            : null;
+    }
+
+    /**
+     * Reintenta con los parámetros que la plantilla admite.
+     *
+     * Solo RECORTA: si la plantilla espera más de los que hay, no se
+     * puede inventar lo que falta y el fallo se registra como cualquier
+     * otro.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function reintentarConMenosParametros(
+        string $to,
+        WhatsAppMessage $message,
+        array $config,
+        string $url,
+        int $esperados,
+    ): bool {
+        $enviados = count($message->templateParams);
+
+        Log::warning('WhatsApp Meta: la plantilla no tiene los parámetros que se le mandan.', [
+            'plantilla' => $message->templateName,
+            'idioma' => $message->templateLanguage ?? $config['template_language'] ?? 'es',
+            'enviados' => $enviados,
+            'esperados' => $esperados,
+            'accion' => $esperados < $enviados
+                ? 'se reintenta sin los sobrantes; revise la plantilla en Meta'
+                : 'no se puede completar: revise la plantilla en Meta',
+        ]);
+
+        if ($esperados >= $enviados) {
+            return false;
+        }
+
+        $recortado = clone $message;
+        $recortado->templateParams = array_slice($message->templateParams, 0, $esperados);
+
+        $respuesta = Http::withToken($config['token'])
+            ->acceptJson()
+            ->timeout(15)
+            ->post($url, $this->payload($to, $recortado, $config));
+
+        if ($respuesta->successful()) {
+            return true;
+        }
+
+        Log::error('WhatsApp Meta: el reintento también falló.', [
+            'para' => $to,
+            'estado' => $respuesta->status(),
+            'respuesta' => $respuesta->json() ?? $respuesta->body(),
+        ]);
+
+        return false;
     }
 
     /**
