@@ -59,6 +59,9 @@ class OntController extends Controller
         // se exige el mismo permiso, que además ya existe en la base
         // de datos y no obliga a sincronizar permisos al desplegar.
         $this->middleware('check.permission:onts.activate')->only('reboot');
+        // Escribir la WAN es dejar al cliente navegando (o sin
+        // navegar): mismo permiso que activarla.
+        $this->middleware('check.permission:onts.activate')->only('wanConfig');
     }
 
     public function no_authorized_ont_index()
@@ -225,6 +228,7 @@ class OntController extends Controller
             // Equipos que ya tiene: al vincular hay que saber si el
             // contrato está libre antes de elegirlo
             ->withCount(['ont as onts_count', 'pppoeAccounts as pppoe_count'])
+            ->with(['pppoeAccounts' => fn ($q) => $q->orderBy('disabled')->latest('id')->limit(1)])
             ->limit(10)
             ->get();
 
@@ -240,6 +244,9 @@ class OntController extends Controller
             'estado'          => $c->status,
             'tiene_ont'       => (int) $c->onts_count > 0,
             'cuentas_pppoe'   => (int) $c->pppoe_count,
+            // Para ofrecer el envio de la WAN al activar la ONT sin
+            // que haya que adivinar que cuenta se va a mandar.
+            'pppoe_username'  => $c->pppoeAccounts->first()?->username,
         ]));
     }
 
@@ -333,6 +340,8 @@ class OntController extends Controller
             // activarla.
             'vendor'          => 'nullable|string|max:30',
             'model'           => 'nullable|string|max:255',
+            // Mandarle de una la cuenta PPPoE del contrato a la ONT.
+            'enviar_wan'      => 'nullable|boolean',
         ], [
             'contract_id.required' => 'Seleccione el contrato o marque que la ONT no pertenece a ninguno.',
             'description.required' => 'La descripción es obligatoria: es el rótulo de la ONT en la OLT.',
@@ -381,6 +390,13 @@ class OntController extends Controller
 
         $avisoNap = $this->ocuparPuertoNap($validated['nap_port_id'] ?? null, $contractId, $ont);
 
+        // Sin contrato no hay cuenta que mandar: la casilla queda
+        // oculta en el formulario, pero un valor colado no puede
+        // disparar un SSH que no tiene nada que escribir.
+        $avisoWan = $request->boolean('enviar_wan') && $contractId
+            ? $this->enviarWanDelContrato($ont, $olt)
+            : '';
+
         $mensaje = $sinContrato
             ? 'ONT activada y registrada SIN contrato asociado.'
             : 'ONT activada y registrada correctamente.';
@@ -397,7 +413,52 @@ class OntController extends Controller
         // había que ir a buscarla por el serial a las autorizadas.
         return redirect()
             ->route('onts.show', $ont)
-            ->with('success', $mensaje . $avisoNap);
+            ->with('success', $mensaje . $avisoNap . $avisoWan);
+    }
+
+    /**
+     * Le manda a la ONT recién activada la cuenta PPPoE del contrato.
+     *
+     * NUNCA LANZA, por el mismo motivo que ocuparPuertoNap(): la ONT ya
+     * quedó autorizada en la OLT. Si esto falla —ONT incompatible, la
+     * consola rechaza el comando— devolver un error haría creer que la
+     * activación no se hizo y alguien la repetiría. Se confirma la
+     * activación y se cuenta aparte cómo fue la WAN.
+     */
+    private function enviarWanDelContrato(Ont $ont, Olt $olt): string
+    {
+        $cuenta = $ont->contract?->pppoeAccounts()->orderBy('disabled')->latest('id')->first();
+
+        if (!$cuenta) {
+            return ' No se envió la configuración WAN: el contrato no tiene cuenta PPPoE.';
+        }
+
+        try {
+            $resultado = $this->oltSshService->setOntWanConfig($olt, $ont, [
+                'modo' => 'pppoe',
+                'vlan' => $ont->vlan,
+                'priority' => 0,
+                'profile_id' => \App\Services\OltSshService::PERFIL_WAN,
+                'username' => $cuenta->username,
+                'password' => $cuenta->password,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('WAN en la activación: la OLT rechazó el comando', [
+                'ont' => $ont->sn,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ' NO se pudo enviar la configuración WAN: ' . $e->getMessage();
+        }
+
+        $this->auditarAccionSobreOnt(
+            $ont, $olt, 'onts.wan_configured',
+            'Configuró la WAN (pppoe) de la ONT %s (%s) al activarla',
+        );
+
+        return $resultado['aplicado']
+            ? ' Además, la ONT tomó la cuenta PPPoE ' . $cuenta->username . '.'
+            : ' La configuración WAN se envió, pero la ONT no la reporta: puede no ser compatible.';
     }
 
     /**
@@ -709,7 +770,18 @@ class OntController extends Controller
         // dejaria 40 s en blanco.
         $acceso = \Illuminate\Support\Facades\Cache::get(OltSshService::claveAcceso($ont));
 
-        return view('gestisp.onts.show', compact('ont', 'acceso'));
+        // La cuenta que el formulario de WAN va a proponer. Se busca
+        // aqui y no en la vista para que la ficha no dispare consultas
+        // sueltas, y se prefiere una habilitada: un contrato puede
+        // arrastrar cuentas viejas deshabilitadas de un servicio
+        // anterior, y proponer esa configuraria la ONT con una cuenta
+        // que el Mikrotik va a rechazar.
+        $cuentaPppoe = $ont->contract?->pppoeAccounts()
+            ->orderBy('disabled')
+            ->latest('id')
+            ->first();
+
+        return view('gestisp.onts.show', compact('ont', 'acceso', 'cuentaPppoe'));
     }
 
     /**
@@ -1040,6 +1112,103 @@ class OntController extends Controller
                 ? 'ONT habilitada: el servicio del cliente queda restablecido.'
                 : 'ONT deshabilitada: el servicio del cliente queda suspendido.'
         );
+    }
+
+    /**
+     * Escribe la configuración WAN en la ONT (OMCI).
+     *
+     * Con esto la ONT se autentica sola contra el Mikrotik: el
+     * técnico ya no entra a la interfaz del equipo del cliente a
+     * teclear la cuenta. La OLT se la escribe por el mismo canal con
+     * el que la administra.
+     *
+     * TRES DESENLACES, NO DOS. La OLT puede rechazar el comando
+     * (error), aceptarlo y que la ONT lo tome (éxito), o aceptarlo y
+     * que la ONT lo ignore porque no es compatible. El tercero es el
+     * que importa avisar: si se tratara como éxito, el técnico se iría
+     * del sitio creyendo que el cliente quedó navegando.
+     */
+    public function wanConfig(Request $request, Ont $ont): RedirectResponse
+    {
+        $esPppoe = $request->input('modo') === 'pppoe';
+        $esEstatica = $request->input('modo') === 'static';
+
+        $datos = $request->validate([
+            'modo' => 'required|in:pppoe,dhcp,static',
+            'vlan' => 'required|integer|min:1|max:4094',
+            'priority' => 'required|integer|min:0|max:7',
+            // Vacío = no se ata perfil: hay OLT donde el servicio ya
+            // viene del srv-profile y el comando sobra.
+            'profile_id' => 'nullable|integer|min:1|max:1024',
+            'username' => [Rule::requiredIf($esPppoe), 'nullable', 'string', 'max:64'],
+            'password' => [Rule::requiredIf($esPppoe), 'nullable', 'string', 'max:64'],
+            // En estática el direccionamiento lo pone la empresa: si
+            // algo va mal escrito, la ONT queda incomunicada y hay que
+            // ir hasta el sitio. Por eso se valida que sean IPs de
+            // verdad antes de mandar nada al equipo.
+            'ip_address' => [Rule::requiredIf($esEstatica), 'nullable', 'ipv4'],
+            'mask' => [Rule::requiredIf($esEstatica), 'nullable', 'ipv4'],
+            'gateway' => [Rule::requiredIf($esEstatica), 'nullable', 'ipv4'],
+            'pri_dns' => [Rule::requiredIf($esEstatica), 'nullable', 'ipv4'],
+            'slave_dns' => 'nullable|ipv4',
+        ], [
+            'username.required' => 'La cuenta PPPoE es obligatoria.',
+            'password.required' => 'La contraseña de la cuenta PPPoE es obligatoria.',
+            'ip_address.required' => 'La dirección IP es obligatoria en configuración estática.',
+            'mask.required' => 'La máscara de subred es obligatoria en configuración estática.',
+            'gateway.required' => 'La puerta de enlace es obligatoria en configuración estática.',
+            'pri_dns.required' => 'El DNS primario es obligatorio en configuración estática.',
+        ]);
+
+        $olt = Olt::findOrFail($ont->olt_id);
+
+        try {
+            $resultado = $this->oltSshService->setOntWanConfig($olt, $ont, $datos);
+        } catch (\Exception $e) {
+            return back()->with('error', 'No se pudo configurar la WAN: ' . $e->getMessage());
+        }
+
+        $this->auditarAccionSobreOnt(
+            $ont, $olt, 'onts.wan_configured',
+            'Configuró la WAN (' . $datos['modo'] . ') de la ONT %s (%s)',
+        );
+
+        if (!$resultado['aplicado']) {
+            return back()->with(
+                'error',
+                'La OLT aceptó el comando, pero la ONT no reporta la configuración: '
+                . 'probablemente no sea compatible con la configuración WAN remota. '
+                . 'Habrá que configurarla desde el propio equipo.'
+            );
+        }
+
+        return back()->with('success', trim(
+            self::resumenDeLaWan($datos, $resultado['estado'])
+            . ' ' . ($resultado['aviso'] ?? '')
+        ));
+    }
+
+    /**
+     * Qué contarle al operador de lo que quedó en la ONT.
+     *
+     * La dirección tarda unos segundos en negociarse, así que puede no
+     * estar todavía en la relectura. Decirlo es mejor que callarlo: sin
+     * eso, «se aplicó» y sin IP a la vista parece un fallo.
+     *
+     * @param  array<string, mixed>  $datos
+     * @param  array<string, string>  $estado
+     */
+    private static function resumenDeLaWan(array $datos, array $estado): string
+    {
+        $base = match ($datos['modo']) {
+            'dhcp' => 'La ONT tomó la configuración WAN por DHCP.',
+            'static' => 'La ONT tomó la configuración WAN estática.',
+            default => 'La ONT tomó la cuenta ' . ($estado['PPPoE username'] ?? $datos['username']) . '.',
+        };
+
+        return $base . (($estado['ONT IP'] ?? null)
+            ? ' Dirección asignada: ' . $estado['ONT IP'] . '.'
+            : ' Todavía no reporta dirección: la negociación tarda unos segundos.');
     }
 
     /**

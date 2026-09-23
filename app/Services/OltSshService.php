@@ -1187,6 +1187,249 @@ class OltSshService
         }
     }
 
+    /** Perfil WAN que se ata al host IP cuando no se indica otro. */
+    public const PERFIL_WAN = 1;
+
+    /**
+     * Escribe la configuración WAN de la ONT por OMCI.
+     *
+     * QUÉ HACE Y POR QUÉ SON TRES COMANDOS
+     * ------------------------------------
+     * `ont ipconfig` deja escrita la cuenta —o el modo DHCP— en el
+     * host IP 0 de la ONT, pero no hace nada más. `ont wan-config` ata
+     * ese host a un perfil WAN de la OLT, que es lo que define el
+     * servicio. Y `ont internet-config … ip-index 0` marca el host
+     * como el de Internet, que es lo que finalmente lo levanta: sin
+     * esa última, el `display` muestra la cuenta y la ONT sigue sin
+     * dirección. Por eso van siempre los tres, en ese orden.
+     *
+     * SOLO LAS ONT COMPATIBLES
+     * ------------------------
+     * Esto viaja por OMCI, el canal con el que la OLT administra la
+     * ONT. Una ONT en modo puente, de marca que no implemente la
+     * gestión remota, o con el firmware capado, acepta el comando en
+     * la OLT y no hace nada con él. Por eso se vuelve a leer con
+     * `display ont ipconfig` y se devuelve lo que la ONT reporta: sin
+     * esa relectura no hay forma de distinguir «se aplicó» de «la OLT
+     * lo anotó y la ONT lo ignoró».
+     *
+     * @param  array{modo:string, vlan:int|string, priority:int|string, username?:?string, password?:?string}  $datos
+     * @return array{aplicado:bool, estado:array<string,string>, aviso:?string}
+     */
+    public function setOntWanConfig(Olt $olt, Ont $ont, array $datos): array
+    {
+        $ssh = $this->connectToOlt($olt);
+
+        try {
+            $this->converse($ssh, 'enable', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, 'config', false, self::SSH_LONG_TIMEOUT);
+            $this->converse($ssh, "interface gpon 0/{$ont->slot}", false, self::SSH_LONG_TIMEOUT);
+
+            // La ONT puede tener ya una configuración: algunas versiones
+            // piden confirmación para sobrescribirla.
+            $escritura = $this->converse($ssh, self::comandoWan($ont, $datos), true, self::SSH_LONG_TIMEOUT);
+            self::exigirQueLaOltAceptara($escritura, 'la configuración WAN');
+
+            // El perfil WAN se puede dejar vacío: hay OLT donde el
+            // servicio ya viene del srv-profile y este comando sobra.
+            // Mandarlo con un perfil que no existe haría fallar una
+            // configuración que, sin él, habría quedado bien.
+            //
+            // Y si FALLA no se aborta: una ONT que ya tenía el perfil
+            // atado hace que la OLT responda con un «Failure», y
+            // rendirse ahí dejaría a medias una reconfiguración que
+            // por lo demás iba bien. Quien decide es la relectura del
+            // final; el motivo se arrastra para poder contarlo.
+            $aviso = null;
+
+            if ($perfil = (int) ($datos['profile_id'] ?? 0)) {
+                $atado = $this->converse(
+                    $ssh,
+                    "ont wan-config {$ont->port} {$ont->onu_id} ip-index 0 profile-id {$perfil}",
+                    true,
+                    self::SSH_LONG_TIMEOUT,
+                );
+
+                if (preg_match('/failure|error/i', $atado)) {
+                    $aviso = "La OLT no ató el perfil WAN {$perfil}: " . self::enUnaLinea($atado);
+                }
+            }
+
+            $encendido = $this->converse(
+                $ssh,
+                "ont internet-config {$ont->port} {$ont->onu_id} ip-index 0",
+                true,
+                self::SSH_LONG_TIMEOUT,
+            );
+            self::exigirQueLaOltAceptara($encendido, 'el encendido de la WAN');
+
+            $estado = self::parseIpConfig($this->converse(
+                $ssh,
+                "display ont ipconfig {$ont->port} {$ont->onu_id}",
+                false,
+                self::SSH_LONG_TIMEOUT,
+            ));
+
+            $this->converse($ssh, 'quit');
+            $this->converse($ssh, 'quit');
+
+            Log::debug('ONT WAN CONFIG', [
+                'sn' => $ont->sn,
+                'modo' => $datos['modo'],
+                'perfil' => $datos['profile_id'] ?? null,
+                'aviso' => $aviso,
+                'estado' => $estado,
+            ]);
+
+            return [
+                'aplicado' => self::laOntLoTomo($estado, $datos),
+                'estado' => $estado,
+                'aviso' => $aviso,
+            ];
+        } finally {
+            $ssh->disconnect();
+        }
+    }
+
+    /**
+     * El comando tal cual lo espera la MA5800.
+     *
+     *   ont ipconfig <puerto> <ont> pppoe vlan <v> priority <p>
+     *       user-account username <usuario> password <clave>
+     *
+     * Público para poder verificar lo que se le manda al equipo sin
+     * abrir un SSH: es el único sitio donde una credencial con un
+     * carácter raro podría partir el comando en dos.
+     *
+     * @param  array{modo:string, vlan:int|string, priority:int|string, username?:?string, password?:?string}  $datos
+     */
+    public static function comandoWan(Ont $ont, array $datos): string
+    {
+        $inicio = sprintf('ont ipconfig %d %d', $ont->port, $ont->onu_id);
+        $red = sprintf(' vlan %d priority %d', (int) $datos['vlan'], (int) $datos['priority']);
+
+        // En estática la VLAN va AL FINAL, después del direccionamiento
+        // y los DNS. No es un capricho de estilo: en ese orden lo pide
+        // la consola, y con la VLAN delante rechaza la línea.
+        if ($datos['modo'] === 'static') {
+            $comando = $inicio . sprintf(
+                ' static ip-address %s mask %s gateway %s pri-dns %s',
+                self::direccionSegura($datos['ip_address'] ?? ''),
+                self::direccionSegura($datos['mask'] ?? ''),
+                self::direccionSegura($datos['gateway'] ?? ''),
+                self::direccionSegura($datos['pri_dns'] ?? ''),
+            );
+
+            // El DNS secundario es opcional en la OLT; mandarlo vacío
+            // dejaría la palabra suelta y la consola rechazaría todo.
+            if ($secundario = self::direccionSegura($datos['slave_dns'] ?? '')) {
+                $comando .= ' slave-dns ' . $secundario;
+            }
+
+            return $comando . $red;
+        }
+
+        if ($datos['modo'] === 'dhcp') {
+            return $inicio . ' dhcp' . $red;
+        }
+
+        return $inicio . ' pppoe' . $red . sprintf(
+            ' user-account username %s password %s',
+            self::credencialSegura($datos['username'] ?? ''),
+            self::credencialSegura($datos['password'] ?? ''),
+        );
+    }
+
+    /**
+     * Una dirección IP que no puede llevar nada más dentro.
+     *
+     * Misma razón que credencialSegura(): lo que entra a la línea de
+     * comando no puede traer espacios ni caracteres que la partan. Aquí
+     * el juego es todavía más estrecho —dígitos y puntos—, porque no
+     * hay ninguna IP válida que necesite otra cosa.
+     */
+    public static function direccionSegura(?string $valor): string
+    {
+        return preg_replace('/[^0-9.]/', '', (string) $valor);
+    }
+
+    /**
+     * Una credencial que no puede romper la línea de comando.
+     *
+     * Un espacio convertiría el resto de la contraseña en argumentos
+     * sueltos, y unas comillas o un salto de línea dejarían la consola
+     * de la OLT en un estado impredecible a media configuración. Se
+     * quita todo lo que no sea imprimible y seguro, en vez de
+     * escaparlo: las credenciales PPPoE que genera el sistema no usan
+     * nada de eso, y si alguien pega algo raro es preferible que el
+     * equipo rechace la cuenta a que la consola se descarrile.
+     */
+    public static function credencialSegura(?string $valor): string
+    {
+        return mb_substr(preg_replace('/[^A-Za-z0-9._@\-]/u', '', (string) $valor), 0, 64);
+    }
+
+    /**
+     * Campos de `display ont ipconfig`, tal como los nombra la OLT.
+     *
+     * Público para poder probar el parseo sin abrir un SSH.
+     *
+     * @return array<string, string>
+     */
+    public static function parseIpConfig(string $salida): array
+    {
+        return self::paresClaveValor($salida);
+    }
+
+    /**
+     * ¿La ONT tomó de verdad lo que se le mandó?
+     *
+     * Se compara contra lo que la ONT REPORTA, no contra lo que la OLT
+     * respondió: el equipo incompatible acepta el comando y sigue con
+     * su configuración anterior. Para PPPoE manda el usuario; para
+     * DHCP, que el tipo haya cambiado.
+     *
+     * @param  array<string, string>  $estado
+     * @param  array<string, mixed>  $datos
+     */
+    private static function laOntLoTomo(array $estado, array $datos): bool
+    {
+        $tipo = strtolower($estado['ONT config type'] ?? '');
+
+        if ($datos['modo'] === 'dhcp') {
+            return $tipo === 'dhcp';
+        }
+
+        // La OLT lo llama «Static config», no «static».
+        if ($datos['modo'] === 'static') {
+            return str_contains($tipo, 'static')
+                && ($estado['ONT IP'] ?? '') === self::direccionSegura($datos['ip_address'] ?? '');
+        }
+
+        return $tipo === 'pppoe'
+            && ($estado['PPPoE username'] ?? '') === self::credencialSegura($datos['username'] ?? '');
+    }
+
+    /**
+     * Revienta si la OLT rechazó el comando.
+     *
+     * Huawei responde con «Failure: …» y el motivo en la misma línea;
+     * arrastrarlo al mensaje es lo que permite saber si fue un perfil
+     * mal puesto, una ONT que no existe o una VLAN sin service-port.
+     */
+    private static function exigirQueLaOltAceptara(string $salida, string $que): void
+    {
+        if (preg_match('/failure|error/i', $salida)) {
+            throw new \Exception("La OLT rechazó {$que}: " . self::enUnaLinea($salida));
+        }
+    }
+
+    /** La respuesta de la consola, sin saltos, para caber en un aviso. */
+    private static function enUnaLinea(string $salida): string
+    {
+        return trim(preg_replace('/\s+/', ' ', $salida));
+    }
+
     /**
      * Habilita o deshabilita la ONT completa en la OLT.
      *

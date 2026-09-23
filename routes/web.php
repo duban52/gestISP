@@ -638,6 +638,10 @@ Route::post('/onts/{ont}/disable', [OntController::class, 'disableOnt'])->name('
 //Reiniciar la ONT (soporte: no cambia su configuración)
 Route::post('/onts/{ont}/reboot',  [OntController::class, 'reboot'])->name('onts.reboot');
 
+// Configuracion WAN por OMCI: la OLT le escribe a la ONT la cuenta
+// PPPoE del cliente, para no tener que entrar al equipo a teclearla.
+Route::post('/onts/{ont}/wan', [OntController::class, 'wanConfig'])->name('onts.wan');
+
 //Cargar información de onts (SNMP: respuesta en milisegundos)
 Route::get('/onts/{ont}/realtime', [OntController::class, 'realtimeInfo'])->name('onts.realtime');
 //Historial de métricas para las gráficas de la vista de detalle

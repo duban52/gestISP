@@ -211,6 +211,27 @@
                             </div>
                         </div>
 
+                            {{-- ============================================================
+                                 ¿Le mandamos también la cuenta al equipo?
+
+                                 Aparece SOLO si el contrato elegido tiene cuenta
+                                 PPPoE: sin cuenta no hay nada que enviar, y
+                                 ofrecerlo sería prometer algo que no va a pasar.
+
+                                 Llega marcado porque es lo que se quiere casi
+                                 siempre —activar y dejar al cliente navegando—,
+                                 y desmarcarlo es la excepción: una ONT en modo
+                                 puente detrás de un router del cliente.
+                                 ============================================================ --}}
+                            <div class="custom-control custom-switch mb-3 d-none" id="ontBloqueWan">
+                                <input type="checkbox" class="custom-control-input"
+                                       id="ontEnviarWan" name="enviar_wan" value="1" checked>
+                                <label class="custom-control-label" for="ontEnviarWan">
+                                    Enviar la <strong>configuración WAN</strong> a la ONT al activarla
+                                    <small class="d-block text-muted" id="ontWanCuenta"></small>
+                                </label>
+                            </div>
+
                         <div class="alert alert-info py-2 d-none" id="ontAvisoSinContrato">
                             <i class="fas fa-info-circle"></i>
                             La ONT quedará registrada <strong>sin cliente asociado</strong>.
@@ -597,6 +618,7 @@
                 document.getElementById('clienteSeleccionadoView').value = '';
                 document.getElementById('selectedContractId').value     = '';
                 document.getElementById('selectedDescription').value    = '';
+                ocultarEnvioWan();
 
                 cargarCajasDelPuerto(btn.getAttribute('data-location'));
 
@@ -805,6 +827,19 @@
             });
         });
 
+        /**
+         * Esconde el envío de la WAN mientras no haya contrato elegido.
+         *
+         * Se llama al abrir el modal y al cambiar de modo: sin esto, el
+         * interruptor de la ONT anterior seguiría marcado y prometería
+         * mandar una cuenta que ya no viene al caso.
+         */
+        function ocultarEnvioWan() {
+            document.getElementById('ontBloqueWan').classList.add('d-none');
+            document.getElementById('ontEnviarWan').checked = false;
+            document.getElementById('ontWanCuenta').textContent = '';
+        }
+
         function aplicarModoContratoOnt(sinContrato) {
             const bloque      = document.getElementById('ontBloqueContrato');
             const aviso       = document.getElementById('ontAvisoSinContrato');
@@ -822,6 +857,7 @@
             document.getElementById('buscarContrato').value           = '';
             document.getElementById('resultadosContrato').style.display = 'none';
             descripcion.value = '';
+            ocultarEnvioWan();
 
             // El bloque se OCULTA, no se quita del formulario: un
             // puerto de caja que quedara elegido se enviaría igual y
@@ -880,6 +916,18 @@
                                 document.getElementById('selectedDescription').value     = contrato.description;
                                 document.getElementById('clienteSeleccionadoView').value = contrato.label;
                                 document.getElementById('buscarContrato').value          = '';
+
+                                // Solo se ofrece mandar la WAN si hay cuenta
+                                // que mandar, y se dice cuál.
+                                const bloqueWan = document.getElementById('ontBloqueWan');
+                                const hayCuenta = !!contrato.pppoe_username;
+
+                                bloqueWan.classList.toggle('d-none', !hayCuenta);
+                                document.getElementById('ontEnviarWan').checked = hayCuenta;
+                                document.getElementById('ontWanCuenta').textContent = hayCuenta
+                                    ? 'Se enviará la cuenta ' + contrato.pppoe_username + '.'
+                                    : '';
+
                                 resultados.style.display = 'none';
                                 resultados.innerHTML     = '';
                             });
