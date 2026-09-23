@@ -63,6 +63,12 @@ return [
             'token' => env('WHATSAPP_META_TOKEN'),
             'api_version' => env('WHATSAPP_META_API_VERSION', 'v21.0'),
 
+            // La cuenta de WhatsApp Business. Solo la usa
+            // `whatsapp:plantillas` para preguntarle a Meta qué
+            // plantillas hay y con cuántas variables: enviar no la
+            // necesita.
+            'business_account_id' => env('WHATSAPP_META_WABA_ID'),
+
             // Meta exige plantillas aprobadas para iniciar una
             // conversación. Si se deja en true, los mensajes se
             // envían como plantilla; el nombre y el idioma se toman
