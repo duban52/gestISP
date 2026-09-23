@@ -280,6 +280,8 @@ class CompanyController extends Controller
             'address' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:30',
+            'tic_registry' => 'nullable|string|max:40',
+            'website' => 'nullable|string|max:255',
 
             // ---- Datos fiscales adicionales (deuda de la fase 8):
             // existian en la tabla pero el formulario nunca los pidio,

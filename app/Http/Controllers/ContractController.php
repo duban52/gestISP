@@ -38,6 +38,9 @@ class ContractController extends Controller
         $this->middleware('check.permission:contracts.show')->only('show');
         $this->middleware('check.permission:contracts.export')->only('export', 'exportFiltered');
         $this->middleware('check.permission:contracts.show')->only('diagnostics');
+        // Imprimir el contrato es verlo: quien puede abrir la ficha
+        // puede sacar el documento que el cliente firma.
+        $this->middleware('check.permission:contracts.show')->only('contratoPdf');
     }
     /**
      * Display a listing of the resource.
@@ -351,7 +354,11 @@ class ContractController extends Controller
         optional($contract->client)->notify(new ClientWelcome($contract));
 
         // Redirigir con un mensaje de éxito
-        return redirect()->route('contracts.index')
+        // A la ficha del contrato recién creado y con su contrato en
+        // pantalla: lo primero que hay que hacer con un alta es
+        // imprimirlo y firmarlo.
+        return redirect()->route('contracts.show', $contract)
+            ->with('abrir_contrato_pdf', true)
             ->with('success', 'Contrato creado exitosamente.' . $locationWarning)
             // Avisa, no bloquea: puede haber razones legitimas para que
             // el IVA no siga al estrato —un contrato empresarial en una
@@ -501,6 +508,41 @@ class ContractController extends Controller
                 : '$' . number_format((float) $datos['discount_value'], 2, ',', '.'),
             $datos['discount_months'] ? " durante {$datos['discount_months']} mes(es)" : ' sin limite de meses',
         ));
+    }
+
+    /**
+     * El contrato de servicios en PDF, para imprimir y firmar.
+     *
+     * Es el formato único que exige la CRC: el articulado es el mismo
+     * para todos y lo que cambia son los datos del suscriptor, el plan
+     * y la permanencia. Se genera cuando alguien lo pide y no se guarda
+     * en disco: si mañana cambia un dato del cliente, el documento que
+     * se imprime tiene que salir con el dato de hoy.
+     */
+    public function contratoPdf(Request $request, Contract $contract)
+    {
+        abort_unless(
+            app(CurrentContext::class)->permiteSucursal($contract->branch_id),
+            403,
+            'Ese contrato pertenece a otra sucursal.',
+        );
+
+        $contract->loadMissing(['client', 'plan.services', 'branch']);
+        $branch = $contract->branch;
+
+        $pdf = \App\Support\PdfBranding::make('gestisp.contracts.pdf', [
+            'contract' => $contract,
+            'branch' => $branch,
+            'company' => $branch?->company,
+            'logoPath' => \App\Support\PdfBranding::logoPath($branch),
+        ]);
+
+        $nombre = 'contrato-' . str_replace([' ', '/'], '-', (string) $contract->numero_visible) . '.pdf';
+
+        // Por defecto se muestra —el modal lo abre en un iframe— y solo
+        // se descarga si lo piden: guardar un PDF que solo se iba a leer
+        // llena la carpeta de descargas de archivos repetidos.
+        return $request->boolean('descargar') ? $pdf->download($nombre) : $pdf->stream($nombre);
     }
 
     /**

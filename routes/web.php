@@ -392,6 +392,8 @@ Route::post('/contracts/{contract}/facturar', [InvoiceController::class, 'genera
 // Descuento del contrato (promociones): va aparte de update() porque
 // alli las ramas se eligen por los campos que trae el formulario.
 Route::post('/contracts/{contract}/descuento', [ContractController::class, 'descuento'])->name('contracts.discount');
+// El contrato de servicios que firma el cliente (formato único CRC).
+Route::get('/contracts/{contract}/documento', [ContractController::class, 'contratoPdf'])->name('contracts.pdf');
 
 // Cesion de contrato: el mismo contrato cambia de titular sin cortar el
 // servicio. Tiene su propio permiso (contracts.cede): le factura el

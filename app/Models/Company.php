@@ -44,6 +44,10 @@ class Company extends Model
         'postal_code',
         'email',
         'phone',
+        // Los imprime el contrato de servicios: el registro del MinTIC
+        // acredita al operador y la web es a donde remite el articulado.
+        'tic_registry',
+        'website',
         'logo',
         'operation_mode',
         'electronic_invoicing_enabled',

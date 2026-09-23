@@ -179,6 +179,14 @@
                             </button>
                         @endcan
 
+                        {{-- El documento que firma el cliente. Se genera
+                             cuando se pide, no se guarda: si se corrige un
+                             dato, lo impreso sale con el dato de hoy. --}}
+                        <button type="button" class="btn btn-outline-dark btn-sm" data-bs-toggle="modal"
+                                data-bs-target="#contratoPdfModal">
+                            <i class="far fa-file-pdf mr-1"></i> Mostrar PDF del contrato
+                        </button>
+
                         {{-- Cambio de titular sin cortar el servicio. Un
                              contrato terminado ya no tiene nada que ceder. --}}
                         @can('contracts.cede')
@@ -189,6 +197,51 @@
                                 </a>
                             @endunless
                         @endcan
+                    </div>
+                </div>
+            </div>
+
+            {{-- ============================================================
+                 EL CONTRATO EN PDF
+
+                 El formato único de la CRC, con los datos del cliente y del
+                 plan. Se abre solo al crear el contrato —lo primero que hay
+                 que hacer con un alta es imprimirlo y firmarlo— y desde el
+                 botón cuando haga falta otra copia.
+                 ============================================================ --}}
+            <div class="modal fade" id="contratoPdfModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="far fa-file-pdf mr-1"></i>
+                                Contrato de servicios {{ $contract->numero_visible }}
+                            </h5>
+                            <button type="button" class="btn-danger" data-bs-dismiss="modal" aria-label="Cerrar">
+                                <i class="far fa-window-close"></i>
+                            </button>
+                        </div>
+                        <div class="modal-body p-0">
+                            {{-- El PDF se carga al abrir el modal y no con la
+                                 página: son tres páginas que nadie mira si no
+                                 pulsa el botón. --}}
+                            <iframe id="contratoPdfVisor" src="" style="width: 100%; height: 70vh; border: 0;"></iframe>
+                        </div>
+                        <div class="modal-footer justify-content-between">
+                            <small class="text-muted">
+                                Imprímalo, fírmelo con el cliente y consérvelo.
+                            </small>
+                            <div>
+                                <button type="button" class="btn btn-primary" id="contratoPdfImprimir">
+                                    <i class="fas fa-print mr-1"></i> Imprimir
+                                </button>
+                                <a href="{{ route('contracts.pdf', [$contract, 'descargar' => 1]) }}"
+                                   class="btn btn-success">
+                                    <i class="fas fa-download mr-1"></i> Guardar
+                                </a>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1385,6 +1438,35 @@
 @endsection
 
 @section('js')
+    {{-- ---------- El contrato en PDF ---------- --}}
+    <script>
+        (function () {
+            const modal = document.getElementById('contratoPdfModal');
+            const visor = document.getElementById('contratoPdfVisor');
+            const url = @json(route('contracts.pdf', $contract));
+
+            // Se carga al abrir y se suelta al cerrar: así no quedan tres
+            // páginas de PDF ocupando memoria en una ficha que se deja
+            // abierta toda la mañana.
+            modal.addEventListener('show.bs.modal', () => { visor.src = url; });
+            modal.addEventListener('hidden.bs.modal', () => { visor.src = ''; });
+
+            document.getElementById('contratoPdfImprimir').addEventListener('click', function () {
+                if (visor.contentWindow) {
+                    visor.contentWindow.focus();
+                    visor.contentWindow.print();
+                }
+            });
+
+            @if(session('abrir_contrato_pdf'))
+                // Recién creado: se enseña sin que haya que buscarlo.
+                window.addEventListener('load', function () {
+                    new bootstrap.Modal(modal).show();
+                });
+            @endif
+        })();
+    </script>
+
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>

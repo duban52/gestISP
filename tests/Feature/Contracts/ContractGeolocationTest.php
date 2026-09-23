@@ -275,7 +275,7 @@ class ContractGeolocationTest extends TestCase
             'location_source' => 'mapa',
         ]);
 
-        $respuesta->assertRedirect(route('contracts.index'));
+        $respuesta->assertRedirect(route('contracts.show', Contract::latest('id')->firstOrFail()));
 
         $contrato = Contract::where('client_id', $cliente->id)->firstOrFail();
 
@@ -306,7 +306,7 @@ class ContractGeolocationTest extends TestCase
             'longitude' => 0,
         ]);
 
-        $respuesta->assertRedirect(route('contracts.index'));
+        $respuesta->assertRedirect(route('contracts.show', Contract::latest('id')->firstOrFail()));
 
         $contrato = Contract::where('client_id', $cliente->id)->firstOrFail();
 

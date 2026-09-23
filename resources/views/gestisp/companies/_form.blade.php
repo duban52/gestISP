@@ -90,6 +90,22 @@
     </div>
 </div>
 
+{{-- Los dos los imprime el contrato de servicios del cliente. --}}
+<div class="form-row">
+    <div class="form-group col-md-6">
+        <label>Registro TIC</label>
+        <input type="text" name="tic_registry" class="form-control" maxlength="40"
+               value="{{ old('tic_registry', $empresa->tic_registry) }}" placeholder="N.º del registro ante el MinTIC">
+        <small class="form-text text-muted">Sale en la cabecera del contrato de servicios.</small>
+    </div>
+    <div class="form-group col-md-6">
+        <label>Página web</label>
+        <input type="text" name="website" class="form-control" maxlength="255"
+               value="{{ old('website', $empresa->website) }}" placeholder="https://…">
+        <small class="form-text text-muted">El contrato remite a ella para políticas y condiciones técnicas.</small>
+    </div>
+</div>
+
 {{-- ============================================================
      Datos fiscales adicionales.
 
