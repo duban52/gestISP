@@ -32,6 +32,21 @@ class TestWhatsAppTemplate extends Command
             return self::FAILURE;
         }
 
+        // Sin credenciales el envío falla igual, pero el error de Meta
+        // no llega a existir: era un «revise el log» que no explicaba
+        // nada. Mejor decirlo aquí.
+        $faltan = array_keys(array_filter([
+            'WHATSAPP_META_PHONE_ID' => empty(config('notifications.whatsapp.meta.phone_number_id')),
+            'WHATSAPP_META_TOKEN' => empty(config('notifications.whatsapp.meta.token')),
+        ]));
+
+        if ($faltan !== []) {
+            $this->error('Falta en el .env de ESTE servidor: ' . implode(' y ', $faltan) . '.');
+            $this->line('Sin eso no se puede enviar nada: este servidor no es el que manda los WhatsApp.');
+
+            return self::FAILURE;
+        }
+
         $phone = PhoneNumber::forWhatsApp($this->argument('phone'));
 
         if (!$phone) {

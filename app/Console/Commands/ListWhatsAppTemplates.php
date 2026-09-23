@@ -30,8 +30,13 @@ class ListWhatsAppTemplates extends Command
         $config = config('notifications.whatsapp.meta');
         $waba = $config['business_account_id'] ?? null;
 
-        if (empty($config['token']) || empty($waba)) {
-            $this->error('Faltan datos: WHATSAPP_META_TOKEN y WHATSAPP_META_WABA_ID.');
+        $faltan = array_keys(array_filter([
+            'WHATSAPP_META_TOKEN' => empty($config['token']),
+            'WHATSAPP_META_WABA_ID' => empty($waba),
+        ]));
+
+        if ($faltan !== []) {
+            $this->error('Falta en el .env de ESTE servidor: ' . implode(' y ', $faltan) . '.');
             $this->line('El WABA es el «Identificador de la cuenta de WhatsApp Business»,');
             $this->line('en Meta Business → WhatsApp Manager → Configuración de la cuenta.');
 
