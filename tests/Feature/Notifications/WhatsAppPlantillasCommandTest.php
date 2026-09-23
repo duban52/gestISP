@@ -52,13 +52,25 @@ class WhatsAppPlantillasCommandTest extends TestCase
 
         $this->artisan('whatsapp:plantillas --filtro=factura')
             ->expectsTable(
-                ['Plantilla', 'Idioma', 'Estado', 'Variables', 'Cabecera'],
+                ['Plantilla', 'Idioma', 'Estado', 'Variables', 'Cabecera', 'Botones'],
                 [
-                    ['factura_generada', 'es', 'APPROVED', 4, '—'],
-                    ['factura_generada', 'es_CO', 'APPROVED', 5, 'DOCUMENT'],
+                    ['factura_generada', 'es', 'APPROVED', 4, '—', '—'],
+                    ['factura_generada', 'es_CO', 'APPROVED', 5, 'DOCUMENT', '—'],
                 ],
             )
             ->assertSuccessful();
+    }
+
+    public function test_la_cuenta_de_negocio_se_puede_pasar_por_parametro(): void
+    {
+        // Para no tener que editar el .env solo para mirar.
+        $this->configurar(['notifications.whatsapp.meta.business_account_id' => null]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['data' => []], 200)]);
+
+        $this->artisan('whatsapp:plantillas --waba=123456789')->assertSuccessful();
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/123456789/message_templates'));
     }
 
     public function test_sin_la_cuenta_de_negocio_dice_donde_encontrarla(): void

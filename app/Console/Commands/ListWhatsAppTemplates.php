@@ -21,14 +21,16 @@ use Illuminate\Support\Facades\Http;
  */
 class ListWhatsAppTemplates extends Command
 {
-    protected $signature = 'whatsapp:plantillas {--filtro= : Solo las plantillas cuyo nombre contenga esto}';
+    protected $signature = 'whatsapp:plantillas
+                            {--filtro= : Solo las plantillas cuyo nombre contenga esto}
+                            {--waba= : Identificador de la cuenta de WhatsApp Business, si no está en el .env}';
 
     protected $description = 'Lista las plantillas de WhatsApp aprobadas en Meta, con su idioma y sus variables';
 
     public function handle(): int
     {
         $config = config('notifications.whatsapp.meta');
-        $waba = $config['business_account_id'] ?? null;
+        $waba = trim((string) $this->option('waba')) ?: ($config['business_account_id'] ?? null);
 
         $faltan = array_keys(array_filter([
             'WHATSAPP_META_TOKEN' => empty($config['token']),
@@ -37,8 +39,10 @@ class ListWhatsAppTemplates extends Command
 
         if ($faltan !== []) {
             $this->error('Falta en el .env de ESTE servidor: ' . implode(' y ', $faltan) . '.');
-            $this->line('El WABA es el «Identificador de la cuenta de WhatsApp Business»,');
-            $this->line('en Meta Business → WhatsApp Manager → Configuración de la cuenta.');
+            $this->line('El WABA es el «Identificador de la cuenta de WhatsApp Business»:');
+            $this->line('está junto al Phone Number ID, en la app de Meta for Developers →');
+            $this->line('WhatsApp → Configuración de la API. Se puede pasar sin tocar el');
+            $this->line('.env: <info>php artisan whatsapp:plantillas --waba=123456789</info>');
 
             return self::FAILURE;
         }
@@ -60,6 +64,7 @@ class ListWhatsAppTemplates extends Command
 
         $filtro = (string) $this->option('filtro');
         $filas = [];
+        $cuerpos = [];
 
         foreach ($respuesta->json('data', []) as $plantilla) {
             if ($filtro !== '' && !str_contains($plantilla['name'], $filtro)) {
@@ -76,7 +81,13 @@ class ListWhatsAppTemplates extends Command
                 // Los huecos son {{1}}, {{2}}…: se cuentan del propio texto.
                 preg_match_all('/\{\{\d+\}\}/', $cuerpo['text'] ?? ''),
                 $cabecera['format'] ?? '—',
+                // Los botones también gastan variables, y no se ven en
+                // el cuerpo: un botón de URL con sufijo dinámico pide su
+                // propio parámetro aparte.
+                collect($plantilla['components'] ?? [])->firstWhere('type', 'BUTTONS') ? 'sí' : '—',
             ];
+
+            $cuerpos[$plantilla['name'] . ' (' . $plantilla['language'] . ')'] = $cuerpo['text'] ?? '';
         }
 
         if ($filas === []) {
@@ -85,7 +96,15 @@ class ListWhatsAppTemplates extends Command
             return self::SUCCESS;
         }
 
-        $this->table(['Plantilla', 'Idioma', 'Estado', 'Variables', 'Cabecera'], $filas);
+        $this->table(['Plantilla', 'Idioma', 'Estado', 'Variables', 'Cabecera', 'Botones'], $filas);
+
+        // El texto aprobado, tal cual. Es lo único que dice si el
+        // enlace quedó como variable {{5}} o escrito a mano.
+        foreach ($cuerpos as $cual => $texto) {
+            $this->newLine();
+            $this->line('<comment>' . $cual . '</comment>');
+            $this->line($texto);
+        }
 
         $this->newLine();
         $this->line('gestISP envía el idioma: <info>' . ($config['template_language'] ?? 'es') . '</info>'

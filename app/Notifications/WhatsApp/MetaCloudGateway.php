@@ -63,6 +63,17 @@ class MetaCloudGateway implements WhatsAppGateway
                 return $this->reintentarConMenosParametros($to, $message, $config, $url, $esperados);
             }
 
+            // LA PLANTILLA NO EXISTE EN ESE IDIOMA.
+            //
+            // Meta resuelve la plantilla por NOMBRE + IDIOMA exacto: con
+            // el sistema en `es_CO`, una plantilla creada solo en `es`
+            // no existe y el envío se rechaza. Le venía pasando a
+            // `orden_rechazada_tecnico` desde que se cambió el idioma
+            // general, en silencio.
+            if ($idioma = $this->idiomaSinRegion($response->json(), $message, $config)) {
+                return $this->reintentarEnOtroIdioma($to, $message, $config, $url, $idioma);
+            }
+
             // Un fallo del proveedor no debe tumbar el flujo de
             // negocio: se registra con detalle y se devuelve false.
             Log::error('WhatsApp Meta: el envío falló.', [
@@ -186,10 +197,64 @@ class MetaCloudGateway implements WhatsAppGateway
         $recortado = clone $message;
         $recortado->templateParams = array_slice($message->templateParams, 0, $esperados);
 
+        return $this->reenviar($to, $recortado, $config, $url);
+    }
+
+    /**
+     * El idioma sin región (`es_CO` → `es`), si el rechazo fue porque
+     * la plantilla no existe en el idioma que se mandó. Null si el
+     * fallo es otro o el idioma ya venía sin región.
+     *
+     * @param  array<string, mixed>|null  $respuesta
+     * @param  array<string, mixed>  $config
+     */
+    private function idiomaSinRegion(?array $respuesta, WhatsAppMessage $message, array $config): ?string
+    {
+        if (($respuesta['error']['code'] ?? null) !== 132001) {
+            return null;
+        }
+
+        $idioma = $message->templateLanguage ?? $config['template_language'] ?? 'es';
+
+        return str_contains($idioma, '_') ? explode('_', $idioma)[0] : null;
+    }
+
+    /**
+     * Reintenta la misma plantilla en el idioma base.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function reintentarEnOtroIdioma(
+        string $to,
+        WhatsAppMessage $message,
+        array $config,
+        string $url,
+        string $idioma,
+    ): bool {
+        Log::warning('WhatsApp Meta: la plantilla no existe en ese idioma; se reintenta en el idioma base.', [
+            'plantilla' => $message->templateName,
+            'idioma' => $message->templateLanguage ?? $config['template_language'] ?? 'es',
+            'reintento' => $idioma,
+            'accion' => 'cree la traducción en Meta o ajuste WHATSAPP_META_TEMPLATE_LANG',
+        ]);
+
+        $otro = clone $message;
+        $otro->templateLanguage = $idioma;
+
+        return $this->reenviar($to, $otro, $config, $url);
+    }
+
+    /**
+     * El segundo —y último— intento. Nunca encadena otro reintento.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function reenviar(string $to, WhatsAppMessage $message, array $config, string $url): bool
+    {
         $respuesta = Http::withToken($config['token'])
             ->acceptJson()
             ->timeout(15)
-            ->post($url, $this->payload($to, $recortado, $config));
+            ->post($url, $this->payload($to, $message, $config));
 
         if ($respuesta->successful()) {
             return true;
