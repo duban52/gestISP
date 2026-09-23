@@ -23,6 +23,7 @@ class WhatsAppPlantillasCommandTest extends TestCase
             'notifications.whatsapp.meta.api_version' => 'v21.0',
             'notifications.whatsapp.meta.template_language' => 'es',
             'notifications.whatsapp.meta.invoice_link_in_template' => true,
+            'notifications.whatsapp.meta.phone_number_id' => null,
         ], $extra));
     }
 
@@ -58,6 +59,32 @@ class WhatsAppPlantillasCommandTest extends TestCase
                     ['factura_generada', 'es_CO', 'APPROVED', 5, 'DOCUMENT', '—'],
                 ],
             )
+            ->assertSuccessful();
+    }
+
+    /**
+     * Las plantillas son de una CUENTA, no del negocio. Con el número
+     * colgando de otra cuenta, Meta resuelve la plantilla vieja de esa
+     * otra mientras en el manager se ve la buena y aprobada.
+     */
+    public function test_avisa_si_el_numero_que_envia_no_es_de_esa_cuenta(): void
+    {
+        $this->configurar(['notifications.whatsapp.meta.phone_number_id' => '1248998741624435']);
+
+        Http::fake([
+            'graph.facebook.com/*/phone_numbers*' => Http::response(['data' => [
+                ['id' => '999000111', 'display_phone_number' => '+57 300 0000000'],
+            ]], 200),
+            'graph.facebook.com/*' => Http::response(['data' => [[
+                'name' => 'factura_generada',
+                'language' => 'es_CO',
+                'status' => 'APPROVED',
+                'components' => [['type' => 'BODY', 'text' => 'Hola {{1}} {{2}} {{3}} {{4}} {{5}}']],
+            ]]], 200),
+        ]);
+
+        $this->artisan('whatsapp:plantillas --filtro=factura --waba=1753691595833926')
+            ->expectsOutputToContain('EL NÚMERO QUE ENVÍA NO ES DE ESTA CUENTA')
             ->assertSuccessful();
     }
 

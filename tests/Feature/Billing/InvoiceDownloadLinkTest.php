@@ -91,25 +91,29 @@ class InvoiceDownloadLinkTest extends BillingTestCase
         $this->assertStringContainsString('signature=', $mensaje->body);
     }
 
-    public function test_la_electronica_todavia_no_manda_enlace(): void
+    public function test_la_electronica_tambien_manda_el_enlace(): void
     {
-        // Mismo motivo que el adjunto del correo: en este momento su PDF
-        // diría «pendiente de validación por la DIAN».
+        // Antes se callaba a propósito, porque en ese momento el PDF
+        // dice «pendiente de validación por la DIAN». Pero el cliente
+        // quiere su factura, valide la DIAN cuando valide: pedido el
+        // 2026-09-23.
         $factura = $this->facturaElectronica();
 
         $mensaje = (new InvoiceGenerated($factura))->toWhatsApp($factura->contract->client);
 
-        $this->assertStringNotContainsString('/descargar', $mensaje->body);
+        $this->assertStringContainsString('/facturas/' . $factura->id . '/descargar', $mensaje->body);
+        $this->assertStringContainsString('signature=', $mensaje->body);
     }
 
     public function test_el_quinto_parametro_de_la_plantilla_esta_apagado_de_fabrica(): void
     {
-        // La plantilla aprobada en Meta tiene CUATRO huecos. Mandarle un
-        // quinto hace que Meta rechace el envío entero y el cliente se
-        // quede sin aviso de factura.
+        // Mandarle un quinto hueco a una plantilla de cuatro hace que
+        // Meta rechace el envío entero y el cliente se quede sin aviso
+        // de factura. Pasó de verdad.
         //
         // Por eso arranca apagado: primero se actualiza y se aprueba la
-        // plantilla, y solo entonces se enciende.
+        // plantilla EN LA CUENTA DEL NÚMERO QUE ENVÍA, y solo entonces
+        // se enciende.
         $factura = $this->facturaInterna();
 
         $sinEncender = (new InvoiceGenerated($factura))->toWhatsApp($factura->contract->client);

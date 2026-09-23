@@ -52,6 +52,13 @@ class ListWhatsAppTemplates extends Command
             ->values();
 
         if ($cuentas->isEmpty()) {
+            // Un token de usuario no siempre puede inspeccionarse a sí
+            // mismo. Si Meta explicó el motivo, se muestra: buscarlo a
+            // ciegas cuesta más que leerlo.
+            if ($motivo = $respuesta->json('error.message')) {
+                $this->line('Meta no lo dijo: <comment>' . $motivo . '</comment>');
+            }
+
             return null;
         }
 
@@ -65,6 +72,55 @@ class ListWhatsAppTemplates extends Command
         }
 
         return (string) $cuentas->first();
+    }
+
+    /**
+     * Que el número que ENVÍA sea de la cuenta cuyas plantillas se
+     * están mirando.
+     *
+     * LA TRAMPA: las plantillas pertenecen a una cuenta de WhatsApp
+     * Business, no al negocio. Si el número cuelga de otra cuenta, Meta
+     * resuelve la plantilla de ESA otra —vieja, con menos huecos— y
+     * rechaza el envío, mientras en el manager se ve la versión buena y
+     * aprobada. Costó media jornada.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function verificarQueElNumeroPertenezca(array $config, string $waba): void
+    {
+        $numero = (string) ($config['phone_number_id'] ?? '');
+
+        if ($numero === '') {
+            return;
+        }
+
+        $respuesta = Http::withToken($config['token'])
+            ->acceptJson()
+            ->timeout(20)
+            ->get(sprintf('https://graph.facebook.com/%s/%s/phone_numbers', $config['api_version'], $waba), [
+                'fields' => 'id,display_phone_number,verified_name',
+            ]);
+
+        if (!$respuesta->successful()) {
+            return;
+        }
+
+        $numeros = collect($respuesta->json('data', []));
+
+        $this->newLine();
+
+        if ($numeros->contains('id', $numero)) {
+            $this->line('El número que envía (<info>' . $numero . '</info>) sí es de esta cuenta.');
+
+            return;
+        }
+
+        $this->error('EL NÚMERO QUE ENVÍA NO ES DE ESTA CUENTA.');
+        $this->line('WHATSAPP_META_PHONE_ID es <comment>' . $numero . '</comment>, y esta cuenta tiene: '
+            . ($numeros->isEmpty() ? 'ninguno' : $numeros->map(fn ($n) => $n['display_phone_number'] . ' (' . $n['id'] . ')')->implode(', ')) . '.');
+        $this->line('Las plantillas de arriba NO son las que usa ese número: Meta resuelve');
+        $this->line('las de la cuenta a la que pertenece. Corrija la plantilla en esa otra');
+        $this->line('cuenta, o apunte WHATSAPP_META_PHONE_ID a un número de esta.');
     }
 
     public function handle(): int
@@ -87,6 +143,9 @@ class ListWhatsAppTemplates extends Command
             $this->line('está junto al Phone Number ID, en la app de Meta for Developers →');
             $this->line('WhatsApp → Configuración de la API. Se puede pasar sin tocar el');
             $this->line('.env: <info>php artisan whatsapp:plantillas --waba=123456789</info>');
+            $this->newLine();
+            $this->line('Atajo: abra la plantilla en WhatsApp Manager y mire la dirección');
+            $this->line('del navegador; lleva <info>waba_id=</info> con ese mismo número.');
 
             return self::FAILURE;
         }
@@ -149,6 +208,8 @@ class ListWhatsAppTemplates extends Command
             $this->line('<comment>' . $cual . '</comment>');
             $this->line($texto);
         }
+
+        $this->verificarQueElNumeroPertenezca($config, $waba);
 
         $this->newLine();
         $this->line('gestISP envía el idioma: <info>' . ($config['template_language'] ?? 'es') . '</info>'
