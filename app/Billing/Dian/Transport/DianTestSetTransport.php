@@ -27,4 +27,18 @@ interface DianTestSetTransport
      * @param  string  $testSetId  El identificador que asigna la DIAN
      */
     public function enviarSetDePruebas(array $documentos, string $testSetId): TransmissionResult;
+
+    /**
+     * Le pregunta a la DIAN como quedo un set ya entregado.
+     *
+     * Es `GetStatusZip`, y se presenta la `ZipKey` que devolvio el
+     * envio. La respuesta trae el veredicto del lote y, dentro, el de
+     * cada documento: cual paso y cual no, y por que. Sin esto, «set
+     * entregado» es todo lo que se sabe, y corregir un rechazo se
+     * convierte en adivinar cual de los diez documentos fallo.
+     *
+     * @param  string|null  $endpointOverride  Si la empresa transmite
+     *   por un proveedor tecnologico.
+     */
+    public function consultarSet(string $zipKey, ?string $endpointOverride = null): TransmissionResult;
 }

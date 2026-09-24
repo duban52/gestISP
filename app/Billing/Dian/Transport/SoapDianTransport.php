@@ -49,6 +49,7 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
     private const NS_WCF = 'http://wcf.dian.colombia';
     private const ACCION_ENVIO = 'http://wcf.dian.colombia/IWcfDianCustomerServices/SendBillSync';
     private const ACCION_SET = 'http://wcf.dian.colombia/IWcfDianCustomerServices/SendTestSetAsync';
+    private const ACCION_ESTADO = 'http://wcf.dian.colombia/IWcfDianCustomerServices/GetStatusZip';
 
     public function __construct(
         private readonly XmlSecuritySigner $seguridad = new XmlSecuritySigner(),
@@ -185,6 +186,156 @@ class SoapDianTransport implements DianTransport, DianTestSetTransport
         }
 
         return $this->interpretarSet($respuesta->status(), $respuesta->body());
+    }
+
+    /**
+     * Le pregunta a la DIAN como quedo un set ya entregado.
+     *
+     * VA SIEMPRE A HABILITACION, igual que el envio: el set es el
+     * tramite de habilitacion, aunque la empresa ya este en produccion.
+     *
+     * LA RESPUESTA SE DEVUELVE ENTERA. `interpretarEstadoDelSet()` saca
+     * de ella lo que se sabe leer, pero el XML crudo viaja en
+     * `respuesta` para poder volcarlo: esta operacion no se habia usado
+     * nunca contra el servicio real, y la unica forma honesta de
+     * afinar el lector es mirar una respuesta de verdad.
+     */
+    public function consultarSet(string $zipKey, ?string $endpointOverride = null): TransmissionResult
+    {
+        $url = $this->endpoints->habilitacion($endpointOverride);
+
+        if ($url === null) {
+            return TransmissionResult::error([
+                'No hay URL del servicio de habilitación de la DIAN configurada.',
+            ]);
+        }
+
+        $certificado = $this->certificadoDe([]);
+
+        if (!$certificado) {
+            return TransmissionResult::error([
+                'No hay certificado con el que autenticar la consulta del set de pruebas.',
+            ]);
+        }
+
+        $doc = new \DOMDocument('1.0', 'UTF-8');
+
+        $sobre = $doc->createElementNS(self::NS_SOAP, 'soap:Envelope');
+        $sobre->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:wcf', self::NS_WCF);
+        $doc->appendChild($sobre);
+
+        $cabecera = $doc->createElementNS(self::NS_SOAP, 'soap:Header');
+        $sobre->appendChild($cabecera);
+
+        $direccionamiento = 'http://www.w3.org/2005/08/addressing';
+        $cabecera->appendChild($doc->createElementNS($direccionamiento, 'wsa:Action', self::ACCION_ESTADO));
+        $cabecera->appendChild($doc->createElementNS($direccionamiento, 'wsa:To', $url));
+
+        $cuerpo = $doc->createElementNS(self::NS_SOAP, 'soap:Body');
+        $sobre->appendChild($cuerpo);
+
+        $consulta = $doc->createElementNS(self::NS_WCF, 'wcf:GetStatusZip');
+        $cuerpo->appendChild($consulta);
+        $consulta->appendChild($doc->createElementNS(self::NS_WCF, 'wcf:trackId', $zipKey));
+
+        $sobreFirmado = $this->seguridad->firmar($doc, $certificado);
+
+        try {
+            $tipo = 'application/soap+xml;charset=UTF-8;action="' . self::ACCION_ESTADO . '"';
+
+            $respuesta = Http::timeout((int) config('dian.timeout', 60))
+                ->withBody($sobreFirmado, $tipo)
+                ->post($url);
+        } catch (\Illuminate\Http\Client\ConnectionException $error) {
+            return TransmissionResult::demora();
+        }
+
+        if ($respuesta->status() >= 400) {
+            return TransmissionResult::error(
+                ['La DIAN respondió ' . $respuesta->status() . ' a la consulta del set.'],
+                httpStatus: $respuesta->status(),
+                respuesta: $respuesta->body(),
+            );
+        }
+
+        return new TransmissionResult(
+            TransmissionResult::ACEPTADO,
+            trackId: $zipKey,
+            httpStatus: $respuesta->status(),
+            respuesta: $respuesta->body(),
+        );
+    }
+
+    /**
+     * Lo que se entiende de una respuesta de `GetStatusZip`.
+     *
+     * SE LEE POR NOMBRE LOCAL, SIN SUPONER LA ESTRUCTURA. Los campos
+     * que la DIAN devuelve cambian entre operaciones y versiones, y
+     * este proyecto ya pago despliegues por deducir formas en vez de
+     * copiarlas. Asi que se buscan las etiquetas conocidas donde sea
+     * que esten, y lo que no se reconozca no se inventa: para eso esta
+     * el volcado del XML crudo.
+     *
+     * Publico y estatico para poder probarlo sin hablar con la DIAN.
+     *
+     * @return array{codigo:?string, descripcion:?string, mensaje:?string,
+     *   aprobado:bool, errores:array<int,string>, documentos:array<int,array>}
+     */
+    public static function interpretarEstadoDelSet(string $xml): array
+    {
+        $anterior = libxml_use_internal_errors(true);
+        $doc = new \DOMDocument();
+        $leido = $doc->loadXML($xml);
+        libxml_clear_errors();
+        libxml_use_internal_errors($anterior);
+
+        if (!$leido) {
+            return [
+                'codigo' => null,
+                'descripcion' => null,
+                'mensaje' => 'La respuesta de la DIAN no es un XML válido.',
+                'aprobado' => false,
+                'errores' => [],
+                'documentos' => [],
+            ];
+        }
+
+        $xpath = new \DOMXPath($doc);
+        $valor = fn (string $etiqueta, ?\DOMNode $desde = null) => trim(
+            (string) $xpath->query(".//*[local-name()='" . $etiqueta . "']", $desde)->item(0)?->nodeValue,
+        ) ?: null;
+
+        $errores = [];
+
+        foreach ($xpath->query("//*[local-name()='ErrorMessage']//*[local-name()='string']") as $nodo) {
+            $errores[] = trim($nodo->nodeValue);
+        }
+
+        // El detalle por documento, cuando viene. Cada uno dice si es
+        // valido y con que nombre de archivo, que es lo que permite
+        // saber CUAL hay que corregir.
+        $documentos = [];
+
+        foreach ($xpath->query("//*[local-name()='XmlDocumentKey']/..") as $nodo) {
+            $documentos[] = array_filter([
+                'archivo' => $valor('XmlFileName', $nodo) ?? $valor('XmlDocumentKey', $nodo),
+                'valido' => $valor('IsValid', $nodo),
+                'descripcion' => $valor('StatusDescription', $nodo),
+            ]);
+        }
+
+        $codigo = $valor('StatusCode');
+
+        return [
+            'codigo' => $codigo,
+            'descripcion' => $valor('StatusDescription'),
+            'mensaje' => $valor('StatusMessage'),
+            // «00» es el procesado correcto del servicio. Se confirma
+            // ademas con IsValid, que es el veredicto de verdad.
+            'aprobado' => $codigo === '00' && strtolower((string) $valor('IsValid')) === 'true',
+            'errores' => $errores,
+            'documentos' => $documentos,
+        ];
     }
 
     /**

@@ -146,11 +146,23 @@ class SendDianTestSet extends Command
             return self::FAILURE;
         }
 
+        // La ZipKey se GUARDA: es lo que hay que presentar para
+        // preguntar el resultado, y eso se hace después —a veces días
+        // después—. Hasta ahora solo quedaba en la trazabilidad, que
+        // es un archivo histórico y no el sitio del que un comando
+        // deba leer con qué trabajar.
+        $empresa->dianConfiguration?->update([
+            'test_set_zip_key' => $resultado->trackId,
+            'test_set_sent_at' => now(),
+        ]);
+
         $this->info('Set recibido por la DIAN.');
         $this->line('ZipKey: <options=bold>' . $resultado->trackId . '</>');
         $this->newLine();
         $this->warn('Recibido NO es aprobado: la DIAN valida después.');
-        $this->line('Cuando apruebe la habilitación, enciéndala con:');
+        $this->line('Pregúntele el resultado con:');
+        $this->line('  php artisan dian:estado-set --empresa=' . $empresa->id);
+        $this->line('Y cuando lo apruebe, encienda producción con:');
         $this->line('  php artisan dian:habilitar --empresa=' . $empresa->id);
 
         return self::SUCCESS;

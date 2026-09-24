@@ -70,6 +70,18 @@ class FakeDianTransport implements DianTransport, DianTestSetTransport
         ]);
     }
 
+    /** @var array<int, string> */
+    public array $setsConsultados = [];
+
+    public function consultarSet(string $zipKey, ?string $endpointOverride = null): TransmissionResult
+    {
+        $this->setsConsultados[] = $zipKey;
+
+        return array_shift($this->respuestas) ?? TransmissionResult::error([
+            'No hay ningún transporte a la DIAN configurado: no se puede consultar el set de pruebas.',
+        ]);
+    }
+
     public function nombre(): string
     {
         return 'simulado';

@@ -33,13 +33,15 @@ class DianConfiguration extends Model
 
     protected $fillable = [
         'company_id', 'environment_code', 'software_id', 'software_pin',
-        'test_set_id', 'endpoint_override', 'enabled_at',
+        'test_set_id', 'test_set_zip_key', 'test_set_sent_at',
+        'endpoint_override', 'enabled_at',
     ];
 
     protected $casts = [
         // Cifrado con la clave de la aplicacion.
         'software_pin' => 'encrypted',
         'enabled_at' => 'datetime',
+        'test_set_sent_at' => 'datetime',
     ];
 
     protected $attributes = [

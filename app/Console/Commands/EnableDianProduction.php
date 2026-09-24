@@ -11,7 +11,7 @@ use Illuminate\Console\Command;
 /**
  * Enciende la facturación electrónica de una empresa.
  *
- *     php artisan dian:habilitar --empresa=3
+ *     php artisan dian:habilitar --empresa=3 --aprobada=2026-09-24
  *     php artisan dian:habilitar --empresa=3 --forzar
  *
  * ES EL INTERRUPTOR MÁS DELICADO DEL SISTEMA
@@ -39,6 +39,7 @@ class EnableDianProduction extends Command
 {
     protected $signature = 'dian:habilitar
                             {--empresa= : La empresa que se habilita}
+                            {--aprobada= : Fecha en que la DIAN aprobó la habilitación (AAAA-MM-DD)}
                             {--forzar : Enciende aunque el diagnóstico encuentre bloqueos}
                             {--pruebas : Enciende la emisión PERO en ambiente de pruebas, para armar el set de habilitación}
                             {--apagar : Vuelve a pruebas y desactiva la emisión electrónica}';
@@ -59,6 +60,30 @@ class EnableDianProduction extends Command
 
         if ($this->option('pruebas')) {
             return $this->encenderEnPruebas($empresa, $trazabilidad);
+        }
+
+        // LA PESCADILLA QUE SE MUERDE LA COLA
+        // ------------------------------------
+        // El diagnóstico marca «Habilitación» en rojo mientras
+        // `enabled_at` sea null, y `enabled_at` solo lo escribe este
+        // comando. O sea que el primer paso a producción —el único
+        // momento en que este comando tiene sentido— era imposible sin
+        // `--forzar`, que además se salta TODOS los bloqueos: si faltaba
+        // el rango de producción, también se lo saltaba, en silencio.
+        //
+        // `--aprobada` es la salida honesta: quien la pasa está
+        // declarando la fecha en que la DIAN aprobó la habilitación
+        // —un hecho que ocurre fuera del sistema y que solo una persona
+        // puede afirmar—, y con eso ese paso deja de bloquear. Los
+        // demás siguen frenando como deben.
+        $aprobada = $this->fechaDeAprobacion();
+
+        if ($aprobada === false) {
+            return self::FAILURE;
+        }
+
+        if ($aprobada) {
+            $this->marcarLaHabilitacion($empresa, $aprobada);
         }
 
         $bloqueos = $revision->bloqueos($empresa);
@@ -105,6 +130,9 @@ class EnableDianProduction extends Command
         $configuracion->enabled_at = $configuracion->enabled_at ?? now();
         $configuracion->save();
 
+        // El diagnóstico se leyó con los datos de antes de guardar.
+        $empresa->unsetRelation('dianConfiguration');
+
         $empresa->update(['electronic_invoicing_enabled' => true]);
 
         $trazabilidad->action(
@@ -122,6 +150,61 @@ class EnableDianProduction extends Command
         $this->info('Facturación electrónica encendida.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * La fecha que se declara, ya comprobada.
+     *
+     * Devuelve null si no se pasó la opción, y false si se pasó mal:
+     * una fecha ilegible aquí acabaría escribiendo un «habilitada el»
+     * falso en la única columna que acredita el trámite.
+     */
+    private function fechaDeAprobacion(): \Illuminate\Support\Carbon|null|false
+    {
+        $valor = trim((string) $this->option('aprobada'));
+
+        if ($valor === '') {
+            return null;
+        }
+
+        try {
+            $fecha = \Illuminate\Support\Carbon::parse($valor);
+        } catch (\Throwable $error) {
+            $this->error('La fecha de aprobación no se entiende: use AAAA-MM-DD.');
+
+            return false;
+        }
+
+        if ($fecha->isFuture()) {
+            $this->error('La fecha de aprobación no puede ser futura: es cuándo aprobó la DIAN, no cuándo se espera.');
+
+            return false;
+        }
+
+        return $fecha;
+    }
+
+    /**
+     * Anota que la DIAN aprobó la habilitación.
+     *
+     * Es lo único de todo el trámite que el sistema no puede comprobar
+     * por su cuenta: ocurre en el portal de la DIAN. Se guarda antes de
+     * pedir el diagnóstico para que ese paso deje de bloquear, y queda
+     * en la trazabilidad con quién lo declaró.
+     */
+    private function marcarLaHabilitacion(Company $empresa, \Illuminate\Support\Carbon $fecha): void
+    {
+        $configuracion = DianConfiguration::withoutGlobalScopes()->firstOrNew([
+            'company_id' => $empresa->id,
+        ]);
+
+        $configuracion->company_id = $empresa->id;
+        $configuracion->enabled_at = $fecha;
+        $configuracion->save();
+
+        $empresa->unsetRelation('dianConfiguration');
+
+        $this->line('Habilitación anotada: aprobada el ' . $fecha->format('d/m/Y') . '.');
     }
 
     /**

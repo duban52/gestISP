@@ -386,6 +386,207 @@ class DianReadinessTest extends TestCase
             ->assertExitCode(1);
     }
 
+    // ==================== Declarar la aprobación ====================
+
+    /**
+     * LA PESCADILLA QUE SE MORDÍA LA COLA.
+     *
+     * El diagnóstico marca «Habilitación» en rojo mientras `enabled_at`
+     * sea null, y `enabled_at` solo lo escribe este comando. O sea que
+     * el primer paso a producción —el único momento en que el comando
+     * tiene sentido— era imposible sin `--forzar`.
+     *
+     * Las pruebas no lo veían porque el ayudante regalaba `enabled_at`.
+     */
+    public function test_con_todo_listo_pero_sin_declarar_la_aprobacion_no_enciende(): void
+    {
+        $this->completarTodo(conHabilitacion: false);
+
+        $this->artisan('dian:habilitar', ['--empresa' => $this->empresa->id])
+            ->expectsOutputToContain('No se puede habilitar todavía')
+            ->assertExitCode(1);
+
+        $this->assertFalse($this->empresa->fresh()->electronic_invoicing_enabled);
+    }
+
+    public function test_declarando_la_fecha_de_aprobacion_enciende_sin_forzar(): void
+    {
+        $this->completarTodo(conHabilitacion: false);
+
+        $this->artisan('dian:habilitar', [
+            '--empresa' => $this->empresa->id,
+            '--aprobada' => '2026-09-20',
+        ])
+            ->expectsConfirmation('¿Continuar?', 'yes')
+            ->assertExitCode(0);
+
+        $configuracion = $this->empresa->fresh()->dianConfiguration;
+
+        $this->assertTrue($this->empresa->fresh()->electronic_invoicing_enabled);
+        $this->assertSame(DianConfiguration::PRODUCCION, $configuracion->environment_code);
+        // La fecha que se declaró, no la de hoy: es cuándo aprobó la DIAN.
+        $this->assertSame('2026-09-20', $configuracion->enabled_at->format('Y-m-d'));
+    }
+
+    /**
+     * Declarar la aprobación NO es `--forzar`.
+     *
+     * Ese era el daño del atajo viejo: para saltarse el paso imposible
+     * había que saltárselos todos, y un rango de producción que faltara
+     * se colaba en silencio.
+     */
+    public function test_declarar_la_aprobacion_no_se_salta_los_demas_bloqueos(): void
+    {
+        $this->completarTodo(conHabilitacion: false);
+
+        NumberingRange::query()->delete();
+
+        $this->artisan('dian:habilitar', [
+            '--empresa' => $this->empresa->id,
+            '--aprobada' => '2026-09-20',
+        ])
+            ->expectsOutputToContain('No se puede habilitar todavía')
+            ->assertExitCode(1);
+
+        $this->assertFalse($this->empresa->fresh()->electronic_invoicing_enabled);
+    }
+
+    public function test_una_fecha_de_aprobacion_futura_se_rechaza(): void
+    {
+        // Es cuándo aprobó la DIAN, no cuándo se espera que apruebe.
+        $this->completarTodo(conHabilitacion: false);
+
+        $this->artisan('dian:habilitar', [
+            '--empresa' => $this->empresa->id,
+            '--aprobada' => now()->addWeek()->format('Y-m-d'),
+        ])
+            ->expectsOutputToContain('no puede ser futura')
+            ->assertExitCode(1);
+
+        $this->assertNull($this->empresa->fresh()->dianConfiguration->enabled_at);
+    }
+
+    // ==================== Preguntar cómo quedó el set ====================
+
+    public function test_el_envio_del_set_guarda_la_zipkey(): void
+    {
+        // Es lo que hay que presentar para preguntar el resultado, y
+        // eso se hace después: antes solo quedaba en la trazabilidad.
+        $transporte = new FakeDianTransport();
+        $transporte->responder(TransmissionResult::aceptado('zip-key-123'));
+        $this->app->instance(DianTestSetTransport::class, $transporte);
+
+        $this->completarTodo(conHabilitacion: false);
+        $this->documentoFirmado();
+
+        $this->artisan('dian:set-de-pruebas', ['--empresa' => $this->empresa->id])
+            ->expectsConfirmation('¿Mandar el set a la DIAN?', 'yes');
+
+        $this->assertSame('zip-key-123', $this->empresa->fresh()->dianConfiguration->test_set_zip_key);
+    }
+
+    public function test_sin_zipkey_no_hay_nada_que_consultar(): void
+    {
+        $this->completarTodo(conHabilitacion: false);
+
+        $this->artisan('dian:estado-set', ['--empresa' => $this->empresa->id])
+            ->expectsOutputToContain('No hay ninguna ZipKey')
+            ->assertExitCode(1);
+    }
+
+    public function test_consultar_el_set_usa_la_zipkey_guardada(): void
+    {
+        $transporte = new FakeDianTransport();
+        $transporte->responder(new TransmissionResult(
+            TransmissionResult::ACEPTADO,
+            respuesta: $this->respuestaDeEstado(aprobado: true),
+        ));
+        $this->app->instance(DianTestSetTransport::class, $transporte);
+
+        $this->completarTodo(conHabilitacion: false);
+        DianConfiguration::withoutGlobalScopes()
+            ->where('company_id', $this->empresa->id)
+            ->update(['test_set_zip_key' => 'zip-key-123']);
+
+        $this->artisan('dian:estado-set', ['--empresa' => $this->empresa->id])
+            ->expectsOutputToContain('APROBADO')
+            ->assertExitCode(0);
+
+        $this->assertSame(['zip-key-123'], $transporte->setsConsultados);
+    }
+
+    public function test_un_set_no_aprobado_dice_que_hay_que_corregir(): void
+    {
+        // Es el caso que importa: «entregado» no ayuda a nadie; lo que
+        // hace falta es saber CUÁL documento falló y por qué.
+        $transporte = new FakeDianTransport();
+        $transporte->responder(new TransmissionResult(
+            TransmissionResult::ACEPTADO,
+            respuesta: $this->respuestaDeEstado(aprobado: false),
+        ));
+        $this->app->instance(DianTestSetTransport::class, $transporte);
+
+        $this->completarTodo(conHabilitacion: false);
+
+        $this->artisan('dian:estado-set', [
+            '--empresa' => $this->empresa->id,
+            '--zipkey' => 'zip-key-456',
+        ])
+            ->expectsOutputToContain('TODAVÍA NO está aprobado')
+            ->assertExitCode(0);
+    }
+
+    public function test_se_lee_el_veredicto_de_cada_documento(): void
+    {
+        $estado = \App\Billing\Dian\Transport\SoapDianTransport::interpretarEstadoDelSet(
+            $this->respuestaDeEstado(aprobado: false),
+        );
+
+        $this->assertFalse($estado['aprobado']);
+        $this->assertSame('99', $estado['codigo']);
+        $this->assertContains('Regla: FAB01. Rechazo: El campo CUFE no cumple.', $estado['errores']);
+        $this->assertSame('SETP990000001.xml', $estado['documentos'][0]['archivo']);
+    }
+
+    /**
+     * «Procesado» NO es «aprobado».
+     *
+     * El servicio devuelve un código de proceso que dice que leyó el
+     * lote, y aparte el veredicto. Confundirlos daría por habilitada
+     * una empresa que no lo está.
+     */
+    public function test_procesado_con_el_veredicto_en_falso_no_es_aprobado(): void
+    {
+        $xml = str_replace('<b:IsValid>true</b:IsValid>', '<b:IsValid>false</b:IsValid>',
+            $this->respuestaDeEstado(aprobado: true));
+
+        $estado = \App\Billing\Dian\Transport\SoapDianTransport::interpretarEstadoDelSet($xml);
+
+        $this->assertSame('00', $estado['codigo']);
+        $this->assertFalse($estado['aprobado']);
+    }
+
+    /** Una respuesta de GetStatusZip con la forma que documenta la DIAN. */
+    private function respuestaDeEstado(bool $aprobado): string
+    {
+        return '<?xml version="1.0"?>'
+            . '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">'
+            . '<s:Body><GetStatusZipResponse xmlns="http://wcf.dian.colombia">'
+            . '<GetStatusZipResult xmlns:b="http://schemas.datacontract.org/2004/07/">'
+            . '<b:StatusCode>' . ($aprobado ? '00' : '99') . '</b:StatusCode>'
+            . '<b:StatusDescription>' . ($aprobado ? 'Procesado Correctamente.' : 'Documento con errores en campos mandatorios.') . '</b:StatusDescription>'
+            . '<b:StatusMessage>' . ($aprobado ? 'La Factura electrónica ha sido autorizada.' : '') . '</b:StatusMessage>'
+            . '<b:IsValid>' . ($aprobado ? 'true' : 'false') . '</b:IsValid>'
+            . ($aprobado ? '' : '<b:ErrorMessage><b:string>Regla: FAB01. Rechazo: El campo CUFE no cumple.</b:string></b:ErrorMessage>')
+            . '<b:DianResponse>'
+            . '<b:XmlDocumentKey>abc123</b:XmlDocumentKey>'
+            . '<b:XmlFileName>SETP990000001.xml</b:XmlFileName>'
+            . '<b:IsValid>' . ($aprobado ? 'true' : 'false') . '</b:IsValid>'
+            . '<b:StatusDescription>' . ($aprobado ? 'Procesado Correctamente.' : 'Rechazado.') . '</b:StatusDescription>'
+            . '</b:DianResponse>'
+            . '</GetStatusZipResult></GetStatusZipResponse></s:Body></s:Envelope>';
+    }
+
     // ==================== Apoyo ====================
 
     private function revision(): DianReadiness
@@ -393,8 +594,16 @@ class DianReadinessTest extends TestCase
         return new DianReadiness();
     }
 
-    /** Deja la empresa con todo lo que hace falta para emitir. */
-    private function completarTodo(): void
+    /**
+     * Deja la empresa con todo lo que hace falta para emitir.
+     *
+     * `$conHabilitacion` existe porque este ayudante escribia
+     * `enabled_at` — el dato que SOLO puede producir `dian:habilitar`—
+     * y con eso tapaba el estado real de una empresa que aun no ha
+     * pasado a produccion. Todas las pruebas de encendido corrian
+     * sobre una empresa que ya estaba habilitada.
+     */
+    private function completarTodo(bool $conHabilitacion = true): void
     {
         $this->empresa->update([
             'legal_name' => 'Fibra Andina S.A.S.',
@@ -414,7 +623,7 @@ class DianReadinessTest extends TestCase
             ['company_id' => $this->empresa->id],
             [
                 'environment_code' => DianConfiguration::PRODUCCION,
-                'enabled_at' => now(),
+                'enabled_at' => $conHabilitacion ? now() : null,
                 'software_id' => 'fa326ca7-c1f8-40d3-a6fc-24d7c1040607',
                 'software_pin' => '12345',
                 'test_set_id' => 'set-1234',
