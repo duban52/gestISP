@@ -63,6 +63,7 @@ class DianReadiness
             $this->resolucion($empresa),
             $this->rango($empresa),
             $this->setDePruebas($empresa),
+            $this->emision($empresa),
             $this->transporte($empresa),
             $this->contingencia($empresa),
         ];
@@ -97,6 +98,13 @@ class DianReadiness
     {
         return collect($this->revisar($empresa))
             ->filter(fn (array $paso) => !$paso['bloqueante'] && !$paso['ok'])
+            // La emisión apagada NO es un aviso: es un estado, y uno
+            // perfectamente legítimo mientras se prepara la
+            // habilitación. `dian:alertas` avisa de lo que va a
+            // romperse —un certificado que caduca, un rango que se
+            // agota—, y meter aquí «está apagada» le mandaría un correo
+            // cada noche a quien todavía no ha encendido nada.
+            ->reject(fn (array $paso) => $paso['clave'] === 'emision')
             ->pluck('detalle')
             ->values()
             ->all();
@@ -271,6 +279,61 @@ class DianReadiness
             blank($configuracion?->test_set_id)
                 ? 'Falta el identificador del set de pruebas que asigna la DIAN.'
                 : 'El set de pruebas todavía no está aprobado.');
+    }
+
+    /**
+     * ¿Hay algo que vaya a salir electrónico?
+     *
+     * POR QUÉ HACE FALTA ESTA COMPROBACIÓN
+     * ------------------------------------
+     * Una empresa puede tener el certificado, la resolución, el rango y
+     * el servicio en verde, y no producir NI UN documento electrónico:
+     * basta con que el interruptor de la empresa esté apagado, o con
+     * que ningún contrato cuelgue de un grupo de afinidad electrónico.
+     *
+     * Y entonces `dian:set-de-pruebas` contesta «no hay documentos
+     * firmados que mandar» sin decir por qué, que es exactamente el
+     * punto en el que uno se queda mirando la pantalla. El diagnóstico
+     * enseñaba todo lo demás menos esto.
+     *
+     * NO ES BLOQUEANTE: no impide emitir, es la razón por la que no hay
+     * nada que emitir. Mezclarlo con los bloqueos haría que una empresa
+     * lista pero sin contratos pareciera mal configurada.
+     */
+    private function emision(Company $empresa): array
+    {
+        if (!$empresa->electronic_invoicing_enabled) {
+            return $this->paso('emision', 'Emisión electrónica', false, false,
+                'Apagada: las facturas salen como documento interno. Enciéndala en pruebas con '
+                . '`php artisan dian:habilitar --empresa=' . $empresa->id . ' --pruebas`.');
+        }
+
+        $grupos = \App\Models\AffinityGroup::withoutGlobalScopes()
+            ->where('company_id', $empresa->id)
+            ->where('requires_electronic_invoicing', true)
+            ->pluck('id');
+
+        if ($grupos->isEmpty()) {
+            return $this->paso('emision', 'Emisión electrónica', false, false,
+                'Encendida, pero ningún grupo de afinidad exige factura electrónica: '
+                . 'todo sale como documento interno.');
+        }
+
+        $contratos = \App\Models\Contract::withoutGlobalScopes()
+            ->whereIn('affinity_group_id', $grupos)
+            ->count();
+
+        if ($contratos === 0) {
+            return $this->paso('emision', 'Emisión electrónica', false, false,
+                'Encendida, pero no hay ningún contrato en los grupos electrónicos: '
+                . 'no se va a generar ningún documento.');
+        }
+
+        return $this->paso('emision', 'Emisión electrónica', true, false, sprintf(
+            'Encendida. %d contrato(s) en %d grupo(s) electrónico(s).',
+            $contratos,
+            $grupos->count(),
+        ));
     }
 
     private function transporte(Company $empresa): array

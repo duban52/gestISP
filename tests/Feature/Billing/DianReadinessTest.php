@@ -48,6 +48,7 @@ class DianReadinessTest extends TestCase
 
     private Company $empresa;
     private Branch $sucursal;
+    private User $usuario;
 
     protected function setUp(): void
     {
@@ -67,7 +68,7 @@ class DianReadinessTest extends TestCase
         $this->empresa = Company::factory()->create();
         $this->sucursal = Branch::factory()->create(['company_id' => $this->empresa->id]);
 
-        $usuario = User::factory()->create();
+        $usuario = $this->usuario = User::factory()->create();
         $rol = Role::where('name', 'superadministrador')->firstOrFail();
         $usuario->assignRole($rol);
         $usuario->branches()->attach($this->sucursal->id, ['role_id' => $rol->id]);
@@ -297,6 +298,29 @@ class DianReadinessTest extends TestCase
             ->assertExitCode(1);
     }
 
+    /**
+     * `dian:alertas` avisa de lo que va a ROMPERSE.
+     *
+     * Que la emisión esté apagada es un estado legítimo mientras se
+     * prepara la habilitación: convertirlo en aviso le mandaría un
+     * correo cada noche a quien todavía no ha encendido nada.
+     */
+    public function test_la_emision_apagada_no_dispara_alertas(): void
+    {
+        $this->completarTodo();
+        $this->empresa->update(['electronic_invoicing_enabled' => false]);
+
+        $this->assertNotContains(
+            'emision',
+            collect($this->revision()->revisar($this->empresa->fresh()))
+                ->where('ok', true)
+                ->pluck('clave')
+                ->all(),
+        );
+
+        $this->assertSame([], $this->revision()->avisos($this->empresa->fresh()));
+    }
+
     public function test_sin_nada_que_avisar_las_alertas_pasan(): void
     {
         $this->completarTodo();
@@ -384,6 +408,74 @@ class DianReadinessTest extends TestCase
         $this->artisan('dian:set-de-pruebas', ['--empresa' => $this->empresa->id])
             ->expectsOutputToContain('No hay documentos firmados')
             ->assertExitCode(1);
+    }
+
+    // ==================== Por qué no hay documentos ====================
+
+    /**
+     * «No hay documentos firmados que mandar» sin decir por qué es el
+     * punto en el que uno se queda mirando la pantalla: el diagnóstico
+     * enseñaba todo lo demás en verde y esto no lo miraba nadie.
+     */
+    public function test_el_diagnostico_dice_si_la_emision_esta_apagada(): void
+    {
+        $this->completarTodo();
+        $this->empresa->update(['electronic_invoicing_enabled' => false]);
+
+        $emision = collect($this->revision()->revisar($this->empresa->fresh()))
+            ->firstWhere('clave', 'emision');
+
+        $this->assertFalse($emision['ok']);
+        $this->assertStringContainsString('Apagada', $emision['detalle']);
+        // No bloquea: no impide emitir, explica por qué no hay nada.
+        $this->assertFalse($emision['bloqueante']);
+    }
+
+    public function test_el_diagnostico_avisa_si_ningun_contrato_es_electronico(): void
+    {
+        $this->completarTodo();
+        $this->empresa->update(['electronic_invoicing_enabled' => true]);
+
+        $emision = collect($this->revision()->revisar($this->empresa->fresh()))
+            ->firstWhere('clave', 'emision');
+
+        $this->assertFalse($emision['ok']);
+        $this->assertStringContainsString('grupo de afinidad', $emision['detalle']);
+    }
+
+    public function test_el_diagnostico_cuenta_los_contratos_electronicos(): void
+    {
+        $this->completarTodo();
+        $this->empresa->update(['electronic_invoicing_enabled' => true]);
+
+        $grupo = \App\Models\AffinityGroup::withoutGlobalScopes()->create([
+            'company_id' => $this->empresa->id,
+            'code' => 'ELEC',
+            'name' => 'Electrónicos',
+            'requires_electronic_invoicing' => true,
+        ]);
+
+        \App\Models\Contract::factory()->create([
+            'branch_id' => $this->sucursal->id,
+            'affinity_group_id' => $grupo->id,
+            'user_id' => $this->usuario->id,
+            'client_id' => \App\Models\Client::factory()->create([
+                'branch_id' => $this->sucursal->id,
+                'number_phone' => '3001112233',
+                'aditional_phone' => '3001112234',
+                'user_id' => $this->usuario->id,
+            ])->id,
+            'plan_id' => \App\Models\Plan::factory()->create([
+                'branch_id' => $this->sucursal->id,
+                'user_id' => $this->usuario->id,
+            ])->id,
+        ]);
+
+        $emision = collect($this->revision()->revisar($this->empresa->fresh()))
+            ->firstWhere('clave', 'emision');
+
+        $this->assertTrue($emision['ok']);
+        $this->assertStringContainsString('Encendida', $emision['detalle']);
     }
 
     // ==================== Declarar la aprobación ====================
