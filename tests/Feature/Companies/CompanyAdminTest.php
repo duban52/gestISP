@@ -73,6 +73,55 @@ class CompanyAdminTest extends TestCase
         ], $extra);
     }
 
+    // ==================== Registro TIC ====================
+
+    /**
+     * El registro ante el MinTIC.
+     *
+     * No es obligatorio —hay empresas del sistema que no son el
+     * operador— pero un ISP tiene que poder enseñarlo, y además sale
+     * impreso en la cabecera del contrato de servicios del cliente. Si
+     * el formulario no lo pide, el contrato sale sin él y nadie se
+     * entera hasta que alguien lo reclama.
+     */
+    public function test_el_registro_tic_se_guarda_al_crear(): void
+    {
+        $this->post(route('companies.store'), $this->datos([
+            'tic_registry' => '96004914',
+            'website' => 'https://fibraandina.co',
+        ]))->assertRedirect();
+
+        $empresa = Company::where('document_number', '901234567')->firstOrFail();
+
+        $this->assertSame('96004914', $empresa->tic_registry);
+        $this->assertSame('https://fibraandina.co', $empresa->website);
+    }
+
+    public function test_el_registro_tic_no_es_obligatorio(): void
+    {
+        $this->post(route('companies.store'), $this->datos())
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull(Company::where('document_number', '901234567')->firstOrFail()->tic_registry);
+    }
+
+    public function test_el_registro_tic_se_puede_cambiar_y_se_ve_en_la_ficha(): void
+    {
+        $empresa = Company::factory()->create(['tic_registry' => null]);
+
+        $this->put(route('companies.update', $empresa), $this->datos([
+            'document_number' => $empresa->document_number,
+            'tic_registry' => '96004914',
+        ]))->assertRedirect();
+
+        $this->assertSame('96004914', $empresa->fresh()->tic_registry);
+
+        $this->get(route('companies.show', $empresa))
+            ->assertOk()
+            ->assertSee('Registro TIC')
+            ->assertSee('96004914');
+    }
+
     // ==================== Alta ====================
 
     public function test_se_puede_crear_una_empresa(): void

@@ -41,6 +41,24 @@
                             <tr><th>Dirección</th><td>{{ $empresa->address ?: '—' }}</td></tr>
                             <tr><th>Correo</th><td>{{ $empresa->email ?: '—' }}</td></tr>
                             <tr><th>Teléfono</th><td>{{ $empresa->phone ?: '—' }}</td></tr>
+                            {{-- El registro ante el MinTIC. Un ISP lo tiene que
+                                 poder enseñar, y sale impreso en el contrato de
+                                 servicios del cliente: si está vacío, el
+                                 contrato sale sin él y nadie se entera hasta
+                                 que alguien lo reclama. --}}
+                            <tr><th>Registro TIC</th><td>{{ $empresa->tic_registry ?: '—' }}</td></tr>
+                            <tr>
+                                <th>Página web</th>
+                                <td>
+                                    @if($empresa->website)
+                                        <a href="{{ $empresa->website }}" target="_blank" rel="noopener">
+                                            {{ $empresa->website }}
+                                        </a>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                            </tr>
                             <tr>
                                 <th>Modalidad</th>
                                 <td>
