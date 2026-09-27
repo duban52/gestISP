@@ -643,6 +643,41 @@
                     this.guardar();
                 },
 
+                /**
+                 * EL SALDO LO MANDA EL SERVIDOR, NO EL CARRITO.
+                 *
+                 * El carrito vive en sessionStorage y `agregar()`
+                 * respeta lo que ya estuviera guardado —para no borrar
+                 * lo que el cajero escribió—. Eso también congelaba el
+                 * SALDO: una factura metida al carrito antes de que le
+                 * emitieran una nota crédito seguía ofreciéndose por
+                 * el valor viejo, y el cajero veía en el modal un
+                 * número distinto del de la tabla que tenía detrás.
+                 *
+                 * Pasó de verdad. Lo que el cajero escribe es suyo; lo
+                 * que la factura DEBE es del servidor, y se refresca
+                 * en cada carga con lo que trae la tabla.
+                 */
+                refrescarSaldo(id, saldo) {
+                    const item = this.items[id];
+
+                    if (!item || !Number.isFinite(saldo) || item.saldo === saldo) {
+                        return;
+                    }
+
+                    item.saldo = saldo;
+
+                    // Y lo que fuera a cobrarse no puede pasar del
+                    // saldo nuevo: el servidor lo rechazaría, pero el
+                    // cajero se enteraría al confirmar, con el cliente
+                    // delante.
+                    if (Number(item.monto) > saldo) {
+                        item.monto = saldo;
+                    }
+
+                    this.guardar();
+                },
+
                 vaciar() {
                     this.items = {};
                     this.guardar();
@@ -695,12 +730,22 @@
                 };
             }
 
-            /** Marca en la tabla las filas que ya están en el carrito. */
+            /**
+             * Marca en la tabla las filas que ya están en el carrito y,
+             * de paso, les refresca el saldo con el que acaba de
+             * pintar el servidor.
+             */
             function sincronizarTabla() {
                 $('.pick-invoice').each(function () {
-                    const seleccionada = Carrito.tiene(String($(this).data('id')));
+                    const id = String($(this).data('id'));
+                    const seleccionada = Carrito.tiene(id);
+
                     $(this).prop('checked', seleccionada);
                     $(this).closest('tr').toggleClass('picked', seleccionada);
+
+                    if (seleccionada) {
+                        Carrito.refrescarSaldo(id, Number($(this).data('saldo')));
+                    }
                 });
             }
 
