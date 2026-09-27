@@ -389,15 +389,37 @@ class InvoiceController extends Controller
             // poder invocarse desde los dos sitios.
             $pdf = app(InvoicePdf::class);
 
-            return response()->streamDownload(
-                fn () => print $pdf->bytes($invoice),
-                $pdf->nombre($invoice),
-                ['Content-Type' => 'application/pdf'],
-            );
-        } catch (\Exception $e) {
-            \Log::error("Error generando PDF para factura {$id}: " . $e->getMessage());
+            // EL PDF SE ARMA AQUI, FUERA DEL CIERRE DE LA DESCARGA.
+            //
+            // Iba dentro: `fn () => print $pdf->bytes($invoice)`. Ese
+            // cierre NO lo ejecuta esta accion — lo ejecuta el framework
+            // DESPUES de mandar las cabeceras—, asi que el `try` de
+            // aqui no lo cubria y el `catch` no se disparaba nunca.
+            //
+            // Si al renderizar fallaba cualquier cosa, el navegador ya
+            // tenia una cabecera que prometia un PDF y recibia otra
+            // cosa: ERR_INVALID_RESPONSE, sin pagina de error, sin
+            // aviso y sin la linea de log de abajo. Paso en produccion.
+            $bytes = $pdf->bytes($invoice);
+            $nombre = $pdf->nombre($invoice);
+        } catch (\Throwable $e) {
+            // `Throwable` y no `Exception`: un TypeError o un error de
+            // memoria tambien dejan al usuario sin PDF, y son
+            // exactamente los que no heredan de Exception.
+            \Log::error("Error generando PDF para factura {$id}: " . $e->getMessage(), [
+                'factura' => $id,
+                'excepcion' => $e::class,
+                'donde' => $e->getFile() . ':' . $e->getLine(),
+            ]);
+
             return redirect()->back()->with('error', 'Error al generar el PDF de la factura.');
         }
+
+        return response()->streamDownload(
+            fn () => print $bytes,
+            $nombre,
+            ['Content-Type' => 'application/pdf'],
+        );
     }
 
     /**

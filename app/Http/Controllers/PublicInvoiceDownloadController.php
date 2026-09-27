@@ -40,8 +40,15 @@ class PublicInvoiceDownloadController extends Controller
     {
         $factura = $this->factura($invoice);
 
+        // Se arma ANTES de devolver la respuesta. Dentro del cierre, un
+        // fallo al renderizar ocurre con las cabeceras ya enviadas: el
+        // cliente —que llega aqui desde el enlace de su WhatsApp— ve un
+        // ERR_INVALID_RESPONSE del navegador en lugar de una pagina de
+        // error, y en el log no queda nada que lo explique.
+        $bytes = $pdf->bytes($factura);
+
         return response()->streamDownload(
-            fn () => print $pdf->bytes($factura),
+            fn () => print $bytes,
             $pdf->nombre($factura),
             ['Content-Type' => 'application/pdf'],
         );
@@ -61,8 +68,11 @@ class PublicInvoiceDownloadController extends Controller
 
         abort_unless($paquete->disponiblePara($factura), 404);
 
+        // Fuera del cierre, por lo mismo que en pdf().
+        $bytes = $paquete->bytes($factura);
+
         return response()->streamDownload(
-            fn () => print $paquete->bytes($factura),
+            fn () => print $bytes,
             $paquete->nombre($factura),
             ['Content-Type' => 'application/zip'],
         );
