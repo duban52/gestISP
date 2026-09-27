@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Billing\Enums\BillingCycle;
 use App\Billing\Enums\BillingMode;
 use App\Billing\Enums\ProrationMode;
 use App\Models\Branch;
@@ -65,6 +66,7 @@ class BranchController extends Controller
             // facturacion son los valores por defecto.
             'facturacion' => BranchBillingSetting::DEFAULTS,
             'prorationModes' => ProrationMode::cases(),
+            'billingCycles' => BillingCycle::cases(),
             'billingModes' => BillingMode::cases(),
         ]);
     }
@@ -90,6 +92,7 @@ class BranchController extends Controller
         // por defecto, igual que antes.
         $facturacion = $request->validate([
             'proration_mode' => ['sometimes', Rule::enum(ProrationMode::class)],
+            'billing_cycle' => ['sometimes', Rule::enum(BillingCycle::class)],
             'billing_mode' => ['sometimes', Rule::enum(BillingMode::class)],
             'billing_day' => [
                 Rule::requiredIf(fn () => $request->input('billing_mode') === BillingMode::Automatico->value),
@@ -157,9 +160,10 @@ class BranchController extends Controller
         // históricos si la sucursal aún no tiene)
         $billingSettings = BranchBillingSetting::forBranch($branch->id);
         $prorationModes = ProrationMode::cases();
+        $billingCycles = BillingCycle::cases();
         $billingModes = BillingMode::cases();
 
-        return view('gestisp.branches.edit', compact('branch', 'billingSettings', 'prorationModes', 'billingModes', 'empresas'));
+        return view('gestisp.branches.edit', compact('branch', 'billingSettings', 'prorationModes', 'billingCycles', 'billingModes', 'empresas'));
     }
 
     /**
@@ -180,6 +184,7 @@ class BranchController extends Controller
             // `sometimes`: por esta ruta pasan tambien payloads que no
             // mandan la configuracion de facturacion. Exigirlo rompia
             // esa otra pantalla sin tener nada que ver con ella; si no
+            'billing_cycle' => ['sometimes', Rule::enum(BillingCycle::class)],
             // viene, el modo se queda como estaba.
             'billing_mode' => ['sometimes', Rule::enum(BillingMode::class)],
             // El día solo se exige —y solo se guarda— en automático:

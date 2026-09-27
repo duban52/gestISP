@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\TechnicalOrder;
 use App\Notifications\Concerns\ArmaCorreo;
+use App\Notifications\Concerns\HablaPorLaEmpresa;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -18,6 +19,7 @@ class TechnicalOrderFinishedClient extends Notification implements ShouldQueue
 {
     use Queueable;
     use ArmaCorreo;
+    use HablaPorLaEmpresa;
     use RespetaCanales;
 
     public function __construct(private readonly TechnicalOrder $order)
@@ -60,9 +62,12 @@ class TechnicalOrderFinishedClient extends Notification implements ShouldQueue
     public function toWhatsApp(object $notifiable): WhatsAppMessage
     {
         $detalle = $this->order->detail ?: 'atención técnica';
+        $empresa = $this->nombreDeLaEmpresa($this->order->branch);
+        $telefono = $this->telefonoDeLaEmpresa($this->order->branch);
 
         return WhatsAppMessage::make(
-            "Hola {$notifiable->name}, su orden de servicio ({$detalle}) quedó FINALIZADA. ✅ Si algo sigue fallando, escríbanos. ¡Gracias!"
-        )->template('orden_finalizada_cliente', [$notifiable->name, $detalle]);
+            "Hola {$notifiable->name}, {$empresa} le informa que su orden de servicio {$detalle} quedó FINALIZADA. ✅ "
+            . "Si presenta alguna novedad, escríbanos al {$telefono}. ¡Gracias!"
+        )->template('orden_finalizada_cliente', [$notifiable->name, $detalle, $empresa, $telefono]);
     }
 }

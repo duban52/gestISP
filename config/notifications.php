@@ -78,23 +78,13 @@ return [
             'use_templates' => (bool) env('WHATSAPP_META_USE_TEMPLATES', true),
             'template_language' => env('WHATSAPP_META_TEMPLATE_LANG', 'es'),
 
-            // ¿La plantilla `factura_generada` ya tiene un hueco para
-            // el enlace de descarga?
-            //
-            // ARRANCA EN false A PROPÓSITO. La plantilla aprobada en
-            // Meta tiene CUATRO parámetros; mandarle un quinto hace que
-            // Meta rechace el envío. O sea: encender esto antes de
-            // actualizar y aprobar la plantilla deja al cliente sin
-            // aviso de factura.
-            //
-            // El orden correcto es: actualizar la plantilla en Meta,
-            // esperar la aprobación, y entonces poner
-            // WHATSAPP_META_INVOICE_LINK=true.
-            //
-            // Mientras esté apagado el enlace sigue viajando en el
-            // cuerpo del mensaje, que es lo que se usa con el driver
-            // `log` y cuando `use_templates` está en false.
-            'invoice_link_in_template' => (bool) env('WHATSAPP_META_INVOICE_LINK', false),
+            // (Aquí vivía WHATSAPP_META_INVOICE_LINK, el interruptor
+            // que decidía si la plantilla ya tenía hueco para el
+            // enlace. Se quitó el 2026-09-26: la plantilla aprobada lo
+            // tiene fijo en {{5}}, con la empresa y el servicio
+            // DETRÁS. Omitirlo ya no es «mandar uno menos», es correr
+            // los dos siguientes de hueco y que el cliente lea el
+            // nombre de la empresa donde va el enlace.)
 
             // ¿La plantilla `factura_generada` tiene CABECERA DE
             // DOCUMENTO aprobada en Meta?

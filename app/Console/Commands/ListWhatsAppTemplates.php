@@ -214,9 +214,6 @@ class ListWhatsAppTemplates extends Command
         $this->newLine();
         $this->line('gestISP envía el idioma: <info>' . ($config['template_language'] ?? 'es') . '</info>'
             . ' (WHATSAPP_META_TEMPLATE_LANG).');
-        $this->line('El enlace de la factura ocupa una variable más y está '
-            . (($config['invoice_link_in_template'] ?? false) ? '<info>encendido</info>' : '<comment>apagado</comment>')
-            . ' (WHATSAPP_META_INVOICE_LINK).');
         $this->line('El PDF adjunto exige cabecera DOCUMENT y está '
             . (($config['invoice_document_in_template'] ?? false) ? '<info>encendido</info>' : '<comment>apagado</comment>')
             . ' (WHATSAPP_META_INVOICE_DOC).');

@@ -9,35 +9,35 @@ use Tests\Feature\Billing\BillingTestCase;
 use Tests\Feature\Billing\ConstruyeFacturasElectronicas;
 
 /**
- * Cuántos parámetros lleva la plantilla `factura_generada`.
+ * Los parámetros de la plantilla `factura_generada`.
  *
  * POR QUÉ ES UNA PRUEBA Y NO UN DETALLE
  * -------------------------------------
  * Meta exige que el número de parámetros coincida EXACTAMENTE con el de
  * la plantilla aprobada. Ni uno más ni uno menos: si no coincide,
  * rechaza el envío entero y el cliente no recibe nada. No hay aviso en
- * pantalla — solo una línea en el log.
+ * pantalla — solo una línea en el log. Ya costó una mañana entera.
  *
  * Y la plantilla la comparten DOS notificaciones: el aviso de que la
  * factura se generó y la entrega de la electrónica ya validada. Las dos
- * tienen que mandar lo mismo, o al encender el interruptor una seguiría
- * funcionando y la otra no. Un fallo a medias es peor que uno entero,
- * porque nadie lo nota.
+ * tienen que mandar lo mismo, o una seguiría funcionando y la otra no.
+ * Un fallo a medias es peor que uno entero, porque nadie lo nota.
  *
- * EL INTERRUPTOR
- * --------------
- * `WHATSAPP_META_INVOICE_LINK` arranca apagado a propósito. El orden es:
- * actualizar la plantilla en Meta → esperar la aprobación → encenderlo.
- * Encenderlo antes deja a los clientes sin aviso de factura.
+ * LA PLANTILLA, TAL COMO ESTÁ APROBADA
+ * ------------------------------------
+ *   Hola {{1}}, {{6}} le informa que se generó su factura {{2}} del
+ *   servicio de {{7}}, por {{3}}. Vence el {{4}}. […] Descarguela en el
+ *   siguiente enlace: {{5}} ¡Gracias!
+ *
+ * El orden importa más que el número: la empresa y el servicio van
+ * DETRÁS del enlace, así que saltarse el enlace no manda «uno menos»,
+ * manda el nombre de la empresa en el hueco de la URL.
  */
 class WhatsAppTemplateParamsTest extends BillingTestCase
 {
     use ConstruyeFacturasElectronicas;
 
-    private function conElInterruptor(bool $encendido): void
-    {
-        config(['notifications.whatsapp.meta.invoice_link_in_template' => $encendido]);
-    }
+    private const HUECOS = 7;
 
     /** Una electrónica ya aceptada por la DIAN, lista para entregar. */
     private function facturaEntregable()
@@ -56,94 +56,81 @@ class WhatsAppTemplateParamsTest extends BillingTestCase
         return $factura->fresh();
     }
 
-    public function test_apagado_las_dos_notificaciones_mandan_cuatro(): void
+    public function test_las_dos_notificaciones_mandan_los_mismos_huecos(): void
     {
-        $this->conElInterruptor(false);
-
         $interna = $this->emitir($this->createBillableContract());
         $electronica = $this->facturaEntregable();
 
         $this->assertCount(
-            4,
+            self::HUECOS,
             (new InvoiceGenerated($interna))->toWhatsApp($interna->contract->client)->templateParams,
         );
 
         $this->assertCount(
-            4,
+            self::HUECOS,
             (new ElectronicInvoiceDelivered($electronica))->toWhatsApp($electronica->contract->client)->templateParams,
         );
     }
 
-    public function test_encendido_las_dos_mandan_cinco(): void
+    public function test_van_los_siete_aunque_no_haya_enlace(): void
     {
-        // EL CASO QUE ROMPÍA. `ElectronicInvoiceDelivered` no miraba el
-        // interruptor: seguía mandando cuatro, así que al actualizar la
-        // plantilla Meta habría rechazado justo la entrega de la factura
-        // validada, que es la que tiene valor fiscal.
-        $this->conElInterruptor(true);
-
-        $interna = $this->emitir($this->createBillableContract());
-        $electronica = $this->facturaEntregable();
-
-        $this->assertCount(
-            5,
-            (new InvoiceGenerated($interna))->toWhatsApp($interna->contract->client)->templateParams,
-        );
-
-        $this->assertCount(
-            5,
-            (new ElectronicInvoiceDelivered($electronica))->toWhatsApp($electronica->contract->client)->templateParams,
-        );
-    }
-
-    public function test_van_cinco_aunque_no_haya_enlace(): void
-    {
-        // Con el interruptor encendido van SIEMPRE cinco, haya enlace o
-        // no: mandar cuatro a una plantilla de cinco lo rechaza Meta
-        // igual que mandar seis.
-        $this->conElInterruptor(true);
-
+        // Mandar seis a una plantilla de siete lo rechaza Meta igual
+        // que mandar ocho.
         $electronica = $this->facturaElectronica();
 
         $mensaje = (new InvoiceGenerated($electronica))->toWhatsApp($electronica->contract->client);
 
-        $this->assertCount(5, $mensaje->templateParams);
+        $this->assertCount(self::HUECOS, $mensaje->templateParams);
     }
 
     public function test_ningun_parametro_va_vacio(): void
     {
         // Meta rechaza los parámetros vacíos y el cliente se quedaría
-        // sin aviso. El quinto es la URL pelada —la plantilla aprobada
-        // ya dice «Descárgala aquí: {{5}}»— y, si no se pudo armar, la
-        // dirección del sitio.
-        $this->conElInterruptor(true);
-
+        // sin aviso.
         $electronica = $this->facturaElectronica();
         $parametros = (new InvoiceGenerated($electronica))->toWhatsApp($electronica->contract->client)->templateParams;
 
         foreach ($parametros as $i => $parametro) {
-            $this->assertNotSame('', trim((string) $parametro), "El parámetro {{" . ($i + 1) . "}} va vacío.");
+            $this->assertNotSame('', trim((string) $parametro), 'El parámetro {{' . ($i + 1) . '}} va vacío.');
         }
-
-        // Y el quinto es un enlace, no una frase: si no, el cliente
-        // leería «Descárgala aquí: Descárguela aquí: https://…».
-        $this->assertStringStartsWith('http', $parametros[4]);
     }
 
-    public function test_el_cuerpo_libre_no_depende_del_interruptor(): void
+    /**
+     * EL ORDEN, hueco por hueco.
+     *
+     * Contar siete no basta: con el enlace y la empresa cambiados de
+     * sitio, el cliente leería «Descarguela en el siguiente enlace:
+     * Grupo Nexar SAS» y el mensaje seguiría teniendo siete parámetros.
+     */
+    public function test_cada_hueco_lleva_lo_suyo(): void
     {
-        // El interruptor es SOLO para la plantilla de Meta. El cuerpo en
-        // texto lo usan el driver simulado y la ventana de 24 h abierta,
-        // y ahí el enlace tiene que seguir viajando igual.
+        $interna = $this->emitir($this->createBillableContract());
+        $cliente = $interna->contract->client;
+
+        $parametros = (new InvoiceGenerated($interna))->toWhatsApp($cliente)->templateParams;
+
+        $this->assertSame($cliente->name, $parametros[0]);
+        $this->assertSame($interna->displayNumber(), $parametros[1]);
+        $this->assertStringStartsWith('$', $parametros[2]);
+        // {{5}} es la URL pelada: la plantilla ya pone la invitación.
+        $this->assertStringStartsWith('http', $parametros[4]);
+        $this->assertSame(
+            $interna->branch->company?->nombreVisible() ?: $interna->branch->name,
+            $parametros[5],
+        );
+        $this->assertSame($interna->contract->plan->name, $parametros[6]);
+    }
+
+    public function test_el_cuerpo_libre_sigue_llevando_el_enlace(): void
+    {
+        // El cuerpo en texto lo usan el driver simulado y la ventana de
+        // 24 h abierta: ahí no hay plantilla y el enlace tiene que ir
+        // escrito dentro del mensaje.
         $interna = $this->emitir($this->createBillableContract());
 
-        $this->conElInterruptor(false);
-        $apagado = (new InvoiceGenerated($interna))->toWhatsApp($interna->contract->client)->body;
-
-        $this->conElInterruptor(true);
-        $encendido = (new InvoiceGenerated($interna))->toWhatsApp($interna->contract->client)->body;
-
-        $this->assertStringContainsString('Descárguela aquí', $apagado);
-        $this->assertStringContainsString('Descárguela aquí', $encendido);
+        $this->assertStringContainsString(
+            'Descárguela aquí',
+            (new InvoiceGenerated($interna))->toWhatsApp($interna->contract->client)->body,
+        );
     }
 }

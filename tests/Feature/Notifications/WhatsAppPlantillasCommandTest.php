@@ -22,7 +22,6 @@ class WhatsAppPlantillasCommandTest extends TestCase
             'notifications.whatsapp.meta.business_account_id' => '999',
             'notifications.whatsapp.meta.api_version' => 'v21.0',
             'notifications.whatsapp.meta.template_language' => 'es',
-            'notifications.whatsapp.meta.invoice_link_in_template' => true,
             'notifications.whatsapp.meta.phone_number_id' => null,
         ], $extra));
     }

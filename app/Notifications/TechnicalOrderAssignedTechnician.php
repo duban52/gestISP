@@ -71,9 +71,16 @@ class TechnicalOrderAssignedTechnician extends Notification implements ShouldQue
         $detalle = $this->order->detail ?: 'atención técnica';
         $direccion = $this->order->contract?->address ?: 'consultar en el sistema';
 
+        // De quién es la orden. El técnico sale a la calle con esto:
+        // sin el nombre del cliente tiene que abrir el sistema para
+        // saber por quién preguntar en la puerta.
+        $cliente = $this->order->contract?->client;
+        $nombreCliente = trim(($cliente?->name ?? '') . ' ' . ($cliente?->last_name ?? '')) ?: 'sin contrato asociado';
+
         return WhatsAppMessage::make(
-            "Hola {$notifiable->name}, se le asignó una orden: {$detalle}. Dirección: {$direccion}. Revísela en GestISP. 🔧"
-        )->template('orden_asignada_tecnico', [$notifiable->name, $detalle, $direccion]);
+            "Hola {$notifiable->name}, se le asignó una orden: {$detalle} para el cliente: {$nombreCliente}, "
+            . "en la dirección: {$direccion}. Revísela en GestISP en la sección «Mis órdenes». 🔧"
+        )->template('orden_asignada_tecnico', [$notifiable->name, $detalle, $direccion, $nombreCliente]);
     }
 
     /**

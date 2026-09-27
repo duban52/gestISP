@@ -109,7 +109,6 @@ class RunDailyBilling extends Command
     private function facturarLasQueToca($sucursales, $hoy, bool $simulacion): void
     {
         $forzar = (bool) $this->option('forzar');
-        $periodo = $hoy->format('Ym');
         $corridas = 0;
 
         foreach ($sucursales as $sucursal) {
@@ -123,8 +122,12 @@ class RunDailyBilling extends Command
                 continue;
             }
 
-            // Ya se facturó este mes en esta sucursal: ni a mano ni
-            // sola se factura dos veces.
+            // Ya se facturó este PERÍODO en esta sucursal: ni a mano
+            // ni sola se factura dos veces. El período es el que la
+            // sucursal cobra hoy —que con ciclo anticipado no es el
+            // mes en curso—, el mismo con el que la corrida se rotula.
+            $periodo = $config->mesFacturado($hoy)->format('Ym');
+
             $yaCorrio = BillingRun::withoutGlobalScopes()
                 ->where('branch_id', $sucursal->id)
                 ->where('billed_year_month', $periodo)

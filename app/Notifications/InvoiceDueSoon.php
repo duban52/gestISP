@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Invoice;
 use App\Notifications\Concerns\ArmaCorreo;
+use App\Notifications\Concerns\HablaPorLaEmpresa;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -18,6 +19,7 @@ class InvoiceDueSoon extends Notification implements ShouldQueue
 {
     use Queueable;
     use ArmaCorreo;
+    use HablaPorLaEmpresa;
     use RespetaCanales;
 
     public function __construct(
@@ -79,6 +81,7 @@ class InvoiceDueSoon extends Notification implements ShouldQueue
             $this->invoice->displayNumber(),
             (string) $this->diasRestantes,
             $total,
+            $this->nombreDeLaEmpresa($this->invoice->branch),
         ]);
     }
 }

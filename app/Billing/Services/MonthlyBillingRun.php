@@ -4,6 +4,7 @@ namespace App\Billing\Services;
 
 use App\Billing\Enums\ContractStatus;
 use App\Models\BillingRun;
+use App\Models\BranchBillingSetting;
 use App\Models\Contract;
 use Illuminate\Support\Facades\Log;
 
@@ -42,6 +43,13 @@ class MonthlyBillingRun
     {
         $today = now();
 
+        // El período que va a cobrar esta corrida. No es el mes en que
+        // se corre si la sucursal cobra por adelantado o vencido, y la
+        // corrida tiene que quedar rotulada con lo que realmente
+        // facturó: es la clave con la que el informe la busca y con la
+        // que se comprueba que no se facture dos veces lo mismo.
+        $periodo = BranchBillingSetting::forBranch($branchId)->mesFacturado($today)->format('Ym');
+
         $this->overdueProcessor->markOverdueInvoices();
         $this->overdueProcessor->refreshContractSuspensions($branchId);
 
@@ -67,7 +75,7 @@ class MonthlyBillingRun
             ? BillingRun::create([
                 'branch_id' => $branchId,
                 'user_id' => $userId,
-                'billed_year_month' => $today->format('Ym'),
+                'billed_year_month' => $periodo,
                 'contracts_count' => $contracts->count(),
                 'generated_count' => 0,
                 'skipped_count' => 0,

@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Invoice;
 use App\Notifications\Concerns\ArmaCorreo;
+use App\Notifications\Concerns\HablaPorLaEmpresa;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -18,6 +19,7 @@ class InvoiceOverdue extends Notification implements ShouldQueue
 {
     use Queueable;
     use ArmaCorreo;
+    use HablaPorLaEmpresa;
     use RespetaCanales;
 
     public function __construct(private readonly Invoice $invoice)
@@ -66,13 +68,16 @@ class InvoiceOverdue extends Notification implements ShouldQueue
     public function toWhatsApp(object $notifiable): WhatsAppMessage
     {
         $total = '$' . number_format((float) $this->invoice->pending_invoice_amount, 0, ',', '.');
+        $empresa = $this->nombreDeLaEmpresa($this->invoice->branch);
 
         return WhatsAppMessage::make(
-            "Hola {$notifiable->name}, su factura {$this->invoice->displayNumber()} está VENCIDA. Saldo: {$total}. Póngase al día para no interrumpir su servicio. Estamos para ayudarle."
+            "Hola {$notifiable->name}, {$empresa} le informa que su factura {$this->invoice->displayNumber()} está VENCIDA. "
+            . "Saldo: {$total}. Póngase al día para no interrumpir su servicio."
         )->template('factura_vencida', [
             $notifiable->name,
             $this->invoice->displayNumber(),
             $total,
+            $empresa,
         ]);
     }
 }

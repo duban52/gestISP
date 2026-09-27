@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Contract;
 use App\Notifications\Concerns\ArmaCorreo;
+use App\Notifications\Concerns\HablaPorLaEmpresa;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -22,6 +23,7 @@ class ClientWelcome extends Notification implements ShouldQueue
 {
     use Queueable;
     use ArmaCorreo;
+    use HablaPorLaEmpresa;
     use RespetaCanales;
 
     public function __construct(private readonly Contract $contract)
@@ -65,11 +67,14 @@ class ClientWelcome extends Notification implements ShouldQueue
 
     public function toWhatsApp(object $notifiable): WhatsAppMessage
     {
-        $sucursal = $this->contract->branch?->name ?? config('app.name');
-        $plan = $this->contract->plan?->name ?? 'servicio de Internet';
+        // La EMPRESA, no la sucursal: es el nombre con el que el
+        // cliente conoce al operador, y el mismo que usan los demás
+        // avisos. Con dos nombres distintos parecerían dos negocios.
+        $empresa = $this->nombreDeLaEmpresa($this->contract->branch);
+        $plan = $this->contract->plan?->name ?: 'servicio de Internet';
 
         return WhatsAppMessage::make(
-            "¡Hola {$notifiable->name}! 🎉 Bienvenido a {$sucursal}. Su contrato del plan {$plan} ya quedó activo. ¡Gracias por confiar en nosotros!"
-        )->template('bienvenida_cliente', [$notifiable->name, $sucursal, $plan]);
+            "¡Hola {$notifiable->name}! 🎉 Bienvenido a {$empresa}. Su contrato del plan {$plan} ya quedó registrado. ¡Gracias por confiar en nosotros!"
+        )->template('bienvenida_cliente', [$notifiable->name, $empresa, $plan]);
     }
 }

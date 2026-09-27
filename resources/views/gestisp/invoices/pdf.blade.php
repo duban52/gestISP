@@ -158,8 +158,57 @@
      * cambian. Lo comprueban las pruebas de InvoicePdfLayoutTest con un
      * logo cuadrado y otro vertical.
      */
-    $cajaLogo = \App\Support\PdfBranding::logoBox($logo ?? null, 100, 46);
-    $cajaLogoTalon = \App\Support\PdfBranding::logoBox($logo ?? null, 80, 28);
+    // EL MISMO LOGO ARRIBA Y EN EL TALÓN. Iban en cajas distintas
+    // —100x46 y 80x28— y se notaba: la misma factura parecía llevar
+    // dos logos de dos tamaños. Una sola caja para los dos.
+    //
+    // Y SE UNIFICA HACIA ABAJO, A LA DEL TALÓN. Es lo que dice la nota
+    // de arriba: en la cabecera el logo no manda la altura de su fila
+    // —la manda el recuadro de fechas, que es más alto—, así que
+    // encogerlo no libera nada; en el talón el logo SÍ es lo más alto
+    // de la fila, y está medido que a 45 px la factura se parte en dos
+    // hojas. Subir los dos a 46 costaría la segunda hoja, que es donde
+    // se pierden el QR y el código de barras.
+    //
+    // 56 px de alto, MEDIDO DE NUEVO Y NO HEREDADO.
+    //
+    // La nota de arriba decía 44 como techo del talón, pero era del
+    // reparto viejo: esa fila llevaba un `padding-right: 80px` en la
+    // celda del logo y el recuadro de la derecha se encogía a su
+    // contenido. Al repartir la fila por anchuras explícitas quedó
+    // aire, y el techo subió. Vuelto a barrer sobre el peor caso —tres
+    // renglones, con QR, que ya ocupa 390 pt de los 396 de la media
+    // carta— con logo cuadrado, vertical, apaisado y enorme:
+    //
+    //   · 56 px → cabe.
+    //   · 72 px → se parte en dos hojas (cuadrado y enorme).
+    //
+    // 56 es el doble de lo que había y deja 16 px hasta el primer
+    // valor que falla. Si alguien toca la letra, los márgenes o mete
+    // otro bloque al pie, este número hay que volver a medirlo: lo
+    // vigila InvoicePdfLayoutTest con esos cuatro logos.
+    //
+    // EL ANCHO SE QUEDA EN 80 y no es indiferente: con un logo
+    // apaisado —1200x300— el que manda es el ancho, y subirlo a 100 le
+    // añade alto suficiente para partir la hoja.
+    $cajaLogo = \App\Support\PdfBranding::logoBox($logo ?? null, 80, 56);
+    $cajaLogoTalon = $cajaLogo;
+
+    // ANCHURAS DE LA CABECERA, EXPLÍCITAS.
+    //
+    // Sin ellas dompdf reparte las columnas por su contenido, y el
+    // recuadro de la factura —que se encoge a lo que ocupa su texto—
+    // acababa a media pulgada del borde, desalineado con las tablas de
+    // abajo, que sí van al 100 %.
+    //
+    // Y son DOS repartos porque la factura electrónica lleva una
+    // columna más, la del QR. Ese era el otro desajuste: el mismo
+    // reparto para los dos casos deja una de las dos versiones torcida.
+    $hayQr = !empty($dian) && !empty($dian['qr']);
+    $anchoLogo = $hayQr ? '13%' : '15%';
+    $anchoDatos = $hayQr ? '25%' : '37%';
+    $anchoQr = '14%';
+    $anchoCaja = '48%';
 @endphp
 <div class="container">
     <div class="info-company">
@@ -169,15 +218,15 @@
                      dompdf tiene que pedirselo al servidor por HTTP, y
                      desde el propio servidor —o desde un worker en
                      cola— eso falla y la factura sale sin logo. --}}
-                <td style="padding-right: 20px;">
+                <td width="{{ $anchoLogo }}" style="padding-right: 10px;">
                     @if($cajaLogo)
                         <img width="{{ $cajaLogo['ancho'] }}" height="{{ $cajaLogo['alto'] }}"
                              src="{{ $cajaLogo['ruta'] }}" alt="Logo"/>
                     @endif
                 </td>
-                {{-- El aire de esta celda se reduce cuando hay QR: es el
-                     hueco de donde sale su sitio. --}}
-                <td style="padding-right: {{ empty($dian) ? '55px' : '10px' }}; padding-left: {{ empty($dian) ? '50px' : '20px' }};">
+                {{-- El aire ya no se ajusta a mano según haya QR o no:
+                     lo reparten las anchuras de arriba. --}}
+                <td width="{{ $anchoDatos }}" style="padding-right: 10px; padding-left: 10px;">
                     <p class="interline">{{ $dian['emisor']['nombre'] ?? $invoice->contract?->branch?->name ?? '' }}</p>
                     <p class="interline">Nit: {{ $invoice->contract?->branch?->nit }}</p>
                     <p class="interline">Tels: {{ $invoice->contract?->branch?->number_phone }}</p>
@@ -189,9 +238,9 @@
                      final, detrás de los costos: no cabía y se llevaba el QR
                      a una segunda página. Aquí ocupa un hueco que ya existía
                      y el pie queda en una línea. --}}
-                @include('gestisp.invoices.partials.dian_qr', ['dian' => $dian ?? null])
-                <td>
-                    <table class="table-border-rounded">
+                @include('gestisp.invoices.partials.dian_qr', ['dian' => $dian ?? null, 'ancho' => $anchoQr])
+                <td width="{{ $anchoCaja }}">
+                    <table class="table-border-rounded" style="width: 100%;">
                         <tbody>
                         <tr>
                             {{-- Electrónica e interna no se llaman igual: una factura
@@ -278,7 +327,11 @@
                      esta cobrando. Las lineas que no vienen de un
                      servicio —cargos sueltos— no lo tienen. --}}
                 <td><p>{{ $item->product_code ?: '—' }}</p></td>
-                <td colspan="3"><p>{{ $item->description }} DEL {{ $invoice->billed_period_short }} DEL MES DE {{ $invoice->billed_month_name }}</p></td>
+                {{-- El período sale del modelo porque hay facturas que
+                     cruzan dos meses: la primera de un contrato
+                     activado después de la corrida arrastra los días
+                     que nadie cobró. --}}
+                <td colspan="3"><p>{{ $item->description }} {{ $invoice->periodoLegible() }}</p></td>
                 <td><p>LUN</p></td>
                 <td><p>{{ $item->quantity }}</p></td>
                 <td><p>{{ $item->unit_price }}</p></td>
@@ -337,8 +390,8 @@
             <tr>
                 <td colspan="4">A la primera cuota vencida se le suspende la señal, la reconexión tiene un costo de $ {{ $invoice->contract?->branch?->reconnection_price }}</td>
                 <td>suscriptor</td>
-                <td colspan="2"><strong>TOTAL A PAGAR</strong></td>
-                <td><strong>{{ number_format($aPagar, 2, '.', '') }}</strong></td>
+                <td colspan="2" style="text-align: right;"><strong>TOTAL A PAGAR</strong></td>
+                <td width="12%" style="text-align: right; padding-right: 4px;"><strong>{{ number_format($aPagar, 2, '.', '') }}</strong></td>
             </tr>
             </tbody>
         </table>
@@ -354,22 +407,27 @@
         <table width="100%">
             <tbody>
                 <tr>
-                   <td style="padding-right: 80px">
+                   <td width="13%" style="padding-right: 10px;">
                        @if($cajaLogoTalon)
                            <img width="{{ $cajaLogoTalon['ancho'] }}" height="{{ $cajaLogoTalon['alto'] }}"
                                 src="{{ $cajaLogoTalon['ruta'] }}" alt="Logo"/>
                        @endif
                    </td>
-                    <td style="padding-right: 50px; margin-bottom: 0;">
+                    <td width="{{ $hayQr ? '49%' : '52%' }}" style="padding-right: 10px;">
                         <img src="{{ $barcodeUrl }}" alt="Código de barras" width="250px">
                         <p style="text-align: center; margin: 0;">{{ $codeString }}</p>
                     </td>
-                    <td>
-                        <p style="text-align: right; padding-right: 15px;" >Señal empaquetada</p>
-                        <table class="table-border-rounded">
-                            <td style="padding-right: 5px; padding-bottom: 10px; padding-left: 5px;">
-                                <p><strong>{{ !empty($dian) ? 'FACTURA ELECTRÓNICA DE VENTA' : 'FACTURA DE VENTA' }} No {{ $invoice->displayNumber() }}</strong></p>
-                            </td>
+                    {{-- Este recuadro cierra por la derecha igual que el de
+                         la cabecera: es la misma factura, y dos bordes
+                         distintos a dos alturas es lo que se ve torcido. --}}
+                    <td width="{{ $hayQr ? '38%' : '35%' }}">
+                        <p style="text-align: right; margin: 0 0 2px 0;">Señal empaquetada</p>
+                        <table class="table-border-rounded" style="width: 100%;">
+                            <tr>
+                                <td class="text-center" style="padding: 4px 5px;">
+                                    <p><strong>{{ !empty($dian) ? 'FACTURA ELECTRÓNICA DE VENTA' : 'FACTURA DE VENTA' }} No {{ $invoice->displayNumber() }}</strong></p>
+                                </td>
+                            </tr>
                         </table>
                     </td>
                 </tr>
@@ -381,7 +439,7 @@
         <table width="100%">
             <tbody>
                 <tr>
-                    <td>
+                    <td width="82%" style="padding-right: 6px;">
                         <table class="border-in" style="font-size: 8px;">
                             <tbody>
                                 <tr>
@@ -399,16 +457,16 @@
                             </tbody>
                         </table>
                     </td>
-                    <td>
-                        <table class="table-border-rounded">
+                    <td width="18%">
+                        <table class="table-border-rounded" style="width: 100%;">
                             <tbody>
                                 <tr>
-                                    <td style="padding-left: 5px; padding-right: 3px;">
+                                    <td class="text-center" style="padding: 0 3px;">
                                         <p><strong>TOTAL A PAGAR</strong></p>
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td style="padding-left: 5px; padding-right: 3px;">
+                                    <td class="text-center" style="padding: 0 3px;">
                                         <p><strong>{{ number_format($aPagar, 2, '.', '') }}</strong></p>
                                     </td>
                                 </tr>

@@ -6,6 +6,7 @@ use App\Billing\Delivery\InvoiceDownloadLink;
 use App\Billing\Delivery\InvoicePackage;
 use App\Models\Invoice;
 use App\Notifications\Concerns\ArmaCorreo;
+use App\Notifications\Concerns\HablaPorLaEmpresa;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -45,6 +46,7 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
     use Queueable;
     use RespetaCanales;
     use ArmaCorreo;
+    use HablaPorLaEmpresa;
 
     public function __construct(private readonly Invoice $invoice)
     {
@@ -107,23 +109,35 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
         // El cuarto hueco de la plantilla es el VENCIMIENTO. Aqui iba
         // «validada por la DIAN», que en el mensaje real habria salido
         // como «Vence el validada por la DIAN».
+        // COMPARTIR PLANTILLA OBLIGA A COMPARTIR EL NÚMERO DE HUECOS.
+        // Si esta lista se queda corta, Meta rechaza ESTE envío —el de
+        // la factura ya validada, justo el que más importa— mientras el
+        // aviso de generación sigue funcionando. Un fallo a medias es
+        // peor que uno entero: nadie lo nota. Hay una prueba que obliga
+        // a las dos a mandar lo mismo.
+        // LOS SIETE HUECOS DE `factura_generada`, EN ORDEN
+        // -------------------------------------------------
+        //   {{1}} cliente · {{2}} número · {{3}} valor · {{4}} vence
+        //   {{5}} enlace  · {{6}} empresa · {{7}} servicio
+        //
+        // El orden es el de la plantilla aprobada en Meta y no se puede
+        // tocar aquí solo: Meta exige que el número de parámetros
+        // coincida EXACTAMENTE, y si no, rechaza el envío entero y el
+        // cliente se queda sin aviso. Solo una línea en el log lo
+        // cuenta. Antes esto costó una mañana.
+        //
+        // El enlace va SIEMPRE, y por eso ya no hay interruptor: el
+        // hueco {{5}} existe en la plantilla, así que omitirlo
+        // desplazaría la empresa y el servicio a los huecos de al lado.
         $parametros = [
             $notifiable->name,
             $this->invoice->displayNumber(),
             $total,
             optional($this->invoice->due_date)->format('d/m/Y') ?? 'la fecha indicada',
+            $this->enlaceParaLaPlantilla($enlace),
+            $this->nombreDeLaEmpresa($this->invoice->branch),
+            $this->invoice->contract?->plan?->name ?: 'servicio de Internet',
         ];
-
-        // COMPARTIR PLANTILLA OBLIGA A COMPARTIR EL NÚMERO DE HUECOS.
-        //
-        // Esto mandaba cuatro parámetros siempre. En cuanto la plantilla
-        // pase a tener cinco, Meta rechazaría ESTE envío —el de la
-        // factura ya validada, justo el que más importa— mientras el
-        // aviso de generación seguiría funcionando. Un fallo a medias es
-        // peor que uno entero: nadie lo nota.
-        if (config('notifications.whatsapp.meta.invoice_link_in_template', false)) {
-            $parametros[] = $this->enlaceParaLaPlantilla($enlace);
-        }
 
         $mensaje = WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
 
@@ -161,28 +175,7 @@ class ElectronicInvoiceDelivered extends Notification implements ShouldQueue
      */
     private function emisor(): string
     {
-        $sucursal = $this->invoice->branch;
-
-        return $sucursal?->company?->nombreVisible()
-            ?: ($sucursal?->name ?: config('app.name'));
-    }
-
-    /**
-     * El quinto hueco de la plantilla: LA URL PELADA.
-     *
-     * La plantilla aprobada ya dice «Descárgala aquí: {{5}} ¡Gracias!»,
-     * así que el parámetro es solo el enlace; mandar la frase entera
-     * haría que el cliente leyera «Descárgala aquí: Descárguela aquí:
-     * https://…».
-     *
-     * NUNCA VACÍO: Meta rechaza los parámetros en blanco y el cliente
-     * se quedaría sin aviso. Si el enlace no se pudo armar —`APP_URL`
-     * mal puesta, por ejemplo— va la dirección del sitio, que al menos
-     * lleva a alguna parte.
-     */
-    private function enlaceParaLaPlantilla(?string $enlace): string
-    {
-        return $enlace ?: rtrim((string) config('app.url'), '/');
+        return $this->nombreDeLaEmpresa($this->invoice->branch);
     }
 
     /** El enlace firmado al paquete. Sin él, el mensaje sale igual. */

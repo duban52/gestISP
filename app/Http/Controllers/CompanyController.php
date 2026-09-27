@@ -6,6 +6,7 @@ use App\Models\AffinityGroup;
 use App\Models\Company;
 use App\Models\FiscalCatalog;
 use Illuminate\Http\RedirectResponse;
+use App\Billing\Enums\BillingCycle;
 use App\Billing\Enums\BillingMode;
 use App\Billing\Enums\ProrationMode;
 use App\Models\BranchBillingSetting;
@@ -123,6 +124,7 @@ class CompanyController extends Controller
             // un dato real y no una invencion.
             'facturacion' => $configuraciones->first() ?? new BranchBillingSetting(BranchBillingSetting::DEFAULTS),
             'prorationModes' => ProrationMode::cases(),
+            'billingCycles' => BillingCycle::cases(),
             'billingModes' => BillingMode::cases(),
         ]);
     }
@@ -143,6 +145,7 @@ class CompanyController extends Controller
     {
         $datos = $request->validate([
             'proration_mode' => ['required', Rule::enum(ProrationMode::class)],
+            'billing_cycle' => ['required', Rule::enum(BillingCycle::class)],
             'billing_mode' => ['required', Rule::enum(BillingMode::class)],
             'billing_day' => [
                 Rule::requiredIf(fn () => $request->input('billing_mode') === BillingMode::Automatico->value),

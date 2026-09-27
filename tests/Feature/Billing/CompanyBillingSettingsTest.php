@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Billing\Enums\BillingCycle;
 use App\Billing\Enums\BillingMode;
 use App\Billing\Enums\ProrationMode;
 use App\Models\Branch;
@@ -30,6 +31,7 @@ class CompanyBillingSettingsTest extends BillingTestCase
     {
         return array_merge([
             'proration_mode' => ProrationMode::FullMonth->value,
+            'billing_cycle' => BillingCycle::Anticipado->value,
             'billing_mode' => BillingMode::Automatico->value,
             'billing_day' => 3,
             'due_days' => 15,
@@ -54,6 +56,10 @@ class CompanyBillingSettingsTest extends BillingTestCase
             $this->assertSame(15, $config->due_days);
             $this->assertSame(3, $config->suspension_threshold);
             $this->assertSame(10, $config->suspension_days);
+            // El ciclo viaja con el resto: aplicar a todas las sedes
+            // tiene que dejarlas cobrando el mismo período, o la
+            // empresa factura dos cosas distintas segun la sede.
+            $this->assertSame(BillingCycle::Anticipado, $config->billing_cycle);
         }
     }
 

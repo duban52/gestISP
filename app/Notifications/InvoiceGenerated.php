@@ -7,6 +7,7 @@ use App\Billing\Delivery\InvoicePdf;
 use App\Billing\Services\ElectronicInvoicingDecider;
 use App\Models\Invoice;
 use App\Notifications\Concerns\ArmaCorreo;
+use App\Notifications\Concerns\HablaPorLaEmpresa;
 use App\Notifications\Concerns\RespetaCanales;
 use App\Notifications\Messages\WhatsAppMessage;
 use Illuminate\Bus\Queueable;
@@ -36,6 +37,7 @@ class InvoiceGenerated extends Notification implements ShouldQueue
     use Queueable;
     use RespetaCanales;
     use ArmaCorreo;
+    use HablaPorLaEmpresa;
 
     public function __construct(private readonly Invoice $invoice)
     {
@@ -92,29 +94,29 @@ class InvoiceGenerated extends Notification implements ShouldQueue
         $cuerpo = "Hola {$notifiable->name}, se generó su factura {$this->invoice->displayNumber()} por {$total}. Vence el {$vence}.";
         $cuerpo .= $enlace ? " Descárguela aquí: {$enlace}" : ' ¡Gracias!';
 
+        // LOS SIETE HUECOS DE `factura_generada`, EN ORDEN
+        // -------------------------------------------------
+        //   {{1}} cliente · {{2}} número · {{3}} valor · {{4}} vence
+        //   {{5}} enlace  · {{6}} empresa · {{7}} servicio
+        //
+        // El orden es el de la plantilla aprobada en Meta y no se puede
+        // tocar aquí solo: Meta exige que el número de parámetros
+        // coincida EXACTAMENTE, y si no, rechaza el envío entero y el
+        // cliente se queda sin aviso. Solo una línea en el log lo
+        // cuenta. Antes esto costó una mañana.
+        //
+        // El enlace va SIEMPRE, y por eso ya no hay interruptor: el
+        // hueco {{5}} existe en la plantilla, así que omitirlo
+        // desplazaría la empresa y el servicio a los huecos de al lado.
         $parametros = [
             $notifiable->name,
             $this->invoice->displayNumber(),
             $total,
             $vence,
+            $this->enlaceParaLaPlantilla($enlace),
+            $this->nombreDeLaEmpresa($this->invoice->branch),
+            $this->servicioFacturado(),
         ];
-
-        // EL QUINTO PARÁMETRO SOLO SI LA PLANTILLA YA LO TIENE.
-        //
-        // La plantilla aprobada en Meta tiene cuatro huecos; mandarle un
-        // quinto hace que Meta rechace el envío entero y el cliente se
-        // quede sin aviso. Por eso el interruptor arranca apagado: hay
-        // que actualizar y aprobar la plantilla ANTES de encenderlo.
-        //
-        // Y al revés también: con el interruptor encendido van SIEMPRE
-        // cinco, aunque no haya enlace. Antes esto decía `if ($enlace
-        // && ...)`, así que una factura electrónica —que a propósito no
-        // lleva enlace aquí— o un fallo al armarlo mandaban cuatro
-        // parámetros a una plantilla de cinco: el mismo rechazo, por el
-        // otro lado.
-        if (config('notifications.whatsapp.meta.invoice_link_in_template', false)) {
-            $parametros[] = $this->enlaceParaLaPlantilla($enlace);
-        }
 
         $mensaje = WhatsAppMessage::make($cuerpo)->template('factura_generada', $parametros);
 
@@ -126,28 +128,23 @@ class InvoiceGenerated extends Notification implements ShouldQueue
             : $mensaje;
     }
 
+    /**
+     * Qué servicio se le está cobrando.
+     *
+     * Sale del plan del contrato. Si la factura no cuelga de un
+     * contrato con plan —un cargo suelto, una factura importada— no se
+     * puede dejar vacío: Meta rechaza un parámetro en blanco y el
+     * cliente se queda sin el aviso entero.
+     */
+    private function servicioFacturado(): string
+    {
+        return $this->invoice->contract?->plan?->name ?: 'servicio de Internet';
+    }
+
     /** Con el que le llega el archivo al cliente. */
     private function nombreDelArchivo(): string
     {
         return 'factura-' . str_replace(['/', ' '], '-', (string) $this->invoice->displayNumber()) . '.pdf';
-    }
-
-    /**
-     * El quinto hueco de la plantilla: LA URL PELADA.
-     *
-     * La plantilla aprobada ya dice «Descárgala aquí: {{5}} ¡Gracias!»,
-     * así que el parámetro es solo el enlace; mandar la frase entera
-     * haría que el cliente leyera «Descárgala aquí: Descárguela aquí:
-     * https://…».
-     *
-     * NUNCA VACÍO: Meta rechaza los parámetros en blanco y el cliente
-     * se quedaría sin aviso. Si el enlace no se pudo armar —`APP_URL`
-     * mal puesta, por ejemplo— va la dirección del sitio, que al menos
-     * lleva a alguna parte.
-     */
-    private function enlaceParaLaPlantilla(?string $enlace): string
-    {
-        return $enlace ?: rtrim((string) config('app.url'), '/');
     }
 
     /**

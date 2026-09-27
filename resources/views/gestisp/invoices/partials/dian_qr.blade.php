@@ -24,7 +24,9 @@
     mínimo práctico está cerca de 1 cm.
 --}}
 @if(!empty($dian) && !empty($dian['qr']))
-    <td style="padding-right: 10px; vertical-align: top;">
+    {{-- La anchura la fija la cabecera: sus columnas están repartidas
+         al 100 % y esta es una de ellas. --}}
+    <td width="{{ $ancho ?? '14%' }}" style="padding-right: 10px; vertical-align: top;">
         <img src="{{ $dian['qr'] }}" width="60" height="60" alt="Código QR de la factura electrónica"/>
     </td>
 @endif

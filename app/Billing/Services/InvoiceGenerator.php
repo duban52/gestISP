@@ -80,7 +80,14 @@ class InvoiceGenerator
             ];
         }
 
-        $yearMonth = $today->format('Ym');
+        // QUÉ MES SE COBRA. No tiene por qué ser el de la corrida:
+        // una sucursal que cobra por adelantado factura en septiembre
+        // el mes de octubre. Todo el período sale de aquí —el nombre,
+        // las fechas y la clave que impide repetir— y no de `$today`,
+        // que solo dice cuándo se emite.
+        $settings = BranchBillingSetting::forBranch($contract->branch_id);
+        $mesFacturado = $settings->mesFacturado($today);
+        $yearMonth = $mesFacturado->format('Ym');
 
         $alreadyBilled = Invoice::where('contract_id', $contract->id)
             ->where('billed_year_month', $yearMonth)
@@ -98,10 +105,12 @@ class InvoiceGenerator
         // contrato viejo. Sin esto la corrida le cobraria al nuevo
         // titular el mismo mes, por el mismo servicio, en la misma casa.
         //
-        // Se compara con el FIN del periodo: si la facturacion empieza
-        // en algun dia de este mes, este mes ya le toca.
+        // Se compara con el FIN DEL PERIODO QUE SE VA A COBRAR, no con
+        // el del mes de la corrida: cobrando por adelantado, la corrida
+        // de septiembre emite el período de octubre, y un contrato que
+        // empieza a facturarse el 5 de octubre ya entra en él.
         if ($contract->billing_start_date
-            && $contract->billing_start_date->gt($today->copy()->endOfMonth())) {
+            && $contract->billing_start_date->gt($mesFacturado->copy()->endOfMonth())) {
             return ['generated' => false, 'reason' => 'Billing starts on ' . $contract->billing_start_date->toDateString()];
         }
 
@@ -121,11 +130,9 @@ class InvoiceGenerator
             return ['generated' => false, 'reason' => 'Nothing to bill'];
         }
 
-        $settings = BranchBillingSetting::forBranch($contract->branch_id);
-
-        $invoice = DB::transaction(function () use ($contract, $today, $userId, $yearMonth, $settings, $billingRunId) {
-            $startOfMonth = $today->copy()->startOfMonth();
-            $endOfMonth = $today->copy()->endOfMonth();
+        $invoice = DB::transaction(function () use ($contract, $today, $mesFacturado, $userId, $yearMonth, $settings, $billingRunId) {
+            $startOfMonth = $mesFacturado->copy()->startOfMonth();
+            $endOfMonth = $mesFacturado->copy()->endOfMonth();
 
             // Vencidas abiertas del contrato: definen el estado de
             // riesgo de la factura nueva, pero NO se absorben
@@ -162,7 +169,9 @@ class InvoiceGenerator
                 'due_date' => $today->copy()->addDays($settings->due_days),
                 'billed_period' => $period['period_full'],
                 'billed_period_short' => $period['period_short'],
-                'billed_month_name' => ucfirst($today->translatedFormat('F')),
+                // El del PERÍODO, no el de la corrida: una factura de
+                // octubre emitida en septiembre dice «Octubre».
+                'billed_month_name' => ucfirst($mesFacturado->translatedFormat('F')),
                 'billed_year_month' => $yearMonth,
                 'period_start' => $period['period_start'],
                 'period_end' => $period['period_end'],
@@ -220,13 +229,51 @@ class InvoiceGenerator
     }
 
     /**
-     * Calcula el período facturado y el multiplicador de prorrateo.
+     * El período que cubre la factura y cuánto del mes se cobra.
      *
-     * Con prorrateo activo (opción B), un contrato activado a mitad
-     * de mes factura solo los días restantes (multiplicador
-     * días_restantes / días_del_mes). Con mes completo (opción A)
-     * el multiplicador es siempre 1 y el período cubre todo el mes,
-     * sin importar el día de activación.
+     * CON MES COMPLETO no hay nada que calcular: se cobra el mes
+     * entero, empiece el cliente el día que empiece. Los días que el
+     * servicio estuvo activo antes del período los regala la empresa,
+     * y eso es una decisión, no un olvido.
+     *
+     * CON PRORRATEO hay dos cosas distintas que hacer, y antes solo se
+     * hacía una:
+     *
+     *   1. El cliente se activa DENTRO del período que se factura
+     *      (activado el 10, se cobra ese mismo mes) → se cobran los
+     *      días del 10 al final. Esto ya funcionaba.
+     *
+     *   2. El cliente se activa ANTES del período, y nadie le cobró
+     *      esos días. Es lo que pasa siempre que la activación cae
+     *      después de la corrida: se factura el 25, el cliente entra
+     *      el 26, y del 26 al 30 no lo cobra nadie — la corrida de
+     *      octubre cobraba octubre entero y esos cinco días se
+     *      perdían. Ahora la PRIMERA factura del contrato arranca en
+     *      la activación: cubre los días sueltos y el período completo
+     *      en un solo renglón.
+     *
+     * POR QUÉ SOLO EN LA PRIMERA FACTURA
+     * ----------------------------------
+     * Porque es la única en la que «desde la activación» significa
+     * algo. A partir de la segunda, lo anterior ya está cobrado, y
+     * mirar la fecha de activación volvería a cobrarlo.
+     *
+     * SOLO SE ARRASTRA EL PERÍODO INMEDIATAMENTE ANTERIOR
+     * ---------------------------------------------------
+     * Y esto no es un detalle: es lo que evita un cobro masivo
+     * indebido. Un contrato activado hace ocho meses y sin una sola
+     * factura no es un cliente que deba ocho meses; es un dato torcido
+     * —una migración a medias, un contrato que se quedó fuera de las
+     * corridas, una sucursal que empieza a usar el sistema con su
+     * cartera ya andando—. Si el arrastre mirara la activación sin
+     * límite, la PRIMERA corrida después de actualizar le habría
+     * cobrado un mes de más a todos ellos a la vez.
+     *
+     * Así que se arrastra solo lo que la corrida anterior habría
+     * cobrado: la activación tiene que caer dentro del mes previo al
+     * período. Más atrás, no se arrastra nada y se cobra el período
+     * normal; si de verdad hay que cobrar algo anterior, se hace a
+     * mano y mirándolo.
      *
      * @return array{period_full: string, period_short: string, period_start: string, period_end: string, prorate_multiplier: float|int}
      */
@@ -236,14 +283,31 @@ class InvoiceGenerator
         $prorateMultiplier = 1;
         $periodStart = $startOfMonth->copy();
 
-        if ($prorates && $contract->activation_date && $contract->activation_date > $startOfMonth) {
-            $activationDate = Carbon::parse($contract->activation_date);
+        $activacion = $contract->activation_date
+            ? Carbon::parse($contract->activation_date)->startOfDay()
+            : null;
 
-            if ($activationDate->isSameMonth($startOfMonth)) {
-                $remainingDays = $activationDate->diffInDays($endOfMonth) + 1;
-                $prorateMultiplier = $remainingDays / $daysInMonth;
-                $periodStart = $activationDate->copy();
+        if ($prorates && $activacion) {
+            // Dentro del período: se cobra desde la activación.
+            if ($activacion->gt($startOfMonth) && $activacion->lte($endOfMonth)) {
+                $periodStart = $activacion->copy();
             }
+
+            // Antes del período y todavía sin cobrar: la primera
+            // factura arranca en la activación y arrastra esos días.
+            // Solo desde el mes anterior; ver el comentario de arriba.
+            if ($activacion->lt($startOfMonth)
+                && $activacion->gte($startOfMonth->copy()->subMonthNoOverflow())
+                && $this->esLaPrimeraFactura($contract)) {
+                $periodStart = $activacion->copy();
+            }
+
+            // Los días cubiertos pueden ser MENOS de un mes (activación
+            // a mitad de período) o MÁS (arrastre), así que el
+            // multiplicador puede pasar de 1. Es lo correcto: son días
+            // de servicio prestado, al precio diario del plan.
+            $diasCubiertos = $periodStart->diffInDays($endOfMonth) + 1;
+            $prorateMultiplier = $diasCubiertos / $daysInMonth;
         }
 
         return [
@@ -253,6 +317,19 @@ class InvoiceGenerator
             'period_end' => $endOfMonth->toDateString(),
             'prorate_multiplier' => $prorateMultiplier,
         ];
+    }
+
+    /**
+     * ¿Es la primera factura de este contrato?
+     *
+     * Cuenta cualquier factura anterior, incluida la que deja la
+     * importación de clientes con su período de migración: si el
+     * contrato llegó con saldo, lo de antes ya está contado y
+     * arrastrar días sería cobrarlo dos veces.
+     */
+    private function esLaPrimeraFactura(Contract $contract): bool
+    {
+        return !Invoice::where('contract_id', $contract->id)->exists();
     }
 
     /**

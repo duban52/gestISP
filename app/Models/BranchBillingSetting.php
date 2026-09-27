@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Billing\Enums\BillingCycle;
 use App\Billing\Enums\BillingMode;
 use App\Billing\Enums\ProrationMode;
 use Carbon\CarbonInterface;
@@ -22,6 +23,7 @@ class BranchBillingSetting extends Model
     protected $fillable = [
         'branch_id',
         'proration_mode',
+        'billing_cycle',
         'billing_mode',
         'billing_day',
         'due_days',
@@ -31,6 +33,7 @@ class BranchBillingSetting extends Model
 
     protected $casts = [
         'proration_mode' => ProrationMode::class,
+        'billing_cycle' => BillingCycle::class,
         'billing_mode' => BillingMode::class,
         'billing_day' => 'integer',
         'due_days' => 'integer',
@@ -45,6 +48,10 @@ class BranchBillingSetting extends Model
      */
     public const DEFAULTS = [
         'proration_mode' => 'prorated',
+        // El mes en el que se corre: es lo que el sistema venía
+        // haciendo, y actualizar no puede cambiarle a nadie el período
+        // que le cobra a sus clientes.
+        'billing_cycle' => 'current',
         // Manual: migrar no puede cambiarle el comportamiento a quien
         // ya venía facturando con el botón.
         'billing_mode' => 'manual',
@@ -70,6 +77,19 @@ class BranchBillingSetting extends Model
             ['branch_id' => $branchId],
             self::DEFAULTS
         );
+    }
+
+    /**
+     * El PRIMER DÍA del mes que hay que facturar hoy.
+     *
+     * Todo el período —el nombre del mes, las fechas de inicio y fin,
+     * la clave `billed_year_month` que impide facturar dos veces— sale
+     * de aquí y no del día de la corrida. Es lo que permite que una
+     * sucursal cobre por adelantado sin tocar código.
+     */
+    public function mesFacturado(CarbonInterface $hoy): CarbonInterface
+    {
+        return ($this->billing_cycle ?? BillingCycle::EnCurso)->mesFacturado($hoy);
     }
 
     /** ¿La sucursal prorratea el primer mes? */

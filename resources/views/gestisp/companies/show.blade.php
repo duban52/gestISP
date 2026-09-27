@@ -144,6 +144,33 @@
                                             @endforeach
                                         </select>
                                     </div>
+                                    {{-- ============================================================
+                                         QUÉ MES COBRA LA CORRIDA
+
+                                         Es una decisión comercial y hasta ahora
+                                         estaba escrita en el código: se cobraba
+                                         siempre el mes en el que se corría. Un ISP
+                                         que cobra por adelantado —lo normal— no
+                                         tenía cómo decirlo.
+
+                                         Cambiarlo NO reescribe nada de lo ya
+                                         facturado: manda sobre la siguiente corrida.
+                                         ============================================================ --}}
+                                    <div class="form-group col-md-6">
+                                        <label for="c_billing_cycle">Qué mes se cobra</label>
+                                        <select name="billing_cycle" id="c_billing_cycle" class="form-control" required>
+                                            @foreach($billingCycles as $ciclo)
+                                                <option value="{{ $ciclo->value }}"
+                                                    {{ old('billing_cycle', $facturacion->billing_cycle?->value ?? 'current') === $ciclo->value ? 'selected' : '' }}>
+                                                    {{ $ciclo->label() }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            Corriendo en septiembre: anticipado cobra octubre,
+                                            en curso cobra septiembre, vencido cobra agosto.
+                                        </small>
+                                    </div>
                                     <div class="form-group col-12 col-md-4">
                                         <label for="c_billing_mode">Cómo se factura</label>
                                         <select name="billing_mode" id="c_billing_mode" class="form-control" required>

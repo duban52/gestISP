@@ -105,25 +105,17 @@ class InvoiceDownloadLinkTest extends BillingTestCase
         $this->assertStringContainsString('signature=', $mensaje->body);
     }
 
-    public function test_el_quinto_parametro_de_la_plantilla_esta_apagado_de_fabrica(): void
+    public function test_el_enlace_ocupa_el_quinto_hueco_de_la_plantilla(): void
     {
-        // Mandarle un quinto hueco a una plantilla de cuatro hace que
-        // Meta rechace el envío entero y el cliente se quede sin aviso
-        // de factura. Pasó de verdad.
-        //
-        // Por eso arranca apagado: primero se actualiza y se aprueba la
-        // plantilla EN LA CUENTA DEL NÚMERO QUE ENVÍA, y solo entonces
-        // se enciende.
+        // El sitio importa: la empresa y el servicio van DETRÁS del
+        // enlace en la plantilla aprobada, así que un enlace fuera de
+        // su hueco no se pierde, se lee donde no toca. Ya no hay
+        // interruptor: el hueco existe siempre.
         $factura = $this->facturaInterna();
 
-        $sinEncender = (new InvoiceGenerated($factura))->toWhatsApp($factura->contract->client);
+        $parametros = (new InvoiceGenerated($factura))->toWhatsApp($factura->contract->client)->templateParams;
 
-        $this->assertCount(4, $sinEncender->templateParams);
-
-        config(['notifications.whatsapp.meta.invoice_link_in_template' => true]);
-
-        $encendido = (new InvoiceGenerated($factura))->toWhatsApp($factura->contract->client);
-
-        $this->assertCount(5, $encendido->templateParams);
+        $this->assertStringContainsString('/facturas/' . $factura->id . '/descargar', $parametros[4]);
+        $this->assertStringContainsString('signature=', $parametros[4]);
     }
 }

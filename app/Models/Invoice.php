@@ -81,6 +81,36 @@ class Invoice extends Model
         'overdue_notified_at',
     ];
 
+    /**
+     * El período que cubre la factura, en una frase.
+     *
+     * POR QUÉ NO BASTA CON «DEL 01 AL 30 DE SEPTIEMBRE»
+     * -------------------------------------------------
+     * Porque hay facturas que cruzan dos meses. La primera de un
+     * contrato activado después de la corrida arrastra los días que
+     * nadie cobró: del 26 de septiembre al 31 de octubre. Con el
+     * formato corto —día inicial, día final y el nombre del mes
+     * facturado— eso se leía «DEL 26 al 31 DEL MES DE Octubre», que
+     * es una fecha que no existe y un período que no es.
+     */
+    public function periodoLegible(): string
+    {
+        $inicio = $this->period_start;
+        $fin = $this->period_end;
+
+        if (!$inicio || !$fin) {
+            return trim('DEL ' . $this->billed_period_short . ' DEL MES DE ' . $this->billed_month_name);
+        }
+
+        if ($inicio->isSameMonth($fin)) {
+            return 'DEL ' . $inicio->format('d') . ' AL ' . $fin->format('d')
+                . ' DEL MES DE ' . ucfirst($fin->translatedFormat('F'));
+        }
+
+        return 'DEL ' . $inicio->format('d') . ' DE ' . ucfirst($inicio->translatedFormat('F'))
+            . ' AL ' . $fin->format('d') . ' DE ' . ucfirst($fin->translatedFormat('F'));
+    }
+
     protected $casts = [
         'voided_at' => 'datetime',
         'contingency_at' => 'datetime',
