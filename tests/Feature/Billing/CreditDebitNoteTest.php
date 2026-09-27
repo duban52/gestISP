@@ -113,6 +113,78 @@ class CreditDebitNoteTest extends TestCase
         ], $datos));
     }
 
+    // ============ El saldo que se cobra (lo de producción) ============
+
+    /**
+     * EL FALLO QUE SE VIO COBRANDO.
+     *
+     * Factura de $80.000 con una nota crédito de $15.000: la ficha
+     * decía $65.000 y la pantalla de cobro seguía ofreciendo $80.000.
+     * No era solo la pantalla — `getPendingAmount()` es lo que valida
+     * el pago, así que el sistema habría ACEPTADO cobrar $80.000 de
+     * una factura que solo debía $65.000.
+     */
+    public function test_el_saldo_a_cobrar_descuenta_la_nota_credito(): void
+    {
+        $factura = $this->factura(80000);
+        $this->emitir($factura, ['subtotal' => 15000]);
+
+        $this->assertEqualsWithDelta(65000, $factura->fresh()->getPendingAmount(), 0.01);
+    }
+
+    public function test_no_se_puede_cobrar_mas_de_lo_que_queda_debiendo(): void
+    {
+        $factura = $this->factura(80000);
+        $this->emitir($factura, ['subtotal' => 15000]);
+
+        $this->assertEqualsWithDelta(
+            65000,
+            $factura->fresh()->getPendingAmount(),
+            0.01,
+            'La validación del pago usa este número: si dice 80.000, se cobra de más.',
+        );
+    }
+
+    /**
+     * LA PARTE SILENCIOSA DEL MISMO FALLO.
+     *
+     * `recalcularSaldo()` escribe el calculado sobre la columna, y la
+     * columna SÍ estaba bien. Así que un abono de un peso le devolvía
+     * a la factura el valor de la nota: el descuento concedido se
+     * esfumaba sin que nadie lo tocara.
+     */
+    public function test_recalcular_el_saldo_no_resucita_la_nota(): void
+    {
+        $factura = $this->factura(80000);
+        $this->emitir($factura, ['subtotal' => 15000]);
+
+        $factura->fresh()->recalcularSaldo();
+
+        $this->assertEqualsWithDelta(65000, (float) $factura->fresh()->pending_invoice_amount, 0.01);
+    }
+
+    public function test_una_nota_anulada_deja_de_descontar(): void
+    {
+        $factura = $this->factura(80000);
+        $nota = $this->emitir($factura, ['subtotal' => 15000]);
+
+        app(NoteIssuer::class)->anular($nota, 'Se emitió sobre la factura equivocada.');
+
+        $this->assertEqualsWithDelta(80000, $factura->fresh()->getPendingAmount(), 0.01);
+    }
+
+    public function test_la_nota_debito_aumenta_lo_que_se_cobra(): void
+    {
+        $factura = $this->factura(80000);
+        $this->emitir($factura, [
+            'type' => NoteType::Debito->value,
+            'subtotal' => 5000,
+            'reason' => 'Intereses de mora del mes.',
+        ]);
+
+        $this->assertEqualsWithDelta(85000, $factura->fresh()->getPendingAmount(), 0.01);
+    }
+
     // ==================== Efecto sobre el saldo ====================
 
     public function test_la_nota_credito_disminuye_el_saldo_de_la_factura(): void

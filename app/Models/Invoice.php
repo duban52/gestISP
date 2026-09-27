@@ -381,7 +381,39 @@ class Invoice extends Model
      */
     public function getPendingAmount()
     {
-        return round($this->total - $this->totalAbonado(), 2);
+        // LAS NOTAS CUENTAN. Esto decía `total - abonado` y se saltaba
+        // las notas crédito y débito, con dos consecuencias que se
+        // vieron en producción:
+        //
+        //  1. La pantalla de cobro ofrecía cobrar el total de una
+        //     factura a la que ya se le había hecho una nota crédito,
+        //     y la validación del pago —que usa este mismo método— lo
+        //     habría aceptado. Cobrar de más.
+        //  2. `recalcularSaldo()` escribe este número sobre
+        //     `pending_invoice_amount`, que SÍ estaba bien. Así que un
+        //     abono de un peso le devolvía a la factura el valor de la
+        //     nota: el descuento concedido se esfumaba.
+        //
+        // Nunca por debajo de cero: una nota crédito mayor que lo que
+        // la factura debía deja el excedente a favor del CONTRATO —lo
+        // hace NoteIssuer al aplicarla—, no un saldo negativo aquí.
+        return round(max(0, $this->total + $this->efectoDeLasNotas() - $this->totalAbonado()), 2);
+    }
+
+    /**
+     * Lo que las notas le quitan o le suman a esta factura.
+     *
+     * Negativo cuando manda una nota crédito. Solo cuentan las
+     * VIGENTES: anular una nota revierte su efecto, y una anulada que
+     * siguiera restando dejaría al cliente debiendo menos de lo que
+     * debe sin que nada lo explique.
+     */
+    public function efectoDeLasNotas(): float
+    {
+        return round((float) $this->notes()
+            ->where('status', CreditDebitNote::EMITIDA)
+            ->get()
+            ->sum(fn (CreditDebitNote $nota) => $nota->efecto), 2);
     }
 
     /**
