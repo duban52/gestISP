@@ -246,6 +246,44 @@ class CreditBalanceTest extends BillingTestCase
         $this->assertGreaterThan(0, (float) $mes4->pending_invoice_amount);
     }
 
+    /**
+     * EL SALDO A FAVOR NO ES UN PAGO, PERO PAGA.
+     *
+     * Aplicarlo no crea una fila de pago: crea un movimiento del
+     * saldo. `getPendingAmount()` sumaba solo pagos y retenciones, así
+     * que daba por pendiente una factura que el cliente ya había
+     * cubierto con su propio dinero.
+     *
+     * Y como `recalcularSaldo()` escribe ese número sobre la columna,
+     * cualquier recálculo le devolvía la deuda al cliente que pagó por
+     * adelantado — con el corte por mora detrás. Se encontró en
+     * producción: una factura con la columna en 0 que el cálculo daba
+     * por pendiente.
+     */
+    public function test_una_factura_cubierta_con_saldo_a_favor_no_queda_debiendo(): void
+    {
+        $this->abrirCaja();
+
+        $contrato = $this->createBillableContract(price: 50000, taxPercent: 0);
+
+        app(PaymentRegistrar::class)->registerAdvance([
+            'contract_id' => $contrato->id,
+            'amount' => 50000,
+            'payment_method' => 'Efectivo',
+        ], $this->admin->id);
+
+        app(InvoiceGenerator::class)->generateForContract($contrato, now(), $this->admin->id);
+        $factura = Invoice::where('contract_id', $contrato->id)->latest('id')->firstOrFail();
+
+        $this->assertEquals(0, $factura->getPendingAmount());
+
+        // Y lo que de verdad dolía: recalcular no le devuelve la deuda.
+        $factura->recalcularSaldo();
+
+        $this->assertEquals(0, (float) $factura->fresh()->pending_invoice_amount);
+        $this->assertSame(InvoiceStatus::Pagada->value, $factura->fresh()->status);
+    }
+
     public function test_un_anticipo_parcial_deja_la_factura_en_pendiente_parcial(): void
     {
         $this->abrirCaja();

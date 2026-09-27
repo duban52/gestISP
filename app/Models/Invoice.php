@@ -417,7 +417,24 @@ class Invoice extends Model
     }
 
     /**
-     * Total ya cubierto de la factura: pagos completados + retenciones.
+     * Todo lo que ya cubre esta factura: pagos, retenciones y el saldo
+     * a favor que se le aplicó.
+     *
+     * EL SALDO A FAVOR NO ES UN PAGO, PERO PAGA.
+     * ------------------------------------------
+     * Cuando el cliente abona por adelantado, ese dinero no entra como
+     * un pago sobre una factura que todavía no existe: queda a su
+     * favor y se va aplicando sola a las facturas que llegan. Esa
+     * aplicación NO crea una fila de pago —crea un movimiento del
+     * saldo—, así que sumar solo pagos dejaba a la factura debiendo un
+     * dinero que el cliente ya había puesto.
+     *
+     * Se vio en producción: una factura con la columna en 0 —bien
+     * saldada— que este cálculo daba por pendiente. Y como
+     * `recalcularSaldo()` escribe este número sobre la columna,
+     * bastaba cualquier recálculo para que al cliente que pagó seis
+     * meses por adelantado le reaparecieran las deudas, con su corte
+     * detrás.
      */
     public function totalAbonado(): float
     {
@@ -425,7 +442,18 @@ class Invoice extends Model
             ->where('status', PaymentStatus::Completed->value)
             ->sum('amount');
 
-        return round((float) $pagos + $this->totalRetenciones(), 2);
+        return round((float) $pagos + $this->totalRetenciones() + $this->saldoAFavorAplicado(), 2);
+    }
+
+    /**
+     * Lo que se cubrió de esta factura con el saldo a favor del
+     * contrato.
+     */
+    public function saldoAFavorAplicado(): float
+    {
+        return round((float) AccountCredit::where('invoice_id', $this->id)
+            ->where('movement', AccountCredit::APLICACION)
+            ->sum('amount'), 2);
     }
 
     /**
