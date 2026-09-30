@@ -145,6 +145,7 @@ class CompanyController extends Controller
     {
         $datos = $request->validate([
             'proration_mode' => ['required', Rule::enum(ProrationMode::class)],
+            'proration_day' => 'required|integer|min:1|max:31',
             'billing_cycle' => ['required', Rule::enum(BillingCycle::class)],
             'billing_mode' => ['required', Rule::enum(BillingMode::class)],
             'billing_day' => [

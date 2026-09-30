@@ -31,6 +31,7 @@ class CompanyBillingSettingsTest extends BillingTestCase
     {
         return array_merge([
             'proration_mode' => ProrationMode::FullMonth->value,
+            'proration_day' => 16,
             'billing_cycle' => BillingCycle::Anticipado->value,
             'billing_mode' => BillingMode::Automatico->value,
             'billing_day' => 3,
@@ -60,6 +61,10 @@ class CompanyBillingSettingsTest extends BillingTestCase
             // tiene que dejarlas cobrando el mismo período, o la
             // empresa factura dos cosas distintas segun la sede.
             $this->assertSame(BillingCycle::Anticipado, $config->billing_cycle);
+            // El día límite también: si una sede regala los días de
+            // quien entra tarde y la otra no, la empresa le cobra
+            // distinto al mismo cliente según dónde firme.
+            $this->assertSame(16, $config->proration_day);
         }
     }
 

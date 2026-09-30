@@ -114,6 +114,48 @@ class InvoiceGenerator
             return ['generated' => false, 'reason' => 'Billing starts on ' . $contract->billing_start_date->toDateString()];
         }
 
+        // ---- NO SE LE COBRA UN PERÍODO QUE NO FUE CLIENTE ----
+        //
+        // Hacía falta desde que el ciclo puede cobrar hacia atrás: con
+        // facturación VENCIDA, la corrida de septiembre cobra agosto, y
+        // un contrato activado el 20 de septiembre no cae ni dentro del
+        // período ni antes de él. Se colaba con el multiplicador en 1 y
+        // le cobraba agosto entero a quien no era cliente en agosto.
+        $activacion = $contract->activation_date
+            ? Carbon::parse($contract->activation_date)->startOfDay()
+            : null;
+
+        $primerDiaCobrable = $activacion ? $settings->primerDiaCobrable($activacion) : null;
+
+        if ($primerDiaCobrable && $primerDiaCobrable->gt($mesFacturado->copy()->endOfMonth())) {
+            return [
+                'generated' => false,
+                'reason' => $settings->haceCortesia($activacion)
+                    ? 'Días de cortesía: empieza a facturarse el período siguiente'
+                    : 'El contrato no estaba activo en el período (activado el ' . $activacion->toDateString() . ')',
+            ];
+        }
+
+        // ---- LOS DÍAS DE CORTESÍA NO SE FACTURAN EN SU PROPIA CORRIDA ----
+        //
+        // Un contrato que entra pasado el día límite no entra en la
+        // corrida del mes en que se dio de alta: empieza en la
+        // siguiente. Decisión del 2026-09-30.
+        //
+        // Con ciclo EN CURSO la regla de arriba ya lo habría dejado
+        // fuera —el período es su propio mes, y ese mes es de
+        // cortesía—. Esta hace falta para ANTICIPADO, donde el período
+        // que se cobra es el mes siguiente y sin esto se le cobraría
+        // en la misma corrida en que acaba de entrar.
+        if ($activacion
+            && $settings->haceCortesia($activacion)
+            && $activacion->isSameMonth($today)) {
+            return [
+                'generated' => false,
+                'reason' => 'Días de cortesía: empieza a facturarse en la corrida siguiente',
+            ];
+        }
+
         // ---- No se emite una factura sin nada dentro ----
         //
         // Pasa cuando el contrato se quedó sin plan: `plan_id` es nulo
@@ -130,7 +172,7 @@ class InvoiceGenerator
             return ['generated' => false, 'reason' => 'Nothing to bill'];
         }
 
-        $invoice = DB::transaction(function () use ($contract, $today, $mesFacturado, $userId, $yearMonth, $settings, $billingRunId) {
+        $invoice = DB::transaction(function () use ($contract, $today, $mesFacturado, $userId, $yearMonth, $settings, $billingRunId, $primerDiaCobrable) {
             $startOfMonth = $mesFacturado->copy()->startOfMonth();
             $endOfMonth = $mesFacturado->copy()->endOfMonth();
 
@@ -142,7 +184,13 @@ class InvoiceGenerator
 
             $suspensionDate = $hasOverdue ? $today->copy()->addDays($settings->suspension_days) : null;
 
-            $period = $this->calculateBillingPeriod($contract, $startOfMonth, $endOfMonth, $settings->prorates());
+            $period = $this->calculateBillingPeriod(
+                $contract,
+                $startOfMonth,
+                $endOfMonth,
+                $settings->prorates(),
+                $primerDiaCobrable,
+            );
 
             $invoice = Invoice::create([
                 'contract_id' => $contract->id,
@@ -277,33 +325,44 @@ class InvoiceGenerator
      *
      * @return array{period_full: string, period_short: string, period_start: string, period_end: string, prorate_multiplier: float|int}
      */
-    private function calculateBillingPeriod(Contract $contract, CarbonInterface $startOfMonth, CarbonInterface $endOfMonth, bool $prorates): array
-    {
+    private function calculateBillingPeriod(
+        Contract $contract,
+        CarbonInterface $startOfMonth,
+        CarbonInterface $endOfMonth,
+        bool $prorates,
+        ?CarbonInterface $primerDiaCobrable = null,
+    ): array {
         $daysInMonth = $startOfMonth->diffInDays($endOfMonth) + 1;
         $prorateMultiplier = 1;
         $periodStart = $startOfMonth->copy();
 
-        $activacion = $contract->activation_date
-            ? Carbon::parse($contract->activation_date)->startOfDay()
-            : null;
+        // NO ES LA FECHA DE ACTIVACIÓN, ES EL PRIMER DÍA COBRABLE.
+        //
+        // Se diferencian cuando la sucursal regala los días de quien
+        // entra pasado el día límite: ahí el primer día cobrable es el
+        // 1 del mes siguiente, y lo de antes no se cobra ni en esa
+        // factura ni arrastrado en la siguiente. Si esto mirara la
+        // activación a secas, el mes que acaba de regalarse
+        // reaparecería en la factura de después.
+        $desde = $primerDiaCobrable;
 
-        if ($prorates && $activacion) {
-            // Dentro del período: se cobra desde la activación.
-            if ($activacion->gt($startOfMonth) && $activacion->lte($endOfMonth)) {
-                $periodStart = $activacion->copy();
+        if ($prorates && $desde) {
+            // Dentro del período: se cobra desde ahí.
+            if ($desde->gt($startOfMonth) && $desde->lte($endOfMonth)) {
+                $periodStart = $desde->copy();
             }
 
             // Antes del período y todavía sin cobrar: la primera
-            // factura arranca en la activación y arrastra esos días.
-            // Solo desde el mes anterior; ver el comentario de arriba.
-            if ($activacion->lt($startOfMonth)
-                && $activacion->gte($startOfMonth->copy()->subMonthNoOverflow())
+            // factura arranca ahí y arrastra esos días. Solo desde el
+            // mes anterior; ver el comentario de arriba.
+            if ($desde->lt($startOfMonth)
+                && $desde->gte($startOfMonth->copy()->subMonthNoOverflow())
                 && $this->esLaPrimeraFactura($contract)) {
-                $periodStart = $activacion->copy();
+                $periodStart = $desde->copy();
             }
 
-            // Los días cubiertos pueden ser MENOS de un mes (activación
-            // a mitad de período) o MÁS (arrastre), así que el
+            // Los días cubiertos pueden ser MENOS de un mes (alta a
+            // mitad de período) o MÁS (arrastre), así que el
             // multiplicador puede pasar de 1. Es lo correcto: son días
             // de servicio prestado, al precio diario del plan.
             $diasCubiertos = $periodStart->diffInDays($endOfMonth) + 1;

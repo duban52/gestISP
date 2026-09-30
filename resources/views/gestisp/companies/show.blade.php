@@ -145,6 +145,27 @@
                                         </select>
                                     </div>
                                     {{-- ============================================================
+                                         HASTA QUÉ DÍA SE PRORRATEA
+
+                                         «Si entra antes del 16 le cobro los días;
+                                         después, se los regalo.» Cobrar cinco días
+                                         cuesta más —la visita, el recibo— de lo que
+                                         se recauda.
+
+                                         31 = siempre se prorratea, que es lo de
+                                         antes. Regalar días lo decide alguien.
+                                         ============================================================ --}}
+                                    <div class="form-group col-md-3" id="c_grupo_proration_day">
+                                        <label for="c_proration_day">Prorratear hasta el día</label>
+                                        <input type="number" name="proration_day" id="c_proration_day"
+                                               class="form-control" min="1" max="31"
+                                               value="{{ old('proration_day', $facturacion->proration_day ?? 31) }}">
+                                        <small class="form-text text-muted">
+                                            Quien entre después empieza a facturarse en la corrida
+                                            siguiente, con el mes completo. Con 31 siempre se prorratea.
+                                        </small>
+                                    </div>
+                                    {{-- ============================================================
                                          QUÉ MES COBRA LA CORRIDA
 
                                          Es una decisión comercial y hasta ahora

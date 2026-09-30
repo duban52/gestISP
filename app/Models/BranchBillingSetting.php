@@ -23,6 +23,7 @@ class BranchBillingSetting extends Model
     protected $fillable = [
         'branch_id',
         'proration_mode',
+        'proration_day',
         'billing_cycle',
         'billing_mode',
         'billing_day',
@@ -33,6 +34,7 @@ class BranchBillingSetting extends Model
 
     protected $casts = [
         'proration_mode' => ProrationMode::class,
+        'proration_day' => 'integer',
         'billing_cycle' => BillingCycle::class,
         'billing_mode' => BillingMode::class,
         'billing_day' => 'integer',
@@ -48,6 +50,10 @@ class BranchBillingSetting extends Model
      */
     public const DEFAULTS = [
         'proration_mode' => 'prorated',
+        // 31 = siempre se prorratea, que es lo que el sistema venía
+        // haciendo. Regalar días es una decisión comercial y la toma
+        // alguien, no una actualización.
+        'proration_day' => 31,
         // El mes en el que se corre: es lo que el sistema venía
         // haciendo, y actualizar no puede cambiarle a nadie el período
         // que le cobra a sus clientes.
@@ -96,6 +102,42 @@ class BranchBillingSetting extends Model
     public function prorates(): bool
     {
         return $this->proration_mode === ProrationMode::Prorated;
+    }
+
+    /** El último día del mes en que todavía se cobra la fracción. */
+    public function diaLimiteDeProrrateo(): int
+    {
+        return (int) ($this->proration_day ?: 31);
+    }
+
+    /**
+     * ¿A un contrato activado ESTE día le tocan días de cortesía?
+     *
+     * La regla vive aquí y no en el generador porque manda en DOS
+     * sitios: en si se le factura el mes de su alta, y en si después
+     * se le arrastran esos días. Escrita dos veces, acabarían
+     * contradiciéndose y el regalo se cobraría el mes siguiente.
+     *
+     * Con mes completo no hay cortesía que valga: ahí se cobra el mes
+     * entero, entre el día que entre.
+     */
+    public function haceCortesia(CarbonInterface $activacion): bool
+    {
+        return $this->prorates() && $activacion->day > $this->diaLimiteDeProrrateo();
+    }
+
+    /**
+     * El primer día que se le puede cobrar a un contrato.
+     *
+     * Su activación, o —si le tocan días de cortesía— el primero del
+     * mes siguiente: lo que va de la activación al fin de SU mes no se
+     * cobra nunca, ni en esa factura ni arrastrado en la siguiente.
+     */
+    public function primerDiaCobrable(CarbonInterface $activacion): CarbonInterface
+    {
+        return $this->haceCortesia($activacion)
+            ? $activacion->copy()->endOfMonth()->addDay()->startOfDay()
+            : $activacion->copy()->startOfDay();
     }
 
     /** ¿Esta sucursal factura sola? */

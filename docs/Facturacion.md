@@ -116,16 +116,16 @@ cada una responde algo distinto:
 
 | Fecha | Qué responde | De dónde sale |
 |---|---|---|
-| **Período facturado** | *Qué* se está cobrando | Del **ciclo** de la sucursal (§3.2) |
+| **Período facturado** | *Qué* se está cobrando | Del **ciclo** de la sucursal (§3.3) |
 | **Fecha de emisión** | *Cuándo* se expidió el documento | El día en que corrió la facturación |
-| **Fecha de vencimiento** | *Hasta cuándo* hay plazo para pagar | Emisión + **días de plazo** (§3.4) |
+| **Fecha de vencimiento** | *Hasta cuándo* hay plazo para pagar | Emisión + **días de plazo** (§3.5) |
 
 Una factura emitida el 25 de septiembre puede estar cobrando octubre y
 vencer el 15 de octubre. Las tres cosas a la vez, y ninguna se
 contradice.
 
 Hay una cuarta, que solo aparece cuando hay mora: la **fecha de
-corte**, que es un aviso (§3.6).
+corte**, que es un aviso (§3.7).
 
 ### 2.2 Qué lleva dentro
 
@@ -265,7 +265,47 @@ cobra el mes completo siempre.
 **Ejemplo.** Plan de $100.000, activado el 20 de un mes de 30 días:
 `100.000 × 11 ÷ 30 = $36.666,67`.
 
-### 3.2 Qué mes se cobra (el ciclo)
+### 3.2 Prorratear hasta el día
+
+Solo aparece con *Prorratear*. Es **hasta qué día del mes se cobra la
+fracción**; a quien entre después se le regalan esos días.
+
+| Valor | Qué hace |
+|---|---|
+| **31** (de fábrica) | Siempre se prorratea. Es lo que hacía el sistema |
+| **16** | Quien entra el 16 o antes paga sus días. Quien entra el 17 o después no paga nada de ese mes |
+
+Nace en 31 a propósito: regalar días es una decisión comercial y la
+toma alguien, no una actualización.
+
+**Qué significa exactamente «regalar»:** que **no se emite factura** de
+ese mes. No es facturar cero — un documento sin renglones, en
+electrónica, gasta un consecutivo autorizado que no se recupera.
+
+Y hay dos consecuencias que van atadas:
+
+- **Esos días no se arrastran después.** El arrastre existe para cobrar
+  lo que nadie cobró; si los días fueron de cortesía, ya están
+  decididos. Si reaparecieran, el regalo sería un aplazamiento.
+- **Ese contrato no entra en la corrida del mes en que se dio de
+  alta**, aunque la sucursal cobre por adelantado: empieza a
+  facturarse en la corrida siguiente.
+
+> **Por qué se hace esto en la calle.** Cobrar cinco días cuesta más
+> —la visita, el recibo, la fricción con alguien que acaba de entrar—
+> de lo que se recauda.
+
+> **Cobrando por adelantado, mírelo dos veces.** Saltarse la corrida
+> hace que la siguiente cobre el mes posterior, así que su primera
+> factura cubre **dos períodos**: el que se saltó y el que toca. No se
+> regala más que la fracción, pero la primera factura es más alta. Si
+> se prefiere que pague un solo mes, el día límite debe quedarse en 31
+> en esa sucursal.
+
+En la corrida ese contrato aparece como **omitido**, con el motivo
+«Días de cortesía». No es un fallo: es la regla trabajando.
+
+### 3.3 Qué mes se cobra (el ciclo)
 
 Es **qué período** cubre la factura. Con la corrida ejecutada el **25
 de septiembre**:
@@ -283,7 +323,7 @@ y el vencimiento se cuenta desde ahí.
 > facturando deja un mes sin cobrar o intenta cobrarlo dos veces
 > (caso 11).
 
-### 3.3 Cómo se factura, y el día
+### 3.4 Cómo se factura, y el día
 
 - **Manual** — las facturas salen solo con el botón *Generar facturas*.
 - **Automática** — la tarea diaria las lanza sola el día indicado. Con
@@ -293,13 +333,13 @@ y el vencimiento se cuenta desde ahí.
 En automática una sucursal no factura dos veces el mismo período aunque
 la tarea corra varias veces.
 
-### 3.4 Días de plazo
+### 3.5 Días de plazo
 
 Días desde la emisión hasta el vencimiento. Con 20: factura del 25 de
 septiembre → vence el 15 de octubre. Pasado el vencimiento sin pago, la
 factura pasa a **Vencida** sola.
 
-### 3.5 Umbral de corte
+### 3.6 Umbral de corte
 
 **Cuántas facturas vencidas hacen falta para suspender el contrato.**
 Con 2, al llegar a la segunda vencida el contrato pasa a **Suspendido**
@@ -307,7 +347,7 @@ y se le corta el servicio.
 
 **Es la única condición que corta de verdad.**
 
-### 3.6 Días hasta el corte
+### 3.7 Días hasta el corte
 
 **Es la fecha de corte que se le ANUNCIA al cliente.** Cuando se emite
 una factura a un contrato que ya tiene vencidas:
@@ -325,7 +365,7 @@ una factura a un contrato que ya tiene vencidas:
 
 Al pagar, el aviso se borra.
 
-### 3.7 Precio de reconexión
+### 3.8 Precio de reconexión
 
 No está en este bloque sino en los datos de la sucursal, pero pertenece
 a la facturación: es lo que se le cobra al cliente **cortado que paga**
@@ -340,7 +380,7 @@ a la facturación: es lo que se le cobra al cliente **cortado que paga**
 ### 4.1 Montar una sucursal para facturar (una vez)
 
 1. **Gestión empresarial → Sucursales → editar**.
-2. En *Configuración de facturación*, decidir las seis reglas de la
+2. En *Configuración de facturación*, decidir las siete reglas de la
    sección 3.
 3. Guardar. Si todas las sedes cobran igual: **Empresas → ficha →
    Aplicar a todas**.
@@ -489,6 +529,15 @@ existía.
 $100.000. Los 5 días de septiembre **los regala la empresa**: es la
 decisión que se tomó al elegir «mes completo».
 
+### Caso 3b — Entra pasado el día límite
+*Prorratear hasta el 16.* Activado el **20 de octubre**.
+→ Octubre **no se le factura**: once días de cortesía. En la corrida de
+octubre sale como omitido con ese motivo.
+→ La de noviembre es **noviembre completo**, $100.000, y los días de
+octubre no reaparecen.
+→ Si hubiera entrado el **16**, habría pagado del 16 al 31 y seguido el
+camino normal.
+
 ### Caso 4 — Activación vieja sin facturas
 Contrato activado el **10 de febrero** que nunca se facturó, y hoy
 corre octubre.
@@ -543,6 +592,13 @@ dos veces; el candado de período lo impide y la corrida sale en cero.
 → **Conclusión:** el ciclo se decide al montar la sucursal. Cambiarlo
 después exige una factura de ajuste y saber lo que se hace.
 
+### Caso 11b — Cobrando vencido, cliente nuevo
+Ciclo **vencido**: la corrida de septiembre cobra agosto. Activado el
+**20 de septiembre**.
+→ En la corrida de septiembre **no se le factura**: agosto no fue suyo.
+→ La de octubre cobra septiembre, y ahí sí: del 20 al 30,
+`100.000 × 11 ÷ 30 = $36.666,67`.
+
 ### Caso 12 — Cliente que se queja de que le cobraron de más
 Ruta de revisión, en orden:
 1. Mirar el **período** impreso en la factura: ¿cuántos días cubre?
@@ -570,8 +626,12 @@ Por orden de probabilidad:
 2. **Ya tiene factura de ese período** — es el candado que impide
    duplicar. Con ciclo anticipado el período no es el mes en curso.
 3. **No hay nada que facturar** — contrato sin plan y sin cargos.
-4. **Su fecha de inicio de facturación es posterior** al período.
-5. **La corrida no incluyó su sucursal** — la corrida es por sucursal.
+4. **Días de cortesía** — entró pasado el día límite (§3.2). El motivo
+   lo dice la corrida.
+5. **No fue cliente en ese período** — cobrando vencido, un contrato
+   activado después del mes que se está cobrando.
+6. **Su fecha de inicio de facturación es posterior** al período.
+7. **La corrida no incluyó su sucursal** — la corrida es por sucursal.
 
 ### «Salió más cara de lo normal»
 
@@ -608,6 +668,7 @@ Anotado para que nadie lo dé por hecho:
 - **Solo se prorratea el primer mes.** A partir del segundo, mes
   completo siempre.
 - **No arrastra más de un mes** de días sin cobrar.
+- **No cobra los días de cortesía más tarde.** Regalados es regalados.
 - **No devuelve días** al dar de baja a mitad de mes.
 - **No absorbe facturas viejas** en la nueva.
 - **Cambiar el ciclo no ajusta lo ya facturado.**
@@ -624,6 +685,7 @@ Anotado para que nadie lo dé por hecho:
 | **Ciclo** | Si se cobra el mes siguiente, el actual o el anterior |
 | **Prorrateo** | Cobrar solo los días de servicio del primer mes |
 | **Arrastre** | Días anteriores al período que nadie había cobrado, en la primera factura |
+| **Días de cortesía** | Los que se regalan a quien entra pasado el día límite de prorrateo |
 | **Umbral de corte** | Número de facturas vencidas que suspende el contrato |
 | **Saldo anterior** | Lo que el cliente debe de facturas previas |
 | **Saldo a favor** | Dinero del cliente que queda en la casa |

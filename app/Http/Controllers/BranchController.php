@@ -92,6 +92,7 @@ class BranchController extends Controller
         // por defecto, igual que antes.
         $facturacion = $request->validate([
             'proration_mode' => ['sometimes', Rule::enum(ProrationMode::class)],
+            'proration_day' => 'sometimes|integer|min:1|max:31',
             'billing_cycle' => ['sometimes', Rule::enum(BillingCycle::class)],
             'billing_mode' => ['sometimes', Rule::enum(BillingMode::class)],
             'billing_day' => [
@@ -184,6 +185,7 @@ class BranchController extends Controller
             // `sometimes`: por esta ruta pasan tambien payloads que no
             // mandan la configuracion de facturacion. Exigirlo rompia
             // esa otra pantalla sin tener nada que ver con ella; si no
+            'proration_day' => 'sometimes|integer|min:1|max:31',
             'billing_cycle' => ['sometimes', Rule::enum(BillingCycle::class)],
             // viene, el modo se queda como estaba.
             'billing_mode' => ['sometimes', Rule::enum(BillingMode::class)],
