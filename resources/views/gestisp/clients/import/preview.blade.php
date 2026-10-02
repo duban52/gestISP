@@ -155,7 +155,7 @@
         <div class="card-header">
             <h3 class="card-title"><i class="fas fa-check-circle mr-1"></i> Confirmar importación</h3>
         </div>
-        <form action="{{ route('clients.import.store') }}" method="POST"
+        <form id="formImportar" action="{{ route('clients.import.store') }}" method="POST"
               onsubmit="return confirm('¿Importar definitivamente? Esta acción crea los clientes, los contratos y las facturas de saldo migrado.');">
             @csrf
             <input type="hidden" name="ruta" value="{{ $ruta }}">
@@ -193,10 +193,41 @@
                 <a href="{{ route('clients.import.index') }}" class="btn btn-outline-secondary">
                     <i class="fas fa-times mr-1"></i> Cancelar
                 </a>
-                <button type="submit" class="btn btn-success">
+                <button type="submit" class="btn btn-success" id="btnImportar">
                     <i class="fas fa-file-import mr-1"></i> Importar definitivamente
                 </button>
             </div>
         </form>
     </div>
 @stop
+
+@section('js')
+    <script>
+        /* ============================================================
+           QUE SE VEA QUE ESTÁ TRABAJANDO
+
+           Importar mil filas tarda, y durante ese rato la pantalla se
+           quedaba exactamente igual que antes de pulsar. Quien no sabe
+           qué está pasando vuelve a pulsar — y una importación repetida
+           es justo lo que después hay que deshacer a mano.
+
+           El botón se deshabilita Y cambia de texto: deshabilitarlo a
+           secas se ve como una pantalla rota.
+           ============================================================ */
+        document.getElementById('formImportar').addEventListener('submit', function (evento) {
+            // El `onsubmit` ya preguntó. Si el operador dijo que no, el
+            // navegador cancela el envío y aquí no hay que tocar nada:
+            // dejar el botón bloqueado le impediría reintentar.
+            if (evento.defaultPrevented) {
+                return;
+            }
+
+            const boton = document.getElementById('btnImportar');
+
+            boton.disabled = true;
+            boton.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>'
+                + 'Importando... no cierre esta ventana';
+        });
+    </script>
+@stop
+

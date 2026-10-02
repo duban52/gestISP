@@ -122,6 +122,126 @@ class MassActionReversalGuardsTest extends BillingTestCase
         $this->assertSame(InvoiceStatus::Anulada->value, $factura->fresh()->status);
     }
 
+    // ============ Cobro múltiple: la caja manda ============
+
+    /**
+     * EL FRENO DEL DINERO.
+     *
+     * Un pago entró a una caja y cuenta en su cuadre. Reversarlo con
+     * la caja ya cerrada deja el arqueo de ese turno descuadrado para
+     * siempre y sin nada que lo explique.
+     */
+    public function test_no_reversa_un_cobro_si_la_caja_ya_se_cerro(): void
+    {
+        $factura = $this->emitir($this->createBillableContract());
+
+        $caja = \App\Models\CashRegister::create([
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->admin->id,
+            'opening_amount' => 0,
+            'status' => 'open',
+            'opened_at' => now(),
+        ]);
+
+        $pago = \App\Models\Payment::create([
+            'invoice_id' => $factura->id,
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->admin->id,
+            'amount' => 1000,
+            'payment_method' => 'Efectivo',
+            'status' => \App\Billing\Enums\PaymentStatus::Completed->value,
+            'payment_date' => now(),
+        ]);
+
+        \App\Models\CashRegisterTransaction::create([
+            'cash_register_id' => $caja->id,
+            'payment_id' => $pago->id,
+            'transaction_type' => 'Ingreso',
+            'amount' => 1000,
+            'payment_method' => 'Efectivo',
+            'description' => 'Prueba',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $recorder = app(MassActionRecorder::class);
+        $accion = $recorder->abrir(
+            MassActionType::CobroMultiple,
+            'Cobro de prueba',
+            branchId: $this->branch->id,
+            userId: $this->admin->id,
+        );
+        $recorder->registrar($accion, $pago, $factura->displayNumber());
+        $recorder->cerrar($accion);
+
+        // Se cierra la caja DESPUÉS del cobro, como en la vida real.
+        $caja->update(['status' => 'closed', 'closed_at' => now()]);
+
+        $reversion = app(MassActionReverter::class)->revertir($accion->refresh());
+
+        $this->assertSame(0, $reversion->reverted_items);
+        $this->assertSame(1, $reversion->conflict_items);
+        $this->assertNotNull($pago->fresh(), 'El pago no puede desaparecer con la caja cerrada.');
+        $this->assertStringContainsString(
+            'cerrada',
+            $accion->items()->firstOrFail()->fresh()->conflict_reason,
+        );
+    }
+
+    public function test_con_la_caja_abierta_el_cobro_si_se_reversa(): void
+    {
+        $factura = $this->emitir($this->createBillableContract());
+
+        $caja = \App\Models\CashRegister::create([
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->admin->id,
+            'opening_amount' => 0,
+            'status' => 'open',
+            'opened_at' => now(),
+        ]);
+
+        $pago = \App\Models\Payment::create([
+            'invoice_id' => $factura->id,
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->admin->id,
+            'amount' => 1000,
+            'payment_method' => 'Efectivo',
+            'status' => \App\Billing\Enums\PaymentStatus::Completed->value,
+            'payment_date' => now(),
+        ]);
+
+        \App\Models\CashRegisterTransaction::create([
+            'cash_register_id' => $caja->id,
+            'payment_id' => $pago->id,
+            'transaction_type' => 'Ingreso',
+            'amount' => 1000,
+            'payment_method' => 'Efectivo',
+            'description' => 'Prueba',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $saldoAntes = $factura->fresh()->getPendingAmount();
+
+        $recorder = app(MassActionRecorder::class);
+        $accion = $recorder->abrir(
+            MassActionType::CobroMultiple,
+            'Cobro de prueba',
+            branchId: $this->branch->id,
+            userId: $this->admin->id,
+        );
+        $recorder->registrar($accion, $pago, $factura->displayNumber());
+        $recorder->cerrar($accion);
+
+        $reversion = app(MassActionReverter::class)->revertir($accion->refresh());
+
+        $this->assertSame(1, $reversion->reverted_items);
+        $this->assertNull(\App\Models\Payment::find($pago->id));
+        // El movimiento de caja se va con él: si no, el cuadre sigue
+        // contando un dinero que ya no tiene pago detrás.
+        $this->assertSame(0, \App\Models\CashRegisterTransaction::where('payment_id', $pago->id)->count());
+        // Y la factura vuelve a deber lo que debía.
+        $this->assertGreaterThan($saldoAntes, $factura->fresh()->getPendingAmount());
+    }
+
     public function test_no_borra_un_contrato_importado_con_pagos(): void
     {
         $contrato = $this->createBillableContract();

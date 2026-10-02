@@ -100,9 +100,20 @@ class ImportOltOnts implements ShouldQueue
             'matched_contracts' => 0,
         ];
 
+        // LA ACCIÓN MASIVA. Se abre fuera del bucle: los lotes son
+        // una conveniencia de la transacción, no operaciones distintas.
+        $accion = app(\App\MassActions\MassActionRecorder::class)->abrir(
+            \App\MassActions\Enums\MassActionType::ImportacionDeOnts,
+            sprintf('Importación de ONTs desde la OLT %s: %d encontrada(s)', $olt->name, $encontradas->count()),
+            summary: ['olt' => $olt->name, 'encontradas' => $encontradas->count()],
+            source: $run,
+            branchId: $olt->branch_id,
+            userId: $run->user_id,
+        );
+
         foreach ($encontradas->chunk(self::TAMANO_LOTE) as $lote) {
             try {
-                DB::transaction(function () use ($lote, $olt, $existentes, $discovery, &$contadores) {
+                DB::transaction(function () use ($lote, $olt, $existentes, $discovery, &$contadores, $accion) {
                     foreach ($lote as $datos) {
                         $contadores['processed']++;
 
@@ -127,7 +138,7 @@ class ImportOltOnts implements ShouldQueue
                             $contadores['matched_contracts']++;
                         }
 
-                        Ont::create([
+                        $ont = Ont::create([
                             'branch_id' => $olt->branch_id,
                             'olt_id' => $olt->id,
                             'contract_id' => $contractId,
@@ -140,6 +151,21 @@ class ImportOltOnts implements ShouldQueue
                             'status' => $datos['online'] ? 1 : 0,
                             'admin_enabled' => true,
                         ]);
+
+                        // Lo que hace falta para deshacerlo: cuál ONT
+                        // trajo esta importación y con qué contrato
+                        // —si lo casó ella—, para saber después si
+                        // alguien la vinculó a mano.
+                        app(\App\MassActions\MassActionRecorder::class)->registrar(
+                            $accion,
+                            $ont,
+                            $ont->sn,
+                            antes: ['existia' => false],
+                            despues: [
+                                'contract_id' => $contractId,
+                                'ubicacion' => $datos['slot'] . '/' . $datos['port'] . '/' . $datos['onu_id'],
+                            ],
+                        );
 
                         // Evita duplicados si la OLT reportara el
                         // mismo serial dos veces
@@ -160,6 +186,8 @@ class ImportOltOnts implements ShouldQueue
             // Publicar el avance para la barra de progreso
             $run->update($contadores);
         }
+
+        app(\App\MassActions\MassActionRecorder::class)->cerrar($accion);
 
         $run->update(array_merge($contadores, [
             'status' => OntImportRun::ESTADO_COMPLETADO,

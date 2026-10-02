@@ -21,6 +21,8 @@ enum MassActionType: string
     case ImportacionDeClientes = 'importacion_clientes';
     case ImportacionDeOnts = 'importacion_onts';
     case CorridaDeFacturacion = 'corrida_facturacion';
+    case CobroMultiple = 'cobro_multiple';
+    case MovimientoDeAlmacen = 'movimiento_almacen';
 
     /** Una acción de reversión: deshace a otra. */
     case Reversion = 'reversion';
@@ -33,6 +35,8 @@ enum MassActionType: string
             self::ImportacionDeClientes => 'Importación de clientes y contratos',
             self::ImportacionDeOnts => 'Importación de ONTs',
             self::CorridaDeFacturacion => 'Corrida de facturación',
+            self::CobroMultiple => 'Cobro múltiple',
+            self::MovimientoDeAlmacen => 'Movimiento de almacén',
             self::Reversion => 'Reversión',
         };
     }
@@ -43,6 +47,8 @@ enum MassActionType: string
             self::CorteDeContratos, self::CortePppoe => 'fa-plug',
             self::ImportacionDeClientes, self::ImportacionDeOnts => 'fa-file-import',
             self::CorridaDeFacturacion => 'fa-file-invoice-dollar',
+            self::CobroMultiple => 'fa-hand-holding-usd',
+            self::MovimientoDeAlmacen => 'fa-dolly',
             self::Reversion => 'fa-undo',
         };
     }

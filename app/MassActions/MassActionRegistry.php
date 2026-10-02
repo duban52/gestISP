@@ -6,7 +6,10 @@ use App\MassActions\Enums\MassActionType;
 use App\MassActions\Reversiones\AnularCorridaDeFacturacion;
 use App\MassActions\Reversiones\RevertirCorteDeContratos;
 use App\MassActions\Reversiones\RevertirCortePppoe;
+use App\MassActions\Reversiones\RevertirCobroMultiple;
 use App\MassActions\Reversiones\RevertirImportacionDeClientes;
+use App\MassActions\Reversiones\RevertirImportacionDeOnts;
+use App\MassActions\Reversiones\RevertirMovimientoDeAlmacen;
 
 /**
  * Qué estrategia sabe deshacer cada tipo de operación.
@@ -21,11 +24,16 @@ use App\MassActions\Reversiones\RevertirImportacionDeClientes;
  *
  * LO QUE NO ESTÁ AQUÍ, NO SE REVIERTE
  * -----------------------------------
- * Y es la respuesta correcta: una importación de ONTs se registra
- * —para saber qué entró y cuándo— pero deshacerla significaría
- * desautorizar equipos en una OLT, que no es una fila de una tabla.
- * Mejor que el historial lo diga a que un botón prometa algo que no
- * puede cumplir.
+ * Y es la respuesta correcta. Mejor que el historial diga «esto no
+ * se deshace» a que un botón prometa algo que no puede cumplir.
+ *
+ * DESHACER NO ES SIEMPRE LO MISMO QUE DESCONFIGURAR
+ * -------------------------------------------------
+ * La importación de ONTs LEYÓ la OLT y copió lo que encontró: no
+ * configuró nada. Por eso sí se revierte, pero solo en la base.
+ * Mandarle un borrado a la OLT sería hacer algo que la importación
+ * nunca hizo, y dejar sin servicio a clientes que llevan meses
+ * navegando por deshacer una lectura.
  */
 class MassActionRegistry
 {
@@ -37,6 +45,9 @@ class MassActionRegistry
             MassActionType::CortePppoe->value => RevertirCortePppoe::class,
             MassActionType::ImportacionDeClientes->value => RevertirImportacionDeClientes::class,
             MassActionType::CorridaDeFacturacion->value => AnularCorridaDeFacturacion::class,
+            MassActionType::CobroMultiple->value => RevertirCobroMultiple::class,
+            MassActionType::MovimientoDeAlmacen->value => RevertirMovimientoDeAlmacen::class,
+            MassActionType::ImportacionDeOnts->value => RevertirImportacionDeOnts::class,
         ];
     }
 

@@ -5,6 +5,8 @@ namespace App\Billing\Services;
 use App\Models\CashRegister;
 use App\Models\Invoice;
 use App\Models\PaymentBatch;
+use App\MassActions\Enums\MassActionType;
+use App\MassActions\MassActionRecorder;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -39,6 +41,7 @@ class BatchPaymentRegistrar
     public function __construct(
         private readonly PaymentRegistrar $registrar,
         private readonly AuditLogger $auditLogger,
+        private readonly MassActionRecorder $recorder,
     ) {
     }
 
@@ -156,6 +159,47 @@ class BatchPaymentRegistrar
                 'payments_count' => count($items),
                 'contracts_count' => count($contratos),
             ]);
+
+            // LA ACCIÓN MASIVA. Un cobro múltiple mueve dinero de
+            // varias facturas a la vez, y hasta ahora deshacerlo pedía
+            // borrar pagos a mano uno por uno, con el riesgo de dejar
+            // el movimiento de caja huérfano.
+            $accion = $this->recorder->abrir(
+                MassActionType::CobroMultiple,
+                sprintf(
+                    'Cobro múltiple de %d factura(s) por $%s%s',
+                    count($items),
+                    number_format($totalEfectivo, 2, ',', '.'),
+                    $lote->payer_name ? ' (' . $lote->payer_name . ')' : '',
+                ),
+                summary: [
+                    'lote' => $lote->numero_visible,
+                    'metodo' => $data['payment_method'],
+                    'total_recibido' => round($totalEfectivo, 2),
+                    'total_retenido' => round($totalRetenido, 2),
+                    'caja' => $caja->id,
+                ],
+                source: $lote,
+                branchId: $lote->branch_id,
+                userId: $userId,
+            );
+
+            // El sujeto es el PAGO: es lo que hay que reversar.
+            foreach ($lote->payments()->get() as $pago) {
+                $this->recorder->registrar(
+                    $accion,
+                    $pago,
+                    $pago->invoice?->displayNumber(),
+                    antes: ['pagado' => false],
+                    despues: [
+                        'monto' => (float) $pago->amount,
+                        'factura' => $pago->invoice?->displayNumber(),
+                        'caja' => $caja->id,
+                    ],
+                );
+            }
+
+            $this->recorder->cerrar($accion);
 
             $this->auditLogger->action(
                 'payments.batch_registered',

@@ -346,6 +346,38 @@ class MaterialMovementController extends Controller
                 }
             });
 
+            // LA ACCIÓN MASIVA. Una operación de almacén son N
+            // renglones —hasta quinientos equipos con su serial— y
+            // deshacerla a mano es registrar quinientos movimientos
+            // contrarios uno por uno.
+            $accion = app(\App\MassActions\MassActionRecorder::class)->abrir(
+                \App\MassActions\Enums\MassActionType::MovimientoDeAlmacen,
+                sprintf('%s de almacén: %d renglón(es)', $request->type, count($movements)),
+                summary: [
+                    'tipo' => $request->type,
+                    'operacion' => $operacion,
+                    'renglones' => count($movements),
+                    'motivo' => $request->reason,
+                ],
+            );
+
+            foreach ($movements as $movimiento) {
+                app(\App\MassActions\MassActionRecorder::class)->registrar(
+                    $accion,
+                    $movimiento,
+                    trim(($movimiento->material?->name ?? 'Material') . ' ' . ($movimiento->serial_number ?? '')),
+                    antes: ['en_inventario' => $request->type !== 'Entrada'],
+                    despues: [
+                        'tipo' => $movimiento->type,
+                        'cantidad' => $movimiento->quantity,
+                        'serial' => $movimiento->serial_number,
+                        'destino' => $movimiento->warehouse_destination_id,
+                    ],
+                );
+            }
+
+            app(\App\MassActions\MassActionRecorder::class)->cerrar($accion);
+
             $this->auditarMovimiento($request, $movements);
 
             // Al detalle de la operación recién registrada: ahí está el
@@ -433,6 +465,16 @@ class MaterialMovementController extends Controller
      * Se ejecuta dentro de la transacción del store, por lo que
      * cualquier excepción revierte también los movimientos creados.
      */
+    /**
+     * Aplica el movimiento al inventario.
+     *
+     * La aritmética vive en `InventoryMover` desde que hay que
+     * deshacer operaciones: la reversión de un movimiento necesita
+     * exactamente este cálculo, y tenerlo dos veces es como las dos
+     * copias acaban diciendo cosas distintas sobre el mismo almacén.
+     * Este método se queda porque es por donde entra todo el
+     * controlador.
+     */
     protected function updateInventory(
         string $type,
         ?int $warehouseOriginId,
@@ -443,105 +485,16 @@ class MaterialMovementController extends Controller
         ?string $serialNumber = null,
         ?float $purchaseUnitValue = null
     ): void {
-        if ($type === 'Entrada') {
-            if ($serialNumber) {
-                // EQUIPO: la fila es una unidad, así que lleva su costo
-                // exacto. Dos ONT compradas a precios distintos valen
-                // cada una lo suyo.
-                Inventory::create([
-                    'warehouse_id'        => $warehouseDestinationId,
-                    'material_id'         => $materialId,
-                    'quantity'            => 1,
-                    'unit_of_measurement' => $unitOfMeasurement,
-                    'serial_number'       => $serialNumber,
-                    'purchase_unit_value' => $purchaseUnitValue,
-                ]);
-            } else {
-                // CONSUMIBLE: todas las compras se acumulan en una sola
-                // fila, así que el costo se lleva por promedio
-                // ponderado. Ver App\Services\InventoryCosting.
-                $inventory = Inventory::updateOrCreate(
-                    [
-                        'warehouse_id'  => $warehouseDestinationId,
-                        'material_id'   => $materialId,
-                        'serial_number' => null,
-                    ],
-                    [
-                        'quantity'            => DB::raw("COALESCE(quantity, 0) + $quantity"),
-                        'unit_of_measurement' => $unitOfMeasurement,
-                    ]
-                );
-
-                // `refresh()` obligatorio: con DB::raw la cantidad que
-                // queda en memoria es la EXPRESIÓN, no el número, y el
-                // promedio saldría de una cantidad inventada.
-                app(InventoryCosting::class)->registrarEntrada(
-                    $inventory->refresh(),
-                    $purchaseUnitValue,
-                    (float) $quantity,
-                );
-            }
-        } elseif ($type === 'Salida') {
-            if ($serialNumber) {
-                Inventory::where('warehouse_id', $warehouseOriginId)
-                    ->where('material_id', $materialId)
-                    ->where('serial_number', $serialNumber)
-                    ->first()?->delete();
-            } else {
-                $inventory = Inventory::where('warehouse_id', $warehouseOriginId)
-                    ->where('material_id', $materialId)
-                    ->first();
-
-                $inventory?->update([
-                    'quantity' => $inventory->quantity - $quantity,
-                ]);
-            }
-        } elseif ($type === 'Transferencia') {
-            if ($serialNumber) {
-                // El equipo conserva su fila, solo cambia de almacén
-                Inventory::where('warehouse_id', $warehouseOriginId)
-                    ->where('material_id', $materialId)
-                    ->where('serial_number', $serialNumber)
-                    ->first()?->update(['warehouse_id' => $warehouseDestinationId]);
-            } else {
-                // Consumible: restar en origen, sumar en destino
-                $originInventory = Inventory::where('warehouse_id', $warehouseOriginId)
-                    ->where('material_id', $materialId)
-                    ->first();
-
-                // EL COSTO VIAJA CON EL MATERIAL. Se lee ANTES de
-                // descontar: trasladar 200 m de cable no los abarata, y
-                // si el destino los valorara a cero, mover material de
-                // un almacén a otro haría desaparecer dinero del
-                // inventario total sin que nadie comprara ni gastara
-                // nada.
-                $costoDeOrigen = $originInventory?->purchase_unit_value !== null
-                    ? (float) $originInventory->purchase_unit_value
-                    : null;
-
-                $originInventory?->update([
-                    'quantity' => $originInventory->quantity - $quantity,
-                ]);
-
-                $destino = Inventory::updateOrCreate(
-                    [
-                        'warehouse_id'  => $warehouseDestinationId,
-                        'material_id'   => $materialId,
-                        'serial_number' => null,
-                    ],
-                    [
-                        'quantity'            => DB::raw("COALESCE(quantity, 0) + $quantity"),
-                        'unit_of_measurement' => $unitOfMeasurement,
-                    ]
-                );
-
-                app(InventoryCosting::class)->registrarEntrada(
-                    $destino->refresh(),
-                    $costoDeOrigen,
-                    (float) $quantity,
-                );
-            }
-        }
+        app(\App\Services\InventoryMover::class)->aplicar(
+            $type,
+            $warehouseOriginId,
+            $warehouseDestinationId,
+            $materialId,
+            $quantity,
+            $unitOfMeasurement,
+            $serialNumber,
+            $purchaseUnitValue,
+        );
     }
 
     /**
