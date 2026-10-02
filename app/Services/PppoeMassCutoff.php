@@ -6,6 +6,10 @@ use App\Billing\Enums\ContractStatus;
 use App\Models\Contract;
 use App\Models\PppoeAccount;
 use App\Models\Router;
+use App\MassActions\Enums\MassActionItemStatus;
+use App\MassActions\Enums\MassActionType;
+use App\MassActions\MassActionRecorder;
+use App\Models\MassAction;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -100,6 +104,7 @@ class PppoeMassCutoff
     public function __construct(
         private readonly MikrotikApiService $mikrotik,
         private readonly AuditLogger $auditLogger,
+        private readonly MassActionRecorder $recorder,
     ) {
     }
 
@@ -532,6 +537,18 @@ class PppoeMassCutoff
         $cortadas = 0;
         $errores = 0;
 
+        // LA ACCIÓN MASIVA. Hasta ahora este corte solo dejaba una
+        // línea en la auditoría con los identificadores: servía para
+        // saber qué pasó, pero no para deshacerlo. Lo que faltaba es
+        // guardar, cuenta por cuenta, qué estado tenía antes.
+        $accion = $this->recorder->abrir(
+            MassActionType::CortePppoe,
+            sprintf('Corte masivo de PPPoE: %d identificador(es) en la lista', count($filas)),
+            summary: ['identificadores' => count($filas)],
+            branchId: $branchId,
+            userId: $userId,
+        );
+
         foreach ($filas as $i => $fila) {
             if ($fila['estado'] !== 'lista') {
                 continue;
@@ -543,6 +560,22 @@ class PppoeMassCutoff
                 $filas[$i]['cuentas'][$j] = array_merge($datos, $resultado);
 
                 $resultado['resultado'] === 'cortada' ? $cortadas++ : $errores++;
+
+                // `disabled` es lo único que cambia en la cuenta, y es
+                // lo único que hace falta para volver atrás.
+                $this->recorder->registrar(
+                    $accion,
+                    PppoeAccount::find($datos['id']),
+                    $datos['username'] ?? null,
+                    // El valor REAL de antes, no un supuesto: lo trae
+                    // la propia fila resuelta.
+                    antes: ['disabled' => (bool) ($datos['disabled'] ?? false)],
+                    despues: ['disabled' => true],
+                    estado: $resultado['resultado'] === 'cortada'
+                        ? MassActionItemStatus::Ok
+                        : MassActionItemStatus::Error,
+                    mensaje: $resultado['error'] ?? null,
+                );
             }
 
             // El estado de la fila resume lo que pasó con sus cuentas
@@ -551,6 +584,8 @@ class PppoeMassCutoff
                 ? 'cortada'
                 : 'error';
         }
+
+        $this->recorder->cerrar($accion);
 
         $this->auditarOperacion($filas, $cortadas, $errores);
 

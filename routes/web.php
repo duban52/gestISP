@@ -324,6 +324,24 @@ Route::middleware('auth')->group(function () {
 Route::get('/auditoria', [App\Http\Controllers\AuditController::class, 'index'])->name('audits.index');
 Route::get('/auditoria/{audit}', [App\Http\Controllers\AuditController::class, 'show'])->name('audits.show');
 
+// ACCIONES MASIVAS: el historial de todo lo que se ejecuto sobre
+// muchos registros a la vez, y su reversion.
+//
+// Reservado al superadministrador por el middleware, igual que la
+// trazabilidad: desde aqui se deshacen cortes, se anulan facturas y se
+// borran contratos importados. Y ademas por la politica, que es la que
+// mira si ESA accion concreta se puede revertir.
+Route::middleware(['auth', 'superadmin'])->prefix('gestion/acciones-masivas')->group(function () {
+    Route::get('/', [App\Http\Controllers\MassActionController::class, 'index'])
+        ->name('mass_actions.index');
+    Route::get('/{massAction}', [App\Http\Controllers\MassActionController::class, 'show'])
+        ->name('mass_actions.show');
+    Route::get('/{massAction}/revertir', [App\Http\Controllers\MassActionController::class, 'revisar'])
+        ->name('mass_actions.confirm');
+    Route::post('/{massAction}/revertir', [App\Http\Controllers\MassActionController::class, 'revertir'])
+        ->name('mass_actions.revert');
+});
+
 // Catalogo del sistema: los estados de contrato y los tipos de orden.
 //
 // Reservado al superadministrador por el middleware, no por un permiso

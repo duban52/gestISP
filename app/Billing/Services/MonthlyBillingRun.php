@@ -3,6 +3,9 @@
 namespace App\Billing\Services;
 
 use App\Billing\Enums\ContractStatus;
+use App\MassActions\Enums\MassActionItemStatus;
+use App\MassActions\Enums\MassActionType;
+use App\MassActions\MassActionRecorder;
 use App\Models\BillingRun;
 use App\Models\BranchBillingSetting;
 use App\Models\Contract;
@@ -31,6 +34,7 @@ class MonthlyBillingRun
     public function __construct(
         private readonly OverdueProcessor $overdueProcessor,
         private readonly InvoiceGenerator $invoiceGenerator,
+        private readonly MassActionRecorder $recorder,
     ) {
     }
 
@@ -86,6 +90,21 @@ class MonthlyBillingRun
             ])
             : null;
 
+        // LA ACCIÓN MASIVA. `billing_runs` ya guardaba los totales de
+        // la corrida, pero no QUÉ facturas salieron de ella con el
+        // detalle que hace falta para deshacerla. Deshacer aquí no es
+        // borrar —una factura gasta un consecutivo autorizado y puede
+        // estar en los registros de la DIAN— sino ANULAR lo anulable;
+        // ver `AnularCorridaDeFacturacion`.
+        $accion = $this->recorder->abrir(
+            MassActionType::CorridaDeFacturacion,
+            sprintf('Corrida de facturación del período %s: %d contrato(s)', $periodo, $contracts->count()),
+            summary: ['periodo' => $periodo, 'contratos' => $contracts->count()],
+            source: $run,
+            branchId: $branchId,
+            userId: $userId,
+        );
+
         foreach ($contracts as $contract) {
             try {
                 $result = $this->invoiceGenerator->generateForContract($contract, $today, $userId, $run?->id);
@@ -95,14 +114,46 @@ class MonthlyBillingRun
                     $totalSubtotal += (float) $result['invoice']->subtotal;
                     $totalTax += (float) $result['invoice']->tax;
                     $totalBilled += (float) $result['invoice']->total;
+
+                    // El sujeto es la FACTURA, no el contrato: es lo
+                    // que habría que anular al revertir.
+                    $this->recorder->registrar(
+                        $accion,
+                        $result['invoice'],
+                        $result['invoice']->displayNumber(),
+                        antes: ['existia' => false],
+                        despues: [
+                            'contrato' => $contract->numero_visible,
+                            'total' => (float) $result['invoice']->total,
+                            'periodo' => $result['invoice']->billed_year_month,
+                        ],
+                    );
                 } else {
                     $skipped++;
+
+                    $this->recorder->registrar(
+                        $accion,
+                        $contract,
+                        $contract->numero_visible,
+                        estado: MassActionItemStatus::Omitido,
+                        mensaje: $result['reason'] ?? null,
+                    );
                 }
             } catch (\Exception $e) {
                 Log::error("Error generando factura para contrato {$contract->numero_visible}: " . $e->getMessage());
                 $skipped++;
+
+                $this->recorder->registrar(
+                    $accion,
+                    $contract,
+                    $contract->numero_visible,
+                    estado: MassActionItemStatus::Error,
+                    mensaje: $e->getMessage(),
+                );
             }
         }
+
+        $this->recorder->cerrar($accion);
 
         // Cerrar la corrida con los totales reales
         $run?->update([

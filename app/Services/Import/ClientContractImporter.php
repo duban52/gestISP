@@ -11,6 +11,9 @@ use App\Models\Invoice;
 use App\Models\Plan;
 use App\Services\ContractNumberGenerator;
 use Illuminate\Support\Carbon;
+use App\MassActions\Enums\MassActionItemStatus;
+use App\MassActions\Enums\MassActionType;
+use App\MassActions\MassActionRecorder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -59,6 +62,7 @@ class ClientContractImporter
 
     public function __construct(
         private readonly ContractNumberGenerator $numerador,
+        private readonly MassActionRecorder $recorder,
     ) {
     }
 
@@ -192,6 +196,20 @@ class ClientContractImporter
     {
         $filas = $this->leerArchivo($rutaArchivo);
 
+        // LA ACCIÓN MASIVA. Una importación equivocada mete cientos de
+        // contratos mal y hasta ahora no había forma de deshacerla:
+        // había que buscarlos a mano uno por uno.
+        $accion = $this->recorder->abrir(
+            MassActionType::ImportacionDeClientes,
+            sprintf('Importación de %d fila(s) desde %s', count($filas), basename($rutaArchivo)),
+            summary: [
+                'archivo' => basename($rutaArchivo),
+                'filas' => count($filas),
+                'con_saldos' => $crearSaldos ? 'sí' : 'no',
+            ],
+            branchId: $branchId,
+        );
+
         $resultado = [
             'creados' => 0,
             'clientes_nuevos' => 0,
@@ -208,14 +226,23 @@ class ClientContractImporter
             if ($datos['errores']) {
                 $resultado['errores'][] = ['linea' => $linea, 'motivos' => $datos['errores']];
 
+                $this->recorder->registrar(
+                    $accion,
+                    null,
+                    'Línea ' . $linea,
+                    estado: MassActionItemStatus::Error,
+                    mensaje: implode('; ', $datos['errores']),
+                );
+
                 continue;
             }
 
             try {
                 // Una transacción por fila: si una falla, las demás
                 // ya importadas se conservan.
-                DB::transaction(function () use ($datos, $branchId, $crearSaldos, &$resultado) {
+                DB::transaction(function () use ($datos, $branchId, $crearSaldos, &$resultado, $accion, $linea) {
                     $cliente = $datos['cliente_existente'];
+                    $clienteCreado = false;
 
                     if (!$cliente) {
                         $cliente = Client::create($datos['cliente'] + [
@@ -223,6 +250,7 @@ class ClientContractImporter
                             'user_id' => Auth::id(),
                         ]);
                         $resultado['clientes_nuevos']++;
+                        $clienteCreado = true;
                     }
 
                     $contrato = $this->crearContrato($datos, $cliente, $branchId);
@@ -233,6 +261,22 @@ class ClientContractImporter
                         $resultado['con_saldo']++;
                         $resultado['saldo_total'] += $datos['saldo'];
                     }
+
+                    // `cliente_creado` decide, al revertir, si el
+                    // cliente se borra con el contrato o se queda: uno
+                    // que ya existía antes no es cosa de esta
+                    // importación.
+                    $this->recorder->registrar(
+                        $accion,
+                        $contrato,
+                        $contrato->numero_visible,
+                        antes: ['existia' => false, 'cliente_creado' => $clienteCreado],
+                        despues: [
+                            'contrato' => $contrato->numero_visible,
+                            'cliente' => $cliente->identity_number,
+                            'linea' => $linea,
+                        ],
+                    );
                 });
 
             } catch (\Throwable $e) {
@@ -242,8 +286,18 @@ class ClientContractImporter
                     'linea' => $linea,
                     'motivos' => ['No se pudo guardar: ' . $e->getMessage()],
                 ];
+
+                $this->recorder->registrar(
+                    $accion,
+                    null,
+                    'Línea ' . $linea,
+                    estado: MassActionItemStatus::Error,
+                    mensaje: 'No se pudo guardar: ' . $e->getMessage(),
+                );
             }
         }
+
+        $this->recorder->cerrar($accion);
 
         return $resultado;
     }

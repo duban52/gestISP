@@ -780,6 +780,19 @@ return [
                     'active' => ['auditoria*'],
                     'solo_superadmin' => true,
                 ],
+                // Acciones masivas: el historial de todo lo que se
+                // ejecuto sobre muchos registros a la vez, con su
+                // reversion. Mismo criterio que la trazabilidad: desde
+                // aqui se deshacen cortes, se anulan facturas y se
+                // borran contratos, asi que no puede depender de un
+                // permiso marcable en el modulo de roles.
+                [
+                    'text' => 'Acciones masivas',
+                    'route' => 'mass_actions.index',
+                    'icon' => 'fas  fa-layer-group',
+                    'active' => ['gestion/acciones-masivas*'],
+                    'solo_superadmin' => true,
+                ],
                 // Copias de seguridad: mismo criterio que la
                 // trazabilidad. El archivo que se descarga es la base
                 // de datos completa, así que la entrada no puede

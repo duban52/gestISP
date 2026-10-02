@@ -14,6 +14,10 @@ use App\Models\ContractStatusOption;
 use App\Models\Invoice;
 use App\Models\Ont;
 use App\Models\PppoeAccount;
+use App\MassActions\Enums\MassActionItemStatus;
+use App\MassActions\Enums\MassActionType;
+use App\MassActions\MassActionRecorder;
+use App\Models\MassAction;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -61,6 +65,7 @@ class ContractMassCutoff
     public function __construct(
         private readonly ContractStatusFromOrder $estados,
         private readonly AuditLogger $auditLogger,
+        private readonly MassActionRecorder $recorder,
     ) {
     }
 
@@ -153,6 +158,25 @@ class ContractMassCutoff
             return $tanda;
         });
 
+        // LA ACCIÓN MASIVA. Es la que permite deshacer esto después:
+        // la tanda ya guardaba qué se iba a cortar, pero no el estado
+        // que tenía cada contrato ANTES, que es lo único con lo que se
+        // puede volver atrás.
+        $this->recorder->abrir(
+            MassActionType::CorteDeContratos,
+            sprintf('Corte masivo por mora de %d contrato(s) (%s): %s', count($aCortar), $origen, $motivo),
+            summary: [
+                'origen' => $origen,
+                'motivo' => $motivo,
+                'umbral' => $tanda->threshold,
+                'en_la_lista' => count($filas),
+                'a_cortar' => count($aCortar),
+            ],
+            source: $tanda,
+            branchId: $branchId,
+            userId: $userId,
+        );
+
         $this->auditLogger->action(
             'contracts.mass_cut',
             sprintf('Ordenó el corte masivo por mora de %d contrato(s) (%s): %s', count($aCortar), $origen, $motivo),
@@ -191,10 +215,28 @@ class ContractMassCutoff
         if ($fila['estado'] !== 'lista') {
             $this->cerrar($item, ContractCutoffItem::OMITIDO, 'Al llegar su turno: ' . $fila['mensaje']);
 
+            $this->recorder->registrar(
+                $this->accionDe($tanda),
+                $fila['contrato_id'] ? Contract::find($fila['contrato_id']) : null,
+                $item->contract_number,
+                estado: MassActionItemStatus::Omitido,
+                mensaje: 'Al llegar su turno: ' . $fila['mensaje'],
+            );
+
+            // También aquí: si el ÚLTIMO de la tanda sale omitido, es
+            // este el que tiene que cerrarla. Sin esto la acción se
+            // quedaba en «procesando» para siempre y nunca ofrecía el
+            // botón de revertir.
+            $this->cerrarSiTerminoLaTanda($tanda);
+
             return;
         }
 
         $contrato = Contract::findOrFail($fila['contrato_id']);
+
+        // El estado ANTES de tocarlo: es contra lo que se compara al
+        // revertir, y lo que se le devuelve al contrato.
+        $estadoAnterior = (string) $contrato->status;
 
         try {
             $orden = $this->estados->ordenAdministrativa(
@@ -226,6 +268,18 @@ class ContractMassCutoff
                 $orden->id,
             );
 
+            // Lo que hace falta para deshacerlo: el estado de antes y
+            // el que quedó. Nada más — ni el contrato entero ni sus
+            // cuarenta columnas.
+            $this->recorder->registrar(
+                $this->accionDe($tanda),
+                $contrato,
+                $contrato->numero_visible,
+                antes: ['status' => $estadoAnterior],
+                despues: ['status' => ContractStatus::Suspendido->value],
+                mensaje: ucfirst($mensaje) . '.',
+            );
+
             // Por contrato: responde «¿por qué me cortaron?».
             $this->auditLogger->action(
                 'contracts.cut_for_debt',
@@ -244,6 +298,59 @@ class ContractMassCutoff
         } catch (\Throwable $e) {
             report($e);
             $this->cerrar($item, ContractCutoffItem::ERROR, 'No se pudo cortar: ' . $e->getMessage());
+
+            $this->recorder->registrar(
+                $this->accionDe($tanda),
+                $contrato,
+                $contrato->numero_visible,
+                estado: MassActionItemStatus::Error,
+                mensaje: 'No se pudo cortar: ' . $e->getMessage(),
+            );
+        }
+
+        // La tanda se corta contrato a contrato, cada uno en su propio
+        // trabajo de la cola: no hay un momento en que «termine», así
+        // que se cierra cuando ya no queda ninguno pendiente. Lo
+        // comprueba el último que pasa por aquí.
+        $this->cerrarSiTerminoLaTanda($tanda);
+    }
+
+    /**
+     * La acción masiva de esta tanda.
+     *
+     * Se busca por el registro de origen y no se guarda en la tanda:
+     * así las tandas que ya existían —cortadas antes de que esto
+     * existiera— siguen funcionando sin columna nueva ni migración de
+     * datos, simplemente sin acción asociada.
+     */
+    private function accionDe(ContractCutoff $tanda): ?MassAction
+    {
+        return MassAction::where('source_type', ContractCutoff::class)
+            ->where('source_id', $tanda->id)
+            ->first();
+    }
+
+    /**
+     * Cierra la acción cuando ya no queda ningún contrato pendiente.
+     *
+     * Lo llama el último trabajo que termina. No hay forma más simple:
+     * cada contrato va en su propio trabajo de la cola y ninguno sabe
+     * si es el último hasta que mira.
+     */
+    private function cerrarSiTerminoLaTanda(ContractCutoff $tanda): void
+    {
+        $quedan = $tanda->items()
+            ->where('status', ContractCutoffItem::PENDIENTE)
+            ->exists();
+
+        if ($quedan) {
+            return;
+        }
+
+        $accion = $this->accionDe($tanda);
+
+        if ($accion && !$accion->status->terminada()) {
+            $this->recorder->cerrar($accion);
         }
     }
 
