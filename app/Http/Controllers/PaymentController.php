@@ -6,6 +6,7 @@ use App\Billing\Enums\InvoiceStatus;
 use App\Billing\Enums\RetentionType;
 use App\Billing\Services\BatchPaymentRegistrar;
 use App\Billing\Services\PaymentRegistrar;
+use App\Billing\Services\PaymentReverser;
 use App\Exports\PaymentsExport;
 use App\Models\CashRegister;
 use App\Models\Invoice;
@@ -43,7 +44,7 @@ class PaymentController extends Controller
         $this->middleware('check.permission:payments.index')->only('index');
         $this->middleware('check.permission:payments.create')->only('create', 'store', 'storeBatch');
         $this->middleware('check.permission:payments.edit')->only('edit', 'update');
-        $this->middleware('check.permission:payments.destroy')->only('destroy');
+        $this->middleware('check.permission:payments.destroy')->only('destroy', 'reversionInfo');
         $this->middleware('check.permission:payments.search')->only('search');
         $this->middleware('check.permission:payments.searchView')->only('searchView');
         $this->middleware('check.permission:payments.export')->only('exportPaymentsPDF');
@@ -529,6 +530,86 @@ class PaymentController extends Controller
                 'error'   => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * Lo que va a pasar si se reversa este pago, ANTES de pedir nada.
+     *
+     * Alimenta el modal de confirmación: cuánto se devuelve, a qué
+     * factura y a qué caja, qué efectos NO se deshacen, y —si no se
+     * puede— el motivo en claro. Se consulta por pago y bajo demanda:
+     * calcularlo para cada fila del listado serían cientos de
+     * consultas para un botón que casi nunca se usa.
+     */
+    public function reversionInfo(Payment $payment, PaymentReverser $reversor)
+    {
+        $factura = $payment->invoice;
+        $contrato = $factura?->contract ?? $payment->contract;
+
+        return response()->json([
+            'pago' => $payment->id,
+            'monto' => number_format((float) $payment->amount, 0, ',', '.'),
+            'retenciones' => $payment->totalRetenciones(),
+            'metodo' => $payment->payment_method,
+            'fecha' => $payment->payment_date?->format('Y-m-d'),
+            'factura' => $factura?->displayNumber(),
+            'contrato' => $contrato?->numero_visible,
+            'cliente' => trim(($contrato?->client?->name ?? '') . ' ' . ($contrato?->client?->last_name ?? '')),
+            'es_anticipo' => $payment->type === 'anticipo',
+            'impedimento' => $reversor->motivoParaNoReversar($payment),
+            'avisos' => $reversor->advertencias($payment),
+        ]);
+    }
+
+    /**
+     * Reversa un pago suelto.
+     *
+     * El dinero mal recibido —el cajero se equivocó de contrato, el
+     * cliente anuló la transferencia, se cobró dos veces— no se
+     * arregla editando el pago: se deshace entero y queda el rastro
+     * de que se deshizo. La aritmética vive en PaymentReverser, que
+     * es el mismo que usa la reversión de un cobro múltiple.
+     *
+     * El MOTIVO es obligatorio. Un pago reversado sin explicación es
+     * exactamente lo que nadie puede auditar seis meses después.
+     */
+    public function destroy(Request $request, Payment $payment, PaymentReverser $reversor)
+    {
+        $validated = $request->validate([
+            'motivo' => 'required|string|min:5|max:500',
+        ], [
+            'motivo.required' => 'Escriba por qué se reversa este pago.',
+            'motivo.min' => 'El motivo es muy corto: explique qué pasó.',
+        ]);
+
+        try {
+            DB::transaction(function () use ($payment, $validated, $reversor) {
+                // Se vuelve a leer con bloqueo: dos pestañas abiertas o
+                // un doble clic llegan a la vez, y sin esto las dos
+                // pasarían el control de "ya fue reversado".
+                $pago = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+
+                $reversor->reversar($pago, $validated['motivo']);
+            });
+        } catch (\Throwable $e) {
+            Log::error('Error al reversar el pago ' . $payment->id . ': ' . $e->getMessage());
+
+            $mensaje = 'No se pudo reversar el pago: ' . $e->getMessage();
+
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'error' => $mensaje], 422)
+                : back()->with('error', $mensaje);
+        }
+
+        $mensaje = sprintf(
+            'Pago #%d reversado por $%s. El dinero salió de la caja y la factura volvió a quedar con su saldo.',
+            $payment->id,
+            number_format((float) $payment->amount, 0, ',', '.'),
+        );
+
+        return $request->expectsJson()
+            ? response()->json(['success' => true, 'message' => $mensaje])
+            : redirect()->route('payments.index')->with('success', $mensaje);
     }
 
     /**

@@ -497,6 +497,13 @@ Route::get('/payments/search', [PaymentController::class, 'searchView'])->name('
 // entrega de dinero. Todo o nada; ver BatchPaymentRegistrar.
 Route::post('/payments/batch', [PaymentController::class, 'storeBatch'])->name('payments.storeBatch');
 
+// Qué va a pasar si se reversa este pago: cuánto vuelve, de qué caja
+// sale y qué NO se deshace. Lo lee el modal de confirmación antes de
+// pedir el motivo. La reversión en sí es el DELETE del resource
+// (payments.destroy).
+Route::get('/payments/{payment}/reversion', [PaymentController::class, 'reversionInfo'])
+    ->name('payments.reversionInfo');
+
 // Recibo de caja en tirilla térmica. El HTML es el que se ve en el
 // modal y el que se manda a la impresora; el PDF es para archivar.
 Route::get('/payments/{payment}/recibo', [App\Http\Controllers\PaymentReceiptController::class, 'show'])->name('payments.receipt');

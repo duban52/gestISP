@@ -483,6 +483,43 @@ class Invoice extends Model
     public function recalcularSaldo(): void
     {
         $this->pending_invoice_amount = $this->getPendingAmount();
+        $this->reabrirSiVolvioADeber();
         $this->save();
+    }
+
+    /**
+     * Una factura que vuelve a deber deja de estar saldada.
+     *
+     * Hasta aquí el recálculo solo escribía el saldo, y el estado se
+     * quedaba como estaba. Al reversar un pago eso dejaba una factura
+     * «Pagada» con saldo pendiente: salía como cobrada en los
+     * informes y, peor, `InvoiceStatus::payable()` ya no la dejaba
+     * cobrar — la factura quedaba trabada, debiendo y sin poder
+     * recibir el cobro correcto. (NoteIssuer::anular() ya corregía el
+     * estado por su cuenta en su camino; esto cubre todos los demás.)
+     *
+     * SOLO EN ESTE SENTIDO. Dar una factura por pagada tiene efectos
+     * que no son de aquí —reactivar el contrato, cobrar la
+     * reconexión— y los decide PaymentRegistrar. Reabrirla no tiene
+     * ninguno: es volver a decir la verdad.
+     */
+    private function reabrirSiVolvioADeber(): void
+    {
+        if ($this->pending_invoice_amount <= 0.001) {
+            return;
+        }
+
+        if (!in_array($this->status, \App\Billing\Enums\InvoiceStatus::settled(), true)) {
+            return;
+        }
+
+        $vencida = $this->due_date
+            && \Carbon\Carbon::parse($this->due_date)->endOfDay()->isPast();
+
+        $this->status = match (true) {
+            $vencida => \App\Billing\Enums\InvoiceStatus::Vencida->value,
+            $this->totalAbonado() > 0 => \App\Billing\Enums\InvoiceStatus::PendienteParcial->value,
+            default => \App\Billing\Enums\InvoiceStatus::Pendiente->value,
+        };
     }
 }

@@ -63,13 +63,47 @@ Y por registro: `ok`, `omitido`, `error`, `revertido`, `conflicto`,
 
 ## 4. Qué se registra y qué se revierte
 
-| Operación | Se registra | Reversión |
+| Operación | Reversión | Qué hace exactamente |
 |---|---|---|
 | **Corte masivo por cartera** | Sí | Devuelve el estado anterior y **restablece el servicio** (ONT y PPPoE) |
 | **Corte masivo de PPPoE** | Sí | Rehabilita el secret en el Mikrotik |
+| **Cobro múltiple** | Sí | Reversa los pagos y su movimiento de caja — **solo con la caja abierta** |
+| **Movimiento de almacén** | Sí | Registra el **movimiento contrario**; el original no se borra |
 | **Importación de clientes** | Sí | **Borra** los contratos creados y lo que cuelga |
+| **Importación de ONTs** | Sí | Borra las ONT **del sistema**; la OLT no se toca |
 | **Corrida de facturación** | Sí | **Anula** las facturas anulables — no las borra |
-| **Importación de ONTs** | Sí | No se revierte automáticamente |
+
+Las siete se registran siempre, se reviertan o no.
+
+### 4.1 Las cuatro que piden explicación
+
+**Cobro múltiple.** Se reversa cada pago del lote: la factura vuelve a
+quedar con su saldo y se quita el movimiento de la caja. **El estado
+del contrato no se toca** aunque el pago lo hubiera reactivado —
+cortarle el servicio a alguien por un cobro mal registrado sería
+castigarlo por un error ajeno, y la mora se recalcula sola en la
+siguiente corrida.
+
+Un pago del lote también se puede reversar SUELTO desde Facturación
+→ Pagos: cae solo ese y los demás quedan como están. Los dos
+caminos usan el mismo servicio, `PaymentReverser`, así que tienen
+los mismos frenos y dejan la misma huella.
+
+**Movimiento de almacén.** Se deshace con el movimiento **contrario**,
+no borrando: una entrada con una salida, un traslado con el traslado
+inverso. Los dos quedan a la vista. Borrar el original dejaría un
+almacén que cuadra y un historial que no explica por qué.
+
+**Importación de ONTs.** Borra **solo las filas**. La importación LEYÓ
+la OLT y copió lo que encontró: no configuró nada. Mandarle un borrado
+al equipo sería hacer algo que la importación nunca hizo, y dejar sin
+servicio a clientes que llevan meses navegando por deshacer una
+lectura. Las ONT siguen autorizadas: volver a importar las trae de
+nuevo.
+
+**Corrida de facturación.** Anula, nunca borra. Una factura gastó un
+consecutivo de un rango autorizado que no se recupera, y el hueco hay
+que justificarlo ante la DIAN.
 
 ---
 
@@ -117,7 +151,11 @@ con su motivo y los otros ochocientos siguen.
 
 ## 6. Lo que la reversión se NIEGA a hacer
 
-Tres hechos que una fila borrada no puede deshacer:
+Hechos consumados que una fila borrada no puede deshacer. Cada uno
+deja el registro en **conflicto** con su motivo, para que lo decida una
+persona.
+
+### 6.1 Dinero y documentos
 
 | Freno | Por qué |
 |---|---|
@@ -125,12 +163,26 @@ Tres hechos que una fila borrada no puede deshacer:
 | **Factura validada por la DIAN** | Existe en sus registros con su CUFE. Borrarla aquí no la borra allá: los dos lados dejan de coincidir |
 | **Notas crédito o débito** | Son documentos con su propio consecutivo, emitidos y entregados |
 
-Cualquiera de los tres deja el registro en **conflicto** con su motivo,
-para que lo decida una persona.
+### 6.2 La caja cerrada
 
-> Una corrida de facturación **nunca se borra**: se anula lo anulable.
-> Una factura gasta un consecutivo de un rango autorizado que no se
-> recupera, y el hueco hay que justificarlo ante la DIAN.
+Un cobro múltiple solo se reversa **mientras su caja siga abierta**. Si
+ya se cerró, el arqueo de ese turno se hizo con ese dinero dentro:
+quitarlo después lo descuadra para siempre y sin nada que lo explique.
+Con la caja cerrada se resuelve con las figuras que sí dejan rastro de
+los dos lados — una nota, un egreso o un ajuste.
+
+### 6.3 El material que ya no está
+
+Un movimiento de almacén no se revierte si las existencias ya no están
+donde las dejó. Un equipo que entró y después se instaló en casa de un
+cliente no se puede «desentrar»: la unidad que habría que quitar ya no
+está en ese almacén, y restarla igual lo dejaría en negativo.
+
+### 6.4 El trabajo de otro
+
+Una ONT importada que alguien vinculó después a un contrato no se
+borra: ese vínculo es trabajo posterior y borrarla se lo llevaría por
+delante.
 
 ---
 
@@ -225,12 +277,28 @@ Escribir la URL a mano no sirve: hay prueba de ello.
 | Qué estrategia deshace cada tipo | `app/MassActions/MassActionRegistry.php` |
 | El contrato de una estrategia | `app/MassActions/RevierteUnaAccionMasiva.php` |
 | Las estrategias | `app/MassActions/Reversiones/` |
+| La aritmética del inventario, compartida | `app/Services/InventoryMover.php` |
 | Estados y tipos | `app/MassActions/Enums/` |
 | Modelos | `app/Models/MassAction.php`, `MassActionItem.php` |
 | Pantalla | `app/Http/Controllers/MassActionController.php` |
 | Autorización | `app/Policies/MassActionPolicy.php` |
 
+Las siete estrategias están en `app/MassActions/Reversiones/`:
+`RevertirCorteDeContratos`, `RevertirCortePppoe`,
+`RevertirCobroMultiple`, `RevertirMovimientoDeAlmacen`,
+`RevertirImportacionDeClientes`, `RevertirImportacionDeOnts` y
+`AnularCorridaDeFacturacion`.
+
+> **`InventoryMover` salió del controlador de movimientos** cuando hubo
+> que deshacerlos: la reversión necesita exactamente la misma
+> aritmética —seriales, promedio ponderado, el costo que viaja en los
+> traslados— y dos copias es como acaban diciendo cosas distintas del
+> mismo almacén. El controlador conserva su método y delega.
+
 Pruebas: `tests/Feature/System/MassActionsTest.php` (registro,
 reversión, conflictos, doble reversión, seguridad) y
 `MassActionReversalGuardsTest.php` (lo que la reversión debe negarse a
-hacer).
+hacer: factura con pago, validada por la DIAN, contrato importado con
+pagos o con notas, y la caja cerrada — con sus contrapuntos, porque si
+solo se prueba lo que se niega, un sistema que no revierte nada pasa
+todas las pruebas).

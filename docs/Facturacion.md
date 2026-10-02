@@ -369,7 +369,7 @@ Al pagar, el aviso se borra.
 
 No está en este bloque sino en los datos de la sucursal, pero pertenece
 a la facturación: es lo que se le cobra al cliente **cortado que paga**
-(§4.6).
+(§4.7).
 
 ---
 
@@ -460,9 +460,62 @@ al cliente le llega el paquete completo.
 - Pago parcial → factura *Pendiente Parcial*, el contrato no cambia.
 - Pago total estando en **Pre-suspensión** → vuelve a **Activo**.
 - Pago total estando **Suspendido** → pasa a **Por Reconexión**, se le
-  crea la **orden técnica** y se le cobra la reconexión (§4.6).
+  crea la **orden técnica** y se le cobra la reconexión (§4.7).
 
-### 4.6 Reconexión
+### 4.6 Reversar un pago
+
+El cobro mal registrado —el cajero se equivocó de contrato, el cliente
+anuló la transferencia, se cobró dos veces— **no se arregla editando el
+pago**. Se deshace entero, y queda el rastro de que se deshizo.
+
+**Dónde:** Facturación → Pagos. El botón ↺ de cada fila. Es un permiso
+aparte (`payments.destroy`): cobrar y deshacer cobros no son el mismo
+oficio.
+
+**Antes de pedir nada**, la pantalla dice qué va a pasar: cuánto
+vuelve, de qué factura y de qué caja sale, y qué efectos **no** se
+deshacen. El **motivo es obligatorio**: un pago reversado sin
+explicación es exactamente lo que nadie puede auditar seis meses
+después.
+
+**Qué deshace, en orden:**
+
+1. El **movimiento de caja**. Primero, porque un movimiento huérfano
+   deja el cuadre contando un dinero que ya no tiene pago detrás.
+2. El **saldo a favor**, si era un anticipo.
+3. El **pago**. No desaparece: queda marcado con su fecha y su autor.
+4. La **factura**: vuelve a su saldo y **deja de estar «Pagada»**, así
+   que se puede volver a cobrar bien.
+5. Los **totales de la caja**.
+
+Las **retenciones** que llegaron con el pago caen con él: dejan de
+saldar la factura y salen del informe de retenciones, que es el insumo
+de la declaración.
+
+> **El freno es la caja.** Solo se reversa **mientras esa caja siga
+> abierta**. Si ya se cerró, el arqueo de ese turno se hizo con ese
+> dinero dentro: quitarlo después lo descuadra para siempre y sin nada
+> que lo explique. Con la caja cerrada se corrige con las figuras que
+> sí dejan rastro de los dos lados — una nota, un egreso o un ajuste.
+
+**Lo que NO deshace, y hay que mirar a mano:**
+
+- **El contrato no se corta.** Aunque el pago lo hubiera reactivado, no
+  se le quita el servicio: castigar al cliente por un error del
+  mostrador no. La mora se recalcula sola en la siguiente corrida.
+- **El cargo de reconexión** que haya dejado el pago sigue pendiente —
+  el servicio sí se restableció. Si el cobro fue un error de
+  identificación, se anula a mano en Cargos adicionales. La pantalla lo
+  avisa.
+- **Un anticipo ya aplicado a facturas no se reversa**: ese dinero ya
+  saldó deudas y quitarlo dejaría facturas pagadas con plata que no
+  existe.
+
+Un pago que entró en un **cobro múltiple** se puede reversar suelto:
+solo cae ese, los demás del lote quedan como están. Para deshacer el
+lote entero está Sistema → Acciones masivas.
+
+### 4.7 Reconexión
 
 Cuando un cliente cortado paga:
 
@@ -473,7 +526,7 @@ Cuando un cliente cortado paga:
 3. El contrato queda *Activo* o *Por Reconexión* según lo que el equipo
    haya confirmado.
 
-### 4.7 Corregir una factura
+### 4.8 Corregir una factura
 
 - **Cobró de más / hay que rebajar** → **nota crédito** desde la
   factura.
@@ -482,7 +535,7 @@ Cuando un cliente cortado paga:
 - **La factura no debió existir** → **anular** (solo si no tiene pagos
   y la DIAN no la validó).
 
-### 4.8 Dar de baja un contrato
+### 4.9 Dar de baja un contrato
 
 Al cerrar una orden de retiro —o con una orden administrativa— el
 contrato pasa a *Retirado* y, **antes**, el sistema emite una última
@@ -493,7 +546,7 @@ completo de cada uno, no una cuota más.
 cliente se va el día 10, esa factura queda como está; devolver los días
 no usados es una decisión comercial y se hace con una nota crédito.
 
-### 4.9 Mora y corte
+### 4.10 Mora y corte
 
 No hay nada que hacer a mano: la tarea diaria marca vencidas y suspende
 a quien llega al umbral. Lo que sí conviene:
@@ -708,6 +761,7 @@ Anotado para que nadie lo dé por hecho:
 | La corrida automática diaria | `app/Console/Commands/RunDailyBilling.php` |
 | Configuración de la sucursal | `app/Models/BranchBillingSetting.php` |
 | Pagos, caja y transiciones | `app/Billing/Services/PaymentRegistrar.php` |
+| Reversar un pago | `app/Billing/Services/PaymentReverser.php` |
 | Saldo a favor | `app/Billing/Services/CreditBalanceService.php` |
 | Reconexión al pagar | `app/Billing/Services/ServiceReconnection.php` |
 | Notas crédito y débito | `app/Billing/Services/NoteIssuer.php` |
@@ -720,7 +774,8 @@ Las pruebas que fijan este comportamiento están en
 `tests/Feature/Billing/`: `BillingCycleTest` (ciclo y arrastre),
 `InvoiceGenerationTest` (generación), `ProratedInvoiceTotalsTest` (que
 las cuentas de un mes prorrateado cuadren para la DIAN),
-`AutomaticBillingTest` (la corrida sola) y `PaymentsTest` (cobros).
+`AutomaticBillingTest` (la corrida sola), `PaymentRegistrationTest`
+(cobros) y `PaymentReversalTest` (deshacerlos sin descuadrar la caja).
 
 ---
 

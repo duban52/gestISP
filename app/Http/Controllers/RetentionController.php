@@ -107,6 +107,13 @@ class RetentionController extends Controller
     {
         $query = PaymentRetention::query()
             ->with(['contract.client', 'invoice', 'user', 'branch'])
+            // Fuera las de un pago REVERSADO. Este informe es el
+            // insumo para descontar las retenciones en la declaración:
+            // una que llegó con un cobro que después se deshizo
+            // declararía un dinero que nunca entró. (Payment usa
+            // SoftDeletes, así que whereHas ya descarta los anulados;
+            // las sueltas, sin pago, siguen contando.)
+            ->where(fn ($q) => $q->whereNull('payment_id')->orWhereHas('payment'))
             ->whereBetween('created_at', [
                 $this->desde($request) . ' 00:00:00',
                 $this->hasta($request) . ' 23:59:59',

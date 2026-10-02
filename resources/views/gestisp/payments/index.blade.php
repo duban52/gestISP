@@ -134,7 +134,7 @@
                         <th>Método</th>
                         <th>Fecha de pago</th>
                         <th>Cobrado por</th>
-                        <th class="text-center">Recibo</th>
+                        <th class="text-center">Acciones</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -194,6 +194,18 @@
                                         title="Ver el recibo de caja">
                                     <i class="fas fa-receipt"></i>
                                 </button>
+
+                                {{-- Reversar: el dinero mal recibido no se
+                                     arregla editando el pago, se deshace
+                                     entero y queda el rastro. --}}
+                                @can('payments.destroy')
+                                    <button type="button" class="btn btn-sm btn-outline-danger btn-reversar"
+                                            data-info="{{ route('payments.reversionInfo', $payment) }}"
+                                            data-url="{{ route('payments.destroy', $payment) }}"
+                                            title="Reversar este pago">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                @endcan
                             </td>
                         </tr>
                     @endforeach
@@ -207,6 +219,58 @@
                     </tr>
                     </tfoot>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    {{-- ============================================================
+         Reversión de un pago.
+
+         Antes de pedir nada se muestra QUÉ va a pasar: cuánto vuelve,
+         de qué factura y de qué caja sale, y qué efectos NO se
+         deshacen. Si no se puede —la caja ya se cerró— se dice por
+         qué y no se deja escribir el motivo.
+         ============================================================ --}}
+    <div class="modal fade" id="reverseModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-undo mr-1"></i> Reversar el pago</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div id="reverseLoading" class="text-center text-muted py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <div class="mt-2">Comprobando qué pasaría...</div>
+                    </div>
+
+                    <div id="reverseBody" class="d-none">
+                        <dl class="row mb-2" id="reverseDatos"></dl>
+
+                        <div class="alert alert-danger d-none" id="reverseImpedimento"></div>
+
+                        <div id="reverseFormulario">
+                            <ul class="list-unstyled small text-muted mb-3" id="reverseAvisos"></ul>
+
+                            <div class="form-group mb-0">
+                                <label for="reverseMotivo" class="font-weight-bold">
+                                    ¿Por qué se reversa? <span class="text-danger">*</span>
+                                </label>
+                                <textarea class="form-control" id="reverseMotivo" rows="3" maxlength="500"
+                                          placeholder="Ej.: se cobró al contrato equivocado; el cliente anuló la transferencia"></textarea>
+                                <small class="form-text text-muted">
+                                    Queda en la trazabilidad junto con quién lo reversó y cuándo.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="reverseConfirmar" disabled>
+                        <i class="fas fa-undo"></i> Reversar el pago
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -257,6 +321,8 @@
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
 
     <script>
+        const CSRF_PAGOS = '{{ csrf_token() }}';
+
         $(document).ready(function () {
             $('#paymentsTable').DataTable({
                 // Traducción al español desde el CDN oficial de plugins
@@ -298,6 +364,98 @@
             $('#receiptFrame').attr('src', $(this).data('url'));
             $('#receiptDownload').attr('href', $(this).data('pdf'));
             $('#receiptModal').modal('show');
+        });
+
+        /* ------------------------------------------------------------
+           Reversión de un pago
+
+           Dos pasos a propósito: primero se le pregunta al servidor
+           qué pasaría —el estado de la caja puede haber cambiado desde
+           que se cargó la pantalla— y solo entonces se habilita el
+           botón. El servidor lo vuelve a comprobar todo al reversar:
+           esto es comodidad, no seguridad.
+           ------------------------------------------------------------ */
+        let reverseUrl = null;
+
+        $(document).on('click', '.btn-reversar', function () {
+            reverseUrl = $(this).data('url');
+
+            $('#reverseLoading').removeClass('d-none');
+            $('#reverseBody').addClass('d-none');
+            $('#reverseImpedimento').addClass('d-none').text('');
+            $('#reverseFormulario').removeClass('d-none');
+            $('#reverseMotivo').val('');
+            $('#reverseConfirmar').prop('disabled', true);
+            $('#reverseModal').modal('show');
+
+            $.get($(this).data('info'))
+                .done(function (d) {
+                    const fila = (t, v) => v
+                        ? '<dt class="col-5">' + t + '</dt><dd class="col-7">' + v + '</dd>'
+                        : '';
+
+                    $('#reverseDatos').html(
+                        fila('Pago', '#' + d.pago + ' &middot; ' + d.fecha)
+                        + fila('Valor', '<strong class="text-danger">$' + d.monto + '</strong> (' + d.metodo + ')')
+                        + fila('Cliente', d.cliente)
+                        + fila('Contrato', d.contrato)
+                        + fila(d.es_anticipo ? 'Tipo' : 'Factura', d.es_anticipo ? 'Anticipo' : d.factura)
+                    );
+
+                    if (d.impedimento) {
+                        $('#reverseImpedimento').text(d.impedimento).removeClass('d-none');
+                        $('#reverseFormulario').addClass('d-none');
+                    } else {
+                        $('#reverseAvisos').html(
+                            (d.avisos || []).map(function (a) {
+                                return '<li><i class="fas fa-info-circle mr-1"></i>' + a + '</li>';
+                            }).join('')
+                        );
+                        $('#reverseConfirmar').prop('disabled', false);
+                    }
+
+                    $('#reverseLoading').addClass('d-none');
+                    $('#reverseBody').removeClass('d-none');
+                })
+                .fail(function () {
+                    $('#reverseLoading').addClass('d-none');
+                    $('#reverseBody').removeClass('d-none');
+                    $('#reverseImpedimento')
+                        .text('No se pudo consultar el estado de este pago. Intente de nuevo.')
+                        .removeClass('d-none');
+                    $('#reverseFormulario').addClass('d-none');
+                });
+        });
+
+        $('#reverseConfirmar').on('click', function () {
+            const motivo = $('#reverseMotivo').val().trim();
+
+            if (motivo.length < 5) {
+                $('#reverseMotivo').focus();
+                return;
+            }
+
+            const boton = $(this);
+            boton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Reversando...');
+
+            $.ajax({
+                url: reverseUrl,
+                type: 'POST',
+                data: {
+                    _method: 'DELETE',
+                    _token: $('meta[name="csrf-token"]').attr('content') || CSRF_PAGOS,
+                    motivo: motivo
+                }
+            })
+                .done(function () { window.location.reload(); })
+                .fail(function (xhr) {
+                    const r = xhr.responseJSON || {};
+                    $('#reverseImpedimento')
+                        .text(r.error
+                            || (r.errors && r.errors.motivo ? r.errors.motivo[0] : 'No se pudo reversar el pago.'))
+                        .removeClass('d-none');
+                    boton.prop('disabled', false).html('<i class="fas fa-undo"></i> Reversar el pago');
+                });
         });
 
         $('#receiptPrint').on('click', function () {
