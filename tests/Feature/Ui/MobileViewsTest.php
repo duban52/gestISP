@@ -127,6 +127,8 @@ class MobileViewsTest extends TestCase
             'Órdenes técnicas — listado' => ['technicals_orders.index'],
             'Órdenes técnicas — mis órdenes' => ['technicals_orders.my_technical_orders'],
             'Órdenes técnicas — verificación' => ['technicals_orders.verification'],
+            'Catálogo — servicios' => ['services.index'],
+            'Catálogo — planes' => ['plans.index'],
         ];
     }
 

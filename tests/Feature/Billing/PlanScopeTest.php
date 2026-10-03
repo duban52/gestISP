@@ -279,4 +279,24 @@ class PlanScopeTest extends BillingTestCase
             ->assertOk()
             ->assertSee('Ahora es exclusivo de', false);
     }
+
+    // ==================== El listado ====================
+
+    public function test_el_listado_distingue_lo_de_la_empresa_de_lo_de_la_sede(): void
+    {
+        $this->planDeLaEmpresa('Hogar compartido');
+
+        Plan::factory()->create([
+            'name' => 'Hogar local',
+            'branch_id' => $this->branch->id,
+            'user_id' => $this->admin->id,
+        ]);
+
+        $this->get(route('plans.index'))
+            ->assertOk()
+            ->assertSee('Ámbito', false)
+            ->assertSee('Empresa', false)
+            ->assertSee($this->branch->name, false);
+    }
+
 }
