@@ -299,24 +299,27 @@ class User extends Authenticatable
 
         return null; // Si no hay sucursal seleccionada, devuelve null
     }
-    public function can($permission, $arguments = [])
-    {
-        // Obtener el rol activo desde la sesión
-        $currentRoleId = session('current_role_id');
-
-        if ($currentRoleId) {
-            // Obtener el rol
-            $role = Role::find($currentRoleId);
-
-            // Verificar si el rol tiene el permiso
-            if ($role && $role->hasPermissionTo($permission)) {
-                return true;
-            }
-        }
-
-        // Si no tiene el permiso, usar la lógica por defecto de Laravel
-        return parent::can($permission, $arguments);
-    }
+    /*
+     * AQUÍ HABÍA UN can() PROPIO, Y ROMPÍA LA APLICACIÓN.
+     * ---------------------------------------------------
+     * Resolvía el permiso contra el rol de la sesión —que es lo
+     * correcto— pero lo hacía con `hasPermissionTo()`, que LANZA
+     * `PermissionDoesNotExist` cuando el nombre no es una fila de la
+     * tabla `permissions`.
+     *
+     * Una habilidad de POLÍTICA no es una fila de esa tabla. Así que
+     * cualquier `@can('revert', $accion)` o `$user->can('view', $x)`
+     * moría con un 500 antes de llegar a la política, y el usuario
+     * solo veía «Server Error». Se vio en el detalle de una acción
+     * masiva, que es la primera pantalla del sistema que usa una
+     * política de verdad.
+     *
+     * No hacía falta reescribirlo: lo mismo —y bien— ya lo hace el
+     * `Gate::before` de AppServiceProvider, que usa
+     * `checkPermissionTo()` (no lanza) y devuelve `null` para dejar
+     * que Laravel siga con la política. Tener la regla en dos sitios
+     * era además la forma de que divergieran.
+     */
 
 
 

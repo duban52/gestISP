@@ -172,6 +172,9 @@ class OntImportController extends Controller
             'imported' => $run->imported,
             'skipped_existing' => $run->skipped_existing,
             'skipped_invalid' => $run->skipped_invalid,
+            // El detalle de lo que no entro: lo pinta la pantalla
+            // al terminar, sin recargar.
+            'skipped_details' => $run->skipped_details ?? [],
             'matched_contracts' => $run->matched_contracts,
             'message' => $run->message,
         ]);

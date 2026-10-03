@@ -447,5 +447,103 @@ class OntImportTest extends TestCase
     {
         Mockery::close();
         parent::tearDown();
+    }
+    // ==================== Lo que NO se importó ====================
+
+    /**
+     * «200 omitidas por datos incompletos» no servia de nada.
+     *
+     * Ni cuales eran ni que les faltaba, asi que no habia nada que
+     * corregir. Ahora cada una dice su serial, su posicion y el
+     * motivo.
+     */
+    public function test_dice_cual_ont_no_entro_y_por_que(): void
+    {
+        $this->simularDescubrimiento([
+            $this->ontEncontrada(['sn' => 'HWTC-BUENA001']),
+            $this->ontEncontrada(['sn' => 'HWTC-SINSLOT1', 'slot' => null]),
+            $this->ontEncontrada(['sn' => 'HWTC-SINPORT1', 'port' => null]),
+        ]);
+
+        $run = OntImportRun::create([
+            'olt_id' => $this->olt->id,
+            'branch_id' => $this->branch->id,
+            'status' => OntImportRun::ESTADO_PENDIENTE,
+        ]);
+
+        dispatch_sync(new ImportOltOnts($run->id));
+
+        $run->refresh();
+
+        $this->assertSame(1, $run->imported);
+        $this->assertSame(2, $run->skipped_invalid);
+
+        $detalle = collect($run->skipped_details);
+
+        $this->assertCount(2, $detalle);
+        $this->assertSame(
+            ['HWTC-SINSLOT1', 'HWTC-SINPORT1'],
+            $detalle->pluck('sn')->all(),
+        );
+
+        // Y el motivo distingue QUE falta, no un «datos incompletos»
+        $this->assertStringContainsString('tarjeta', $detalle->firstWhere('sn', 'HWTC-SINSLOT1')['motivo']);
+        $this->assertStringContainsString('puerto', $detalle->firstWhere('sn', 'HWTC-SINPORT1')['motivo']);
     }
+
+    public function test_el_detalle_se_ve_en_la_pantalla(): void
+    {
+        $this->simularDescubrimiento([
+            $this->ontEncontrada(['sn' => 'HWTC-SINSLOT1', 'slot' => null]),
+        ]);
+
+        $run = OntImportRun::create([
+            'olt_id' => $this->olt->id,
+            'branch_id' => $this->branch->id,
+            'status' => OntImportRun::ESTADO_PENDIENTE,
+        ]);
+
+        dispatch_sync(new ImportOltOnts($run->id));
+
+        $this->get(route('onts.import.index'))
+            ->assertOk()
+            ->assertSee('HWTC-SINSLOT1', false)
+            ->assertSee('que no entraron', false);
+    }
+
+    public function test_una_ont_mala_ya_no_se_lleva_por_delante_el_lote(): void
+    {
+        // Era el origen de los «200 omitidos»: el lote iba en una sola
+        // transaccion y, si una fila reventaba, las otras noventa y
+        // nueve buenas se contaban como «datos incompletos». El motivo
+        // real solo quedaba en el log del servidor.
+        //
+        // Una ONT con un serial imposiblemente largo revienta su
+        // INSERT; las demas tienen que entrar igual.
+        $this->simularDescubrimiento([
+            $this->ontEncontrada(['sn' => 'HWTC-BUENA001']),
+            $this->ontEncontrada(['sn' => str_repeat('X', 600)]),
+            $this->ontEncontrada(['sn' => 'HWTC-BUENA002']),
+        ]);
+
+        $run = OntImportRun::create([
+            'olt_id' => $this->olt->id,
+            'branch_id' => $this->branch->id,
+            'status' => OntImportRun::ESTADO_PENDIENTE,
+        ]);
+
+        dispatch_sync(new ImportOltOnts($run->id));
+
+        $run->refresh();
+
+        $this->assertSame(2, $run->imported, 'las buenas entran');
+        $this->assertNotNull(Ont::where('sn', 'HWTC-BUENA001')->first());
+        $this->assertNotNull(Ont::where('sn', 'HWTC-BUENA002')->first());
+
+        // Y la mala dice por que, en castellano
+        $this->assertSame(1, $run->skipped_invalid);
+        $this->assertNotEmpty($run->skipped_details);
+        $this->assertNotEmpty($run->skipped_details[0]['motivo']);
+    }
+
 }

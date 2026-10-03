@@ -8,6 +8,7 @@ use App\Models\Router;
 use App\Services\MikrotikApiService;
 use App\Services\PppoeCredentialGenerator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
@@ -45,7 +46,7 @@ class PppoeAccountController extends Controller
         $this->middleware('check.permission:pppoe.create')->only('store', 'suggestCredentials');
         $this->middleware('check.permission:pppoe.edit')->only('update', 'toggleState');
         $this->middleware('check.permission:pppoe.destroy')->only('destroy');
-        $this->middleware('check.permission:pppoe.import')->only('importFromRouter');
+        $this->middleware('check.permission:pppoe.import')->only('importFromRouter', 'revisarImportacion');
         $this->middleware('check.permission:pppoe.restart')->only('restartSession');
     }
 
@@ -428,6 +429,47 @@ class PppoeAccountController extends Controller
     /**
      * Importa a la DB los secrets que ya existen en el router
      */
+    /**
+     * Qué pasaría si se importaran los secrets de este router.
+     *
+     * NO ESCRIBE NADA. Es la pantalla que faltaba: antes se pulsaba
+     * «importar» a ciegas y, si el router traía dos secrets con el
+     * mismo usuario, la inserción masiva moría contra el índice
+     * único y al usuario le salía un error 500 lleno de SQL. Nadie
+     * podía saber qué corregir — ni siquiera que hubiera algo que
+     * corregir.
+     */
+    public function revisarImportacion(Router $router): View
+    {
+        if (!app()->runningInConsole()) {
+            set_time_limit(300);
+        }
+
+        try {
+            $secrets = $this->mikrotik->getPppSecrets($router);
+        } catch (\Exception $e) {
+            return view('gestisp.pppoe.import_review', [
+                'router' => $router,
+                'error' => 'No se pudo conectar con el router: ' . $e->getMessage(),
+                'revision' => null,
+            ]);
+        }
+
+        return view('gestisp.pppoe.import_review', [
+            'router' => $router,
+            'error' => null,
+            'revision' => $this->revisarSecrets($secrets, $router),
+        ]);
+    }
+
+    /**
+     * Importa a la DB los secrets que ya existen en el router.
+     *
+     * Solo entra lo que la revisión declaró importable: los
+     * duplicados del propio router y los que no traen usuario se
+     * quedan fuera con su motivo, en vez de tumbar la operación
+     * entera contra el índice único.
+     */
     public function importFromRouter(Router $router): RedirectResponse
     {
         // 5 minutos para importaciones grandes, pero SOLO en web: en
@@ -443,26 +485,121 @@ class PppoeAccountController extends Controller
             return back()->with('error', 'Error al conectar: ' . $e->getMessage());
         }
 
-        $imported = 0;
+        $revision = $this->revisarSecrets($secrets, $router);
 
-        // Una sola consulta: usernames que ya existen en este router
-        $existingUsernames = PppoeAccount::where('router_id', $router->id)
+        try {
+            // insertOrIgnore y no insert: si entre la revisión y este
+            // momento alguien creó una cuenta con ese usuario, se
+            // salta esa fila en vez de tumbar el lote. El índice único
+            // sigue siendo quien manda.
+            foreach (array_chunk($revision['importables'], 100) as $chunk) {
+                PppoeAccount::insertOrIgnore($chunk);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error importando cuentas PPPoE', [
+                'router' => $router->name,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error',
+                'No se pudieron importar las cuentas: ' . $e->getMessage()
+                . ' No se guardó nada. Revise la importación antes de volver a intentarlo.');
+        }
+
+        $mensaje = sprintf('%d cuenta(s) importada(s) desde %s.', count($revision['importables']), $router->name);
+
+        if ($revision['ya_estaban'] > 0) {
+            $mensaje .= sprintf(' %d ya estaban registradas.', $revision['ya_estaban']);
+        }
+
+        if ($revision['problemas'] !== []) {
+            // El aviso va en el mensaje de éxito y no en un error: la
+            // importación SÍ se hizo, y lo que quedó fuera está
+            // explicado en la pantalla de revisión.
+            $mensaje .= sprintf(
+                ' %d se quedaron fuera (usuarios repetidos en el router o sin nombre): corríjalos allá y vuelva a importar.',
+                count($revision['problemas']),
+            );
+        }
+
+        return back()->with('success', $mensaje);
+    }
+
+    /**
+     * Qué se puede importar de este router y qué no.
+     *
+     * EL DUPLICADO ESTÁ EN EL ROUTER, NO EN NUESTRA BASE
+     * ---------------------------------------------------
+     * La versión anterior comprobaba contra lo ya registrado, pero no
+     * contra el propio lote: dos secrets con el mismo usuario en el
+     * Mikrotik entraban los dos al array y la base los rechazaba a
+     * los dos —con todo el lote detrás—. Un `username` repetido es un
+     * problema REAL del router, no nuestro: dos secrets iguales son
+     * una configuración ambigua que hay que resolver allá.
+     *
+     * @param  iterable<int, array<string, mixed>>  $secrets
+     * @return array{importables: array<int, array<string, mixed>>, ya_estaban: int, problemas: array<int, array{username: string, motivo: string, perfil: ?string, comentario: ?string}>, total: int}
+     */
+    private function revisarSecrets($secrets, Router $router): array
+    {
+        $yaRegistrados = PppoeAccount::where('router_id', $router->id)
             ->pluck('username')
-            ->flip(); // flip para búsqueda O(1) con isset
+            ->flip();
 
-        $toInsert = [];
+        $importables = [];
+        $problemas = [];
+        $yaEstaban = 0;
+        $total = 0;
+        $vistos = [];
 
         foreach ($secrets as $secret) {
-            if (isset($existingUsernames[$secret['username']])) {
+            $total++;
+            $usuario = trim((string) ($secret['username'] ?? ''));
+
+            if ($usuario === '') {
+                $problemas[] = [
+                    'username' => '(sin nombre de usuario)',
+                    'motivo' => 'El secret no tiene nombre de usuario: no se puede identificar la cuenta.',
+                    'perfil' => $secret['profile'] ?? null,
+                    'comentario' => $secret['comment'] ?? null,
+                ];
                 continue;
             }
 
-            $toInsert[] = [
+            if (isset($yaRegistrados[$usuario])) {
+                $yaEstaban++;
+                continue;
+            }
+
+            if (isset($vistos[$usuario])) {
+                $problemas[] = [
+                    'username' => $usuario,
+                    'motivo' => 'Está REPETIDO en el router: hay más de un secret con este mismo usuario. '
+                        . 'Déjelo una sola vez en el Mikrotik y vuelva a importar.',
+                    'perfil' => $secret['profile'] ?? null,
+                    'comentario' => $secret['comment'] ?? null,
+                ];
+                continue;
+            }
+
+            $vistos[$usuario] = true;
+
+            $importables[] = [
                 // Importadas DEL router: su sucursal es la de el.
                 'branch_id'      => $router->branch_id,
+                // Y SU EMPRESA TAMBIEN, A MANO.
+                //
+                // `insert()` masivo no dispara los eventos del modelo,
+                // asi que el gancho de BelongsToCompany —que es quien
+                // rellena company_id— nunca corria. Las cuentas
+                // importadas entraban con la empresa en NULL y el
+                // alcance de empresa las escondia de todos los
+                // listados: estaban en la base y no existian para
+                // nadie. (En desarrollo habia 300 de 747 asi.)
+                'company_id'     => $router->company_id,
                 'router_id'      => $router->id,
                 'mikrotik_id'    => $secret['mikrotik_id'],
-                'username'       => $secret['username'],
+                'username'       => $usuario,
                 'password'       => $secret['password'] ?? '',
                 'profile'        => $secret['profile'],
                 'service'        => $secret['service'],
@@ -472,16 +609,14 @@ class PppoeAccountController extends Controller
                 'created_at'     => now(),
                 'updated_at'     => now(),
             ];
-
-            $imported++;
         }
 
-        // Insertar en lotes de 100 (mucho más rápido que creates individuales)
-        foreach (array_chunk($toInsert, 100) as $chunk) {
-            PppoeAccount::insert($chunk);
-        }
-
-        return back()->with('success', "{$imported} cuentas importadas desde {$router->name}.");
+        return [
+            'importables' => $importables,
+            'ya_estaban' => $yaEstaban,
+            'problemas' => $problemas,
+            'total' => $total,
+        ];
     }
     public function show(PppoeAccount $pppoe)
     {

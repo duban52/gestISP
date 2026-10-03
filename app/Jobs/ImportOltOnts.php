@@ -40,6 +40,18 @@ class ImportOltOnts implements ShouldQueue
     /** ONTs que se escriben por lote */
     private const TAMANO_LOTE = 100;
 
+    /**
+     * Cuántas ONT omitidas se explican con nombre y apellido.
+     *
+     * Con mil ilegibles, guardar las mil no ayuda más que guardar las
+     * primeras doscientas y sí hincha la fila. El contador sigue
+     * contándolas todas.
+     */
+    private const LIMITE_DETALLES = 200;
+
+    /** El porqué de cada ONT que no entró. @var array<int, array{sn: string, ubicacion: string, motivo: string}> */
+    private array $omitidas = [];
+
     /** Una importación larga no debe reintentarse sola */
     public int $tries = 1;
 
@@ -100,6 +112,8 @@ class ImportOltOnts implements ShouldQueue
             'matched_contracts' => 0,
         ];
 
+        $this->omitidas = [];
+
         // LA ACCIÓN MASIVA. Se abre fuera del bucle: los lotes son
         // una conveniencia de la transacción, no operaciones distintas.
         $accion = app(\App\MassActions\MassActionRecorder::class)->abrir(
@@ -112,6 +126,15 @@ class ImportOltOnts implements ShouldQueue
         );
 
         foreach ($encontradas->chunk(self::TAMANO_LOTE) as $lote) {
+            // LA FOTO DE ANTES DEL LOTE.
+            //
+            // Si la transaccion revienta, la base vuelve atras pero
+            // estos dos no: son memoria de PHP. Sin restaurarlos, el
+            // reintento daba por importadas filas que el ROLLBACK se
+            // habia llevado —el contador decia 2 y en la base habia 1—.
+            $contadoresAntes = $contadores;
+            $vistosAntes = clone $existentes;
+
             try {
                 DB::transaction(function () use ($lote, $olt, $existentes, $discovery, &$contadores, $accion) {
                     foreach ($lote as $datos) {
@@ -129,6 +152,14 @@ class ImportOltOnts implements ShouldQueue
                         // (no se sabría en qué puerto está)
                         if ($datos['slot'] === null || $datos['port'] === null) {
                             $contadores['skipped_invalid']++;
+                            $this->anotarOmitida(
+                                $datos,
+                                $datos['slot'] === null && $datos['port'] === null
+                                    ? 'La OLT no reportó ni la tarjeta ni el puerto PON de esta ONT.'
+                                    : ($datos['slot'] === null
+                                        ? 'La OLT no reportó la tarjeta (slot) de esta ONT.'
+                                        : 'La OLT no reportó el puerto PON de esta ONT.'),
+                            );
                             continue;
                         }
 
@@ -174,17 +205,30 @@ class ImportOltOnts implements ShouldQueue
                     }
                 });
             } catch (Throwable $e) {
-                Log::error('Error importando un lote de ONTs', [
+                Log::error('Error importando un lote de ONTs; se reintenta una a una', [
                     'olt' => $olt->name,
                     'error' => $e->getMessage(),
                 ]);
 
-                // Un lote con problemas no aborta la importación
-                $contadores['skipped_invalid'] += $lote->count();
+                // EL LOTE ENTERO NO PUEDE CAER POR UNA ONT.
+                //
+                // Antes esto sumaba las cien al contador de «datos
+                // incompletos» y seguía: por una sola fila con un
+                // problema se perdían noventa y nueve buenas, y el
+                // usuario leía «200 omitidas por datos incompletos»
+                // —dos lotes— sin que a ninguna le faltara un dato.
+                // El motivo real solo quedaba en el log del servidor.
+                //
+                // Ahora se reintenta registro a registro: entran las
+                // que pueden, y la que falla dice por qué.
+                $contadores = $contadoresAntes;
+                $existentes = $vistosAntes;
+
+                $this->reintentarUnaAUna($lote, $olt, $existentes, $discovery, $contadores, $accion);
             }
 
             // Publicar el avance para la barra de progreso
-            $run->update($contadores);
+            $run->update($contadores + ['skipped_details' => $this->omitidas]);
         }
 
         app(\App\MassActions\MassActionRecorder::class)->cerrar($accion);
@@ -193,6 +237,7 @@ class ImportOltOnts implements ShouldQueue
             'status' => OntImportRun::ESTADO_COMPLETADO,
             'finished_at' => now(),
             'message' => $this->resumen($contadores),
+            'skipped_details' => $this->omitidas,
         ]));
 
         Log::info('Importación de ONTs completada', [
@@ -217,10 +262,128 @@ class ImportOltOnts implements ShouldQueue
         }
 
         if ($c['skipped_invalid'] > 0) {
-            $partes[] = "omitidas por datos incompletos: {$c['skipped_invalid']}";
+            // «Datos incompletos» era mentira la mitad de las veces:
+            // ahí caía también el lote que reventaba por otra causa.
+            // Ahora se dice el total y el detalle está en la pantalla.
+            $partes[] = "no importadas: {$c['skipped_invalid']} (abajo se explica cada una)";
         }
 
         return ucfirst(implode(' · ', $partes)) . '.';
+    }
+
+    /**
+     * Reintenta un lote caído registro a registro.
+     *
+     * Cada ONT en su propia transacción: la que falle se queda sola
+     * con su motivo y las demás entran.
+     */
+    private function reintentarUnaAUna(
+        $lote,
+        Olt $olt,
+        $existentes,
+        OltOntDiscovery $discovery,
+        array &$contadores,
+        $accion,
+    ): void {
+        foreach ($lote as $datos) {
+            $sn = strtoupper(trim($datos['sn'] ?? ''));
+
+            if ($sn === '' || $existentes->has($sn)) {
+                continue;
+            }
+
+            try {
+                DB::transaction(function () use ($datos, $olt, $existentes, $discovery, &$contadores, $accion, $sn) {
+                    $contractId = $discovery->matchContract($datos['description'], $olt->branch_id);
+
+                    $ont = Ont::create([
+                        'branch_id' => $olt->branch_id,
+                        'olt_id' => $olt->id,
+                        'contract_id' => $contractId,
+                        'slot' => $datos['slot'],
+                        'port' => $datos['port'],
+                        'onu_id' => $datos['onu_id'],
+                        'if_index' => $datos['if_index'],
+                        'sn' => $datos['sn'],
+                        'description' => $datos['description'] ?: null,
+                        'status' => $datos['online'] ? 1 : 0,
+                        'admin_enabled' => true,
+                    ]);
+
+                    app(\App\MassActions\MassActionRecorder::class)->registrar(
+                        $accion,
+                        $ont,
+                        $ont->sn,
+                        antes: ['existia' => false],
+                        despues: [
+                            'contract_id' => $contractId,
+                            'ubicacion' => $datos['slot'] . '/' . $datos['port'] . '/' . $datos['onu_id'],
+                        ],
+                    );
+
+                    if ($contractId) {
+                        $contadores['matched_contracts']++;
+                    }
+
+                    $existentes->put($sn, true);
+                    $contadores['imported']++;
+                });
+            } catch (Throwable $e) {
+                $contadores['skipped_invalid']++;
+                $this->anotarOmitida($datos, $this->enClaro($e));
+            }
+        }
+    }
+
+    /**
+     * Deja constancia de una ONT que no entró, con su motivo.
+     */
+    private function anotarOmitida(array $datos, string $motivo): void
+    {
+        if (count($this->omitidas) >= self::LIMITE_DETALLES) {
+            return;
+        }
+
+        $this->omitidas[] = [
+            'sn' => $datos['sn'] ?? '(sin serial)',
+            'ubicacion' => implode('/', array_map(
+                fn ($v) => $v === null ? '?' : $v,
+                [$datos['slot'] ?? null, $datos['port'] ?? null, $datos['onu_id'] ?? null],
+            )),
+            'descripcion' => $datos['description'] ?? null,
+            'motivo' => $motivo,
+        ];
+    }
+
+    /**
+     * El error del motor, en algo que se pueda leer y corregir.
+     *
+     * «SQLSTATE[23000]: Integrity constraint violation: 1062
+     * Duplicate entry...» no le dice nada a quien está importando.
+     */
+    private function enClaro(Throwable $e): string
+    {
+        $mensaje = $e->getMessage();
+
+        if (str_contains($mensaje, '1062') || str_contains($mensaje, 'Duplicate entry')) {
+            return 'Ya existe otra ONT con ese serial o en esa misma posición de la OLT.';
+        }
+
+        if (str_contains($mensaje, '1452') || str_contains($mensaje, 'foreign key')) {
+            return 'Apunta a un contrato, una OLT o una sucursal que ya no existe.';
+        }
+
+        if (str_contains($mensaje, 'Data too long')) {
+            return 'Algún dato que reportó la OLT es más largo de lo que cabe en el sistema.';
+        }
+
+        if (str_contains($mensaje, 'cannot be null') || str_contains($mensaje, '1048')) {
+            return 'Le falta un dato obligatorio que la OLT no reportó.';
+        }
+
+        // Lo que no se reconozca va tal cual: peor que un mensaje feo
+        // es un «error desconocido» que no se puede investigar.
+        return \Illuminate\Support\Str::limit($mensaje, 200);
     }
 
     private function fallar(OntImportRun $run, string $mensaje): void

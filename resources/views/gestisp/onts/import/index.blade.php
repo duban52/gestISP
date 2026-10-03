@@ -222,6 +222,54 @@
                                 @else
                                     {{ $run->message }}
                                 @endif
+
+                                {{-- QUÉ ONT NO ENTRÓ Y POR QUÉ.
+                                     Antes la corrida decía «200 omitidas por
+                                     datos incompletos» y ahí se acababa: ni
+                                     cuáles ni qué les faltaba, así que no
+                                     había nada que corregir. --}}
+                                @if(!empty($run->skipped_details))
+                                    <button class="btn btn-link btn-sm p-0 mt-1" type="button"
+                                            data-toggle="collapse" data-target="#omitidas-{{ $run->id }}">
+                                        <i class="fas fa-list-ul"></i>
+                                        Ver las {{ count($run->skipped_details) }} que no entraron
+                                    </button>
+
+                                    <div class="collapse mt-2" id="omitidas-{{ $run->id }}">
+                                        <div class="table-responsive border rounded">
+                                            <table class="table table-sm mb-0">
+                                                <thead class="thead-light">
+                                                <tr>
+                                                    <th>Serial</th>
+                                                    <th>Posición</th>
+                                                    <th>Motivo</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                @foreach($run->skipped_details as $omitida)
+                                                    <tr>
+                                                        <td class="text-monospace">{{ $omitida['sn'] ?? '—' }}</td>
+                                                        <td class="text-nowrap">{{ $omitida['ubicacion'] ?? '—' }}</td>
+                                                        <td>
+                                                            {{ $omitida['motivo'] ?? '—' }}
+                                                            @if(!empty($omitida['descripcion']))
+                                                                <small class="d-block text-muted">{{ $omitida['descripcion'] }}</small>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        @if($run->skipped_invalid > count($run->skipped_details))
+                                            <small class="text-muted d-block mt-1">
+                                                Se detallan las primeras {{ count($run->skipped_details) }}
+                                                de {{ $run->skipped_invalid }}.
+                                            </small>
+                                        @endif
+                                    </div>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -374,6 +422,13 @@
                             barra.classList.remove('progress-bar-animated');
                             barra.classList.add(res.status === 'failed' ? 'bg-danger' : 'bg-success');
                             fila.classList.remove('run-activa');
+
+                            // Y recargar: el detalle de lo que no entró se
+                            // pinta en el servidor. Reconstruirlo aquí seria
+                            // una segunda copia de la misma tabla.
+                            if ((res.skipped_details ?? []).length > 0) {
+                                setTimeout(() => window.location.reload(), 800);
+                            }
 
                             if (res.status === 'completed') {
                                 fila.querySelector('.run-mensaje').classList.add('text-success');

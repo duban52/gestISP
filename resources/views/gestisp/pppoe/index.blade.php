@@ -222,18 +222,23 @@
                 @endcan
             </div>
 
-            {{-- Importar cuentas que ya existen en un router --}}
-            <form method="POST" id="formImportar" action=""
+            {{-- Importar cuentas que ya existen en un router.
+
+                 Lleva a la REVISIÓN, no a la importación: escribir a
+                 ciegas reventaba con un 500 cuando el Mikrotik traía
+                 dos secrets con el mismo usuario, y el operador no
+                 tenía forma de saber qué corregir. --}}
+            <form method="GET" id="formImportar" action=""
                   class="form-inline form-linea-movil order-md-1">
-                @csrf
                 <select id="importRouterSelect" class="form-control form-control-sm mr-2">
                     <option value="">Importar desde un router…</option>
                     @foreach($routers as $router)
                         <option value="{{ $router->id }}">{{ $router->name }}</option>
                     @endforeach
                 </select>
-                <button type="submit" class="btn btn-sm btn-outline-primary" disabled id="btnImportar">
-                    <i class="fas fa-download"></i> Importar
+                <button type="submit" class="btn btn-sm btn-outline-primary" disabled id="btnImportar"
+                        title="Primero se revisa qué entraría y qué hay que corregir">
+                    <i class="fas fa-search"></i> Revisar e importar
                 </button>
             </form>
         </div>
@@ -691,11 +696,18 @@
         });
 
         // ============ Importar desde router ============
+        //
+        // La URL sale de route() y no se arma a mano: las rutas de
+        // este proyecto viven bajo prefijos que han cambiado, y un
+        // `/pppoe/import/${id}` escrito aquí deja de existir sin que
+        // nada lo avise.
+        const URL_REVISION = @json(route('pppoe.import.review', ['router' => '__ID__']));
+
         document.getElementById('importRouterSelect').addEventListener('change', function () {
             const btn = document.getElementById('btnImportar');
             btn.disabled = !this.value;
             document.getElementById('formImportar').action = this.value
-                ? `/pppoe/import/${this.value}`
+                ? URL_REVISION.replace('__ID__', this.value)
                 : '';
         });
 

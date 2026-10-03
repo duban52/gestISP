@@ -32,6 +32,8 @@ class OntImportRun extends Model
         'skipped_existing',
         'skipped_invalid',
         'matched_contracts',
+        // Que ONT no entro y por que. Lo llena ImportOltOnts.
+        'skipped_details',
         'message',
         'started_at',
         'finished_at',
@@ -46,6 +48,7 @@ class OntImportRun extends Model
         'skipped_existing' => 'integer',
         'skipped_invalid' => 'integer',
         'matched_contracts' => 'integer',
+        'skipped_details' => 'array',
     ];
 
     public function olt()

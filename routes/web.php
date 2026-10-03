@@ -806,6 +806,10 @@ Route::post('/pppoe/{pppoe}/toggle',       [PppoeAccountController::class, 'togg
 Route::post('/pppoe/{pppoe}/contrato',   [PppoeAccountController::class, 'linkContract'])->name('pppoe.link_contract');
 Route::delete('/pppoe/{pppoe}/contrato', [PppoeAccountController::class, 'unlinkContract'])->name('pppoe.unlink_contract');
 Route::delete('/pppoe/{pppoe}',            [PppoeAccountController::class, 'destroy'])->name('pppoe.destroy');
+// REVISION PRIMERO. Importar a ciegas los secrets de un router
+// reventaba con un 500 cuando el Mikrotik traia dos usuarios
+// iguales; esta pantalla lo dice antes de tocar nada.
+Route::get('/pppoe/import/{router}/revision', [PppoeAccountController::class, 'revisarImportacion'])->name('pppoe.import.review');
 Route::post('/pppoe/import/{router}',      [PppoeAccountController::class, 'importFromRouter'])->name('pppoe.import');
 Route::get('/api/routers/{router}/active-sessions', [PppoeAccountController::class, 'apiActiveSessions'])->name('api.routers.sessions');
 

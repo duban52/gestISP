@@ -305,4 +305,51 @@ class MassActionsTest extends TestCase
             ->assertOk()
             ->assertSee('en conflicto');
     }
+    // ==================== El detalle ====================
+
+    /**
+     * La vista individual se abre para TODOS los tipos.
+     *
+     * En producción daba un 500 y nadie sabía por qué: la culpa no
+     * era de esta pantalla sino de un `User::can()` propio que
+     * resolvía las habilidades de política con `hasPermissionTo()`,
+     * y ese método LANZA cuando el nombre no es una fila de la tabla
+     * `permissions` —que es justo lo que nunca es «revert»—.
+     *
+     * Se recorren todos los tipos porque la línea que reventaba está
+     * detrás de `sePuedeRevertir()`: con un tipo no reversible la
+     * pantalla abría igual y el fallo pasaba desapercibido.
+     *
+     * @dataProvider todosLosTipos
+     */
+    public function test_el_detalle_se_abre_para_cualquier_tipo(string $tipo): void
+    {
+        $recorder = app(MassActionRecorder::class);
+
+        $accion = $recorder->abrir(
+            MassActionType::from($tipo),
+            'Prueba del detalle',
+            branchId: $this->branch->id,
+            userId: $this->superadmin->id,
+        );
+
+        $recorder->registrar($accion, null, 'REGISTRO-1',
+            antes: ['status' => 'Activo'],
+            despues: ['status' => 'Suspendido'],
+        );
+
+        $recorder->cerrar($accion);
+
+        $this->get(route('mass_actions.show', $accion))
+            ->assertOk()
+            ->assertSee('REGISTRO-1', false);
+    }
+
+    public static function todosLosTipos(): array
+    {
+        return collect(MassActionType::cases())
+            ->mapWithKeys(fn ($tipo) => [$tipo->value => [$tipo->value]])
+            ->all();
+    }
+
 }
