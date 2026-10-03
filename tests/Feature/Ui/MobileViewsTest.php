@@ -129,6 +129,7 @@ class MobileViewsTest extends TestCase
             'Órdenes técnicas — verificación' => ['technicals_orders.verification'],
             'Catálogo — servicios' => ['services.index'],
             'Catálogo — planes' => ['plans.index'],
+            'Clientes — listado' => ['clients.index'],
         ];
     }
 

@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use App\Support\PdfBranding;
 use App\Tenancy\CurrentContext;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +25,7 @@ class ClientController extends Controller
         $this->middleware('check.permission:clients.destroy')->only('destroy');
         $this->middleware('check.permission:clients.search')->only('search');
         $this->middleware('check.permission:clients.searchView')->only('searchView');
-        $this->middleware('check.permission:clients.export')->only('export');
+        $this->middleware('check.permission:clients.export')->only('export', 'exportPdf');
     }
     /**
      * Buscador de clientes.
@@ -87,37 +88,154 @@ class ClientController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Client::query();
+        $clients = $this->aplicarFiltros($request)
+            // El contrato y su plan vienen con el cliente: la columna de
+            // contratos los pintaba vacios y, sin esto, cada fila seria
+            // dos consultas mas.
+            ->with(['contracts.plan', 'branch'])
+            ->withCount('contracts')
+            ->orderBy('name')
+            ->paginate((int) $request->get('per_page', 15))
+            ->withQueryString();
 
-        // Sin filtro de sucursal: el cliente pertenece a la empresa.
-        // El global scope de BelongsToCompany ya acota a la empresa del
-        // contexto, que es la barrera que importa.
-
-        // Verifica si hay un filtro adicional y aplica la búsqueda
-        if ($request->filled('filter_field') && $request->filled('filter_value')) {
-            $field = $request->filter_field;
-            $value = $request->filter_value;
-
-            // Usa "like" para búsquedas de texto y "where" para valores exactos
-            if (in_array($field, ['name', 'type_client'])) {
-                $query->where($field, 'like', '%' . $value . '%');
-            } else {
-                $query->where($field, $value);
-            }
-        }
-
-        // Paginación flexible
-        $perPage = $request->get('per_page', 8);
-        $clients = $query->paginate($perPage);
-
-        return view('gestisp.clients.index', compact('clients'));
-
+        return view('gestisp.clients.index', [
+            'clients' => $clients,
+            'resumen' => $this->resumen($request),
+        ]);
     }
 
-    public function export()
+    /**
+     * Excel de lo que se ve, no de toda la tabla.
+     *
+     * Antes era `Client::query()` a secas: bajaba la empresa entera sin
+     * encabezados y sin respetar un solo filtro de la pantalla. Lo que
+     * se descarga tiene que ser lo que se esta mirando — es el mismo
+     * criterio que ya seguian los pagos y los movimientos de almacen.
+     */
+    public function export(Request $request)
     {
-        //Función para exportar los datos de los clientes a un excel
-        return (new ClientsExport)->download('clients.xlsx');
+        return (new ClientsExport($this->aplicarFiltros($request)))
+            ->download('clientes.xlsx');
+    }
+
+    /** El mismo listado, en PDF. */
+    public function exportPdf(Request $request)
+    {
+        $clients = $this->aplicarFiltros($request)
+            ->with(['contracts.plan'])
+            ->withCount('contracts')
+            ->orderBy('name')
+            ->get();
+
+        return PdfBranding::make('gestisp.clients.pdf', [
+            'clients' => $clients,
+            'resumen' => $this->resumen($request),
+            'filtros' => $this->filtrosLegibles($request),
+        ], landscape: true)->download('clientes.pdf');
+    }
+
+    /**
+     * Los filtros del listado, en un solo sitio.
+     *
+     * Pantalla, Excel y PDF la comparten: asi lo que se descarga es
+     * exactamente lo que se ve. Sin filtro de sucursal a proposito — el
+     * cliente pertenece a la EMPRESA, y esa barrera ya la pone el
+     * global scope de BelongsToCompany.
+     */
+    private function aplicarFiltros(Request $request): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = Client::query();
+
+        if ($request->filled('filter_field') && $request->filled('filter_value')) {
+            $valor = trim((string) $request->filter_value);
+
+            match ($request->filter_field) {
+                // Lista blanca: el campo viaja por la URL y sin esto
+                // bastaria con escribir el nombre de otra columna.
+                'identity_number', 'number_phone', 'email', 'type_client'
+                    => $query->where($request->filter_field, 'like', "%{$valor}%"),
+
+                // El nombre completo, para que «Juan Perez» encuentre al
+                // cliente aunque nombre y apellido vivan en columnas
+                // distintas.
+                'name' => $query->where(fn ($q) => $q
+                    ->where('name', 'like', "%{$valor}%")
+                    ->orWhere('last_name', 'like', "%{$valor}%")
+                    ->orWhereRaw("CONCAT(name, ' ', COALESCE(last_name, '')) LIKE ?", ["%{$valor}%"])),
+
+                // Por el numero de contrato: en el mostrador es lo unico
+                // que trae el cliente apuntado en un papel.
+                'contract_number' => $query->whereHas(
+                    'contracts',
+                    fn ($c) => $c->where('contract_number', 'like', "%{$valor}%"),
+                ),
+
+                default => null,
+            };
+        }
+
+        // Con contratos, sin ellos, o con alguno en un estado concreto.
+        match ($request->get('contratos')) {
+            'si' => $query->has('contracts'),
+            'no' => $query->doesntHave('contracts'),
+            default => null,
+        };
+
+        if ($request->filled('estado')) {
+            $query->whereHas('contracts', fn ($c) => $c->where('status', $request->estado));
+        }
+
+        return $query;
+    }
+
+    /**
+     * Las cifras de la cabecera, sobre LO FILTRADO.
+     *
+     * Contarlas sobre toda la empresa daria un total que no explica la
+     * tabla que se esta mirando.
+     */
+    private function resumen(Request $request): array
+    {
+        $base = $this->aplicarFiltros($request);
+
+        return [
+            'total' => (clone $base)->count(),
+            'con_contrato' => (clone $base)->has('contracts')->count(),
+            'sin_contrato' => (clone $base)->doesntHave('contracts')->count(),
+            'juridicos' => (clone $base)->where('type_client', 'like', '%uridic%')->count(),
+        ];
+    }
+
+    /** Lo que se filtro, en palabras, para el encabezado del PDF. */
+    private function filtrosLegibles(Request $request): array
+    {
+        $etiquetas = [
+            'name' => 'Nombre',
+            'identity_number' => 'Documento',
+            'number_phone' => 'Teléfono',
+            'email' => 'Correo',
+            'type_client' => 'Tipo de cliente',
+            'contract_number' => 'N.º de contrato',
+        ];
+
+        $puestos = [];
+
+        if ($request->filled('filter_field') && $request->filled('filter_value')) {
+            $campo = $etiquetas[$request->filter_field] ?? $request->filter_field;
+            $puestos[] = $campo . ': ' . $request->filter_value;
+        }
+
+        if ($request->get('contratos') === 'si') {
+            $puestos[] = 'Solo con contrato';
+        } elseif ($request->get('contratos') === 'no') {
+            $puestos[] = 'Solo sin contrato';
+        }
+
+        if ($request->filled('estado')) {
+            $puestos[] = 'Con un contrato ' . $request->estado;
+        }
+
+        return $puestos;
     }
 
     /**

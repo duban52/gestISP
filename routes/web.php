@@ -182,6 +182,9 @@ Route::post('/clients/search', [ClientController::class, 'search'])->name('clien
 
 // Ruta para exportar clientes a excel
 Route::get('/clients/export', [ClientController::class, 'export'])->name('clients.export');
+// El mismo listado en PDF: comparte los filtros de la pantalla
+// (ClientController::aplicarFiltros), asi que exporta lo que se ve.
+Route::get('/clients/export-pdf', [ClientController::class, 'exportPdf'])->name('clients.export-pdf');
 
 // Ruta para exportar ordenes
 Route::get('/orders/export', [TechnicalOrderController::class, 'export'])->name('orders.export');
