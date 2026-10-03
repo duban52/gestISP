@@ -636,40 +636,15 @@ class ClientContractImporter
     /**
      * Convierte importes escritos de cualquier forma habitual:
      * "45.000", "45,000.50", "$ 45000".
+     *
+     * La lectura vive en App\Support\Dinero desde que el formulario
+     * de servicios se topó con el mismo problema: un precio con
+     * decimales escrito como se escribe aquí. El mismo texto no puede
+     * valer una cosa importando y otra tecleando.
      */
     private function dinero(mixed $valor): float
     {
-        if ($valor === null || $valor === '') {
-            return 0.0;
-        }
-
-        // Solo los números REALES (los que trae un Excel) se toman tal
-        // cual. Un texto como "45.000" no puede pasar por aquí aunque
-        // PHP lo considere numérico: lo leería como cuarenta y cinco
-        // en lugar de cuarenta y cinco mil.
-        if (is_int($valor) || is_float($valor)) {
-            return round(max((float) $valor, 0), 2);
-        }
-
-        $limpio = preg_replace('/[^\d,.\-]/', '', (string) $valor);
-
-        // Con ambos separadores, el último es el decimal
-        if (str_contains($limpio, ',') && str_contains($limpio, '.')) {
-            $limpio = strrpos($limpio, ',') > strrpos($limpio, '.')
-                ? str_replace(['.', ','], ['', '.'], $limpio)
-                : str_replace(',', '', $limpio);
-        } elseif (str_contains($limpio, ',')) {
-            // Una sola coma: decimal si deja 1-2 dígitos detrás
-            $decimales = strlen($limpio) - strrpos($limpio, ',') - 1;
-            $limpio = $decimales <= 2 ? str_replace(',', '.', $limpio) : str_replace(',', '', $limpio);
-        } elseif (substr_count($limpio, '.') >= 1) {
-            $decimales = strlen($limpio) - strrpos($limpio, '.') - 1;
-            if ($decimales === 3) {
-                $limpio = str_replace('.', '', $limpio); // 45.000 = miles
-            }
-        }
-
-        return round(max((float) $limpio, 0), 2);
+        return \App\Support\Dinero::positivo($valor);
     }
 
     /**

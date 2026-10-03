@@ -41,8 +41,12 @@
                 <div class="form-group">
                     <label>Precio base</label>
                     <input type="text" class="form-control" id="base_price" name='base_price'
-                           placeholder="Ingrese el precio base del servicio"
+                           placeholder="27.731,09"
                            value="{{ old('base_price') }}">
+                    <small class="form-text text-muted">
+                        Se puede escribir con separador de miles y decimales:
+                        <code>27.731,09</code>, <code>27731,09</code> o <code>27731.09</code>.
+                    </small>
 
                     @error('base_price')
                     <span class="text-danger">
@@ -53,10 +57,13 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Porcentaje IVA (si es el 19%, ingrese 0.19)</label>
+                    <label>Porcentaje IVA</label>
                     <input type="text" class="form-control" id="tax_percentage" name='tax_percentage'
-                           placeholder="Ingrese el porcentaje de IVA"
+                           placeholder="19"
                            value="{{ old('tax_percentage') }}">
+                    <small class="form-text text-muted">
+                        El número del porcentaje: <code>19</code> para el 19%, <code>0</code> si no lleva IVA.
+                    </small>
 
                     @error('tax_percentage')
                     <span class="text-danger">

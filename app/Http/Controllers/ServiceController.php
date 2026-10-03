@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Service;
+use App\Support\Dinero;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
@@ -155,6 +156,13 @@ class ServiceController extends Controller
      */
     private function validateService(Request $request): array
     {
+        // El precio se escribe como se escribe aquí: «27.731,09». PHP
+        // leería eso como 27 y `numeric` lo rechazaba con un «debe ser
+        // un número» que no explicaba nada. Se traduce ANTES de
+        // validar, con el mismo lector que usa el importador de
+        // clientes para las columnas de Excel.
+        Dinero::normalizarEn($request, ['base_price', 'tax_percentage']);
+
         return $request->validate([
             'name'           => 'required|string|max:255',
             'base_price'     => 'required|numeric|min:0',
