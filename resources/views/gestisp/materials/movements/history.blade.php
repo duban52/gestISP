@@ -39,6 +39,9 @@
                             <option value="supplier" {{ request('filter_field') == 'supplier' ? 'selected' : '' }}>
                                 Proveedor
                             </option>
+                            <option value="observations" {{ request('filter_field') == 'observations' ? 'selected' : '' }}>
+                                Observación
+                            </option>
                             <option value="invoice_number" {{ request('filter_field') == 'invoice_number' ? 'selected' : '' }}>
                                 Número de factura
                             </option>
@@ -143,6 +146,7 @@
                         <th>Almacén destino</th>
                         <th>Qué se movió</th>
                         <th class="text-right">Unidades</th>
+                        <th>Observación</th>
                         <th>Proveedor</th>
                         <th>Factura</th>
                         <th>Realizado por</th>
@@ -199,6 +203,20 @@
                             <td class="text-right">
                                 {{ rtrim(rtrim(number_format($operacion->unidades, 2, ',', '.'), '0'), ',') }}
                                 <small class="d-block text-muted">{{ $operacion->renglones }} renglón(es)</small>
+                            </td>
+
+                            {{-- La observación completa en el title: en la
+                                 tabla se recorta para no partir la fila, y
+                                 entera está a un vistazo del ratón y en el
+                                 comprobante. --}}
+                            <td>
+                                @if($operacion->observations)
+                                    <span title="{{ $operacion->observations }}">
+                                        {{ \Illuminate\Support\Str::limit($operacion->observations, 60) }}
+                                    </span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
                             </td>
                             <td>{{ $operacion->supplier ?: '—' }}</td>
                             <td>
@@ -276,6 +294,7 @@
                 material:              'Nombre del material',
                 supplier:              'Nombre del proveedor',
                 invoice_number:        'Número de la factura del proveedor',
+                observations:          'Texto de la observación del movimiento',
                 serial_number:         'Número de serial',
             };
 

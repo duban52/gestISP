@@ -47,6 +47,7 @@ class MaterialsMovementsExport implements FromQuery, WithHeadings, WithMapping
             'Proveedor',
             'Numero de factura',
             'Fecha de la factura',
+            'Observacion',
             'Realizado por'
         ];
     }
@@ -69,6 +70,7 @@ class MaterialsMovementsExport implements FromQuery, WithHeadings, WithMapping
             $movement->supplier ?? '',
             $movement->invoice_number ?? '',
             $movement->invoice_date?->format('Y-m-d') ?? '',
+            $movement->observations ?? '',
             $movement->user->name ?? 'N/A',
 
         ];

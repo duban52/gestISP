@@ -94,6 +94,22 @@
                         <option value="Transferencia" class="option-Transferencia">Transferencia entre almacenes</option>
                     </select>
                 </div>
+
+                {{-- La OBSERVACIÓN va fuera del bloque de la compra: a
+                     diferencia del proveedor y la factura, vale igual en
+                     una entrada, una salida o un traslado. Es lo que el
+                     motivo —una lista cerrada— no alcanza a contar. --}}
+                <div class="form-group col-md-12">
+                    <label for="observations">
+                        Observación <small class="text-muted">(opcional)</small>
+                    </label>
+                    <textarea name="observations" id="observations" class="form-control" rows="2"
+                              maxlength="1000"
+                              placeholder="Lo que el motivo no dice: quién lo pidió, a qué torre fue, qué venía dañado...">{{ old('observations') }}</textarea>
+                    <small class="form-text text-muted">
+                        Queda en el comprobante, en el historial y en los informes. Se puede buscar por ella.
+                    </small>
+                </div>
             </div>
 
             {{-- ============================================================

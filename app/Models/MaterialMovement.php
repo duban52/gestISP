@@ -47,6 +47,10 @@ class MaterialMovement extends Model
         'supplier',
         'invoice_number',
         'invoice_date',
+        // Lo que el motivo no cuenta. Opcional, y en TODOS los tipos:
+        // una salida por deterioro necesita explicarse igual que una
+        // entrada por compra (ver la migracion que la introdujo).
+        'observations',
     ];
 
     protected $casts = [

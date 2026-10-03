@@ -70,6 +70,11 @@
                         @endif
                     </dd>
                 @endif
+
+                @if($cabecera->observations)
+                    <dt class="col-sm-2">Observación</dt>
+                    <dd class="col-sm-10" style="white-space: pre-line;">{{ $cabecera->observations }}</dd>
+                @endif
             </dl>
         </div>
     </div>

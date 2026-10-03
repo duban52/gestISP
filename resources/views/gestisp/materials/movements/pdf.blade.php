@@ -157,6 +157,10 @@
                             @if($operacion->invoice_number) · Fact. {{ $operacion->invoice_number }} @endif
                         </span>
                     @endif
+                    @if($operacion->observations)
+                        <br>
+                        <span class="muted">{{ \Illuminate\Support\Str::limit($operacion->observations, 90) }}</span>
+                    @endif
                     <br>
                     <span class="muted">
                         {{ $operacion->user->name ?? '—' }} {{ $operacion->user->last_name ?? '' }}

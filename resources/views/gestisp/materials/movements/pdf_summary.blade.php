@@ -75,6 +75,7 @@
             // Los datos de la compra son del movimiento entero: se toman
             // del primer renglón, que es donde se guardaron todos.
             $compra = collect($movements)->first(fn ($m) => $m->supplier || $m->invoice_number || $m->invoice_date);
+            $observacion = collect($movements)->first(fn ($m) => filled($m->observations))?->observations;
         @endphp
 
         @if($compra)
@@ -89,6 +90,15 @@
                 <tr>
                     <td class="label">Fecha de la factura</td>
                     <td colspan="3">{{ $compra->invoice_date?->format('d/m/Y') ?: '—' }}</td>
+                </tr>
+            </table>
+        @endif
+
+        @if($observacion)
+            <div class="section-title">Observación</div>
+            <table class="detail">
+                <tr>
+                    <td style="white-space: pre-line;">{{ $observacion }}</td>
                 </tr>
             </table>
         @endif

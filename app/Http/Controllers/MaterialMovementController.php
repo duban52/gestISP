@@ -166,6 +166,12 @@ class MaterialMovementController extends Controller
                 'supplier'                        => 'nullable|string|max:150',
                 'invoice_number'                  => 'nullable|string|max:60',
                 'invoice_date'                    => 'nullable|date',
+                // La OBSERVACION, al reves que los datos de compra, vale
+                // en los tres tipos: lo que el motivo —que es una lista
+                // cerrada— no alcanza a contar. Opcional a proposito:
+                // obligarla produce «ninguna» cien veces y una nota de
+                // verdad cada mil.
+                'observations'                    => 'nullable|string|max:1000',
             ], [
                 'materials.*.material_id.exists' => 'Uno de los materiales no pertenece a esta sucursal.',
                 'warehouse_origin_id.exists' => 'El almacén de origen no pertenece a esta sucursal.',
@@ -174,11 +180,10 @@ class MaterialMovementController extends Controller
 
             $movements = [];
 
-            // Los datos de la compra viajan con CADA renglón del
-            // movimiento: es lo que hace que buscar por número de
-            // factura encuentre el equipo, y que el comprobante los
-            // lleve sin depender de otra tabla.
-            $compra = $request->type === 'Entrada'
+            // Lo que viaja con CADA renglón del movimiento: es lo que
+            // hace que buscar por número de factura encuentre el equipo,
+            // y que el comprobante lo lleve sin depender de otra tabla.
+            $cabecera = $request->type === 'Entrada'
                 ? [
                     'supplier' => $request->input('supplier') ?: null,
                     'invoice_number' => $request->input('invoice_number') ?: null,
@@ -186,12 +191,18 @@ class MaterialMovementController extends Controller
                 ]
                 : ['supplier' => null, 'invoice_number' => null, 'invoice_date' => null];
 
+            // Y la observación, que SÍ va en los tres tipos: los datos de
+            // compra se anulan fuera de una entrada porque ahí no hay
+            // compra, pero una salida por deterioro necesita explicarse
+            // igual que un ingreso.
+            $cabecera['observations'] = $request->input('observations') ?: null;
+
             // El PRIMER renglón bautiza la operación y los demás nacen
             // con su número: así una entrada de mil seriales es UN
             // movimiento en el historial, sin mil actualizaciones extra.
             $operacion = null;
 
-            DB::transaction(function () use ($request, $compra, &$movements, &$operacion) {
+            DB::transaction(function () use ($request, $cabecera, &$movements, &$operacion) {
                 foreach ($request->materials as $materialData) {
                     $material    = Material::findOrFail($materialData['material_id']);
                     $quantity    = $materialData['quantity'];
@@ -286,7 +297,7 @@ class MaterialMovementController extends Controller
                     if ($isEquipment && isset($materialData['serial_numbers'])) {
                         // Equipos: un movimiento por cada serial
                         foreach ($materialData['serial_numbers'] as $serialNumber) {
-                            $renglon = MaterialMovement::create($compra + [
+                            $renglon = MaterialMovement::create($cabecera + [
                                 'operation_id'             => $operacion,
                                 'type'                     => $request->type,
                                 'material_id'              => $material->id,
@@ -316,7 +327,7 @@ class MaterialMovementController extends Controller
                         }
                     } else {
                         // Consumibles: un movimiento con la cantidad total
-                        $renglon = MaterialMovement::create($compra + [
+                        $renglon = MaterialMovement::create($cabecera + [
                             'operation_id'             => $operacion,
                             'type'                     => $request->type,
                             'material_id'              => $material->id,
@@ -683,15 +694,19 @@ class MaterialMovementController extends Controller
         return MaterialMovement::whereIn('operation_id', $ids)
             ->selectRaw('operation_id as operacion, MIN(created_at) as fecha, type, '
                 . 'warehouse_origin_id, warehouse_destination_id, reason, supplier, invoice_number, '
-                . 'invoice_date, user_id, COUNT(*) as renglones, SUM(quantity) as unidades, '
+                . 'invoice_date, observations, user_id, COUNT(*) as renglones, SUM(quantity) as unidades, '
                 . 'COUNT(DISTINCT material_id) as materiales, COUNT(serial_number) as seriales, '
                 // Lo invertido en la operación y cuántos renglones traen
                 // precio: sin lo segundo, un total parecería completo
                 // cuando media entrada quedó sin valorar.
                 . 'SUM(CASE WHEN purchase_unit_value IS NULL THEN 0 ELSE quantity * purchase_unit_value END) as invertido, '
                 . 'COUNT(purchase_unit_value) as con_valor')
+            // La observación entra en el GROUP BY como el resto de la
+            // cabecera: se repite en todos los renglones de la operación,
+            // así que no parte el grupo. Sin ella, ONLY_FULL_GROUP_BY
+            // —el modo por defecto de MySQL 8— rechaza la consulta.
             ->groupBy('operation_id', 'type', 'warehouse_origin_id', 'warehouse_destination_id',
-                'reason', 'supplier', 'invoice_number', 'invoice_date', 'user_id')
+                'reason', 'supplier', 'invoice_number', 'invoice_date', 'observations', 'user_id')
             ->with(['warehouseOrigin.branch', 'warehouseDestination.branch', 'user'])
             ->orderByDesc('fecha')
             ->get();
@@ -859,6 +874,7 @@ class MaterialMovementController extends Controller
                 case 'reason':
                 case 'supplier':
                 case 'invoice_number':
+                case 'observations':
                     $query->where($field, 'like', "%{$value}%");
                     break;
 

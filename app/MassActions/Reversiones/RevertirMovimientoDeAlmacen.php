@@ -120,6 +120,11 @@ class RevertirMovimientoDeAlmacen implements RevierteUnaAccionMasiva
             'user_id' => auth()->id(),
             'reason' => 'Reversión de la acción masiva #' . $item->mass_action_id
                 . ' (movimiento ' . $movimiento->id . ')',
+            // La observación del original viaja al contramovimiento: lo
+            // que explicaba por qué se movió el material explica igual
+            // de bien por qué volvió, y el comprobante de la reversión
+            // no puede salir más mudo que el que deshace.
+            'observations' => $movimiento->observations,
             // El costo viaja con el material: devolver algo no lo
             // revalúa ni lo abarata.
             'purchase_unit_value' => $movimiento->purchase_unit_value,
