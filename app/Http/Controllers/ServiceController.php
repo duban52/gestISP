@@ -100,7 +100,20 @@ class ServiceController extends Controller
     {
         $validated = $this->validateService($request);
 
+        $ambito = $this->ambitoDe($request);
+
+        // ESTO FALTABA. El formulario ofrecía el ámbito desde que
+        // existe el catálogo compartido, pero update() no lo escribía:
+        // se cambiaba el radio, se guardaba, y el servicio seguía
+        // siendo de la empresa sin un solo aviso. El plan sí lo
+        // guardaba (PlanController::update), de ahí que pasara
+        // desapercibido.
+        if ($aviso = $this->motivoParaNoEncerrar($service, $ambito)) {
+            return back()->withInput()->with('error', $aviso);
+        }
+
         $service->update([
+            'branch_id'      => $ambito,
             'name'           => $validated['name'],
             'base_price'     => $validated['base_price'],
             'tax_percentage' => $validated['tax_percentage'],
@@ -192,6 +205,45 @@ class ServiceController extends Controller
      * Que un servicio sea exclusivo de una sede deberia ser raro y
      * deliberado.
      */
+    /**
+     * ¿Se puede encerrar este servicio en una sola sucursal?
+     *
+     * Pasarlo de la empresa a una sede le quita el servicio a las
+     * demás. Si algún PLAN de otra sucursal lo está usando, ese plan
+     * queda apuntando a algo que ya no alcanza: no revienta —la
+     * factura ya tiene sus renglones—, pero el servicio desaparece de
+     * la pantalla del plan, y el siguiente que lo edite y guarde lo
+     * pierde para siempre sin enterarse. Un plan DE LA EMPRESA cuenta
+     * igual: vale en todas las sedes, así que no puede depender de un
+     * servicio de una sola.
+     *
+     * Ampliar el ámbito —de una sede a la empresa— no rompe nada y no
+     * se comprueba.
+     *
+     * @return string|null El motivo, o null si se puede
+     */
+    private function motivoParaNoEncerrar(Service $service, ?int $destino): ?string
+    {
+        if ($destino === null || (int) $service->branch_id === $destino) {
+            return null;
+        }
+
+        $planes = $service->plans()
+            ->where(fn ($q) => $q->whereNull('plans.branch_id')->orWhere('plans.branch_id', '!=', $destino))
+            ->pluck('plans.name');
+
+        if ($planes->isEmpty()) {
+            return null;
+        }
+
+        return sprintf(
+            'No se puede dejar «%s» solo para esta sucursal: lo usan planes que viven fuera de ella (%s). '
+            . 'Quítelo de esos planes —o páselos también a esta sucursal— y vuelva a intentarlo.',
+            $service->name,
+            $planes->take(5)->implode(', ') . ($planes->count() > 5 ? '…' : ''),
+        );
+    }
+
     private function ambitoDe(Request $request): ?int
     {
         if ($request->boolean('de_la_empresa', true)) {

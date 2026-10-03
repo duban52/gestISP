@@ -6,6 +6,10 @@
     </div>
 @endsection
 @section('content')
+    @if(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
     <div class="card">
         <div class="card-body">
             <form method="POST" action="{{ route('plans.store') }}" enctype="multipart/form-data">

@@ -119,10 +119,16 @@ class PlanController extends Controller
     {
         $validated = $this->validatePlan($request);
 
+        $ambito = $this->ambitoDe($request);
+
+        if ($aviso = $this->motivoParaNoEncerrar($plan, $ambito)) {
+            return back()->withInput()->with('error', $aviso);
+        }
+
         $plan->update([
             'name' => $validated['name'],
             'active' => $request->boolean('active', true),
-            'branch_id' => $this->ambitoDe($request),
+            'branch_id' => $ambito,
         ]);
 
         // Sincronizar servicios: refleja exactamente la selección del formulario
@@ -223,10 +229,69 @@ class PlanController extends Controller
             'de_la_empresa' => 'nullable|boolean',
             'active'     => 'nullable|boolean',
             'services'   => 'nullable|array',
-            'services.*' => 'exists:services,id',
+            // UN PLAN NO PUEDE LLEVAR UN SERVICIO QUE NO ALCANZA.
+            //
+            // Era `exists:services,id` a secas: valía CUALQUIER fila de
+            // la tabla. Dos cosas se colaban por ahí. La primera, un
+            // servicio de otra EMPRESA —el formulario no lo ofrece,
+            // pero un POST a mano sí—. La segunda, más probable y más
+            // silenciosa: un plan de la empresa con un servicio
+            // exclusivo de una sede, que en las demás sucursales
+            // factura un plan al que le falta un renglón.
+            'services.*' => [
+                Rule::exists('services', 'id')
+                    ->where('company_id', $empresaId)
+                    ->where(fn ($q) => $q->where(
+                        fn ($w) => $branchId === null
+                            ? $w->whereNull('branch_id')
+                            : $w->whereNull('branch_id')->orWhere('branch_id', $branchId),
+                    )),
+            ],
         ], [
             'name.unique' => 'Ya existe un plan con ese nombre en este ámbito.',
+            'services.*.exists' => $branchId === null
+                ? 'Un plan de la empresa solo puede llevar servicios de la empresa: hay uno '
+                    . 'que es exclusivo de una sucursal y en las demás dejaría el plan incompleto.'
+                : 'Hay un servicio que no está disponible en esta sucursal.',
         ]);
+    }
+
+    /**
+     * ¿Se puede encerrar este plan en una sola sucursal?
+     *
+     * Pasarlo de la empresa a una sede se lo quita a las demás, y ahí
+     * sí se nota: la validación del contrato exige que su plan sea de
+     * la empresa o de SU sucursal (ContractController), así que un
+     * contrato de otra sede con ese plan deja de poder guardarse — ni
+     * para cambiarle la dirección. Las facturas ya emitidas no se
+     * tocan, pero el contrato queda trabado.
+     *
+     * Ampliar el ámbito —de una sede a la empresa— no se comprueba:
+     * no le quita el plan a nadie.
+     *
+     * @return string|null El motivo, o null si se puede
+     */
+    private function motivoParaNoEncerrar(Plan $plan, ?int $destino): ?string
+    {
+        if ($destino === null || (int) $plan->branch_id === $destino) {
+            return null;
+        }
+
+        $contratos = $plan->contracts()
+            ->where(fn ($q) => $q->whereNull('contracts.branch_id')
+                ->orWhere('contracts.branch_id', '!=', $destino))
+            ->count();
+
+        if ($contratos === 0) {
+            return null;
+        }
+
+        return sprintf(
+            'No se puede dejar «%s» solo para esta sucursal: lo tienen %d contrato(s) de otras sedes, '
+            . 'que quedarían sin poder guardarse. Páselos antes a otro plan.',
+            $plan->name,
+            $contratos,
+        );
     }
 
     /**
