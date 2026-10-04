@@ -169,6 +169,36 @@ class BranchColumnTest extends TestCase
     }
 
     /**
+     * ¿Se sabe de qué sede es cada fila?
+     *
+     * Es la pregunta de la prueba de consolidado, y la columna
+     * «Sucursal» no es la única forma de responderla.
+     *
+     * EL CATÁLOGO COMPARTIDO RESPONDE DISTINTO, Y MEJOR
+     * -------------------------------------------------
+     * Un plan o un servicio puede ser DE LA EMPRESA: no es de ninguna
+     * sede, vale en todas. La columna «Sucursal» ahí pintaba un guion
+     * que lo mismo se leía «de la empresa» que «sin asignar», y había
+     * que abrir la ficha para salir de dudas. La columna «Ámbito» dice
+     * «Empresa» o el nombre de la sede, que es exactamente lo que esta
+     * prueba defiende.
+     *
+     * POR QUÉ NO VALE PARA LA OTRA PRUEBA
+     * -----------------------------------
+     * La de una sola sucursal comprueba que no se repita el nombre de
+     * la sede en todas las filas, que es ruido. El ÁMBITO no es ruido
+     * ahí: «este servicio también lo usan las demás sedes» sigue
+     * siendo información aunque se trabaje en una sola, y es justo lo
+     * que se pidió poder ver sin entrar a la ficha. Por eso son dos
+     * ayudantes y no uno con un parámetro: son dos preguntas.
+     */
+    private function identificaLaSede(TestResponse $respuesta): bool
+    {
+        return $this->muestraLaSucursal($respuesta)
+            || str_contains($respuesta->getContent(), '<th>Ámbito</th>');
+    }
+
+    /**
      * @dataProvider listados
      */
     public function test_en_consolidado_el_listado_dice_la_sucursal(string $ruta): void
@@ -182,7 +212,7 @@ class BranchColumnTest extends TestCase
         $respuesta = $this->get(route($ruta))->assertOk();
 
         $this->assertTrue(
-            $this->muestraLaSucursal($respuesta),
+            $this->identificaLaSede($respuesta),
             'El listado mezcla sedes y no dice de cuál es cada fila.',
         );
     }
