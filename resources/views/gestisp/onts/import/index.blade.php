@@ -128,6 +128,51 @@
                     </div>
                 </div>
 
+                {{-- LAS QUE NO VAN A ENTRAR.
+
+                     Esto es lo que faltaba: el análisis decía «sin
+                     ubicación: 200» y la importación remataba con
+                     «omitidas por datos incompletos: 200», sin decir
+                     cuáles ni qué les faltaba. Aquí salen una por una,
+                     ANTES de importar, que es cuando se pueden
+                     corregir en la OLT. --}}
+                <div id="analisisProblemas" class="card border-warning mb-3" style="display:none;">
+                    <div class="card-header py-2 bg-warning">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Estas ONTs <strong>no se van a importar</strong>
+                            <span class="badge badge-dark ml-1" id="resProblemasCont">0</span>
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">
+                            La OLT no informa en qué tarjeta y puerto PON están, y sin eso el
+                            sistema no podría operarlas (ni cortarlas, ni reiniciarlas, ni saber
+                            de qué NAP cuelgan). <strong>El dato falta en la OLT, no aquí.</strong>
+                        </p>
+                        <p class="text-muted small">
+                            Suele pasar con ONTs que quedaron registradas en el equipo pero ya no
+                            están conectadas, o con puertos de una tarjeta que la OLT no publica
+                            por SNMP. Si estos equipos ya no existen, bórrelos de la OLT; si sí,
+                            revise la tarjeta. Las demás ONTs se pueden importar ya.
+                        </p>
+
+                        <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="thead-light">
+                                <tr>
+                                    <th>Serial</th>
+                                    <th>ONT ID</th>
+                                    <th>Descripción en la OLT</th>
+                                    <th>Qué falta</th>
+                                </tr>
+                                </thead>
+                                <tbody id="resProblemas"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <p class="text-muted">
                     <i class="fas fa-eye"></i> Muestra de las primeras ONTs que se importarían:
                 </p>
@@ -354,10 +399,40 @@
                     const tbody = document.getElementById('resMuestra');
                     tbody.innerHTML = '';
 
+                    // Las que no van a entrar, con su motivo
+                    const problemas = res.problemas ?? [];
+                    const caja = document.getElementById('analisisProblemas');
+                    const cuerpoProblemas = document.getElementById('resProblemas');
+
+                    caja.style.display = problemas.length ? 'block' : 'none';
+                    document.getElementById('resProblemasCont').textContent = problemas.length;
+                    cuerpoProblemas.innerHTML = '';
+
+                    problemas.forEach(o => {
+                        const fila = document.createElement('tr');
+                        fila.innerHTML = `
+                            <td><strong></strong></td>
+                            <td class="text-center"></td>
+                            <td class="descripcion"></td>
+                            <td class="motivo"></td>`;
+                        // textContent y no innerHTML: la descripción la
+                        // escribe quien configura la OLT y puede traer
+                        // cualquier cosa.
+                        fila.querySelector('strong').textContent = o.sn ?? '—';
+                        fila.children[1].textContent = o.onu_id ?? '—';
+                        fila.querySelector('.descripcion').textContent = o.descripcion ?? '—';
+                        fila.querySelector('.motivo').textContent = o.motivo ?? '—';
+                        cuerpoProblemas.appendChild(fila);
+                    });
+
                     if (res.muestra.length === 0) {
                         tbody.innerHTML =
                             '<tr><td colspan="6" class="text-center text-muted py-3">' +
-                            'No hay ONTs nuevas: todas las de esta OLT ya están en GestISP.</td></tr>';
+                            (problemas.length
+                                ? 'No hay ninguna ONT importable: las nuevas de esta OLT son las de arriba, ' +
+                                  'y les falta la ubicación.'
+                                : 'No hay ONTs nuevas: todas las de esta OLT ya están en GestISP.') +
+                            '</td></tr>';
                         document.getElementById('btnImportar').disabled = true;
                     } else {
                         document.getElementById('btnImportar').disabled = false;

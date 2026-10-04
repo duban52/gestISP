@@ -191,6 +191,9 @@ class OltOntDiscovery
      *
      * @return array{total: int, nuevas: int, existentes: int, con_contrato: int, muestra: array}
      */
+    /** Cuantas ONT problematicas se detallan en el analisis. */
+    private const LIMITE_PROBLEMAS = 200;
+
     public function preview(Olt $olt, int $limit = 15): array
     {
         $found = $this->discover($olt);
@@ -199,7 +202,9 @@ class OltOntDiscovery
 
         $nuevas = $found->reject(fn ($o) => $existing->has(strtoupper($o['sn'])));
 
-        $muestra = $nuevas->take($limit)->map(function ($ont) use ($olt) {
+        $muestra = $nuevas
+            ->filter(fn ($o) => $o['slot'] !== null && $o['port'] !== null)
+            ->take($limit)->map(function ($ont) use ($olt) {
             $ont['contract_id'] = $this->matchContract($ont['description'], $olt->branch_id);
 
             // El id es lo que necesita la importación para vincular; el
@@ -213,11 +218,42 @@ class OltOntDiscovery
             return $ont;
         })->values()->all();
 
+        // LAS QUE NO VAN A ENTRAR, CON NOMBRE Y MOTIVO.
+        //
+        // Antes el análisis solo decía «sin ubicación: 200» y la
+        // importación remataba con «omitidas por datos incompletos:
+        // 200». Ni cuáles ni qué les faltaba: no había nada que
+        // corregir porque no se sabía qué corregir. Esto lo responde
+        // ANTES de importar, que es cuando sirve.
+        $problemas = $nuevas
+            ->filter(fn ($o) => $o['slot'] === null || $o['port'] === null)
+            ->take(self::LIMITE_PROBLEMAS)
+            ->map(fn ($o) => [
+                'sn' => $o['sn'],
+                'onu_id' => $o['onu_id'] ?? null,
+                'if_index' => $o['if_index'] ?? null,
+                'descripcion' => $o['description'] ?: null,
+                'motivo' => $o['slot'] === null && $o['port'] === null
+                    ? 'La OLT no reportó ni la tarjeta ni el puerto PON de esta ONT.'
+                    : ($o['slot'] === null
+                        ? 'La OLT no reportó la tarjeta (slot) de esta ONT.'
+                        : 'La OLT no reportó el puerto PON de esta ONT.'),
+            ])
+            ->values()
+            ->all();
+
+        $sinUbicacion = $nuevas
+            ->filter(fn ($o) => $o['slot'] === null || $o['port'] === null)
+            ->count();
+
         return [
             'total' => $found->count(),
-            'nuevas' => $nuevas->count(),
+            'nuevas' => $nuevas->count() - $sinUbicacion,
             'existentes' => $found->count() - $nuevas->count(),
-            'sin_ubicacion' => $found->whereNull('slot')->count(),
+            // De las NUEVAS: una ya registrada sin ubicación no es un
+            // problema que resolver, es un equipo que ya está dentro.
+            'sin_ubicacion' => $sinUbicacion,
+            'problemas' => $problemas,
             'muestra' => $muestra,
         ];
     }

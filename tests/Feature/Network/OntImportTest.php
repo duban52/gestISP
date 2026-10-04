@@ -546,4 +546,56 @@ class OntImportTest extends TestCase
         $this->assertNotEmpty($run->skipped_details[0]['motivo']);
     }
 
+    /**
+     * El ANALISIS dice cuales no entrarian, antes de importar.
+     *
+     * Es donde sirve de verdad: el detalle de despues explica lo que
+     * ya paso, este permite corregir la OLT antes de tocar nada.
+     */
+    public function test_el_analisis_lista_las_ont_que_no_entrarian(): void
+    {
+        $this->simularDescubrimiento([
+            $this->ontEncontrada(['sn' => 'HWTC-BUENA001']),
+            $this->ontEncontrada(['sn' => 'HWTC-SINSLOT1', 'slot' => null, 'description' => 'BT000353 - VIEJA']),
+        ]);
+
+        $respuesta = $this->postJson(route('onts.import.preview'), ['olt_id' => $this->olt->id])
+            ->assertOk()
+            ->json();
+
+        $this->assertTrue($respuesta['ok']);
+
+        // Las que entran NO cuentan a la que le falta la ubicacion
+        $this->assertSame(1, $respuesta['nuevas']);
+        $this->assertSame(1, $respuesta['sin_ubicacion']);
+
+        $this->assertCount(1, $respuesta['problemas']);
+        $this->assertSame('HWTC-SINSLOT1', $respuesta['problemas'][0]['sn']);
+        $this->assertStringContainsString('tarjeta', $respuesta['problemas'][0]['motivo']);
+        $this->assertSame('BT000353 - VIEJA', $respuesta['problemas'][0]['descripcion']);
+
+        // Y la muestra solo trae las importables
+        $this->assertCount(1, $respuesta['muestra']);
+        $this->assertSame('HWTC-BUENA001', $respuesta['muestra'][0]['sn']);
+
+        // Sin escribir nada
+        $this->assertSame(0, Ont::count());
+    }
+
+    public function test_el_analisis_no_inventa_problemas_cuando_no_los_hay(): void
+    {
+        $this->simularDescubrimiento([
+            $this->ontEncontrada(['sn' => 'HWTC-BUENA001']),
+            $this->ontEncontrada(['sn' => 'HWTC-BUENA002']),
+        ]);
+
+        $respuesta = $this->postJson(route('onts.import.preview'), ['olt_id' => $this->olt->id])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(2, $respuesta['nuevas']);
+        $this->assertSame(0, $respuesta['sin_ubicacion']);
+        $this->assertSame([], $respuesta['problemas']);
+    }
+
 }
