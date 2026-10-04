@@ -15,6 +15,7 @@ use App\Tenancy\CurrentContext;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\ServiceProvider;
@@ -116,6 +117,30 @@ class AppServiceProvider extends ServiceProvider
         $this->resolverPermisosPorRolDeLaSesion();
         $this->personalizarCorreoDeContrasena();
         $this->compartirSiSeMuestraLaSucursal();
+        $this->prepararElCorreo();
+    }
+
+    /**
+     * El correo saliente: configuración, interruptor y bitácora.
+     *
+     * Aquí y no en un EventServiceProvider porque hay que hacer dos
+     * cosas distintas: aplicar la configuración ANTES de que se arme
+     * ningún mailer, y quedarse escuchando los envíos. Las dos viven
+     * en App\Mail\CorreoDelSistema.
+     *
+     * Los oyentes se registran en TODO contexto —web, cola, consola—:
+     * el correo que importa de verdad, el de la corrida de
+     * facturación, sale precisamente desde la cola.
+     */
+    private function prepararElCorreo(): void
+    {
+        $correo = app(\App\Mail\CorreoDelSistema::class);
+
+        $correo->aplicarConfiguracion();
+
+        Event::listen(\Illuminate\Mail\Events\MessageSending::class, [$correo, 'alEnviar']);
+        Event::listen(\Illuminate\Mail\Events\MessageSent::class, [$correo, 'alEnviarse']);
+        Event::listen(\Illuminate\Queue\Events\JobFailed::class, [$correo, 'alFallarElTrabajo']);
     }
 
     /**

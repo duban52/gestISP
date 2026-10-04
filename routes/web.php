@@ -352,6 +352,18 @@ Route::middleware(['auth', 'superadmin'])->prefix('gestion/acciones-masivas')->g
 // contratos tienen servicio y que le pasa a los equipos de un cliente
 // al cerrar una orden.
 Route::middleware(['auth', 'superadmin'])->prefix('gestion')->group(function () {
+    // ENVIO DE CORREOS. Mismo criterio que lo de arriba: desde aqui se
+    // apaga TODO el correo saliente de un sistema que factura, y se
+    // guarda la contrasena del servidor de salida.
+    Route::get('/envio-de-correos', [App\Http\Controllers\MailSettingController::class, 'index'])
+        ->name('mail.settings');
+    Route::put('/envio-de-correos', [App\Http\Controllers\MailSettingController::class, 'update'])
+        ->name('mail.settings.update');
+    Route::post('/envio-de-correos/probar', [App\Http\Controllers\MailSettingController::class, 'probar'])
+        ->name('mail.settings.test');
+    Route::delete('/envio-de-correos/bitacora', [App\Http\Controllers\MailSettingController::class, 'podar'])
+        ->name('mail.log.prune');
+
     Route::get('/estados-y-ordenes', [App\Http\Controllers\SystemCatalogController::class, 'index'])
         ->name('system.catalog');
 

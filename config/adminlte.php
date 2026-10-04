@@ -829,6 +829,17 @@ return [
                 // a quien se le factura y que le pasa a los equipos de
                 // un cliente, asi que no puede depender de un permiso
                 // marcable en el modulo de roles.
+                // Envio de correos: el SMTP, el interruptor general y la
+                // bitacora de lo que salio. Mismo criterio que las de
+                // arriba: desde aqui se apaga el correo de un sistema
+                // que factura, y se guarda la contrasena del servidor.
+                [
+                    'text' => 'Envío de correos',
+                    'route' => 'mail.settings',
+                    'icon' => 'fas  fa-envelope',
+                    'active' => ['gestion/envio-de-correos*'],
+                    'solo_superadmin' => true,
+                ],
                 [
                     'text' => 'Estados y órdenes',
                     'route' => 'system.catalog',

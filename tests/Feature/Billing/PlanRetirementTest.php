@@ -157,15 +157,24 @@ class PlanRetirementTest extends BillingTestCase
     {
         $this->comoAdministrador();
 
+        // DE LA EMPRESA, como el plan que se va a crear.
+        //
+        // Un plan sin ámbito explícito nace de la empresa, y un plan de
+        // la empresa solo admite servicios de la empresa: con uno
+        // exclusivo de una sede, en las demás sucursales facturaría un
+        // renglón de menos. Esa regla la fija PlanScopeTest; aquí lo
+        // que se comprueba es otra cosa —que el plan nazca ofreciéndose—
+        // y el servicio solo tiene que ser válido.
         $servicio = Service::factory()->create([
-            'branch_id' => $this->branch->id,
+            'branch_id' => null,
+            'company_id' => $this->branch->company_id,
             'user_id' => $this->admin->id,
         ]);
 
         $this->post(route('plans.store'), [
             'name' => 'Plan recién creado',
             'services' => [$servicio->id],
-        ])->assertRedirect();
+        ])->assertSessionHasNoErrors()->assertRedirect();
 
         $this->assertTrue(
             Plan::withoutGlobalScopes()->where('name', 'Plan recién creado')->firstOrFail()->active,
