@@ -221,6 +221,32 @@ class PppoeTrafficTest extends TestCase
             ->assertSee('Velocidad actual', false);
     }
 
+    /**
+     * La grafica tiene un alto FIJO, y no uno que crece con la pantalla.
+     *
+     * El lienzo llevaba `height="130"`, que con el comportamiento por
+     * defecto de Chart.js no fija un alto sino una PROPORCION. En una
+     * pantalla ancha salia una grafica de casi setecientos pixeles que
+     * empujaba fuera de la vista el resto de la ficha: habia que
+     * desplazarse para ver los datos de la cuenta y el contrato.
+     *
+     * La ficha tiene que caber en una pantalla; la grafica es un apoyo.
+     */
+    public function test_la_grafica_no_crece_con_el_ancho_de_la_pantalla(): void
+    {
+        $html = $this->get(route('pppoe.show', $this->account))->assertOk()->getContent();
+
+        // El alto lo manda el contenedor...
+        $this->assertStringContainsString('caja-grafica', $html);
+        $this->assertMatchesRegularExpression('/\.caja-grafica\s*\{[^}]*height:\s*\d+px/', $html);
+
+        // ...y Chart.js tiene que dejarle mandar
+        $this->assertStringContainsString('maintainAspectRatio: false', $html);
+
+        // El lienzo ya no impone una proporcion
+        $this->assertStringNotContainsString('<canvas id="trafficChart" height=', $html);
+    }
+
     public function test_el_poller_limpia_el_historial_antiguo(): void
     {
         PppoeSessionMetric::create([

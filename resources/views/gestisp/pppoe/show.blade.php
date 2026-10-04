@@ -153,7 +153,7 @@
                         <option value="168">Última semana</option>
                     </select>
                 </div>
-                <div class="card-body">
+                <div class="card-body py-2">
                     <div id="chartEmpty" class="alert alert-info mb-0" style="display:none;">
                         <i class="fas fa-info-circle"></i>
                         Todavía no hay muestras de tráfico para esta cuenta. El historial lo
@@ -162,8 +162,8 @@
                     </div>
 
                     <div id="chartWrapper" style="display:none;">
-                        {{-- Resumen del período --}}
-                        <div class="row text-center mb-3">
+                        {{-- Resumen del período, en una línea --}}
+                        <div class="row text-center mb-2">
                             <div class="col-4">
                                 <small class="text-muted d-block">Pico de bajada</small>
                                 <strong id="peak-out" class="text-primary">—</strong>
@@ -178,7 +178,22 @@
                             </div>
                         </div>
 
-                        <canvas id="trafficChart" height="130"></canvas>
+                        {{-- EL ALTO LO MANDA ESTE CONTENEDOR, NO EL LIENZO.
+
+                             El atributo `height="130"` del canvas no fijaba
+                             nada: con `maintainAspectRatio` (el valor por
+                             defecto de Chart.js) solo definía una PROPORCIÓN,
+                             300:130. En una pantalla ancha eso daba una
+                             gráfica de casi setecientos píxeles de alto que
+                             empujaba fuera de la vista todo lo demás de la
+                             ficha.
+
+                             Con un alto fijo aquí y `maintainAspectRatio:
+                             false` abajo, la gráfica mide lo que dice medir
+                             en cualquier pantalla. --}}
+                        <div class="caja-grafica">
+                            <canvas id="trafficChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -337,6 +352,21 @@
 
 @section('css')
     <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
+    <style>
+        /* EL ALTO DE LA GRAFICA, EN UN SOLO SITIO.
+           La ficha de una cuenta tiene que caber en una pantalla: la
+           grafica es un apoyo, no el contenido. En el telefono se
+           encoge un poco mas, donde cada pixel de alto cuesta un
+           desplazamiento. */
+        .caja-grafica {
+            position: relative;
+            height: 190px;
+        }
+
+        @media (max-width: 767.98px) {
+            .caja-grafica { height: 160px; }
+        }
+    </style>
 @endsection
 
 @section('js')
@@ -540,9 +570,16 @@
                         },
                         options: {
                             responsive: true,
+                            // Sin esto, Chart.js conserva la proporción del
+                            // lienzo y la altura crece con el ancho de la
+                            // pantalla. El alto lo pone .caja-grafica.
+                            maintainAspectRatio: false,
                             interaction: { mode: 'index', intersect: false },
                             plugins: {
-                                legend: { position: 'bottom' },
+                                legend: {
+                                    position: 'bottom',
+                                    labels: { boxWidth: 12, padding: 8, font: { size: 11 } },
+                                },
                                 tooltip: {
                                     callbacks: {
                                         label: c => `${c.dataset.label}: ${formatBps(c.parsed.y)}`,
@@ -555,9 +592,28 @@
                                 },
                             },
                             scales: {
+                                // Una muestra cada cinco minutos son casi
+                                // trescientas etiquetas en 24 horas: un muro
+                                // de texto girado que ocupaba más alto que la
+                                // propia gráfica y no se leía. Con autoSkip
+                                // salen las que caben.
+                                x: {
+                                    ticks: {
+                                        autoSkip: true,
+                                        maxTicksLimit: 12,
+                                        maxRotation: 0,
+                                        minRotation: 0,
+                                        font: { size: 10 },
+                                    },
+                                    grid: { display: false },
+                                },
                                 y: {
                                     beginAtZero: true,
-                                    ticks: { callback: v => formatBps(v) },
+                                    ticks: {
+                                        callback: v => formatBps(v),
+                                        maxTicksLimit: 5,
+                                        font: { size: 10 },
+                                    },
                                 },
                             },
                         },
