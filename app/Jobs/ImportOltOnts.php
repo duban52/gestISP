@@ -178,7 +178,10 @@ class ImportOltOnts implements ShouldQueue
                             'onu_id' => $datos['onu_id'],
                             'if_index' => $datos['if_index'],
                             'sn' => $datos['sn'],
-                            'description' => $datos['description'] ?: null,
+                            // Saneada tambien aqui: si llegara un byte que no es
+                            // UTF-8, el INSERT falla y la ONT se pierde por el
+                            // texto de un comentario que nadie va a leer.
+                            'description' => OltOntDiscovery::textoSeguro($datos['description'] ?? '') ?: null,
                             'status' => $datos['online'] ? 1 : 0,
                             'admin_enabled' => true,
                         ]);
@@ -228,16 +231,15 @@ class ImportOltOnts implements ShouldQueue
             }
 
             // Publicar el avance para la barra de progreso
-            $run->update($contadores + ['skipped_details' => $this->omitidas]);
+            $this->guardarAvance($run, $contadores);
         }
 
         app(\App\MassActions\MassActionRecorder::class)->cerrar($accion);
 
-        $run->update(array_merge($contadores, [
+        $this->guardarAvance($run, array_merge($contadores, [
             'status' => OntImportRun::ESTADO_COMPLETADO,
             'finished_at' => now(),
             'message' => $this->resumen($contadores),
-            'skipped_details' => $this->omitidas,
         ]));
 
         Log::info('Importación de ONTs completada', [
@@ -305,7 +307,10 @@ class ImportOltOnts implements ShouldQueue
                         'onu_id' => $datos['onu_id'],
                         'if_index' => $datos['if_index'],
                         'sn' => $datos['sn'],
-                        'description' => $datos['description'] ?: null,
+                        // Saneada tambien aqui: si llegara un byte que no es
+                            // UTF-8, el INSERT falla y la ONT se pierde por el
+                            // texto de un comentario que nadie va a leer.
+                            'description' => OltOntDiscovery::textoSeguro($datos['description'] ?? '') ?: null,
                         'status' => $datos['online'] ? 1 : 0,
                         'admin_enabled' => true,
                     ]);
@@ -336,6 +341,36 @@ class ImportOltOnts implements ShouldQueue
     }
 
     /**
+     * Guarda el avance de la corrida, con el detalle si se puede.
+     *
+     * EL DETALLE NUNCA PUEDE TUMBAR LA IMPORTACIÓN.
+     * ---------------------------------------------
+     * Se guarda en una columna JSON y `json_encode` se niega ante un
+     * byte que no sea UTF-8 válido. Pasó: una importación murió al
+     * 77 % con «Malformed UTF-8 characters», y lo que la mató fue
+     * justamente la lista que existe para explicar los fallos.
+     *
+     * Los textos ya vienen saneados (OltOntDiscovery::textoSeguro).
+     * Esto es el cinturón: si aun así no se pudiera serializar, se
+     * guarda el avance SIN el detalle y la importación sigue. Mejor
+     * una corrida completa sin explicación que ninguna corrida.
+     */
+    private function guardarAvance(OntImportRun $run, array $datos): void
+    {
+        try {
+            $run->update($datos + ['skipped_details' => $this->omitidas]);
+        } catch (Throwable $e) {
+            Log::warning('No se pudo guardar el detalle de lo omitido; se guarda el avance sin él', [
+                'run' => $run->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $this->omitidas = [];
+            $run->update($datos + ['skipped_details' => null]);
+        }
+    }
+
+    /**
      * Deja constancia de una ONT que no entró, con su motivo.
      */
     private function anotarOmitida(array $datos, string $motivo): void
@@ -344,14 +379,24 @@ class ImportOltOnts implements ShouldQueue
             return;
         }
 
+        // TODO LO QUE ENTRA AQUI PASA POR EL SANEADOR.
+        //
+        // Esta lista se guarda en una columna JSON, y `json_encode` se
+        // NIEGA ante un byte que no sea UTF-8 valido. Lo que devuelve
+        // la OLT no siempre lo es. La primera version de esto tumbo una
+        // importacion al 77% con «Malformed UTF-8 characters»: el
+        // detalle que existe para explicar los fallos se convirtio en
+        // la causa de uno. El origen ya viene saneado desde
+        // OltOntDiscovery, pero esto no puede depender de quien lo
+        // llame.
         $this->omitidas[] = [
-            'sn' => $datos['sn'] ?? '(sin serial)',
+            'sn' => OltOntDiscovery::textoSeguro($datos['sn'] ?? '') ?: '(sin serial)',
             'ubicacion' => implode('/', array_map(
                 fn ($v) => $v === null ? '?' : $v,
                 [$datos['slot'] ?? null, $datos['port'] ?? null, $datos['onu_id'] ?? null],
             )),
-            'descripcion' => $datos['description'] ?? null,
-            'motivo' => $motivo,
+            'descripcion' => OltOntDiscovery::textoSeguro($datos['description'] ?? '') ?: null,
+            'motivo' => OltOntDiscovery::textoSeguro($motivo),
         ];
     }
 

@@ -598,4 +598,66 @@ class OntImportTest extends TestCase
         $this->assertSame([], $respuesta['problemas']);
     }
 
+    // ==================== Lo que la OLT devuelve no siempre es UTF-8 ====================
+
+    /**
+     * Una descripcion en Latin-1 ya no tumba la importacion.
+     *
+     * Paso en produccion: la corrida murio al 77 % con «Unable to
+     * encode attribute [skipped_details] ... Malformed UTF-8
+     * characters». Las descripciones las escribe quien configura la
+     * OLT, a veces desde una consola en Latin-1, y la columna del
+     * detalle es JSON: `json_encode` se niega ante esos bytes. Lo que
+     * mato la importacion fue justamente la lista que existe para
+     * explicar los fallos.
+     */
+    public function test_una_descripcion_que_no_es_utf8_no_tumba_la_importacion(): void
+    {
+        // «JOSE MUNOZ» con la E y la N acentuadas en Latin-1.
+        // Se arma con chr() y no con un literal: escrito a mano, el
+        // propio editor lo guardaria como UTF-8 y la prueba dejaria
+        // de probar lo que dice probar.
+        $latin1 = "BT000353 - JOS" . chr(0xC9) . " MU" . chr(0xD1) . "OZ";
+
+        $this->assertFalse(mb_check_encoding($latin1, 'UTF-8'), 'la prueba necesita bytes invalidos');
+
+        $this->simularDescubrimiento([
+            $this->ontEncontrada(['sn' => 'HWTC-BUENA001', 'description' => $latin1]),
+            $this->ontEncontrada(['sn' => 'HWTC-SINSLOT1', 'slot' => null, 'description' => $latin1]),
+        ]);
+
+        $run = OntImportRun::create([
+            'olt_id' => $this->olt->id,
+            'branch_id' => $this->branch->id,
+            'status' => OntImportRun::ESTADO_PENDIENTE,
+        ]);
+
+        dispatch_sync(new ImportOltOnts($run->id));
+
+        $run->refresh();
+
+        // La importacion TERMINA
+        $this->assertSame(OntImportRun::ESTADO_COMPLETADO, $run->status);
+        $this->assertSame(1, $run->imported);
+
+        // Y el detalle se guardo, legible
+        $this->assertNotEmpty($run->skipped_details);
+        $this->assertTrue(mb_check_encoding(json_encode($run->skipped_details), 'UTF-8'));
+    }
+
+    public function test_el_saneador_respeta_lo_que_ya_es_utf8(): void
+    {
+        // Una descripcion con tildes BIEN escritas no se toca
+        $this->assertSame(
+            'BT000353 - JOSÉ MUÑOZ',
+            \App\Services\OltOntDiscovery::textoSeguro('BT000353 - JOSÉ MUÑOZ'),
+        );
+
+        // Y la que no es UTF-8 sale convertida, no vacia
+        $convertida = \App\Services\OltOntDiscovery::textoSeguro("JOSÉ");
+
+        $this->assertTrue(mb_check_encoding($convertida, 'UTF-8'));
+        $this->assertNotSame('', $convertida);
+    }
+
 }
