@@ -422,4 +422,25 @@ class OntMetricsTest extends TestCase
         );
     }
 
+    /**
+     * La ficha se compacta con ESPACIO, nunca encogiendo la letra.
+     *
+     * Para que todo quepa en una pantalla se recorta el relleno de las
+     * celdas (`table-sm`) y el de las cabeceras (`py-2`). Bajar el
+     * tamano del texto seria arreglar una molestia creando otra peor:
+     * hay gente que necesita la letra grande para trabajar.
+     */
+    public function test_la_ficha_se_compacta_sin_achicar_la_letra(): void
+    {
+        $html = $this->get(route('onts.show', $this->ont))->assertOk()->getContent();
+
+        // El relleno, recortado
+        $this->assertStringContainsString('table-striped table-sm', $html);
+        $this->assertStringContainsString('card-header bg-primary text-white py-2', $html);
+
+        // La letra, intacta: nada de font-size pequenos ni .small en
+        // las tablas de datos de la ONT
+        $this->assertStringNotContainsString('table table-striped table-sm small', $html);
+    }
+
 }

@@ -45,7 +45,7 @@
              ============================================================ --}}
         <div class="col-xl-4 col-lg-6">
             <div class="card">
-                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
                     <span>
                         <i class="fas fa-broadcast-tower"></i> Estado en Tiempo Real
                         {{-- Indicador de la latencia real de la consulta SNMP --}}
@@ -63,7 +63,7 @@
                     </div>
 
                     {{-- Tabla (oculta hasta que lleguen los datos) --}}
-                    <div class="table-responsive"><table id="realtimeTable" class="table table-striped mb-0" style="display:none;">
+                    <div class="table-responsive"><table id="realtimeTable" class="table table-striped table-sm mb-0" style="display:none;">
                         <tr>
                             <th style="width:40%">Estado operativo</th>
                             <td id="rt-run-state">—</td>
@@ -111,7 +111,7 @@
                  eliminarla, que obliga a reautorizarla desde cero).
                  ============================================================ --}}
             <div class="card">
-                <div class="card-header bg-warning">
+                <div class="card-header bg-warning py-2">
                     <i class="fas fa-power-off"></i> Control de la ONT
                 </div>
                 <div class="card-body">
@@ -207,7 +207,7 @@
                  ============================================================ --}}
             {{-- Puertos LAN, MAC GPON y WAN. Un solo viaje por SSH. --}}
             <div class="card">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
                     <span><i class="fas fa-ethernet"></i> Acceso del cliente</span>
                     <button id="btnAcceso" class="btn btn-sm btn-light" title="Consultar en la OLT (tarda ~40 s)">
                         <i class="fas fa-sync"></i> Consultar
@@ -248,11 +248,11 @@
         <div class="col-xl-4 col-lg-12">
             {{-- Historial (oculta hasta que lleguen los datos) --}}
             <div class="card" id="historyCard" style="display:none;">
-                <div class="card-header bg-secondary text-white">
+                <div class="card-header bg-secondary text-white py-2">
                     <i class="fas fa-history"></i> Historial de Conexión
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive"><table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped table-sm mb-0">
                         <tr>
                             <th style="width:40%">Última conexión</th>
                             <td id="rt-last-up">—</td>
@@ -275,7 +275,7 @@
 
 
             <div class="card" id="catvCard">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
                     <span><i class="fas fa-tv"></i> CATV (Televisión)</span>
                     <button id="btnCheckCatv" class="btn btn-sm btn-light" title="Consultar el estado real en la OLT (tarda ~40 s)">
                         <i class="fas fa-sync"></i> Verificar
@@ -301,7 +301,7 @@
                             </div>
                         </div>
 
-                    <div class="table-responsive"><table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped table-sm mb-0">
                         <tr>
                             <th style="width:45%">Estado del puerto</th>
                             <td id="rt-catv-state">—</td>
@@ -333,7 +333,7 @@
                  activarlas en lugar de mostrar una gráfica vacía.
                  ============================================================ --}}
             <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
                     <span><i class="fas fa-chart-area"></i> Historial</span>
                     <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
                         <option value="6">Últimas 6 horas</option>
@@ -423,11 +423,11 @@
     <div class="row">
         <div class="col-lg-6">
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-white py-2">
                     <i class="fas fa-info-circle"></i> Información General
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive"><table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped table-sm mb-0">
                         <tr>
                             <th style="width:40%">Serial</th>
                             <td>{{ $ont->sn }}</td>
@@ -491,7 +491,7 @@
         </div>
         <div class="col-lg-6">
             <div class="card">
-                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center py-2">
                     <span><i class="fas fa-user"></i> Cliente y Contrato</span>
 
                     @if($ont->contract_id)
@@ -510,7 +510,7 @@
 
                 @if($ont->contract_id)
                     <div class="card-body p-0">
-                        <div class="table-responsive"><table class="table table-striped mb-0">
+                        <div class="table-responsive"><table class="table table-striped table-sm mb-0">
                             <tr>
                                 <th style="width:40%">Cliente</th>
                                 <td>
@@ -687,14 +687,20 @@
            La ficha de una ONT tiene que caber en una pantalla: las
            graficas son un apoyo, no el contenido. El atributo
            height del lienzo no servia —solo fijaba una proporcion—,
-           asi que en pantalla ancha salian de 400 px. */
+           asi que en pantalla ancha salian de 400 px.
+
+           LO QUE SE ENCOGE ES EL ESPACIO, NO LA LETRA. Las tablas de
+           esta ficha llevan `table-sm` y las cabeceras `py-2`: eso
+           recorta el relleno, no el tamano del texto. Hay gente que
+           necesita la letra grande, y achicarla para ganar sitio
+           seria arreglar una molestia creando otra peor. */
         .caja-grafica {
             position: relative;
-            height: 200px;
+            height: 170px;
         }
 
         @media (max-width: 767.98px) {
-            .caja-grafica { height: 170px; }
+            .caja-grafica { height: 150px; }
         }
     </style>
 @endsection

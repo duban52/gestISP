@@ -42,7 +42,7 @@
     <div class="row">
         <div class="col-lg-6">
             <div class="card">
-                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center py-2">
                     <span><i class="fas fa-wifi"></i> Estado de Conexión</span>
                     <button id="btnRefreshSession" class="btn btn-sm btn-light" title="Refrescar">
                         <i class="fas fa-sync"></i>
@@ -56,7 +56,7 @@
                     </div>
 
                     {{-- Tabla de sesión (oculta hasta que lleguen datos) --}}
-                    <div class="table-responsive"><table id="sessionTable" class="table table-striped mb-0" style="display:none;">
+                    <div class="table-responsive"><table id="sessionTable" class="table table-striped table-sm mb-0" style="display:none;">
                         <tr>
                             <th style="width:40%">Estado</th>
                             <td id="st-connected">—</td>
@@ -93,7 +93,7 @@
         <div class="col-lg-6">
             {{-- Acciones --}}
             <div class="card">
-                <div class="card-header bg-secondary text-white">
+                <div class="card-header bg-secondary text-white py-2">
                     <i class="fas fa-tools"></i> Acciones
                 </div>
                 <div class="card-body">
@@ -144,7 +144,7 @@
                  pppoe:poll (una petición por router cada 5 minutos).
                  ============================================================ --}}
             <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
                     <span><i class="fas fa-chart-area"></i> Ancho de banda</span>
                     <select id="chartRange" class="form-control form-control-sm" style="width:auto;">
                         <option value="6">Últimas 6 horas</option>
@@ -209,11 +209,11 @@
     <div class="row">
         <div class="col-lg-6">
             <div class="card">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-white py-2">
                     <i class="fas fa-id-card"></i> Datos de la Cuenta
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive"><table class="table table-striped mb-0">
+                    <div class="table-responsive"><table class="table table-striped table-sm mb-0">
                         <tr>
                             <th style="width:40%">Usuario</th>
                             <td>{{ $pppoe->username }}</td>
@@ -265,7 +265,7 @@
         <div class="col-lg-6">
             {{-- Cliente / Contrato --}}
             <div class="card">
-                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center py-2">
                     <span><i class="fas fa-user"></i> Cliente y Contrato</span>
 
                     @if($pppoe->contract_id)
@@ -284,7 +284,7 @@
 
                 @if($pppoe->contract_id)
                     <div class="card-body p-0">
-                        <div class="table-responsive"><table class="table table-striped mb-0">
+                        <div class="table-responsive"><table class="table table-striped table-sm mb-0">
                             <tr>
                                 <th style="width:40%">Cliente</th>
                                 <td>
@@ -358,13 +358,19 @@
            grafica es un apoyo, no el contenido. En el telefono se
            encoge un poco mas, donde cada pixel de alto cuesta un
            desplazamiento. */
+
+        /* LO QUE SE ENCOGE ES EL ESPACIO, NO LA LETRA. Las tablas de
+           esta ficha llevan `table-sm` y las cabeceras `py-2`: eso
+           recorta el relleno, no el tamano del texto. Hay gente que
+           necesita la letra grande, y achicarla para ganar sitio
+           seria arreglar una molestia creando otra peor. */
         .caja-grafica {
             position: relative;
-            height: 190px;
+            height: 165px;
         }
 
         @media (max-width: 767.98px) {
-            .caja-grafica { height: 160px; }
+            .caja-grafica { height: 145px; }
         }
     </style>
 @endsection
