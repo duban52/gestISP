@@ -1191,6 +1191,7 @@
                                     suggestedMin: -30,
                                     suggestedMax: -10,
                                     ticks: { maxTicksLimit: 6, font: { size: 10 } },
+                                },
                             },
                         },
                     });
