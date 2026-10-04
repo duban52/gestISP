@@ -264,4 +264,25 @@ class MobileViewsTest extends TestCase
             ->assertSee('layout-fixed', false);
     }
 
+    /**
+     * La barra superior tampoco se va con el scroll.
+     *
+     * Ahi viven el cambio de contexto, el modo oscuro y el menu del
+     * usuario: las tres cosas que se buscan a media ficha y que
+     * obligaban a subir hasta arriba del todo.
+     */
+    public function test_la_barra_superior_no_se_mueve_con_el_scroll(): void
+    {
+        $this->assertTrue(
+            config('adminlte.layout_fixed_navbar'),
+            'layout_fixed_navbar deberia estar activo en config/adminlte.php',
+        );
+
+        $this->prepararDatos();
+
+        $this->comoAdmin()->get(route('pppoe.index'))
+            ->assertOk()
+            ->assertSee('layout-navbar-fixed', false);
+    }
+
 }

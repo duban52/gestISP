@@ -168,7 +168,16 @@ return [
     // interno a la barra (overflow-y), así que un menú con muchas
     // entradas sigue siendo accesible entero.
     'layout_fixed_sidebar' => true,
-    'layout_fixed_navbar' => null,
+    // LA BARRA SUPERIOR TAMPOCO.
+    //
+    // Añade `layout-navbar-fixed`: el cambio de contexto, el modo
+    // oscuro y el menú del usuario quedan siempre a la vista. Son
+    // las tres cosas que se buscan a media ficha, y hasta ahora
+    // obligaban a subir hasta arriba.
+    //
+    // AdminLTE le deja al contenido el hueco de la barra, así que
+    // no tapa el encabezado de la página.
+    'layout_fixed_navbar' => true,
     'layout_fixed_footer' => null,
     'layout_dark_mode' => null,
 
