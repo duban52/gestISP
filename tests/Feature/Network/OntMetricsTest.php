@@ -368,4 +368,58 @@ class OntMetricsTest extends TestCase
             ->assertDontSee('olt:snmp-probe', false);
     }
 
+    public function test_las_dos_graficas_comparten_la_fila(): void
+    {
+        // Con `col-lg-6` se apilaban en cualquier ventana de menos de
+        // 992 px —media pantalla de portatil— y volvia el
+        // desplazamiento que todo esto venia a quitar.
+        $html = $this->get(route('onts.show', $this->ont))->assertOk()->getContent();
+
+        // Las dos columnas de la fila de graficas son col-md-6
+        $this->assertMatchesRegularExpression(
+            '/col-md-6">\s*<h6[^>]*>Potencia óptica/u',
+            $html,
+        );
+        $this->assertMatchesRegularExpression(
+            '/col-md-6">\s*<h6[^>]*>Ancho de banda/u',
+            $html,
+        );
+    }
+
+    /**
+     * La tabla de interfaces dice si puede haber trafico por ONT.
+     *
+     * El poller tambien lo averigua, pero para eso recorre las mil ONT
+     * de la OLT: minutos de espera para una pregunta que la tabla de
+     * interfaces contesta en milisegundos. `olt:snmp-probe
+     * --interfaces` usa esta misma regla y deja la respuesta escrita.
+     */
+    public function test_reconoce_una_olt_que_no_publica_interfaz_por_ont(): void
+    {
+        // Tabla real de una MA5800 de fabrica: solo puertos PON
+        $hay = app(\App\Services\OltSnmpService::class)->publicaInterfazPorOnt(
+            $this->ont->olt,
+            [1 => 'MEth 0/0/1', 2 => 'GPON 0/1/0', 3 => 'GPON 0/1/1'],
+        );
+
+        $this->assertFalse($hay);
+    }
+
+    public function test_reconoce_una_olt_que_si_la_publica(): void
+    {
+        $hay = app(\App\Services\OltSnmpService::class)->publicaInterfazPorOnt(
+            $this->ont->olt,
+            [1 => 'MEth 0/0/1', 2 => 'GPON 0/1/0', 9 => 'GPON ONT 0/1/2:5'],
+        );
+
+        $this->assertTrue($hay, 'el patron de config/olt_snmp.php deberia reconocer «GPON ONT 0/1/2:5»');
+    }
+
+    public function test_una_tabla_vacia_no_cuenta_como_que_si(): void
+    {
+        $this->assertFalse(
+            app(\App\Services\OltSnmpService::class)->publicaInterfazPorOnt($this->ont->olt, []),
+        );
+    }
+
 }

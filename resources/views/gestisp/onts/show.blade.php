@@ -360,11 +360,18 @@
                     @endphp
 
                     {{-- Las dos en la misma fila: apiladas ocupaban el doble
-                         de alto sin aportar nada. En pantalla estrecha vuelven
-                         a apilarse solas. Si la OLT no da tráfico, la óptica
-                         se queda con toda la fila. --}}
+                         de alto sin aportar nada.
+
+                         `col-md-6` y no `col-lg-6`: con lg se apilaban en
+                         cualquier ventana de menos de 992 px —que es media
+                         pantalla de portátil— y volvía el desplazamiento
+                         que esto venía a quitar. Se reparten desde 768 px;
+                         por debajo son un teléfono y ahí sí van apiladas.
+
+                         Si la OLT no da tráfico, la óptica se queda con
+                         toda la fila. --}}
                     <div id="chartsWrapper" class="row" style="display:none;">
-                        <div class="{{ $hayTrafico ? 'col-lg-6' : 'col-12' }}">
+                        <div class="{{ $hayTrafico ? 'col-md-6' : 'col-12' }}">
                             <h6 class="text-muted mb-1">Potencia óptica (dBm)</h6>
                             <div class="caja-grafica">
                                 <canvas id="opticalChart"></canvas>
@@ -372,7 +379,7 @@
                         </div>
 
                         @if($hayTrafico)
-                            <div class="col-lg-6">
+                            <div class="col-md-6">
                                 <h6 class="text-muted mb-1">Ancho de banda</h6>
                                 <div class="caja-grafica">
                                     <canvas id="trafficChart"></canvas>

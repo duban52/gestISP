@@ -159,6 +159,16 @@ class OltSnmpProbe extends Command
             return self::FAILURE;
         }
 
+        $total = count($descriptions);
+
+        // ---- ¿Publica una interfaz por ONT? ----
+        //
+        // Es lo que decide si la gráfica de ancho de banda por ONT
+        // puede existir siquiera. Se comprueba contra el patrón de
+        // config/olt_snmp.php con los números en comodín: así la
+        // respuesta no depende de que exista una ONT concreta.
+        $this->anotarSiHayInterfazPorOnt($olt, $descriptions);
+
         $filter = $this->option('filter');
 
         if ($filter) {
@@ -168,7 +178,28 @@ class OltSnmpProbe extends Command
             );
         }
 
-        $this->info(count($descriptions) . " interfaces ({$ms} ms para recorrer la tabla completa).");
+        // EL TOTAL Y LO FILTRADO, POR SEPARADO.
+        //
+        // Antes decía «0 interfaces (31 ms para recorrer la tabla
+        // completa)» cuando el filtro no casaba con nada, y eso se lee
+        // como «la OLT no devolvió nada» — que es justo lo contrario
+        // de lo que pasaba.
+        if ($filter) {
+            $this->info(sprintf(
+                '%d interfaces en total; %d coinciden con «%s» (%s ms para recorrer la tabla completa).',
+                $total,
+                count($descriptions),
+                $filter,
+                $ms,
+            ));
+
+            if ($descriptions === []) {
+                $this->warn('Ninguna interfaz contiene ese texto. Quite --filter para ver las que sí hay.');
+            }
+        } else {
+            $this->info("{$total} interfaces ({$ms} ms para recorrer la tabla completa).");
+        }
+
         $this->newLine();
 
         $rows = [];
@@ -188,5 +219,42 @@ class OltSnmpProbe extends Command
         $this->line('  ont_if_pattern   → interfaz por ONT (gráfica de tráfico)');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Deja escrito en la OLT si publica una interfaz por cada ONT.
+     *
+     * POR QUÉ AQUÍ Y NO SOLO EN EL POLLER
+     * ------------------------------------
+     * El poller también lo averigua, pero para llegar a esa conclusión
+     * recorre las mil ONT de la OLT: son varios minutos de espera para
+     * responder a una pregunta que esta tabla ya contesta en treinta
+     * milisegundos. Si se sabe ya, la ficha de la ONT deja de reservar
+     * media pantalla para una gráfica que nunca va a tener datos.
+     *
+     * Se comprueba con el patrón de config/olt_snmp.php y los números
+     * en comodín: lo que se pregunta no es «¿está la ONT 5?» sino
+     * «¿hay interfaces de ONT, las que sean?».
+     */
+    private function anotarSiHayInterfazPorOnt(Olt $olt, array $descriptions): void
+    {
+        $hay = $this->snmp->publicaInterfazPorOnt($olt, $descriptions);
+
+        $olt->update(['onts_traffic_supported' => $hay]);
+
+        $this->newLine();
+
+        if ($hay) {
+            $this->info('Esta OLT SÍ publica una interfaz por ONT: la gráfica de ancho de banda puede funcionar.');
+            $this->line('  Rellene los índices con: php artisan onts:poll --resolve-traffic');
+        } else {
+            $this->warn('Esta OLT NO publica una interfaz por ONT.');
+            $this->line('  No hay contadores de tráfico por ONT que leer. Queda anotado, y la ficha');
+            $this->line('  de cada ONT dejará de reservar sitio para esa gráfica.');
+            $this->line('  Si cree que el patrón es el equivocado, mire la lista de abajo y ajuste');
+            $this->line('  ont_if_pattern en config/olt_snmp.php; después vuelva a correr esto.');
+        }
+
+        $this->newLine();
     }
 }

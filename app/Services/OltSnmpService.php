@@ -272,6 +272,38 @@ class OltSnmpService
      * Devuelve null si el equipo no expone interfaces por ONT: en
      * ese caso simplemente no habrá gráfica de tráfico.
      */
+    /**
+     * ¿Esta OLT publica una interfaz SNMP por cada ONT?
+     *
+     * Es lo que decide si la gráfica de ancho de banda por ONT puede
+     * existir siquiera: sin interfaz propia no hay contadores que
+     * leer. Muchas MA5800 de fábrica solo publican los puertos PON.
+     *
+     * Se pregunta con el patrón de config/olt_snmp.php y los números
+     * en comodín: la pregunta no es «¿está la ONT 5?» —que depende de
+     * qué ONT se mire— sino «¿hay interfaces de ONT, las que sean?».
+     *
+     * @param  array<int, string>  $descriptions  La tabla ifDescr ya leída
+     */
+    public function publicaInterfazPorOnt(Olt $olt, array $descriptions): bool
+    {
+        $patron = $this->brandConfig($olt)['ont_if_pattern'] ?? null;
+
+        if (!$patron || $descriptions === []) {
+            return false;
+        }
+
+        $generico = str_replace(['%slot%', '%port%', '%onu%'], ['\d+', '\d+', '\d+'], $patron);
+
+        foreach ($descriptions as $descr) {
+            if (@preg_match($generico, $descr) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function resolveOntIfIndex(Olt $olt, Ont $ont, ?array $descriptions = null): ?int
     {
         $pattern = $this->brandConfig($olt)['ont_if_pattern'] ?? null;

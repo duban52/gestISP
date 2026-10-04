@@ -209,10 +209,20 @@ class OntPoller
 
         $descriptions = $this->snmp->interfaceDescriptions($olt);
 
-        // Sin respuesta no se concluye nada: puede ser la red, no la
-        // OLT. Marcar «no los expone» aquí apagaría la función por un
-        // timeout pasajero.
+        // UNA TABLA VACÍA TAMBIÉN ES UNA RESPUESTA.
+        //
+        // Aquí se devolvía sin concluir nada, por miedo a apagar la
+        // función por un timeout. Pero a esta altura la OLT YA
+        // contestó: `bulkOntMetrics` trajo métricas unas líneas más
+        // arriba y, si no lo hubiera hecho, poll() habría salido antes.
+        // Así que si además su tabla de interfaces viene vacía —que es
+        // lo que pasa en las MA5800 con la configuración de fábrica:
+        // `olt:snmp-probe --interfaces` devuelve 0 filas en 31 ms— la
+        // conclusión es firme: esta OLT no publica una interfaz por
+        // ONT, y no hay tráfico por ONT que medir.
         if (empty($descriptions)) {
+            $olt->update(['onts_traffic_supported' => false]);
+
             return;
         }
 
