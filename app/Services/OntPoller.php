@@ -32,7 +32,7 @@ class OntPoller
      *
      * @return array{onts: int, updated: int, with_traffic: int, elapsed_ms: float}
      */
-    public function poll(Olt $olt, bool $resolveTrafficIndexes = false): array
+    public function poll(Olt $olt, bool $resolveTrafficIndexes = false, bool $recheckTraffic = false): array
     {
         $start = microtime(true);
 
@@ -68,7 +68,7 @@ class OntPoller
         // Resolver los ifIndex de tráfico que falten (recorre
         // ifDescr una sola vez para todas las ONTs)
         if ($resolveTrafficIndexes) {
-            $this->resolveMissingTrafficIndexes($olt, $onts);
+            $this->resolveMissingTrafficIndexes($olt, $onts, $recheckTraffic);
         }
 
         $measuredAt = now();
@@ -176,9 +176,31 @@ class OntPoller
     /**
      * Resuelve el ifIndex de tráfico de las ONTs que no lo tengan,
      * recorriendo ifDescr UNA sola vez para todas.
+     *
+     * Y SE ACUERDA DE SI ESTA OLT PUEDE SIQUIERA
+     * -------------------------------------------
+     * Medir el tráfico de una ONT exige que la OLT publique una
+     * interfaz SNMP por cada una. Muchas no lo hacen —las MA5608T y
+     * bastantes MA5800 de fábrica solo exponen los puertos PON—, y
+     * entonces esto recorría la tabla de interfaces ENTERA en cada
+     * pasada buscando algo que no existe. Con mil ONT es un walk
+     * completo de ifDescr para nada, cada cinco minutos.
+     *
+     * Así que la primera vez se comprueba y se anota en la OLT. Un
+     * «no» no es definitivo: `--resolve-traffic` vuelve a preguntar,
+     * porque un firmware nuevo o un patrón corregido en
+     * config/olt_snmp.php pueden cambiar la respuesta.
      */
-    private function resolveMissingTrafficIndexes(Olt $olt, $onts): void
+    private function resolveMissingTrafficIndexes(Olt $olt, $onts, bool $recheck = false): void
     {
+        // Ya se comprobó que esta OLT no los publica. Volver a
+        // intentarlo cada noche es un walk completo de ifDescr para
+        // llegar a la misma conclusión. `--recheck-traffic` lo fuerza
+        // cuando hay motivo para pensar que cambió.
+        if ($olt->onts_traffic_supported === false && !$recheck) {
+            return;
+        }
+
         $pending = $onts->whereNull('traffic_if_index');
 
         if ($pending->isEmpty()) {
@@ -187,17 +209,27 @@ class OntPoller
 
         $descriptions = $this->snmp->interfaceDescriptions($olt);
 
+        // Sin respuesta no se concluye nada: puede ser la red, no la
+        // OLT. Marcar «no los expone» aquí apagaría la función por un
+        // timeout pasajero.
         if (empty($descriptions)) {
             return;
         }
+
+        $resueltos = 0;
 
         foreach ($pending as $ont) {
             $ifIndex = $this->snmp->resolveOntIfIndex($olt, $ont, $descriptions);
 
             if ($ifIndex) {
                 $ont->update(['traffic_if_index' => $ifIndex]);
+                $resueltos++;
             }
         }
+
+        // La OLT contestó con su tabla de interfaces y en ella no hay
+        // ni una ONT: la respuesta es que no las publica.
+        $olt->update(['onts_traffic_supported' => $resueltos > 0]);
     }
 
     /**

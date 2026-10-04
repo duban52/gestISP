@@ -287,5 +287,85 @@ class OntMetricsTest extends TestCase
 
         $this->assertSame(1, $deleted);
         $this->assertSame(1, OntMetric::count());
+    }
+    // ==================== Las graficas de la ficha ====================
+
+    /**
+     * Las graficas tienen un alto FIJO, no uno que crece con la pantalla.
+     *
+     * El lienzo llevaba `height="150"`, que con el comportamiento por
+     * defecto de Chart.js no fija un alto sino una PROPORCION: en una
+     * pantalla ancha la grafica salia de unos 400 px y empujaba fuera
+     * de la vista los datos de la ONT y del contrato.
+     */
+    public function test_las_graficas_no_crecen_con_el_ancho_de_la_pantalla(): void
+    {
+        $html = $this->get(route('onts.show', $this->ont))->assertOk()->getContent();
+
+        $this->assertStringContainsString('caja-grafica', $html);
+        $this->assertMatchesRegularExpression('/\.caja-grafica\s*\{[^}]*height:\s*\d+px/', $html);
+        $this->assertStringContainsString('maintainAspectRatio: false', $html);
+        $this->assertStringNotContainsString('height="150"', $html);
     }
+
+    /**
+     * Si la OLT no publica contadores por ONT, el bloque no se pinta.
+     *
+     * Medir el trafico de una ONT exige que la OLT exponga una interfaz
+     * SNMP por cada una, y muchas no lo hacen. Ahi el hueco reservado
+     * para la grafica —con dos comandos de artisan a la vista de
+     * cualquiera— no informaba de nada y se comia media pantalla.
+     */
+    public function test_sin_contadores_por_ont_el_bloque_de_trafico_desaparece(): void
+    {
+        $this->ont->olt->update(['onts_traffic_supported' => false]);
+
+        $html = $this->get(route('onts.show', $this->ont))->assertOk()->getContent();
+
+        // El lienzo no se pinta (el JS sigue nombrandolo: comprueba que
+        // no exista antes de tocarlo).
+        $this->assertStringNotContainsString('<canvas id="trafficChart"', $html);
+        $this->assertStringNotContainsString('>Ancho de banda<', $html);
+
+        // Y la optica se queda con la fila entera
+        $this->assertStringContainsString('<div class="col-12">', $html);
+    }
+
+    public function test_mientras_no_se_sepa_el_bloque_sigue_ahi(): void
+    {
+        // `null` es «todavia no se ha comprobado»: apagarlo por si
+        // acaso esconderia una funcion que si existe.
+        $this->assertNull($this->ont->olt->onts_traffic_supported);
+
+        $this->get(route('onts.show', $this->ont))
+            ->assertOk()
+            ->assertSee('trafficChart', false)
+            ->assertSee('Ancho de banda', false);
+    }
+
+    public function test_los_comandos_de_artisan_no_se_le_ensenan_a_cualquiera(): void
+    {
+        // Un aviso con dos comandos de servidor es una nota para quien
+        // programa, no para quien atiende a un cliente por telefono.
+        $rol = Role::where('name', 'administrador')->firstOrFail();
+
+        $usuario = User::factory()->create(['number_phone' => '3000000009']);
+        $usuario->assignRole($rol);
+        $usuario->branches()->attach($this->ont->branch_id, ['role_id' => $rol->id]);
+
+        $this->actingAs($usuario)->withSession([
+            'branch_id' => $this->ont->branch_id,
+            'current_role_id' => $rol->id,
+        ]);
+
+        // El comando que REPARA esto solo lo ve quien tiene acceso al
+        // servidor. (El aviso de «todavia no hay muestras» menciona la
+        // tarea programada y eso se queda: explica por que esta vacio,
+        // no pide ejecutar nada.)
+        $this->get(route('onts.show', $this->ont))
+            ->assertOk()
+            ->assertDontSee('--recheck-traffic', false)
+            ->assertDontSee('olt:snmp-probe', false);
+    }
+
 }

@@ -17,6 +17,10 @@ use Illuminate\Console\Command;
  *   php artisan onts:poll
  *   php artisan onts:poll --olt=3
  *   php artisan onts:poll --resolve-traffic   (resuelve ifIndex de tráfico)
+ *   php artisan onts:poll --resolve-traffic --recheck-traffic
+ *       vuelve a preguntarle a una OLT que ya contestó que no publica
+ *       una interfaz por ONT. Sin esto, un «no» se recuerda y no se
+ *       repite el recorrido de ifDescr cada noche para nada.
  *   php artisan onts:poll --prune=30          (limpia historial viejo)
  */
 class PollOnts extends Command
@@ -24,6 +28,7 @@ class PollOnts extends Command
     protected $signature = 'onts:poll
                             {--olt= : ID de una OLT específica}
                             {--resolve-traffic : Resuelve el ifIndex de tráfico de las ONTs que no lo tengan}
+                            {--recheck-traffic : Vuelve a preguntarle a una OLT que ya dijo que no publica contadores por ONT}
                             {--prune= : Elimina muestras con más de N días}';
 
     protected $description = 'Muestrea por SNMP las métricas de las ONTs y guarda el historial';
@@ -60,7 +65,11 @@ class PollOnts extends Command
         $rows = [];
 
         foreach ($olts as $olt) {
-            $result = $this->poller->poll($olt, (bool) $this->option('resolve-traffic'));
+            $result = $this->poller->poll(
+                $olt,
+                (bool) $this->option('resolve-traffic'),
+                (bool) $this->option('recheck-traffic'),
+            );
 
             $rows[] = [
                 $olt->name,

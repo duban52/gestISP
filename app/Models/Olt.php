@@ -31,6 +31,9 @@ class Olt extends Model
         'status',
         'uptime',
         'status_checked_at',
+        // ¿Publica una interfaz SNMP por cada ONT? Sin eso no hay
+        // tráfico por ONT que medir. Lo averigua OntPoller.
+        'onts_traffic_supported',
     ];
 
     protected $casts = [
@@ -40,6 +43,7 @@ class Olt extends Model
         'ssh_port' => 'integer',
         'telnet_port' => 'integer',
         'snmp_port' => 'integer',
+        'onts_traffic_supported' => 'boolean',
     ];
 
     /**

@@ -342,7 +342,7 @@
                         <option value="168">Última semana</option>
                     </select>
                 </div>
-                <div class="card-body">
+                <div class="card-body py-2">
                     <div id="chartsEmpty" class="alert alert-info mb-0" style="display:none;">
                         <i class="fas fa-info-circle"></i>
                         Todavía no hay muestras registradas para esta ONT. El historial lo
@@ -350,26 +350,57 @@
                         una vez que corra periódicamente, aquí verá la evolución.
                     </div>
 
+                    @php
+                        // ¿Esta OLT publica una interfaz SNMP por cada ONT?
+                        // Sin eso no hay tráfico que medir, y entonces la
+                        // mitad derecha de esta fila no se pinta siquiera.
+                        // `null` es «todavía no se ha comprobado»: se deja
+                        // el hueco, que para eso se va a comprobar.
+                        $hayTrafico = $ont->olt?->onts_traffic_supported !== false;
+                    @endphp
+
                     {{-- Las dos en la misma fila: apiladas ocupaban el doble
                          de alto sin aportar nada. En pantalla estrecha vuelven
-                         a apilarse solas. --}}
+                         a apilarse solas. Si la OLT no da tráfico, la óptica
+                         se queda con toda la fila. --}}
                     <div id="chartsWrapper" class="row" style="display:none;">
-                        <div class="col-lg-6">
-                            <h6 class="text-muted mb-2">Potencia óptica (dBm)</h6>
-                            <canvas id="opticalChart" height="150"></canvas>
+                        <div class="{{ $hayTrafico ? 'col-lg-6' : 'col-12' }}">
+                            <h6 class="text-muted mb-1">Potencia óptica (dBm)</h6>
+                            <div class="caja-grafica">
+                                <canvas id="opticalChart"></canvas>
+                            </div>
                         </div>
 
-                        <div class="col-lg-6">
-                            <h6 class="text-muted mb-2">Ancho de banda</h6>
-                            <canvas id="trafficChart" height="150"></canvas>
-                        <div id="trafficUnavailable" class="alert alert-secondary mt-2 mb-0" style="display:none;">
-                            <i class="fas fa-info-circle"></i>
-                            No hay datos de tráfico para esta ONT. Requiere que la OLT exponga
-                            contadores por ONT: ejecute
-                            <code>php artisan onts:poll --resolve-traffic</code> y verifique
-                            con <code>php artisan olt:snmp-probe {{ $ont->olt_id }} --interfaces --filter=ONT</code>.
-                        </div>
-                        </div>
+                        @if($hayTrafico)
+                            <div class="col-lg-6">
+                                <h6 class="text-muted mb-1">Ancho de banda</h6>
+                                <div class="caja-grafica">
+                                    <canvas id="trafficChart"></canvas>
+                                </div>
+
+                                {{-- EL AVISO ES PARA QUIEN PUEDE ARREGLARLO.
+
+                                     Aquí había dos comandos de artisan a la
+                                     vista de cualquiera: eso es una nota para
+                                     el que programa, no para quien atiende a
+                                     un cliente por teléfono, y ocupaba un
+                                     tercio de la pantalla. Ahora es una línea,
+                                     y los comandos solo los ve el
+                                     superadministrador, que es quien tiene
+                                     acceso al servidor. --}}
+                                <div id="trafficUnavailable" class="small text-muted mt-1" style="display:none;">
+                                    <i class="fas fa-info-circle"></i>
+                                    Esta OLT todavía no ha entregado contadores de tráfico por ONT.
+                                    @if(session('current_role_id') && \Spatie\Permission\Models\Role::find(session('current_role_id'))?->name === \App\Http\Middleware\EnsureSuperadmin::ROL)
+                                        <br>
+                                        Compruébelo con
+                                        <code>php artisan onts:poll --resolve-traffic --recheck-traffic</code>
+                                        y
+                                        <code>php artisan olt:snmp-probe {{ $ont->olt_id }} --interfaces --filter=ONT</code>.
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -644,6 +675,21 @@
 
 @section('css')
     <link rel="stylesheet" href="{{ asset('css/gestisp-movil.css') }}">
+    <style>
+        /* EL ALTO DE LAS GRAFICAS, EN UN SOLO SITIO.
+           La ficha de una ONT tiene que caber en una pantalla: las
+           graficas son un apoyo, no el contenido. El atributo
+           height del lienzo no servia —solo fijaba una proporcion—,
+           asi que en pantalla ancha salian de 400 px. */
+        .caja-grafica {
+            position: relative;
+            height: 200px;
+        }
+
+        @media (max-width: 767.98px) {
+            .caja-grafica { height: 170px; }
+        }
+    </style>
 @endsection
 
 @section('js')
@@ -1111,9 +1157,17 @@
                         data: opticalData,
                         options: {
                             responsive: true,
+                            // Sin esto Chart.js conserva la proporcion del
+                            // lienzo y el alto crece con el ancho de la
+                            // pantalla: la grafica se comia la ficha entera.
+                            // El alto lo pone .caja-grafica.
+                            maintainAspectRatio: false,
                             interaction: { mode: 'index', intersect: false },
                             plugins: {
-                                legend: { position: 'bottom' },
+                                legend: {
+                                    position: 'bottom',
+                                    labels: { boxWidth: 12, padding: 8, font: { size: 11 } },
+                                },
                                 tooltip: {
                                     callbacks: {
                                         label: c => `${c.dataset.label}: ${c.parsed.y} dBm`,
@@ -1121,12 +1175,22 @@
                                 },
                             },
                             scales: {
+                                x: {
+                                    ticks: {
+                                        autoSkip: true,
+                                        maxTicksLimit: 10,
+                                        maxRotation: 0,
+                                        minRotation: 0,
+                                        font: { size: 10 },
+                                    },
+                                    grid: { display: false },
+                                },
                                 y: {
                                     title: { display: true, text: 'dBm' },
                                     // Umbral de alarma habitual en GPON
                                     suggestedMin: -30,
                                     suggestedMax: -10,
-                                },
+                                    ticks: { maxTicksLimit: 6, font: { size: 10 } },
                             },
                         },
                     });
@@ -1134,6 +1198,13 @@
                     // ---- Ancho de banda ----
                     const trafficBox = document.getElementById('trafficUnavailable');
                     const trafficCanvas = document.getElementById('trafficChart');
+
+                    // La OLT no publica interfaz por ONT: el bloque entero
+                    // no se pinta (ver $hayTrafico en la plantilla), asi
+                    // que aqui no hay nada que hacer.
+                    if (!trafficCanvas) {
+                        return;
+                    }
 
                     if (!res.has_traffic) {
                         trafficBox.style.display = 'block';
@@ -1173,9 +1244,13 @@
                         },
                         options: {
                             responsive: true,
+                            maintainAspectRatio: false,
                             interaction: { mode: 'index', intersect: false },
                             plugins: {
-                                legend: { position: 'bottom' },
+                                legend: {
+                                    position: 'bottom',
+                                    labels: { boxWidth: 12, padding: 8, font: { size: 11 } },
+                                },
                                 tooltip: {
                                     callbacks: {
                                         label: c => `${c.dataset.label}: ${formatBps(c.parsed.y)}`,
@@ -1183,9 +1258,23 @@
                                 },
                             },
                             scales: {
+                                x: {
+                                    ticks: {
+                                        autoSkip: true,
+                                        maxTicksLimit: 10,
+                                        maxRotation: 0,
+                                        minRotation: 0,
+                                        font: { size: 10 },
+                                    },
+                                    grid: { display: false },
+                                },
                                 y: {
                                     beginAtZero: true,
-                                    ticks: { callback: v => formatBps(v) },
+                                    ticks: {
+                                        callback: v => formatBps(v),
+                                        maxTicksLimit: 5,
+                                        font: { size: 10 },
+                                    },
                                 },
                             },
                         },
