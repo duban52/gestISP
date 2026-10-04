@@ -236,4 +236,32 @@ class MobileViewsTest extends TestCase
             'status' => 1,
         ]);
     }
+    // ==================== El menu lateral ====================
+
+    /**
+     * El menu no se va con el scroll.
+     *
+     * `layout-fixed` en el <body> deja la barra lateral quieta y
+     * desplaza solo el contenido. En una ficha larga —un contrato, una
+     * ONT— habia que subir hasta arriba del todo solo para cambiar de
+     * modulo.
+     *
+     * Sale de config/adminlte.php (`layout_fixed_sidebar`), y por eso
+     * se comprueba aqui: un `php artisan config:cache` con el valor
+     * viejo lo deshace sin que nada avise.
+     */
+    public function test_el_menu_lateral_no_se_mueve_con_el_scroll(): void
+    {
+        $this->assertTrue(
+            config('adminlte.layout_fixed_sidebar'),
+            'layout_fixed_sidebar deberia estar activo en config/adminlte.php',
+        );
+
+        $this->prepararDatos();
+
+        $this->comoAdmin()->get(route('pppoe.index'))
+            ->assertOk()
+            ->assertSee('layout-fixed', false);
+    }
+
 }

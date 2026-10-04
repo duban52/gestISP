@@ -157,7 +157,17 @@ return [
 
     'layout_topnav' => null,
     'layout_boxed' => null,
-    'layout_fixed_sidebar' => null,
+    // EL MENU NO SE VA CON EL SCROLL.
+    //
+    // Añade `layout-fixed` al <body>: la barra lateral queda fija y
+    // lo que se desplaza es el contenido. En fichas largas —un
+    // contrato, una ONT— había que subir hasta arriba del todo solo
+    // para cambiar de módulo.
+    //
+    // Con el menú fijo, AdminLTE le pone su propio desplazamiento
+    // interno a la barra (overflow-y), así que un menú con muchas
+    // entradas sigue siendo accesible entero.
+    'layout_fixed_sidebar' => true,
     'layout_fixed_navbar' => null,
     'layout_fixed_footer' => null,
     'layout_dark_mode' => null,
