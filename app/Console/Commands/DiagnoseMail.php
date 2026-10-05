@@ -27,7 +27,10 @@ use Throwable;
 class DiagnoseMail extends Command
 {
     protected $signature = 'correo:diagnostico
-                            {--probar= : Intenta una conexión real y, si se indica correo, manda una prueba}';
+                            {--probar= : Intenta una conexión real y, si se indica correo, manda una prueba}
+                            {--usuario= : Prueba con OTRO usuario, sin guardarlo}
+                            {--clave= : Prueba con OTRA contraseña, sin guardarla}
+                            {--sin-espacios : Quita los espacios de la contraseña antes de probar}';
 
     protected $description = 'Enseña con qué configuración de correo está enviando el sistema y por qué falla';
 
@@ -35,6 +38,31 @@ class DiagnoseMail extends Command
     {
         // La misma que aplica la aplicación al arrancar.
         $correo->aplicarConfiguracion();
+
+        // PROBAR SIN GUARDAR.
+        //
+        // Cuando el servidor dice «535» hay cuatro sospechosos —usuario,
+        // contraseña, espacios y cuenta equivocada— y comprobarlos
+        // guardando cada combinación es lento y deja rastro en la
+        // configuración de verdad. Esto los prueba en el sitio, sin
+        // tocar nada: lo que se pasa aquí vale solo para esta orden.
+        if ($this->option('usuario')) {
+            config(['mail.mailers.smtp.username' => $this->option('usuario')]);
+        }
+
+        if ($this->option('clave')) {
+            config(['mail.mailers.smtp.password' => $this->option('clave')]);
+        }
+
+        if ($this->option('sin-espacios')) {
+            config([
+                'mail.mailers.smtp.password' => preg_replace(
+                    '/\s+/u',
+                    '',
+                    (string) config('mail.mailers.smtp.password'),
+                ),
+            ]);
+        }
 
         $guardada = MailSetting::first();
 
@@ -63,6 +91,13 @@ class DiagnoseMail extends Command
             $this->newLine();
             $this->comment('Para probar la conexión de verdad:');
             $this->line('  php artisan correo:diagnostico --probar=sucorreo@dominio.com');
+            $this->newLine();
+            $this->comment('Para descartar los espacios, probando sin guardar nada:');
+            $this->line('  php artisan correo:diagnostico --probar=sucorreo@dominio.com --sin-espacios');
+            $this->newLine();
+            $this->comment('Para probar OTRA cuenta o la clave del .env, sin guardarlas:');
+            $this->line('  php artisan correo:diagnostico --probar=sucorreo@dominio.com'
+                . ' --usuario=otra@gmail.com --clave="la de aplicacion"');
 
             return self::SUCCESS;
         }
@@ -99,8 +134,14 @@ class DiagnoseMail extends Command
         $this->newLine();
 
         if (str_contains($clave, ' ')) {
-            $this->error('La contraseña tiene espacios. Google las enseña en grupos de cuatro pero NO van con espacios:');
-            $this->line('  vuelva a guardarla en la pantalla y se los quitará sola.');
+            // SIN SENTENCIAR. Google dice en su ayuda que la
+            // contraseña de aplicación vale con o sin espacios, y hay
+            // instalaciones funcionando con ellos. Son sospechosos,
+            // no culpables: lo que se ofrece es la forma de
+            // descartarlos en diez segundos.
+            $this->warn('La contraseña tiene espacios.');
+            $this->line('  Google las enseña en grupos de cuatro y suele aceptarlas así, pero no siempre.');
+            $this->line('  Para descartarlo sin guardar nada, repita la orden añadiendo --sin-espacios');
 
             return;
         }
