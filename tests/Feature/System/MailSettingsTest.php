@@ -432,4 +432,42 @@ class MailSettingsTest extends TestCase
         $this->assertStringContainsString('dos pasos', $motivo);
     }
 
+    /**
+     * El diagnostico enseña la contraseña SIN enseñarla.
+     *
+     * Cuando el servidor contesta «535 Username and Password not
+     * accepted» no hay forma de saber que se le mando. Lo que importa
+     * no es cual es la clave, sino cuantos caracteres tiene y si trae
+     * espacios: una de aplicacion de Google son exactamente 16 y sin
+     * ninguno.
+     */
+    public function test_el_diagnostico_delata_una_contrasena_con_espacios(): void
+    {
+        // Se guarda saltandose la limpieza, como quedo la que ya estaba
+        // grabada antes de que existiera.
+        MailSetting::create([
+            'enabled' => true,
+            'host' => 'smtp.gmail.com',
+            'port' => 587,
+            'username' => 'x@gmail.com',
+            'password' => 'abcd efgh ijkl mnop',
+        ]);
+
+        CorreoDelSistema::olvidarCache();
+
+        $this->artisan('correo:diagnostico')
+            ->expectsOutputToContain('CONTIENE ESPACIOS')
+            ->assertSuccessful();
+    }
+
+    public function test_el_diagnostico_no_imprime_la_contrasena(): void
+    {
+        $this->guardar();
+        CorreoDelSistema::olvidarCache();
+
+        $this->artisan('correo:diagnostico')
+            ->doesntExpectOutputToContain('clave-secreta')
+            ->assertSuccessful();
+    }
+
 }
