@@ -713,7 +713,10 @@ return [
                             'route' => 'onts.import.index',
                             'icon' => 'fas  fa-file-import',
                             'active' => ['onts/import*'],
-                            'can' => 'onts.activate',
+                            // Permiso propio: iba con onts.activate y
+                            // por eso lo veia cualquiera que pudiera
+                            // autorizar una ONT.
+                            'can' => 'onts.import',
                         ],
                     ]
                 ],

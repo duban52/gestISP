@@ -222,16 +222,25 @@ class AppServiceProvider extends ServiceProvider
                 'email' => $usuario->getEmailForPasswordReset(),
             ], false));
 
-            // Se usa la sucursal del usuario para que el correo llegue
-            // con la marca de su operación y no con una genérica.
-            $sucursal = $usuario->selected_branch_id
-                ? Branch::find($usuario->selected_branch_id)
-                : $usuario->branches()->first();
+            // SIN SUCURSAL, Y ES EL ARREGLO.
+            //
+            // Antes se tomaba la del usuario «para que llegara con la
+            // marca de su operación». Pero esto no es un correo de la
+            // operación: es del panel. Salía con el logo y el nombre
+            // de EASYNET SAN ANDRÉS un mensaje que no tiene nada que
+            // ver con esa empresa —y que, en una instalación con
+            // varias, le enseña a un administrador la marca de un
+            // cliente cualquiera.
+            //
+            // Con `null`, la plantilla usa el logo y el nombre de
+            // GestISP. Y el envío sale por el servidor del sistema,
+            // no por el de ninguna sede (ver ArmaCorreo, del que este
+            // correo no pasa a propósito).
 
             return (new MailMessage)
                 ->subject('Restablecer su contraseña de ' . config('app.name'))
                 ->view('emails.layout', [
-                    'sucursal' => $sucursal,
+                    'sucursal' => null,
                     'color' => '#1F4E79',
                     'titulo' => 'Restablecer su contraseña',
                     'preheader' => 'Enlace válido por ' . $minutos . ' minutos.',

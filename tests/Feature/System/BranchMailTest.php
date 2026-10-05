@@ -372,4 +372,42 @@ class BranchMailTest extends TestCase
         $this->assertStringContainsString('APAGÓ', $registro->description);
     }
 
+    // ==================== La marca del correo ====================
+
+    /**
+     * El correo del panel lleva la marca de GestISP, no la de una sede.
+     *
+     * Salia con el logo y el nombre de EASYNET SAN ANDRES un mensaje
+     * que no tiene nada que ver con esa empresa. En una instalacion
+     * con varias, le enseña a quien administra la marca de un cliente
+     * cualquiera: el que tuviera asignado primero.
+     */
+    public function test_el_correo_del_sistema_lleva_la_marca_de_gestisp(): void
+    {
+        $this->configurar($this->sanAndres);
+
+        $html = (new \Illuminate\Auth\Notifications\ResetPassword('token-de-prueba'))
+            ->toMail($this->admin)
+            ->render();
+
+        $this->assertStringNotContainsString('San Andrés', $html, 'lleva la marca de una sucursal');
+        $this->assertStringContainsString(config('app.name'), $html);
+        $this->assertStringContainsString('Logo-gestisp-full.png', $html);
+    }
+
+    /**
+     * El contrapunto: lo que SI es de la operacion sigue saliendo con
+     * la marca de la sucursal que atiende al cliente.
+     */
+    public function test_el_correo_del_cliente_si_lleva_la_de_su_sede(): void
+    {
+        $factura = $this->facturaDe($this->sanAndres);
+
+        $html = (new InvoiceOverdue($factura))
+            ->toMail($factura->contract->client)
+            ->render();
+
+        $this->assertStringContainsString('San Andrés', $html);
+    }
+
 }

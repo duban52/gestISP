@@ -21,12 +21,23 @@
      ============================================================ --}}
 @php
     $color = $color ?? '#1F4E79';
+
+    // SIN SUCURSAL, LA MARCA ES LA DEL SISTEMA.
+    //
+    // Hay dos correos que no son el mismo. Al cliente le escribe su
+    // operador y el encabezado lleva el logo y el nombre de su sede.
+    // El restablecimiento de contraseña de un usuario del panel es
+    // correo INTERNO de GestISP: salía con el logo de EASYNET SAN
+    // ANDRÉS, que no tiene nada que ver con quien pide la contraseña
+    // —y que confunde a quien administra varias empresas—.
     $sucursalNombre = $sucursal->name ?? config('app.name');
 
     // El logo se enlaza por URL: si el gestor de correo bloquea las
     // imágenes, el encabezado sigue leyéndose porque el nombre va en
     // texto. Requiere que APP_URL apunte al dominio público.
-    $logo = ($sucursal->image ?? null) ? asset('storage/' . $sucursal->image) : null;
+    $logo = ($sucursal->image ?? null)
+        ? asset('storage/' . $sucursal->image)
+        : asset('img/Logo-gestisp-full.png');
 
     $contacto = collect([
         $sucursal->address ?? null,
@@ -217,7 +228,15 @@
                         @if($sucursal->nit ?? null)NIT {{ $sucursal->nit }}@endif
                         <div style="margin-top:12px; padding-top:12px; border-top:1px solid #eef1f5;">
                             Este mensaje se generó automáticamente. Por favor, no responda a este correo:
-                            para cualquier consulta comuníquese con nosotros por los medios de contacto indicados arriba.
+                            @if($contacto || $telefonos)
+                                para cualquier consulta comuníquese con nosotros por los medios de contacto
+                                indicados arriba.
+                            @else
+                                {{-- Sin sucursal no hay «medios indicados arriba» a los que remitir:
+                                     mandar al usuario a unos datos de contacto que no están es peor
+                                     que no decir nada. --}}
+                                si no esperaba este mensaje, puede ignorarlo.
+                            @endif
                         </div>
                     </td>
                 </tr>

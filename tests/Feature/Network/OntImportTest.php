@@ -660,4 +660,74 @@ class OntImportTest extends TestCase
         $this->assertNotSame('', $convertida);
     }
 
+    // ==================== Quien puede importar ====================
+
+    /**
+     * Importar de la OLT tiene permiso propio.
+     *
+     * Iba con `onts.activate` —autorizar UNA ONT— y por eso la veia
+     * cualquiera que pudiera atender el mostrador. Esto lee la OLT
+     * entera, da de alta miles de equipos de golpe y deja una accion
+     * masiva: no es lo mismo.
+     */
+    public function test_importar_exige_su_propio_permiso(): void
+    {
+        $rol = \Spatie\Permission\Models\Role::create(['name' => 'solo activa ONTs']);
+        $rol->givePermissionTo('onts.index', 'onts.show', 'onts.activate');
+
+        $usuario = \App\Models\User::factory()->create(['number_phone' => '3000000055']);
+        $usuario->assignRole($rol);
+        $usuario->branches()->attach($this->branch->id, ['role_id' => $rol->id]);
+
+        $this->actingAs($usuario)->withSession([
+            'branch_id' => (string) $this->branch->id,
+            'current_role_id' => (string) $rol->id,
+        ]);
+
+        // Ni la pantalla...
+        $this->get(route('onts.import.index'))->assertForbidden();
+
+        // ...ni el analisis, ni lanzarla
+        $this->postJson(route('onts.import.preview'), ['olt_id' => $this->olt->id])->assertForbidden();
+        $this->post(route('onts.import.store'), ['olt_id' => $this->olt->id])->assertForbidden();
+    }
+
+    public function test_con_el_permiso_si_entra(): void
+    {
+        $rol = \Spatie\Permission\Models\Role::create(['name' => 'importa ONTs']);
+        $rol->givePermissionTo('onts.index', 'onts.show', 'onts.activate', 'onts.import');
+
+        $usuario = \App\Models\User::factory()->create(['number_phone' => '3000000056']);
+        $usuario->assignRole($rol);
+        $usuario->branches()->attach($this->branch->id, ['role_id' => $rol->id]);
+
+        $this->actingAs($usuario)->withSession([
+            'branch_id' => (string) $this->branch->id,
+            'current_role_id' => (string) $rol->id,
+        ]);
+
+        $this->get(route('onts.import.index'))->assertOk();
+    }
+
+    public function test_el_menu_no_ofrece_importar_sin_el_permiso(): void
+    {
+        // El filtro del menu evalua 'can' contra el rol de la sesion:
+        // sin el permiso, la entrada no se pinta.
+        $rol = \Spatie\Permission\Models\Role::create(['name' => 'sin importacion']);
+        $rol->givePermissionTo('onts.index', 'onts.show', 'onts.activate');
+
+        $usuario = \App\Models\User::factory()->create(['number_phone' => '3000000057']);
+        $usuario->assignRole($rol);
+        $usuario->branches()->attach($this->branch->id, ['role_id' => $rol->id]);
+
+        $this->actingAs($usuario)->withSession([
+            'branch_id' => (string) $this->branch->id,
+            'current_role_id' => (string) $rol->id,
+        ]);
+
+        $this->get(route('onts.authorized'))
+            ->assertOk()
+            ->assertDontSee(route('onts.import.index'), false);
+    }
+
 }

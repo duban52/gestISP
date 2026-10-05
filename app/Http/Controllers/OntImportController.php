@@ -32,8 +32,15 @@ class OntImportController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        // Importar ONTs equivale a darlas de alta: mismo permiso
-        $this->middleware('check.permission:onts.activate');
+        // PERMISO PROPIO, no el de activar una ONT.
+        //
+        // Iba con `onts.activate` «porque importar equivale a darlas
+        // de alta». No equivale: activar es una ONT en el mostrador,
+        // esto lee la OLT entera, da de alta miles de equipos de
+        // golpe, deja una accion masiva y los vincula a contratos.
+        // Con el permiso compartido, cualquiera que pudiera autorizar
+        // una ONT veia —y podia lanzar— la importacion.
+        $this->middleware('check.permission:onts.import');
     }
 
     /**

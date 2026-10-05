@@ -199,6 +199,14 @@ class RoleSeeder extends Seeder
         Permission::create(['name' => 'onts.destroy', 'description' => 'Eliminar ONTs']);
         Permission::create(['name' => 'onts.relocate', 'description' => 'Mover ONTs de puerto']);
         Permission::create(['name' => 'onts.catv', 'description' => 'Activar/desactivar CATV en ONTs']);
+        // IMPORTAR DE LA OLT TIENE SU PROPIO PERMISO.
+        //
+        // Iba con `onts.activate`, que es autorizar UNA ONT. Esto
+        // es otra cosa: lee la OLT entera y da de alta miles de
+        // equipos de golpe, deja una accion masiva y puede
+        // vincularlos a contratos. Quien activa una ONT en el
+        // mostrador no tiene por que poder hacer eso.
+        Permission::create(['name' => 'onts.import', 'description' => 'Importar ONTs desde una OLT']);
 
         // Cuentas PPPoE
         Permission::create(['name' => 'pppoe.index', 'description' => 'Ver cuentas PPPoE']);
@@ -280,7 +288,7 @@ class RoleSeeder extends Seeder
             'technicals_orders.index', 'technicals_orders.create', 'technicals_orders.store', 'technicals_orders.update', 'technicals_orders.my_technical_orders', 'technicals_orders.process', 'technicals_orders.getSerialNumbers', 'technicals_orders.verification', 'technical_order.verification_process', 'technical_orders.reject',
             'routers.index', 'routers.create', 'routers.edit', 'routers.destroy',
             'olts.index', 'olts.create', 'olts.edit', 'olts.vlans',
-            'onts.index', 'onts.show', 'onts.activate', 'onts.destroy', 'onts.relocate', 'onts.catv',
+            'onts.index', 'onts.show', 'onts.activate', 'onts.destroy', 'onts.relocate', 'onts.catv', 'onts.import',
             'pppoe.index', 'pppoe.show', 'pppoe.create', 'pppoe.edit', 'pppoe.destroy', 'pppoe.import', 'pppoe.restart', 'pppoe.cutoff', 'pppoe.export',
             'networks.index', 'networks.create', 'networks.edit', 'networks.destroy',
             'naps.index', 'naps.create', 'naps.edit', 'naps.destroy',

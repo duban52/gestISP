@@ -93,13 +93,25 @@ class EmailTemplatesTest extends TestCase
         return (string) Mail::render($mensaje->view, $mensaje->viewData);
     }
 
-    /** Comprobaciones comunes a todos los correos del sistema. */
+    /**
+     * Comprobaciones comunes a los correos DEL CLIENTE.
+     *
+     * Al cliente le escribe su operador, asi que el encabezado y el
+     * pie llevan los datos de la sede que lo atiende. El correo
+     * interno del panel NO —ver assertCorreoBienMaquetado—.
+     */
     private function assertCorreoConMarca(string $html): void
     {
         // Encabezado y pie con los datos de la sucursal
         $this->assertStringContainsString('EasyNet Gómez Plata', $html);
         $this->assertStringContainsString('3206181020', $html);
 
+        $this->assertCorreoBienMaquetado($html);
+    }
+
+    /** Lo que vale para TODOS los correos, lleven la marca que lleven. */
+    private function assertCorreoBienMaquetado(string $html): void
+    {
         // La tarjeta va a 600 px: el ancho que respetan los gestores
         $this->assertStringContainsString('width="600"', $html);
 
@@ -238,6 +250,15 @@ class EmailTemplatesTest extends TestCase
 
     // ============ Correo del sistema: contraseña ============
 
+    /**
+     * El restablecimiento de contraseña es correo INTERNO del panel.
+     *
+     * Antes esta prueba exigia la marca de la sucursal del usuario, y
+     * por eso salia con el logo y el nombre de EASYNET SAN ANDRES un
+     * mensaje que no tiene nada que ver con esa empresa. En una
+     * instalacion con varias, le enseñaba a quien administra la marca
+     * de un cliente cualquiera.
+     */
     public function test_el_correo_para_restablecer_la_contrasena_usa_la_plantilla_propia(): void
     {
         $notificacion = new ResetPassword('token-de-prueba');
@@ -245,7 +266,13 @@ class EmailTemplatesTest extends TestCase
 
         $html = (string) Mail::render($mensaje->view, $mensaje->viewData);
 
-        $this->assertCorreoConMarca($html);
+        $this->assertCorreoBienMaquetado($html);
+
+        // La marca es la de GestISP, no la de ninguna sede
+        $this->assertStringContainsString(config('app.name'), $html);
+        $this->assertStringContainsString('Logo-gestisp-full.png', $html);
+        $this->assertStringNotContainsString('EasyNet Gómez Plata', $html);
+        $this->assertStringNotContainsString('3206181020', $html);
         $this->assertStringContainsString('Restablecer su contraseña', $html);
         $this->assertStringContainsString('Crear contraseña nueva', $html);
         $this->assertStringContainsString('token-de-prueba', $html);
