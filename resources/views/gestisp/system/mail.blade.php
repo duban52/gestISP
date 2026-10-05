@@ -183,6 +183,16 @@
                                     ? 'Déjela vacía para no cambiarla. Se guarda cifrada y no se muestra nunca.'
                                     : 'Se guarda cifrada y no se muestra nunca.' }}
                             </small>
+                            {{-- La causa número uno de que esto no funcione a
+                                 la primera. Google la enseña en grupos de
+                                 cuatro y la gente la pega con los espacios. --}}
+                            <small class="form-text text-muted" id="pistaGmail" style="display:none;">
+                                <i class="fas fa-key"></i>
+                                En Gmail NO sirve la contraseña del correo: hace falta una
+                                <strong>contraseña de aplicación</strong> (16 letras), creada en
+                                <em>Cuenta de Google → Seguridad</em> con la verificación en dos pasos
+                                activada, y de <strong>la misma cuenta</strong> que puso arriba como usuario.
+                            </small>
                         </div>
 
                         <hr>
@@ -407,6 +417,14 @@
 
             nota.textContent = op.dataset.nota || '';
             nota.style.display = op.dataset.nota ? 'block' : 'none';
+
+            document.getElementById('pistaGmail').style.display =
+                this.value === 'gmail' ? 'block' : 'none';
         });
+
+        // Al cargar, si ya venía guardado Gmail
+        if (document.getElementById('preset').value === 'gmail') {
+            document.getElementById('pistaGmail').style.display = 'block';
+        }
     </script>
 @endsection

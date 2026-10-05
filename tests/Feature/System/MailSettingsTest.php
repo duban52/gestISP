@@ -122,21 +122,89 @@ class MailSettingsTest extends TestCase
 
     // ==================== El interruptor ====================
 
+    /**
+     * El interruptor apaga el correo VENGA DE DONDE VENGA EL SMTP.
+     *
+     * Esta es la prueba que importa: el `.env` del servidor puede
+     * seguir teniendo un Gmail perfectamente configurado y el correo
+     * NO sale igual. El freno no esta en la configuracion del
+     * servidor de salida —que sigue intacta— sino antes: el oyente de
+     * `MessageSending` devuelve `false` y Laravel no llega a entregarle
+     * el mensaje al transporte.
+     *
+     * Se comprueba contra el transporte, no contra la bitacora: que el
+     * log diga «no se envio» no demuestra que no se enviara.
+     */
     public function test_apagado_no_sale_ni_un_correo(): void
     {
+        // El SMTP del entorno sigue puesto y funcionando
+        $this->assertNotNull(config('mail.mailers.smtp.host'));
+
         $this->guardar(['enabled' => '0'])->assertRedirect();
         CorreoDelSistema::olvidarCache();
 
         Mail::raw('contenido', fn ($m) => $m->to('cliente@ejemplo.com')->subject('Su factura'));
 
-        // El oyente devuelve false en MessageSending: el correo no se
-        // manda y queda anotado como «no se envio».
+        // NADA llego al transporte
+        $this->assertCount(
+            0,
+            app('mailer')->getSymfonyTransport()->messages(),
+            'el correo salio pese a estar apagado',
+        );
+
+        // Y el intento quedo anotado
         $log = MailLog::latest('id')->first();
 
         $this->assertNotNull($log, 'el intento tiene que quedar anotado aunque no salga');
         $this->assertSame(MailLog::OMITIDO, $log->status);
         $this->assertSame('cliente@ejemplo.com', $log->to);
         $this->assertStringContainsString('deshabilitado', $log->error);
+    }
+
+    /** El contrapunto: encendido, el mismo correo SI llega al transporte. */
+    public function test_encendido_el_mismo_correo_si_sale(): void
+    {
+        $this->guardar(['enabled' => '1']);
+        CorreoDelSistema::olvidarCache();
+
+        Mail::raw('contenido', fn ($m) => $m->to('cliente@ejemplo.com')->subject('Su factura'));
+
+        $this->assertCount(1, app('mailer')->getSymfonyTransport()->messages());
+    }
+
+    /**
+     * Y lo apaga tambien para la COLA, que es por donde sale lo que
+     * importa.
+     *
+     * La corrida de facturacion no manda desde una peticion web: encola
+     * novecientos trabajos que procesa un worker aparte, que lleva
+     * horas levantado. Si ese proceso no se entera del interruptor, se
+     * apaga el correo en la pantalla y las facturas siguen saliendo.
+     *
+     * Lo que lo resuelve es que el estado se lee en CADA envio, no una
+     * vez al arrancar.
+     */
+    public function test_el_interruptor_llega_a_la_cola(): void
+    {
+        $this->guardar(['enabled' => '1']);
+        CorreoDelSistema::olvidarCache();
+
+        // Un envio cualquiera: el proceso ya ha leido la configuracion
+        Mail::raw('uno', fn ($m) => $m->to('cliente@ejemplo.com')->subject('Primero'));
+        $this->assertCount(1, app('mailer')->getSymfonyTransport()->messages());
+
+        // Se apaga DESPUES, como haria el administrador con el worker
+        // ya corriendo
+        MailSetting::first()->update(['enabled' => false]);
+        CorreoDelSistema::olvidarCache();
+
+        Mail::raw('dos', fn ($m) => $m->to('cliente@ejemplo.com')->subject('Segundo'));
+
+        $this->assertCount(
+            1,
+            app('mailer')->getSymfonyTransport()->messages(),
+            'el proceso que ya estaba levantado siguio enviando',
+        );
     }
 
     public function test_el_aviso_de_apagado_se_ve_en_la_pantalla(): void
@@ -310,4 +378,58 @@ class MailSettingsTest extends TestCase
             MailLog::where('to', 'yo@ejemplo.com')->latest('id')->firstOrFail()->status,
         );
     }
+    // ==================== La contrasena pegada a mano ====================
+
+    /**
+     * Google enseña la contraseña de aplicación en grupos de cuatro.
+     *
+     * «abcd efgh ijkl mnop» son dieciseis letras y los espacios son de
+     * adorno, pero el servidor recibe la cadena tal cual y responde
+     * «535 Username and Password not accepted» — el mismo error que
+     * una contraseña equivocada, sin mencionar ningun espacio. Es la
+     * causa numero uno de que esto no arranque a la primera.
+     *
+     * Y hay un agravante del propio framework: `TrimStrings` excluye a
+     * proposito los campos llamados `password`, asi que ni siquiera se
+     * le quitan los espacios de los extremos.
+     */
+    public function test_quita_los_espacios_de_una_contrasena_de_aplicacion(): void
+    {
+        $this->guardar(['password' => 'abcd efgh ijkl mnop']);
+
+        $this->assertSame('abcdefghijklmnop', MailSetting::first()->password);
+    }
+
+    public function test_tambien_los_espacios_de_los_extremos(): void
+    {
+        // TrimStrings no toca los campos «password», asi que un espacio
+        // pegado de mas al copiar llegaba hasta el servidor.
+        $this->guardar(['password' => '  clave-del-servidor  ']);
+
+        $this->assertSame('clave-del-servidor', MailSetting::first()->password);
+    }
+
+    public function test_no_destroza_una_contrasena_que_lleva_un_espacio_de_verdad(): void
+    {
+        // Solo se quitan los espacios de en medio cuando lo que queda
+        // son dieciseis caracteres, que es la forma de una contraseña
+        // de Google y de nada mas.
+        $this->guardar(['password' => 'esta clave tiene espacios de verdad']);
+
+        $this->assertSame('esta clave tiene espacios de verdad', MailSetting::first()->password);
+    }
+
+    public function test_el_fallo_de_gmail_dice_que_hace_falta_una_contrasena_de_aplicacion(): void
+    {
+        $log = new MailLog([
+            'error' => 'Failed to authenticate on SMTP server with username "x@gmail.com" ... '
+                . '"535-5.7.8 Username and Password not accepted ... BadCredentials"',
+        ]);
+
+        $motivo = $log->motivoEnClaro();
+
+        $this->assertStringContainsString('CONTRASEÑA DE APLICACIÓN', $motivo);
+        $this->assertStringContainsString('dos pasos', $motivo);
+    }
+
 }

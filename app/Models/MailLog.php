@@ -94,7 +94,11 @@ class MailLog extends Model
 
         return match (true) {
             str_contains($e, '535') || stripos($e, 'Username and Password') !== false
-                => 'El servidor rechazó el usuario o la contraseña.',
+                => stripos($e, 'gmail') !== false || stripos($e, 'BadCredentials') !== false
+                    ? 'Gmail rechazó el usuario o la contraseña. Tiene que ser una CONTRASEÑA DE APLICACIÓN '
+                        . '(16 letras, sin espacios) creada en la misma cuenta del usuario, con la verificación '
+                        . 'en dos pasos activada.'
+                    : 'El servidor rechazó el usuario o la contraseña.',
             str_contains($e, '534') || stripos($e, 'application-specific password') !== false
                 => 'Gmail exige una «contraseña de aplicación»: la del correo no sirve.',
             stripos($e, 'Connection could not be established') !== false

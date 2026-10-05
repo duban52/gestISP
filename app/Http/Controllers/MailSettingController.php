@@ -90,6 +90,8 @@ class MailSettingController extends Controller
         // Vacía significa «no la cambies». Ver la nota de la clase.
         if (blank($datos['password'] ?? null)) {
             unset($datos['password']);
+        } else {
+            $datos['password'] = $this->limpiarContrasena($datos['password']);
         }
 
         $datos['enabled'] = $request->boolean('enabled');
@@ -123,6 +125,39 @@ class MailSettingController extends Controller
         return back()->with('success', $ajustes->enabled
             ? 'Configuración guardada. Use «Enviar correo de prueba» para comprobar que funciona.'
             : 'Configuración guardada. EL ENVÍO DE CORREOS ESTÁ APAGADO: no saldrá ninguno.');
+    }
+
+    /**
+     * La contraseña del SMTP, tal como la pega una persona.
+     *
+     * DOS COSAS, Y LAS DOS HAN COSTADO UN RATO
+     * ----------------------------------------
+     * 1. El middleware `TrimStrings` NO toca los campos que se llaman
+     *    `password` —y hace bien: una contraseña de acceso puede
+     *    terminar en espacio a propósito—. Pero esta no es de acceso,
+     *    es de un servidor, y un espacio pegado de más al copiar hace
+     *    que el servidor la rechace con un error que no menciona
+     *    ningún espacio.
+     *
+     * 2. Google enseña las contraseñas de aplicación en cuatro grupos
+     *    de cuatro letras: «abcd efgh ijkl mnop». Son dieciséis
+     *    letras, los espacios son de adorno, y pegarlas con espacios
+     *    da exactamente el mismo «535 Username and Password not
+     *    accepted» que una contraseña equivocada. Es la causa número
+     *    uno de que esto no funcione a la primera.
+     *
+     * Solo se quitan los espacios de en medio cuando lo que queda son
+     * dieciséis caracteres: es la forma de una contraseña de Google y
+     * de nada más. Una contraseña de otro servidor que lleve un
+     * espacio de verdad se respeta.
+     */
+    private function limpiarContrasena(string $clave): string
+    {
+        $clave = trim($clave);
+
+        $sinEspacios = preg_replace('/\s+/u', '', $clave);
+
+        return strlen($sinEspacios) === 16 ? $sinEspacios : $clave;
     }
 
     /**
