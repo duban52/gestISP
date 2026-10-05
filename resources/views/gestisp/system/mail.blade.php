@@ -180,8 +180,8 @@
                                    placeholder="{{ $ajustes->password ? '•••••••• (guardada)' : '' }}">
                             <small class="form-text text-muted">
                                 {{ $ajustes->password
-                                    ? 'Déjela vacía para no cambiarla. Se guarda cifrada y no se muestra nunca.'
-                                    : 'Se guarda cifrada y no se muestra nunca.' }}
+                                    ? 'Déjela vacía para no cambiarla. No se muestra nunca.'
+                                    : 'No se muestra nunca, pero se guarda sin cifrar: quien acceda a la base de datos o a una copia de seguridad puede leerla.' }}
                             </small>
                             {{-- La causa número uno de que esto no funcione a
                                  la primera. Google la enseña en grupos de

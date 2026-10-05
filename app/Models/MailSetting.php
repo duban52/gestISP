@@ -34,9 +34,17 @@ class MailSetting extends Model
         'enabled' => 'boolean',
         'port' => 'integer',
         'per_minute' => 'integer',
-        // Cifrada en reposo, como el PIN de la DIAN. Nunca se enseña
-        // en la pantalla ni se escribe en el log.
-        'password' => 'encrypted',
+        // EN CLARO, por decisión del dueño del sistema.
+        //
+        // Lo normal aquí sería `encrypted`, como el PIN de la DIAN y
+        // la contraseña del certificado. Se guarda sin cifrar para
+        // poder leerla y corregirla directamente en la base cuando el
+        // correo no sale. El precio: quien tenga acceso a la base —o
+        // a una copia de seguridad— lee la contraseña del servidor
+        // que manda las facturas.
+        //
+        // Lo que NO cambia: sigue sin volver a la pantalla y sigue
+        // fuera de la trazabilidad.
     ];
 
     /**

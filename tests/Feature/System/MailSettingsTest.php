@@ -291,13 +291,21 @@ class MailSettingsTest extends TestCase
 
     // ==================== La contraseña ====================
 
-    public function test_la_contrasena_se_guarda_cifrada(): void
+    /**
+     * La contraseña se guarda EN CLARO, por decision del dueño.
+     *
+     * Lo normal seria cifrarla, como el PIN de la DIAN. Se guarda sin
+     * cifrar para poder leerla y corregirla en la base cuando el
+     * correo no sale. Queda aqui escrito para que nadie lo «arregle»
+     * sin saber que fue deliberado — y para que se vea que lo que SI
+     * se protege sigue protegido: no vuelve a la pantalla ni entra en
+     * la trazabilidad.
+     */
+    public function test_la_contrasena_se_guarda_sin_cifrar(): void
     {
         $this->guardar();
 
-        $crudo = \DB::table('mail_settings')->value('password');
-
-        $this->assertNotSame('clave-secreta', $crudo, 'la contraseña no puede estar en claro en la base');
+        $this->assertSame('clave-secreta', \DB::table('mail_settings')->value('password'));
         $this->assertSame('clave-secreta', MailSetting::first()->password);
     }
 
