@@ -41,12 +41,17 @@ class MailLog extends Model
 
     protected $fillable = [
         'status', 'to', 'subject', 'mailer', 'from_address',
-        'context', 'error', 'company_id', 'sent_at',
+        'context', 'error', 'company_id', 'branch_id', 'sent_at',
     ];
 
     protected $casts = [
         'sent_at' => 'datetime',
     ];
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
 
     public function company()
     {

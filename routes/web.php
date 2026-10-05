@@ -77,6 +77,20 @@ Route::namespace('App\Http\Controllers')->prefix('gestisp')->group(function () {
     // Sucursales
     Route::resource('branches', 'BranchController')->names('branches');
 
+    // EL CORREO DE LA SUCURSAL: el que ve el cliente.
+    //
+    // Ruta aparte y no dentro del update de la sucursal: ese
+    // metodo arrastra reglas de facturacion con `sometimes`, y
+    // meterle once campos mas es la forma de romper el guardado de
+    // una sucursal por un campo de correo.
+    //
+    // No exige superadministrador —lo configura quien administra la
+    // sede—; lo reservado sigue siendo el correo DEL SISTEMA.
+    Route::put('branches/{branch}/correo', [App\Http\Controllers\MailSettingController::class, 'updateSucursal'])
+        ->name('branches.mail.update');
+    Route::post('branches/{branch}/correo/probar', [App\Http\Controllers\MailSettingController::class, 'probarSucursal'])
+        ->name('branches.mail.test');
+
     // Clientes
     Route::resource('clients', 'ClientController')->names('clients');
 

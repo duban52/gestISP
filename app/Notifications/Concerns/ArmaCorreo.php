@@ -30,7 +30,7 @@ trait ArmaCorreo
      */
     protected function correo(string $asunto, array $datos, ?Branch $sucursal = null, string $tono = 'institucional'): MailMessage
     {
-        return (new MailMessage)
+        $correo = (new MailMessage)
             ->subject($asunto)
             ->view('emails.layout', array_merge([
                 'sucursal' => $sucursal,
@@ -39,6 +39,66 @@ trait ArmaCorreo
                 // muestra el propio asunto.
                 'preheader' => $asunto,
             ], $datos));
+
+        return $this->porLaSucursal($correo, $sucursal);
+    }
+
+    /**
+     * Hace que el correo salga por el servidor de SU sucursal.
+     *
+     * AL CLIENTE LE ESCRIBE SU OPERADOR, no una central. Todas las
+     * notificaciones del cliente pasan por aquí, así que es el único
+     * sitio donde hay que decidirlo: nueve notificaciones resolviendo
+     * cada una su servidor es la forma de que una se quede sin
+     * actualizar y mande por donde no debe.
+     *
+     * Y corre DENTRO del trabajo de la cola, que es cuando se arma el
+     * mensaje. Resolverlo al encolar habría hecho que las novecientas
+     * facturas de una corrida salieran todas por la sucursal de la
+     * última.
+     *
+     * Sin servidor propio, el correo sale como siempre: por el del
+     * sistema o el del `.env`.
+     */
+    private function porLaSucursal(MailMessage $correo, ?Branch $sucursal): MailMessage
+    {
+        $delaSede = app(\App\Mail\CorreoDeLaSucursal::class);
+
+        if ($mailer = $delaSede->mailerDe($sucursal)) {
+            $correo->mailer($mailer);
+        }
+
+        // UNA MARCA EN EL MENSAJE, NO UN MAILER FALSO.
+        //
+        // Si la sede tiene el correo apagado hay que cancelar el envío,
+        // y el único sitio que sabe cancelar es el oyente de
+        // `MessageSending` —el mismo que apaga el correo del sistema—.
+        // Pero ese oyente no sabe de qué sucursal es el mensaje: se lo
+        // dice esta cabecera, que él lee y quita antes de enviar.
+        //
+        // La alternativa era un mailer llamado «apagado», y entonces
+        // Laravel reventaría con «Mailer [apagado] is not defined» en
+        // mitad de una corrida.
+        if ($sucursal) {
+            $apagada = $delaSede->estaApagada($sucursal);
+
+            $correo->withSymfonyMessage(function ($mensaje) use ($sucursal, $apagada) {
+                $mensaje->getHeaders()->addTextHeader(\App\Mail\CorreoDeLaSucursal::CABECERA_SEDE, (string) $sucursal->id);
+
+                if ($apagada) {
+                    $mensaje->getHeaders()->addTextHeader(\App\Mail\CorreoDeLaSucursal::CABECERA_APAGADA, '1');
+                }
+            });
+        }
+
+        if ($remitente = $delaSede->remitenteDe($sucursal)) {
+            // Laravel resuelve el «from» del MENSAJE, no del
+            // transporte: sin esto saldría por el servidor de la sede
+            // pero firmado por el del sistema.
+            $correo->from($remitente['address'], $remitente['name']);
+        }
+
+        return $correo;
     }
 
     /**

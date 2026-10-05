@@ -82,10 +82,23 @@ class CorreoDelSistema
         }
     }
 
-    /** La configuración vigente, cacheada. */
+    /**
+     * La configuración DEL SISTEMA, cacheada.
+     *
+     * `whereNull('branch_id')` no es un detalle: desde que las
+     * sucursales guardan la suya en esta misma tabla, un `first()` a
+     * secas devuelve la de cualquiera. Con una sede que tuviera el
+     * correo apagado, eso apagaba el correo de TODO el sistema —
+     * incluidos los restablecimientos de contraseña— y además le
+     * aplicaba su servidor SMTP al resto. Lo encontró una prueba que
+     * esperaba que apagar una sede no callara a las demás.
+     */
     public function vigentes(): ?MailSetting
     {
-        return Cache::rememberForever(self::CACHE, fn () => MailSetting::first());
+        return Cache::rememberForever(
+            self::CACHE,
+            fn () => MailSetting::whereNull('branch_id')->first(),
+        );
     }
 
     public static function olvidarCache(): void
@@ -104,10 +117,36 @@ class CorreoDelSistema
         $destino = $this->destinatario($evento);
         $asunto = $evento->message->getSubject();
 
+        // De qué sucursal es este correo, y si esa sede lo tiene
+        // apagado. Lo marcó ArmaCorreo con una cabecera porque aquí no
+        // hay forma de saberlo: al oyente le llega un mensaje, no una
+        // notificación con su contexto.
+        [$sucursal, $sedeApagada] = $this->leerYQuitarLasMarcas($evento);
+
+        if ($sedeApagada) {
+            $this->anotar(
+                MailLog::OMITIDO,
+                $destino,
+                $asunto,
+                $evento,
+                'La sucursal tiene el envío de correos deshabilitado.',
+                $sucursal,
+            );
+
+            return false;
+        }
+
         if ($ajustes && !$ajustes->enabled) {
             // Se anota igual: al volver a encender el correo hay que
             // poder saber qué se quedó sin mandar.
-            $this->anotar(MailLog::OMITIDO, $destino, $asunto, $evento, 'El envío de correos está deshabilitado.');
+            $this->anotar(
+                MailLog::OMITIDO,
+                $destino,
+                $asunto,
+                $evento,
+                'El envío de correos está deshabilitado.',
+                $sucursal,
+            );
 
             return false;
         }
@@ -117,7 +156,7 @@ class CorreoDelSistema
         // Nace FALLIDO: si el envío revienta, el proceso se muere o el
         // servidor cuelga la conexión, la fila ya dice la verdad.
         // `MessageSent` es quien la asciende a enviado.
-        self::$filaEnCurso = $this->anotar(MailLog::FALLIDO, $destino, $asunto, $evento)?->id;
+        self::$filaEnCurso = $this->anotar(MailLog::FALLIDO, $destino, $asunto, $evento, null, $sucursal)?->id;
 
         return null;
     }
@@ -167,7 +206,7 @@ class CorreoDelSistema
      *
      * @return array{ok: bool, mensaje: string}
      */
-    public function enviarPrueba(string $destino): array
+    public function enviarPrueba(string $destino, ?string $mailer = null): array
     {
         $ajustes = $this->vigentes();
 
@@ -179,7 +218,10 @@ class CorreoDelSistema
         }
 
         try {
-            Mail::raw(
+            // Con un mailer concreto se prueba el de UNA sucursal sin
+            // tocar el del sistema: es lo que permite comprobar la sede
+            // nueva mientras las demas siguen enviando.
+            Mail::mailer($mailer)->raw(
                 "Este es un correo de prueba de GestISP.\n\n"
                 . "Si lo está leyendo, la configuración de salida funciona: el servidor aceptó el "
                 . "mensaje y lo entregó.\n\n"
@@ -242,6 +284,7 @@ class CorreoDelSistema
         ?string $asunto,
         MessageSending $evento,
         ?string $error = null,
+        ?int $sucursal = null,
     ): ?MailLog {
         try {
             return MailLog::create([
@@ -253,6 +296,7 @@ class CorreoDelSistema
                 'context' => $this->contexto($evento),
                 'error' => $error,
                 'company_id' => $this->empresa(),
+                'branch_id' => $sucursal,
                 'sent_at' => $estado === MailLog::ENVIADO ? now() : null,
             ]);
         } catch (Throwable $e) {
@@ -260,6 +304,30 @@ class CorreoDelSistema
 
             return null;
         }
+    }
+
+    /**
+     * Lee las marcas que dejó ArmaCorreo y las QUITA del mensaje.
+     *
+     * Son cabeceras internas: dicen de qué sucursal es el correo y si
+     * esa sede lo tiene apagado. Se quitan antes de enviar porque no
+     * pintan nada en la bandeja del cliente — y porque una cabecera
+     * `X-` rara es justo el tipo de detalle que algunos filtros de
+     * spam puntúan.
+     *
+     * @return array{0: ?int, 1: bool}  [sucursal, apagada]
+     */
+    private function leerYQuitarLasMarcas(MessageSending $evento): array
+    {
+        $cabeceras = $evento->message->getHeaders();
+
+        $sucursal = $cabeceras->get(\App\Mail\CorreoDeLaSucursal::CABECERA_SEDE)?->getBodyAsString();
+        $apagada = $cabeceras->has(\App\Mail\CorreoDeLaSucursal::CABECERA_APAGADA);
+
+        $cabeceras->remove(\App\Mail\CorreoDeLaSucursal::CABECERA_SEDE);
+        $cabeceras->remove(\App\Mail\CorreoDeLaSucursal::CABECERA_APAGADA);
+
+        return [$sucursal ? (int) $sucursal : null, $apagada];
     }
 
     /** Todos los destinatarios, separados por coma. */

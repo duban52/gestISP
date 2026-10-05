@@ -117,6 +117,7 @@ class AppServiceProvider extends ServiceProvider
         $this->resolverPermisosPorRolDeLaSesion();
         $this->personalizarCorreoDeContrasena();
         $this->compartirSiSeMuestraLaSucursal();
+        $this->registrarElCorreoDeLasSucursales();
         $this->prepararElCorreo();
     }
 
@@ -132,6 +133,18 @@ class AppServiceProvider extends ServiceProvider
      * el correo que importa de verdad, el de la corrida de
      * facturación, sale precisamente desde la cola.
      */
+    /**
+     * Un solo resolutor de correo por sucursal en toda la ejecucion.
+     *
+     * Sin esto, cada correo creaba uno nuevo, volvia a registrar el
+     * mailer de la sede y tiraba la conexion SMTP abierta: mil
+     * facturas, mil conexiones.
+     */
+    private function registrarElCorreoDeLasSucursales(): void
+    {
+        $this->app->singleton(\App\Mail\CorreoDeLaSucursal::class);
+    }
+
     private function prepararElCorreo(): void
     {
         $correo = app(\App\Mail\CorreoDelSistema::class);

@@ -25,6 +25,7 @@ class MailSetting extends Model
     use NotAudited;
 
     protected $fillable = [
+        'branch_id',
         'enabled', 'preset',
         'host', 'port', 'encryption', 'username', 'password',
         'from_address', 'from_name', 'per_minute', 'updated_by',
@@ -48,13 +49,46 @@ class MailSetting extends Model
     ];
 
     /**
-     * La configuración vigente. Si no existe, una recién nacida con
-     * el correo ENCENDIDO: la ausencia de configuración no puede
-     * apagar el correo de un sistema que estaba funcionando.
+     * La del SISTEMA: correo interno de GestISP.
+     *
+     * Restablecimientos de contraseña y cualquier aviso que no sea
+     * para un cliente. Es además el respaldo de las sucursales que no
+     * tengan la suya.
+     *
+     * Si no existe, una recién nacida con el correo ENCENDIDO: la
+     * ausencia de configuración no puede apagar el correo de un
+     * sistema que estaba funcionando.
      */
     public static function vigente(): self
     {
-        return static::first() ?? new static(['enabled' => true]);
+        return static::whereNull('branch_id')->first() ?? new static(['enabled' => true]);
+    }
+
+    /**
+     * La de una SUCURSAL: lo que se le manda a sus clientes.
+     *
+     * `null` significa «no tiene la suya», y entonces manda la del
+     * sistema. Nunca se inventa una vacía: la diferencia entre «no hay
+     * configuración» y «hay una sin servidor» decide si se respalda o
+     * se intenta enviar por la nada.
+     */
+    public static function deLaSucursal(int|string|null $branchId): ?self
+    {
+        if (!$branchId) {
+            return null;
+        }
+
+        return static::where('branch_id', $branchId)->first();
+    }
+
+    public function esDelSistema(): bool
+    {
+        return $this->branch_id === null;
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     /** ¿Hay un SMTP propio, o se usa el del .env? */

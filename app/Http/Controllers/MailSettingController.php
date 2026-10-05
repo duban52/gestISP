@@ -195,6 +195,136 @@ class MailSettingController extends Controller
     }
 
     /**
+     * El servidor de salida de una SUCURSAL.
+     *
+     * Al cliente le escribe su operador: la factura y los avisos salen
+     * de la sede que lo atiende, con su dominio y con un buzón al que
+     * pueda responder. Lo de Gestión del sistema es otra cosa —correo
+     * interno de GestISP— y sigue siendo el respaldo de las sedes que
+     * no tengan el suyo.
+     *
+     * Ruta aparte y no dentro de BranchController::update(): ese
+     * método arrastra reglas delicadas de facturación con `sometimes`,
+     * y meterle once campos más es la forma de romper el guardado de
+     * una sucursal por un campo de correo.
+     */
+    public function updateSucursal(Request $request, \App\Models\Branch $branch): RedirectResponse
+    {
+        $this->authorizeSucursal($branch);
+
+        $datos = $request->validate([
+            'enabled' => 'nullable|boolean',
+            'preset' => 'nullable|string|max:20',
+            'host' => 'nullable|string|max:150',
+            'port' => 'nullable|integer|min:1|max:65535',
+            'encryption' => 'nullable|in:tls,ssl,',
+            'username' => 'nullable|string|max:190',
+            'password' => 'nullable|string|max:190',
+            'from_address' => 'nullable|email|max:190',
+            'from_name' => 'nullable|string|max:150',
+        ], [
+            'from_address.email' => 'El remitente tiene que ser una dirección de correo válida.',
+            'port.integer' => 'El puerto es un número: 587 para TLS, 465 para SSL.',
+        ]);
+
+        $ajustes = MailSetting::deLaSucursal($branch->id)
+            ?? new MailSetting(['branch_id' => $branch->id, 'enabled' => true]);
+
+        if (blank($datos['password'] ?? null)) {
+            unset($datos['password']);
+        } else {
+            $datos['password'] = $this->limpiarContrasena($datos['password']);
+        }
+
+        $estabaEncendido = $ajustes->exists ? $ajustes->enabled : true;
+
+        $datos['enabled'] = $request->boolean('enabled');
+        $datos['updated_by'] = auth()->id();
+
+        $ajustes->fill($datos)->save();
+
+        CorreoDelSistema::olvidarCache();
+
+        $this->auditoria->action(
+            'mail.branch_settings_updated',
+            match (true) {
+                $estabaEncendido && !$ajustes->enabled
+                    => sprintf('APAGÓ el envío de correos de la sucursal %s', $branch->name),
+                !$estabaEncendido && $ajustes->enabled
+                    => sprintf('Encendió el envío de correos de la sucursal %s', $branch->name),
+                $ajustes->tieneServidorPropio()
+                    => sprintf('Configuró el correo de la sucursal %s (%s)', $branch->name, $ajustes->host),
+                default
+                    => sprintf('Dejó la sucursal %s sin servidor propio: usará el del sistema', $branch->name),
+            },
+            [
+                'sucursal' => $branch->name,
+                'habilitado' => $ajustes->enabled,
+                'servidor' => $ajustes->host ?: '(el del sistema)',
+                'remitente' => $ajustes->from_address,
+                'cambio_la_clave' => array_key_exists('password', $datos),
+            ],
+            $branch,
+            'sistema',
+        );
+
+        if (!$ajustes->enabled) {
+            return back()->with('success',
+                'Guardado. ESTA SUCURSAL YA NO ENVÍA CORREOS: ni facturas, ni avisos, ni órdenes.');
+        }
+
+        return back()->with('success', $ajustes->tieneServidorPropio()
+            ? 'Correo de la sucursal guardado. Pruébelo antes de confiarle una corrida.'
+            : 'La sucursal enviará por el servidor del sistema.');
+    }
+
+    /**
+     * Prueba el servidor de una sucursal, sin tocar el del sistema.
+     */
+    public function probarSucursal(Request $request, \App\Models\Branch $branch): RedirectResponse
+    {
+        $this->authorizeSucursal($branch);
+
+        $datos = $request->validate(['destino' => 'required|email']);
+
+        $mailer = app(\App\Mail\CorreoDeLaSucursal::class)->mailerDe($branch);
+
+        if (!$mailer) {
+            return back()->with('error',
+                'Esta sucursal no tiene servidor propio: sus correos salen por el del sistema. '
+                . 'Pruebe aquel desde Gestión del sistema → Envío de correos.');
+        }
+
+        $resultado = $this->correo->enviarPrueba($datos['destino'], $mailer);
+
+        return back()->with(
+            $resultado['ok'] ? 'success' : 'error',
+            $resultado['ok']
+                ? 'Salió desde el servidor de ' . $branch->name . ' hacia ' . $datos['destino'] . '.'
+                : 'No se pudo enviar: ' . $resultado['mensaje'],
+        );
+    }
+
+    /**
+     * Solo quien pueda editar la sucursal toca su correo.
+     *
+     * Aquí NO se exige superadministrador: el correo comercial de una
+     * sede lo configura quien la administra. Lo que sigue reservado es
+     * el del sistema, que es el que manda los restablecimientos de
+     * contraseña de todo el panel.
+     */
+    private function authorizeSucursal(\App\Models\Branch $branch): void
+    {
+        abort_unless(auth()->user()?->can('branches.edit'), 403);
+
+        abort_unless(
+            in_array((int) $branch->id, array_map('intval', app(\App\Tenancy\CurrentContext::class)->branchIds()), true),
+            403,
+            'Esa sucursal no es de su contexto.',
+        );
+    }
+
+    /**
      * Poda la bitácora.
      *
      * Una corrida de facturación son mil filas. Sin poda esto crece

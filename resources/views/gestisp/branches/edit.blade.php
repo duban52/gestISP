@@ -258,4 +258,182 @@
             </form>
         </div>
     </div>
+
+    {{-- ============================================================
+         EL CORREO QUE VE EL CLIENTE
+
+         Fuera del formulario de arriba a propósito: es HTML inválido
+         anidar formularios, y además el guardado de la sucursal
+         arrastra reglas de facturación que no tienen por qué fallar
+         por un campo de correo.
+
+         Lo que se configura aquí sale en las facturas, los avisos de
+         vencimiento y las órdenes técnicas de ESTA sede. El
+         restablecimiento de contraseña de un usuario del panel NO:
+         ese es correo interno y sale del de Gestión del sistema.
+         ============================================================ --}}
+    @php
+        $correoSede = \App\Models\MailSetting::deLaSucursal($branch->id);
+        $preajustes = \App\Models\MailSetting::PREAJUSTES;
+    @endphp
+
+    <div class="card shadow-sm">
+        <div class="card-header py-2 bg-primary text-white d-flex justify-content-between align-items-center flex-wrap">
+            <h3 class="card-title mb-0">
+                <i class="fas fa-envelope mr-1"></i> Correo de esta sucursal
+            </h3>
+            @if($correoSede && !$correoSede->enabled)
+                <span class="badge badge-danger">Envío APAGADO</span>
+            @elseif($correoSede?->tieneServidorPropio())
+                <span class="badge badge-light">Servidor propio</span>
+            @else
+                <span class="badge badge-secondary">Usa el del sistema</span>
+            @endif
+        </div>
+
+        <form method="POST" action="{{ route('branches.mail.update', $branch) }}" class="card-body">
+            @csrf
+            @method('PUT')
+
+            <p class="text-muted">
+                Desde aquí salen las <strong>facturas, los avisos de vencimiento y las órdenes
+                técnicas de los clientes de esta sede</strong>, con su remitente. Si se deja en
+                blanco, se envían por el servidor configurado en
+                <em>Gestión del sistema → Envío de correos</em>.
+            </p>
+
+            {{-- APAGADO SIGNIFICA QUE NO SALE, no que salga por el del
+                 sistema. Es el interruptor general acotado a una sede:
+                 sirve para cortar el correo de una sucursal concreta
+                 sin dejar a las demás sin facturas. --}}
+            <div class="custom-control custom-switch mb-3">
+                <input type="checkbox" class="custom-control-input" id="enabled_sede" name="enabled"
+                       value="1" @checked(old('enabled', $correoSede?->enabled ?? true))>
+                <label class="custom-control-label" for="enabled_sede">
+                    <strong>Enviar correos a los clientes de esta sucursal</strong>
+                    <small class="d-block text-muted">
+                        Al apagarlo no sale ninguno — tampoco por el servidor del sistema.
+                        Los intentos quedan anotados en la bitácora.
+                    </small>
+                </label>
+            </div>
+
+            @if($correoSede && !$correoSede->enabled)
+                <div class="alert alert-danger py-2">
+                    <i class="fas fa-ban"></i>
+                    <strong>Esta sucursal no está enviando correos.</strong>
+                    Ni facturas, ni avisos de vencimiento, ni órdenes técnicas.
+                </div>
+            @endif
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="preset_sede">Proveedor</label>
+                    <select name="preset" id="preset_sede" class="form-control">
+                        <option value="">— Elija para rellenar servidor y puerto —</option>
+                        @foreach($preajustes as $clave => $datos)
+                            <option value="{{ $clave }}"
+                                    data-host="{{ $datos['host'] }}"
+                                    data-port="{{ $datos['port'] }}"
+                                    data-encryption="{{ $datos['encryption'] }}"
+                                    @selected(old('preset', $correoSede?->preset) === $clave)>
+                                {{ $datos['etiqueta'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-group col-md-5">
+                    <label for="host_sede">Servidor (host)</label>
+                    <input type="text" name="host" id="host_sede" class="form-control"
+                           value="{{ old('host', $correoSede?->host) }}"
+                           placeholder="Vacío = usa el del sistema">
+                </div>
+                <div class="form-group col-md-2">
+                    <label for="port_sede">Puerto</label>
+                    <input type="number" name="port" id="port_sede" class="form-control"
+                           value="{{ old('port', $correoSede?->port) }}" placeholder="587">
+                </div>
+                <div class="form-group col-md-1">
+                    <label for="encryption_sede">Cifrado</label>
+                    <select name="encryption" id="encryption_sede" class="form-control">
+                        <option value="tls" @selected(old('encryption', $correoSede?->encryption) === 'tls')>TLS</option>
+                        <option value="ssl" @selected(old('encryption', $correoSede?->encryption) === 'ssl')>SSL</option>
+                        <option value="" @selected(old('encryption', $correoSede?->encryption) === '')>—</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="username_sede">Usuario</label>
+                    <input type="text" name="username" id="username_sede" class="form-control"
+                           value="{{ old('username', $correoSede?->username) }}" autocomplete="off">
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="password_sede">Contraseña</label>
+                    <input type="password" name="password" id="password_sede" class="form-control"
+                           autocomplete="new-password"
+                           placeholder="{{ $correoSede?->password ? '•••••••• (guardada)' : '' }}">
+                    <small class="form-text text-muted">
+                        {{ $correoSede?->password ? 'Déjela vacía para no cambiarla.' : '' }}
+                        Se guarda sin cifrar: quien acceda a la base de datos puede leerla.
+                    </small>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="from_address_sede">Remitente</label>
+                    <input type="email" name="from_address" id="from_address_sede" class="form-control"
+                           value="{{ old('from_address', $correoSede?->from_address) }}"
+                           placeholder="facturacion@sudominio.com">
+                    <small class="form-text text-muted">
+                        La dirección desde la que el cliente ve llegar la factura, y a la que
+                        responderá. Debe ser de un dominio verificado en el proveedor.
+                    </small>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="from_name_sede">Nombre del remitente</label>
+                    <input type="text" name="from_name" id="from_name_sede" class="form-control"
+                           value="{{ old('from_name', $correoSede?->from_name) }}"
+                           placeholder="{{ $branch->name }}">
+                </div>
+            </div>
+
+            <button class="btn btn-primary">
+                <i class="fas fa-save"></i> Guardar el correo de la sucursal
+            </button>
+        </form>
+
+        @if($correoSede?->tieneServidorPropio())
+            <div class="card-footer py-2">
+                <form method="POST" action="{{ route('branches.mail.test', $branch) }}" class="form-inline">
+                    @csrf
+                    <small class="text-muted mr-2">Probar este servidor enviando a</small>
+                    <input type="email" name="destino" class="form-control form-control-sm mr-2"
+                           value="{{ auth()->user()->email }}" required style="min-width: 240px;">
+                    <button class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-paper-plane"></i> Enviar prueba
+                    </button>
+                </form>
+            </div>
+        @endif
+    </div>
+@endsection
+
+@section('js')
+    <script>
+        /* Elegir proveedor rellena servidor, puerto y cifrado. */
+        document.getElementById('preset_sede')?.addEventListener('change', function () {
+            const op = this.options[this.selectedIndex];
+
+            if (!this.value) { return; }
+
+            if (op.dataset.host) { document.getElementById('host_sede').value = op.dataset.host; }
+            if (op.dataset.port) { document.getElementById('port_sede').value = op.dataset.port; }
+            if (op.dataset.encryption !== undefined) {
+                document.getElementById('encryption_sede').value = op.dataset.encryption;
+            }
+        });
+    </script>
 @endsection
