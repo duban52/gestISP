@@ -213,7 +213,25 @@
                         <option value="deshabilitada" @selected(($filtros['estado'] ?? '') === 'deshabilitada')>Deshabilitadas</option>
                     </select>
                 </div>
-                <div class="col-md-3 form-group mb-2">
+                {{-- PUERTO PON.
+                     El filtro que responde «¿a quién más se le cayó?»:
+                     cuando un puerto falla se caen todos los clientes
+                     que cuelgan de él. Solo se ofrecen los puertos que
+                     de verdad tienen ONTs, para no hacer adivinar
+                     cuáles existen en este equipo. --}}
+                <div class="col-md-2 form-group mb-2">
+                    <label class="mb-1 small">Puerto PON</label>
+                    <select name="pon" class="form-control form-control-sm">
+                        <option value="">Todos</option>
+                        @foreach($puertosPon as $puerto)
+                            @php $clave = $puerto->slot . '/' . $puerto->port; @endphp
+                            <option value="{{ $clave }}" @selected(($filtros['pon'] ?? '') === $clave)>
+                                {{ $clave }} — {{ $puerto->onts }} ONT
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2 form-group mb-2">
                     <label class="mb-1 small">Señal</label>
                     <select name="banda" class="form-control form-control-sm">
                         <option value="">Todas</option>
@@ -316,7 +334,22 @@
                             <td data-label="Ubicación">
                                 <span class="text-muted small">{{ $ont->olt->name ?? '—' }}</span>
                                 <span class="d-block">
-                                    <code>{{ $ont->slot }}/{{ $ont->port }}</code>
+                                    {{-- El puerto lleva a las demás ONTs que
+                                         cuelgan de él. Con la OLT puesta: «3/4»
+                                         de un equipo no es el mismo puerto que
+                                         «3/4» de otro, y sin acotarla el enlace
+                                         mezclaría clientes de dos cabeceras. --}}
+                                    @if($ont->slot !== null && $ont->port !== null)
+                                        <a href="{{ route('onts.authorized', [
+                                                'olt' => $ont->olt_id,
+                                                'pon' => $ont->slot . '/' . $ont->port,
+                                           ]) }}"
+                                           title="Ver las ONTs de este puerto PON">
+                                            <code>{{ $ont->slot }}/{{ $ont->port }}</code>
+                                        </a>
+                                    @else
+                                        <code class="text-muted">sin ubicar</code>
+                                    @endif
                                     <span class="badge badge-light border">ONU {{ $ont->onu_id }}</span>
                                 </span>
                             </td>

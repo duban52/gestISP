@@ -443,4 +443,80 @@ class OntMetricsTest extends TestCase
         $this->assertStringNotContainsString('table table-striped table-sm small', $html);
     }
 
+    // ==================== El puerto PON ====================
+
+    /**
+     * Filtrar por puerto PON.
+     *
+     * Es el filtro que responde «¿a quien mas se le cayo el
+     * servicio?»: cuando un puerto falla se caen todos los clientes
+     * que cuelgan de el, y antes habia que ir mirando la columna de
+     * ubicacion ONT por ONT.
+     */
+    public function test_filtra_las_ont_por_puerto_pon(): void
+    {
+        $delPuerto = $this->otraOnt(['sn' => 'HWTC-PUERTO34A', 'slot' => 3, 'port' => 4, 'onu_id' => 1]);
+        $tambien   = $this->otraOnt(['sn' => 'HWTC-PUERTO34B', 'slot' => 3, 'port' => 4, 'onu_id' => 2]);
+        $deOtro    = $this->otraOnt(['sn' => 'HWTC-PUERTO99A', 'slot' => 9, 'port' => 9, 'onu_id' => 1]);
+
+        $this->get(route('onts.authorized', ['pon' => '3/4']))
+            ->assertOk()
+            ->assertSee($delPuerto->sn, false)
+            ->assertSee($tambien->sn, false)
+            ->assertDontSee($deOtro->sn, false);
+    }
+
+    public function test_un_puerto_mal_escrito_no_filtra_nada(): void
+    {
+        // Un texto que no tiene forma de «slot/puerto» se ignora: el
+        // listado sale entero en vez de vacio sin explicacion.
+        $ont = $this->otraOnt(['sn' => 'HWTC-CUALQUIERA', 'slot' => 3, 'port' => 4, 'onu_id' => 7]);
+
+        $this->get(route('onts.authorized', ['pon' => 'tres barra cuatro']))
+            ->assertOk()
+            ->assertSee($ont->sn, false);
+    }
+
+    public function test_el_desplegable_solo_ofrece_puertos_con_ont(): void
+    {
+        $this->otraOnt(['sn' => 'HWTC-PUERTO34A', 'slot' => 3, 'port' => 4, 'onu_id' => 1]);
+        $this->otraOnt(['sn' => 'HWTC-PUERTO34B', 'slot' => 3, 'port' => 4, 'onu_id' => 2]);
+
+        $html = $this->get(route('onts.authorized'))->assertOk()->getContent();
+
+        // Con su cuenta, para saber a cuantos clientes afecta
+        $this->assertStringContainsString('3/4 — 2 ONT', $html);
+    }
+
+    /**
+     * El puerto de cada fila lleva a las demas ONT de ese puerto.
+     *
+     * Con la OLT puesta: «3/4» de un equipo no es el mismo puerto que
+     * «3/4» de otro, y sin acotarla el enlace mezclaria clientes de
+     * dos cabeceras.
+     */
+    public function test_el_puerto_de_cada_fila_enlaza_a_las_suyas(): void
+    {
+        $this->otraOnt(['sn' => 'HWTC-ENLACE001', 'slot' => 3, 'port' => 4, 'onu_id' => 5]);
+
+        $this->get(route('onts.authorized'))
+            ->assertOk()
+            // Sin `false`: en el HTML el «&» del enlace va escapado
+            ->assertSee(route('onts.authorized', [
+                'olt' => $this->ont->olt_id,
+                'pon' => '3/4',
+            ]));
+    }
+
+    /** Otra ONT en la misma OLT y sucursal que la del setUp. */
+    private function otraOnt(array $datos): \App\Models\Ont
+    {
+        return \App\Models\Ont::create(array_merge([
+            'branch_id' => $this->ont->branch_id,
+            'olt_id' => $this->ont->olt_id,
+            'if_index' => 4194304000,
+            'status' => 1,
+        ], $datos));
+    }
+
 }

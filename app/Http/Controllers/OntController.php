@@ -123,6 +123,19 @@ class OntController extends Controller
             $query->whereNull('contract_id');
         }
 
+        // PUERTO PON. Llega como «3/4» —tarjeta/puerto—, que es como se
+        // lee en la ficha y como lo dice un técnico por radio.
+        //
+        // Es el filtro que responde «¿a quién más se le cayó el
+        // servicio?»: cuando un puerto PON falla, se caen todos los
+        // clientes que cuelgan de él, y hasta ahora había que ir
+        // mirando la columna de ubicación ONT por ONT.
+        [$slot, $puerto] = $this->leerElPuertoPon($request->query('pon'));
+
+        if ($slot !== null) {
+            $query->where('slot', $slot)->where('port', $puerto);
+        }
+
         $onts = $query->get();
 
         // La banda de señal no se puede filtrar en SQL: rx_power es una
@@ -145,9 +158,55 @@ class OntController extends Controller
             // consolidado, todas las del usuario.
             'olts' => Olt::whereIn('branch_id', app(CurrentContext::class)->branchIds())
                 ->orderBy('name')->get(),
-            'filtros' => $request->only(['olt', 'estado', 'contrato', 'banda']),
+            'filtros' => $request->only(['olt', 'estado', 'contrato', 'banda', 'pon']),
+            // Los puertos PON que de verdad tienen ONTs, para que el
+            // desplegable no ofrezca puertos vacíos ni obligue a
+            // adivinar cuáles existen.
+            'puertosPon' => $this->puertosPonConOnts($oltFiltrada),
             'resumen' => $this->resumenDeOnts($onts),
         ]);
+    }
+
+    /**
+     * Interpreta el puerto PON escrito como «3/4».
+     *
+     * Devuelve [slot, puerto] o [null, null] si no viene o no tiene
+     * esa forma. No se valida contra la OLT a propósito: un puerto que
+     * no existe simplemente no devuelve ONTs, que es la respuesta
+     * correcta y no un error que haya que explicar.
+     *
+     * @return array{0: ?int, 1: ?int}
+     */
+    private function leerElPuertoPon(?string $pon): array
+    {
+        if (!$pon || !preg_match('/^(\\d+)\\/(\\d+)$/', trim($pon), $m)) {
+            return [null, null];
+        }
+
+        return [(int) $m[1], (int) $m[2]];
+    }
+
+    /**
+     * Los puertos PON que tienen ONTs, con cuántas cuelgan de cada uno.
+     *
+     * Acotado a la OLT elegida cuando la hay: «3/4» de una OLT no es el
+     * mismo puerto que «3/4» de otra, y ofrecer los de todas en una
+     * sola lista haría elegir un puerto que no existe en la que se está
+     * mirando.
+     *
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function puertosPonConOnts(?Olt $olt)
+    {
+        return Ont::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->when($olt, fn ($q) => $q->where('olt_id', $olt->id))
+            ->whereNotNull('slot')
+            ->whereNotNull('port')
+            ->selectRaw('slot, port, COUNT(*) as onts')
+            ->groupBy('slot', 'port')
+            ->orderBy('slot')
+            ->orderBy('port')
+            ->get();
     }
 
     /**
