@@ -241,6 +241,13 @@
                     <i class="fas fa-search"></i> Revisar e importar
                 </button>
             </form>
+
+            {{-- El registro del router, traducido. Es lo que se abre
+                 cuando llama un cliente diciendo que no tiene internet. --}}
+            <a href="{{ route('pppoe.log') }}" class="btn btn-sm btn-outline-secondary order-md-1 ml-md-2"
+               title="Ver el registro de conexiones y fallos del router">
+                <i class="fas fa-clipboard-list"></i> Registro del router
+            </a>
         </div>
     </div>
 

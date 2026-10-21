@@ -814,6 +814,19 @@ Route::post('/pppoe/cortes/revisar', [App\Http\Controllers\PppoeCutoffController
 Route::post('/pppoe/cortes/ejecutar',[App\Http\Controllers\PppoeCutoffController::class, 'execute'])->name('pppoe.cutoff.execute');
 
 //Ver estados de sesiones pppoe
+// EL REGISTRO DE PPPoE DEL ROUTER, legible.
+//
+// Se lee en vivo del Mikrotik y se traduce; no se guarda nada.
+// Es la pantalla que contesta «¿por que este cliente no entra?»
+// sin tener que abrir Winbox.
+//
+// VA ANTES DE /pppoe/{pppoe}, y no es un capricho de orden: Laravel
+// casa por orden de declaracion, asi que detras de la ruta con
+// parametro «registro» se tomaba como el id de una cuenta y la
+// pantalla devolvia 404.
+Route::get('/pppoe/registro', [App\Http\Controllers\PppoeLogController::class, 'index'])
+    ->name('pppoe.log');
+
 Route::get('/pppoe/{pppoe}',                  [PppoeAccountController::class, 'show'])->name('pppoe.show');
 Route::get('/pppoe/{pppoe}/realtime-session', [PppoeAccountController::class, 'realtimeSession'])->name('pppoe.realtime');
 //Historial de tráfico para la gráfica de ancho de banda
@@ -832,6 +845,7 @@ Route::post('/pppoe/{pppoe}/toggle',       [PppoeAccountController::class, 'togg
 Route::post('/pppoe/{pppoe}/contrato',   [PppoeAccountController::class, 'linkContract'])->name('pppoe.link_contract');
 Route::delete('/pppoe/{pppoe}/contrato', [PppoeAccountController::class, 'unlinkContract'])->name('pppoe.unlink_contract');
 Route::delete('/pppoe/{pppoe}',            [PppoeAccountController::class, 'destroy'])->name('pppoe.destroy');
+
 // REVISION PRIMERO. Importar a ciegas los secrets de un router
 // reventaba con un 500 cuando el Mikrotik traia dos usuarios
 // iguales; esta pantalla lo dice antes de tocar nada.

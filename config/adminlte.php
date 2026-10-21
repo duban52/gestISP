@@ -670,6 +670,17 @@ return [
                     'icon' => 'fas  fa-user-check',
                     'can' => 'pppoe.index',
                 ],
+                // El registro del router, traducido: conexiones,
+                // desconexiones y fallos de PPPoE con su motivo. Mismo
+                // permiso que el listado — enseña los mismos usuarios
+                // y no actúa sobre el equipo.
+                [
+                    'text' => 'Registro PPPoE',
+                    'route' => 'pppoe.log',
+                    'icon' => 'fas  fa-clipboard-list',
+                    'active' => ['pppoe/registro*'],
+                    'can' => 'pppoe.index',
+                ],
                 // Corte de servicio por lotes. Permiso propio: dejar
                 // sin internet a media sucursal no es lo mismo que
                 // consultar el listado de cuentas.

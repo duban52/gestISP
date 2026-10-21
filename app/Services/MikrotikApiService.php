@@ -347,6 +347,35 @@ class MikrotikApiService
     }
 
     /**
+     * El registro del router, tal cual.
+     *
+     * Se trae ENTERO y se filtra en PHP (ver RegistroPppoe). RouterOS
+     * no deja filtrar el log por tema desde la petición, y pedirlo en
+     * trozos sería varias consultas para reconstruir lo mismo: el log
+     * en memoria son unos cientos de líneas, cabe de una.
+     *
+     * OJO CON LO QUE ESTO NO PUEDE DEVOLVER
+     * -------------------------------------
+     * El log de RouterOS es un buffer en memoria: se pierde al
+     * reiniciar y solo contiene los temas que alguien haya mandado
+     * ahí con una regla de `/system logging`. Si nadie configuró los
+     * de ppp, esto devuelve líneas de otros temas y ninguna de
+     * cuentas — por eso la pantalla distingue «no hay fallos» de «no
+     * se está registrando».
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getLog(Router $router): array
+    {
+        $base = $this->baseUrl($router);
+
+        $response = $this->http($router)->get("{$base}/log");
+        $this->checkResponse($response, 'log');
+
+        return $this->safeJson($response);
+    }
+
+    /**
      * Velocidad instantánea de una sesión PPPoE.
      *
      * Usa monitor-traffic del router, que entrega bits por segundo
