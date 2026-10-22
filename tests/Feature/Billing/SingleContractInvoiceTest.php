@@ -4,8 +4,10 @@ namespace Tests\Feature\Billing;
 
 use App\Billing\Enums\ContractStatus;
 use App\Billing\Events\InvoiceIssued;
+use App\Billing\Services\InvoiceGenerator;
 use App\Models\Audit;
 use App\Models\Branch;
+use App\Models\BranchBillingSetting;
 use App\Models\Invoice;
 use Illuminate\Support\Facades\Event;
 use Spatie\Permission\Models\Role;
@@ -172,5 +174,79 @@ class SingleContractInvoiceTest extends BillingTestCase
         $this->assertNotNull($factura->full_number, 'No se numeró.');
         $this->assertSame($contrato->affinity_group_id, $factura->affinity_group_id);
         $this->assertTrue($factura->invoice_items()->exists(), 'Salió sin renglones.');
+    }
+
+    // ==================== Por qué no se facturó ====================
+    //
+    // El generador devuelve el motivo pensando en el log de la corrida;
+    // aquí lo lee una persona delante de la pantalla. Tres de los seis
+    // motivos llevan datos dentro —el estado, la fecha— y por eso un
+    // `match` por igualdad no los reconocía: la pantalla decía «No se
+    // pudo generar la factura de este contrato» y punto, que es lo
+    // mismo que no decir nada.
+
+    public function test_el_contrato_suspendido_dice_en_que_estado_esta(): void
+    {
+        $contrato = $this->createBillableContract();
+        $contrato->update(['status' => ContractStatus::Suspendido->value]);
+
+        $this->post(route('contracts.invoice', $contrato));
+
+        $this->assertStringContainsString(ContractStatus::Suspendido->value, session('error'));
+        $this->assertStringNotContainsString('No se pudo generar la factura', session('error'));
+    }
+
+    public function test_los_dias_de_cortesia_se_explican(): void
+    {
+        // El caso de un contrato dado de alta hoy: activado pasado el
+        // día límite de prorrateo, empieza a facturarse en la corrida
+        // siguiente. Antes esto era el error mudo.
+        BranchBillingSetting::forBranch($this->branch->id)->update(['proration_day' => 5]);
+
+        $contrato = $this->createBillableContract(
+            activationDate: now()->startOfMonth()->addDays(21)->toDateString(),
+        );
+
+        $this->post(route('contracts.invoice', $contrato));
+
+        $this->assertStringContainsString('cortesía', session('error'));
+        $this->assertStringNotContainsString('No se pudo generar la factura', session('error'));
+    }
+
+    public function test_la_fecha_de_inicio_de_facturacion_se_explica(): void
+    {
+        $contrato = $this->createBillableContract();
+        $contrato->update(['billing_start_date' => now()->addMonths(2)->startOfMonth()]);
+
+        $this->post(route('contracts.invoice', $contrato));
+
+        $this->assertStringContainsString(
+            now()->addMonths(2)->startOfMonth()->format('d/m/Y'),
+            session('error'),
+        );
+    }
+
+    /**
+     * Un motivo que todavía no existe tiene que verse igual.
+     *
+     * Es la prueba que impide que esto se vuelva a romper: el día que
+     * alguien añada un motivo al generador y olvide traducirlo aquí,
+     * la pantalla enseñará el texto en crudo —feo, pero accionable—
+     * en vez de volver al callejón sin salida.
+     */
+    public function test_un_motivo_nuevo_del_generador_se_ensena_en_vez_de_esconderse(): void
+    {
+        $this->mock(InvoiceGenerator::class, function ($mock) {
+            $mock->shouldReceive('generateForContract')->andReturn([
+                'generated' => false,
+                'reason' => 'Un motivo que nadie tradujo todavía',
+            ]);
+        });
+
+        $contrato = $this->createBillableContract();
+
+        $this->post(route('contracts.invoice', $contrato));
+
+        $this->assertStringContainsString('Un motivo que nadie tradujo todavía', session('error'));
     }
 }

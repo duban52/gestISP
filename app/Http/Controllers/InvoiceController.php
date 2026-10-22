@@ -339,10 +339,33 @@ class InvoiceController extends Controller
      */
     private function motivoDeNoFacturar(array $resultado, Contract $contract): string
     {
-        return match ($resultado['reason'] ?? null) {
-            'Contract suspended' =>
-                'El contrato está suspendido: no se le factura hasta reconectarlo.',
+        $motivo = trim((string) ($resultado['reason'] ?? ''));
 
+        // LOS MOTIVOS CON DATOS DENTRO NO SE COMPARAN POR IGUALDAD.
+        //
+        // El generador devuelve «Contract not billable: Suspendido» y
+        // «Billing starts on 2026-11-01»: el estado y la fecha van
+        // pegados al texto. Un `match` por igualdad no los reconoce
+        // nunca, así que caían en el `default` y la pantalla decía
+        // «No se pudo generar la factura» sin más — que es justo lo
+        // que no sirve cuando hay que decidir qué hacer.
+        if (str_starts_with($motivo, 'Contract not billable')) {
+            return sprintf(
+                'El contrato está en estado «%s», y en ese estado no se factura. '
+                . 'Cámbielo a Activo si corresponde cobrarle.',
+                $contract->status,
+            );
+        }
+
+        if (str_starts_with($motivo, 'Billing starts on')) {
+            return sprintf(
+                'A este contrato se le empieza a facturar el %s: antes de esa fecha el período '
+                . 'lo paga el titular anterior.',
+                optional($contract->billing_start_date)->format('d/m/Y') ?: 'una fecha posterior',
+            );
+        }
+
+        return match ($motivo) {
             'Nothing to bill' =>
                 'Este contrato no tiene nada que facturar: se quedó sin plan y no tiene cargos '
                 . 'pendientes. Asígnele un plan antes de emitir.',
@@ -356,7 +379,24 @@ class InvoiceController extends Controller
                     ->value('full_number') ?? 'sin número',
             ),
 
-            default => 'No se pudo generar la factura de este contrato.',
+            'Días de cortesía: empieza a facturarse el período siguiente',
+            'Días de cortesía: empieza a facturarse en la corrida siguiente' => sprintf(
+                'Este contrato se activó el %s, pasado el día límite de prorrateo de la sucursal: '
+                . 'lo que queda del mes son días de cortesía y empieza a facturarse en la corrida '
+                . 'siguiente.',
+                optional($contract->activation_date)->format('d/m/Y') ?: 'este mes',
+            ),
+
+            // EL MOTIVO SE ENSEÑA, NO SE ESCONDE.
+            //
+            // Quedan motivos que ya vienen redactados en español —el
+            // de «no estaba activo en el período»— y, sobre todo, los
+            // que se añadan mañana al generador. Enseñarlos tal cual
+            // es peor que una frase pulida y muchísimo mejor que
+            // «no se pudo»: al menos dice qué pasó.
+            default => $motivo !== ''
+                ? 'No se generó la factura: ' . $motivo
+                : 'No se pudo generar la factura de este contrato.',
         };
     }
 

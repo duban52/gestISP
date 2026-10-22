@@ -223,10 +223,76 @@ class ContractController extends Controller
     }
 
     /**
+     * Los datos de la residencia que la tabla exige.
+     *
+     * `neighborhood`, `address` y `home_type` son NOT NULL en
+     * `contracts`. Sin esto, dejar el barrio en blanco no daba un
+     * mensaje: daba un error 500 con «Column 'neighborhood' cannot be
+     * null», y quien lo veía no tenía forma de saber que le faltaba
+     * escribir el barrio.
+     *
+     * Esta en un metodo aparte porque el alta y la edicion guardan los
+     * MISMOS campos por dos caminos distintos: validarlo solo en el
+     * alta habria dejado la edicion reventando igual.
+     *
+     * `address` no tiene campo propio en el formulario: se arma por
+     * partes (ver Direccion y ComponerDirecciones) y llega vacia si no
+     * se escribio ninguna. El parcial ya recoge los errores de
+     * `address`, asi que el mensaje sale junto a los campos.
+     *
+     * NO se exige mas de lo que la tabla pide: departamento, municipio
+     * y estrato admiten nulo, y hay contratos importados sin ellos.
+     * Volverlos obligatorios aqui habria impedido guardar cualquier
+     * cambio en esos contratos.
+     */
+    private function validarResidencia(Request $request): void
+    {
+        $request->validate([
+            'neighborhood' => ['required', 'string', 'max:255'],
+            'address' => ['required', 'string', 'max:255'],
+            // Sin lista cerrada a proposito: los contratos importados
+            // traen valores que no estan en el desplegable, y con una
+            // regla `in` no se podria ni abrir el modal para
+            // corregirlos.
+            'home_type' => ['required', 'string', 'max:255'],
+            // Sin `string`: el desplegable manda "3" pero hay llamadas
+            // que mandan el 3 entero, y la columna es de texto. El
+            // `max` está solo para que un valor absurdamente largo no
+            // acabe en un 1406 («data too long»), que es otro 500.
+            'social_stratum' => ['nullable', 'max:20'],
+            'department' => ['nullable', 'string', 'max:255'],
+            'municipality' => ['nullable', 'string', 'max:255'],
+        ], [
+            'neighborhood.required' => 'Escriba el barrio o la vereda de la residencia.',
+            'address.required' => 'Escriba la dirección de la residencia: elija el tipo de vía '
+                . 'y complete la nomenclatura.',
+            'home_type.required' => 'Elija el tipo de vivienda.',
+        ]);
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(Request $request, ContractGeolocator $geolocator)
     {
+        $this->validarResidencia($request);
+
+        // El cliente no se elige en el formulario: se llega aqui desde
+        // su ficha y viaja en un campo oculto. Se comprueba igual
+        // porque sin cliente el contrato tampoco se puede insertar, y
+        // el 500 era el mismo que con el barrio.
+        //
+        // Solo que exista: NO se filtra por empresa. Hay clientes
+        // importados con `company_id` nulo, y exigirlo aqui habria
+        // dejado a esos clientes sin poder contratar — un bloqueo peor
+        // que el error que se esta arreglando.
+        $request->validate([
+            'client_id' => ['required', 'exists:clients,id'],
+        ], [
+            'client_id.required' => 'Falta el cliente del contrato: vuelva a abrir el alta desde su ficha.',
+            'client_id.exists' => 'Ese cliente no existe.',
+        ]);
+
         // La ubicación de la vivienda es OPCIONAL: se valida aparte
         // para poder rechazar una coordenada imposible sin impedir dar
         // de alta un contrato que todavía no se ha ido a ubicar.
@@ -551,6 +617,11 @@ class ContractController extends Controller
     public function update(Request $request, Contract $contract)
     {
         if (isset($request->neighborhood) || isset($request->address) || isset($request->home_type) || isset($request->social_stratum) ){
+            // El mismo 500 que el alta: borrar el barrio en el modal
+            // de residencia intentaba escribir NULL en una columna que
+            // no lo admite.
+            $this->validarResidencia($request);
+
             $contract->update([
                 'neighborhood' => $request->neighborhood,
                 'address' => $request->address,

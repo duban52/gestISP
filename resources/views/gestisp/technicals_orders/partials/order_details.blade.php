@@ -110,33 +110,31 @@
     @endphp
 
     @if(!empty($images))
-        <p class="mt-3 mb-1"><strong>Fotos</strong></p>
-        <div class="card">
-            {{-- El id del carousel incluye el id de la orden: con un id
-                 fijo repetido, los controles de cualquier modal movían
-                 el primer carousel de la página (bug de la versión anterior) --}}
-            <div id="carouselOrder{{ $technical_order->id }}" class="carousel slide">
-                <div class="carousel-inner">
-                    @foreach($images as $index => $image)
-                        <div class="carousel-item {{ $index == 0 ? 'active' : '' }}">
-                            <img src="{{ asset($image) }}" class="d-block w-100"
-                                 alt="Imagen técnica {{ $index + 1 }}">
-                        </div>
-                    @endforeach
-                </div>
-                {{-- Controles con sintaxis Bootstrap 4 (AdminLTE 3):
-                     href + data-slide, no data-bs-target/data-bs-slide --}}
-                <a class="carousel-control-prev" href="#carouselOrder{{ $technical_order->id }}"
-                   role="button" data-slide="prev">
-                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                    <span class="sr-only">Anterior</span>
+        {{-- MINIATURAS DEL MISMO TAMAÑO, NO EL TAMAÑO DE LA FOTO.
+             Antes era un carousel con `w-100` y sin tope de alto: una
+             foto de celular ocupaba la pantalla entera y había que
+             pasarlas de una en una para ver si estaba la que se
+             buscaba. Con la rejilla se ven todas de golpe y todas
+             iguales — `object-fit: cover` recorta, no deforma.
+
+             EL ZOOM ES LA PESTAÑA NUEVA, no un visor propio: este
+             bloque se pinta DENTRO de un modal en las tres pantallas
+             que lo usan, y un modal dentro de otro modal en Bootstrap 4
+             es justo el tipo de cosa que funciona hasta que alguien
+             abre dos. La foto completa en su pestaña se amplía con el
+             zoom del navegador, que en el móvil además es el gesto que
+             la gente ya hace. --}}
+        <p class="mt-3 mb-1"><strong>Fotos</strong> <small class="text-muted">— toque una para verla completa</small></p>
+        <div class="d-flex flex-wrap" style="gap: 8px;">
+            @foreach($images as $index => $image)
+                <a href="{{ asset($image) }}" target="_blank" rel="noopener"
+                   title="Ver la foto completa">
+                    <img src="{{ asset($image) }}"
+                         alt="Evidencia {{ $index + 1 }}"
+                         style="width: 300px; height: 300px; max-width: 100%; object-fit: cover;
+                                border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
                 </a>
-                <a class="carousel-control-next" href="#carouselOrder{{ $technical_order->id }}"
-                   role="button" data-slide="next">
-                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                    <span class="sr-only">Siguiente</span>
-                </a>
-            </div>
+            @endforeach
         </div>
     @endif
 

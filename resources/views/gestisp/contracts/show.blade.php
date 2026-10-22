@@ -10,6 +10,21 @@
 
 @section('content')
 
+    {{-- Los modales de esta ficha guardan y vuelven aquí. Sin este
+         bloque, un dato rechazado por la validación —el barrio en
+         blanco, por ejemplo— cerraba el modal sin guardar y sin decir
+         nada, y parecía que el sistema había ignorado el cambio. --}}
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <h6 class="mb-2"><i class="fas fa-exclamation-triangle mr-1"></i> No se guardó: revise estos datos</h6>
+            <ul class="mb-0 pl-3">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     @if(session('success'))
         <div class="alert alert-success">
             {{ session('success') }}
@@ -427,8 +442,8 @@
                                             ])
                                         </div>
                                         <div class="form-group">
-                                            <label for="neighborhood">Barrio / Vereda:</label>
-                                            <input type="text" name="neighborhood" id="neighborhood" class="form-control" value="{{ $contract->neighborhood }}">
+                                            <label for="neighborhood">Barrio / Vereda: <span class="text-danger">*</span></label>
+                                            <input type="text" name="neighborhood" id="neighborhood" class="form-control" value="{{ $contract->neighborhood }}" required>
                                         </div>
                                         @php
                                             // Sin mapa en este modal: la sugerencia sale de la
@@ -436,14 +451,18 @@
                                             $parametrosDireccion = [
                                                 'valor' => $contract->address,
                                                 'coordenadas' => $contract->isGeolocated() ? [$contract->latitude, $contract->longitude] : null,
+                                                // Obligatoria, pero el parcial solo exige las
+                                                // partes si NO hay dirección guardada: dejarlas
+                                                // en blanco conserva la que ya tenía.
+                                                'requerido' => true,
                                             ];
                                         @endphp
                                         <div class="form-group">
                                             @include('gestisp.partials.direccion', $parametrosDireccion)
                                         </div>
                                         <div class="form-group">
-                                            <label for="">Tipo de vivienda:</label>
-                                            <select name="home_type" id="" class="form-control">
+                                            <label for="">Tipo de vivienda: <span class="text-danger">*</span></label>
+                                            <select name="home_type" id="" class="form-control" required>
                                                 <option value="{{ $contract->home_type }}">{{ $contract->home_type }}</option>
                                                 <option value="Propia">Propia</option>
                                                 <option value="En Arriendo">En Arriendo</option>

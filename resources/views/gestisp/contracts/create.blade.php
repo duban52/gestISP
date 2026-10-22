@@ -106,22 +106,27 @@
                     @include('gestisp.partials.departamento-municipio')
 
                     <div class="form-group col-md-6">
-                        <label for="neighborhood">Barrio / Vereda</label>
+                        <label for="neighborhood">Barrio / Vereda <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="neighborhood" name="neighborhood"
                                placeholder="Ingrese el nombre del barrio" minlength="5" maxlength="255"
-                               value="{{ old('neighborhood') }}">
+                               value="{{ old('neighborhood') }}" required>
                         @error('neighborhood')
                             <span class="text-danger small">* {{ $message }}</span>
                         @enderror
                     </div>
 
                     <div class="form-group col-12">
-                        @include('gestisp.partials.direccion', ['mapa' => 'mapaContratoNuevo'])
+                        @include('gestisp.partials.direccion', [
+                            'mapa' => 'mapaContratoNuevo',
+                            // La columna es NOT NULL: sin dirección el
+                            // alta no se puede guardar.
+                            'requerido' => true,
+                        ])
                     </div>
 
                     <div class="form-group col-md-6">
-                        <label for="home_type">Tipo de vivienda</label>
-                        <select name="home_type" id="home_type" class="form-control">
+                        <label for="home_type">Tipo de vivienda <span class="text-danger">*</span></label>
+                        <select name="home_type" id="home_type" class="form-control" required>
                             <option value="">Seleccionar tipo de vivienda</option>
                             <option value="Propia" @selected(old('home_type') === 'Propia')>Propia</option>
                             <option value="En Arriendo" @selected(old('home_type') === 'En Arriendo')>Arrendada</option>
