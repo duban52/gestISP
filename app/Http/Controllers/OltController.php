@@ -8,6 +8,8 @@ use App\Models\Ont;
 use App\Models\PonPort;
 use App\Models\SrvProfile;
 use App\Models\VlanOlt;
+use App\Services\Audit\AuditLogger;
+use App\Services\DiagnosticoDeOlt;
 use App\Services\OltHardwareDiscovery;
 use App\Services\OltSshService;
 use App\Services\OltStatistics;
@@ -280,6 +282,42 @@ class OltController extends Controller
 
 
     /**
+     * Por qué no se conecta con esta OLT, capa por capa.
+     *
+     * Va por su cuenta y bajo petición —no al abrir la ficha— porque
+     * prueba cuatro cosas con su tiempo de espera cada una: contra un
+     * equipo que no responde eso es casi medio minuto, y nadie quiere
+     * esa espera cada vez que entra a mirar las potencias.
+     *
+     * El resultado SÍ se anota en la trazabilidad, al revés que el
+     * sondeo automático: esto lo pulsa una persona para averiguar algo,
+     * y suele ser el paso previo a tocar la configuración del equipo.
+     */
+    public function diagnosticar(Olt $olt, DiagnosticoDeOlt $diagnostico, AuditLogger $auditor): JsonResponse
+    {
+        abort_if(!app(CurrentContext::class)->permiteSucursal($olt->branch_id), 403);
+
+        $resultado = $diagnostico->ejecutar($olt);
+
+        $auditor->action(
+            'diagnosed',
+            sprintf('Diagnosticó la conexión con la OLT %s: %s', $olt->name, $resultado['resumen']),
+            ['olt_id' => $olt->id, 'conecta' => $resultado['conecta'], 'pasos' => $resultado['pasos']],
+            $olt,
+            'red',
+        );
+
+        // El motivo queda guardado para que la ficha lo enseñe sin
+        // tener que volver a diagnosticar.
+        $olt->update([
+            'last_error' => $resultado['conecta'] ? null : $resultado['resumen'],
+            'status_checked_at' => now(),
+        ]);
+
+        return response()->json($resultado);
+    }
+
+    /**
      * Obtiene datos remotos de la OLT via SSH
      */
     private function getRemoteData(Olt $olt): array
@@ -298,8 +336,15 @@ class OltController extends Controller
 
             return $result;
         } catch (\Exception $e) {
-            // Marcar como desconectado en la base de datos
-            $this->updateOltStatus($olt, $defaultResult, false);
+            // EL MOTIVO SE GUARDA.
+            //
+            // Esto era `catch (\Exception $e)` sin mirar `$e`: el único
+            // dato que explicaba el fallo se tiraba, y el panel solo
+            // sabía decir «Desconectado». Con los datos de acceso
+            // aparentemente correctos no había forma de saber si era el
+            // firewall, el puerto, la clave o el cifrado del equipo.
+            $this->updateOltStatus($olt, $defaultResult, false, $e->getMessage());
+
             return $defaultResult;
         }
     }
@@ -307,12 +352,18 @@ class OltController extends Controller
     /**
      * Actualiza el estado de la OLT en la base de datos
      */
-    private function updateOltStatus(Olt $olt, array $data, bool $connected = true): void
+    private function updateOltStatus(Olt $olt, array $data, bool $connected = true, ?string $motivo = null): void
     {
         // La marca de tiempo se guarda SIEMPRE, conectada o no: es lo
         // que permite decirle al operador si lo que ve en pantalla es
         // de hace un minuto o de ayer.
-        $updateData = ['status' => $connected, 'status_checked_at' => now()];
+        $updateData = [
+            'status' => $connected,
+            'status_checked_at' => now(),
+            // Al conectar se borra: un motivo viejo junto a una OLT que
+            // ya responde manda a buscar un problema que no existe.
+            'last_error' => $connected ? null : $this->motivoCorto($motivo),
+        ];
 
         if ($connected) {
             $updateData['temperature'] = is_numeric($data['temperature']) ? $data['temperature'] : null;
@@ -320,6 +371,18 @@ class OltController extends Controller
         }
 
         $olt->update($updateData);
+    }
+
+    /** El mensaje de la excepción, en una línea y sin la traza. */
+    private function motivoCorto(?string $motivo): ?string
+    {
+        $motivo = preg_replace('/\s+/u', ' ', trim((string) $motivo));
+
+        if ($motivo === '') {
+            return null;
+        }
+
+        return mb_strlen($motivo) > 500 ? mb_substr($motivo, 0, 500) . '…' : $motivo;
     }
 
     /**

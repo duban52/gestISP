@@ -31,6 +31,10 @@ class Olt extends Model
         'status',
         'uptime',
         'status_checked_at',
+        // Por qué se quedó desconectada la última vez. Antes el motivo
+        // se perdía en un `catch` que no miraba la excepción, y el
+        // panel solo sabía decir «Desconectado».
+        'last_error',
         // ¿Publica una interfaz SNMP por cada ONT? Sin eso no hay
         // tráfico por ONT que medir. Lo averigua OntPoller.
         'onts_traffic_supported',

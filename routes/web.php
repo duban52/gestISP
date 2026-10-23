@@ -642,6 +642,13 @@ Route::middleware(['auth', 'check.permission:olts.index'])
 Route::middleware(['auth', 'check.permission:olts.edit'])
     ->post('/olts/{olt}/descubrir-puertos', [OltController::class, 'discoverPorts'])
     ->name('olts.discover_ports');
+
+// Por qué no se conecta. Va con olts.index —el mismo permiso con el
+// que se abre la ficha— porque solo LEE: prueba el puerto, el SSH y
+// el SNMP, y no toca nada del equipo.
+Route::middleware(['auth', 'check.permission:olts.index'])
+    ->post('/olts/{olt}/diagnosticar', [OltController::class, 'diagnosticar'])
+    ->name('olts.diagnose');
 Route::middleware('auth')->get('/api/vlansolt/{olt}', [OltController::class, 'viewVlans'])->name('api.vlansolt');
 Route::middleware('auth')->get('/api/lineprofiles/{olt}', [OltController::class, 'viewLineProfiles'])->name('api.lineProfile');
 Route::middleware('auth')->get('/api/srvprofiles/{olt}', [OltController::class, 'viewSrvProfiles'])->name('api.srvProfile');

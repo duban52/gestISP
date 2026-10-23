@@ -85,10 +85,18 @@
                                  igual que una recién consultada. --}}
                             <td class="celda-estado">
                                 @if($olt->status_checked_at)
-                                    <span class="badge badge-{{ $olt->status ? 'success' : 'danger' }}">
+                                    {{-- El motivo va en el `title`: en el listado no
+                                         cabe, pero tenerlo a un hover de distancia
+                                         evita entrar a la ficha solo para leerlo. --}}
+                                    <span class="badge badge-{{ $olt->status ? 'success' : 'danger' }}"
+                                          @if($olt->last_error) title="{{ $olt->last_error }}" @endif>
                                         {{ $olt->status ? 'Conectado' : 'Desconectado' }}
                                     </span>
                                     <small class="d-block text-muted">{{ $olt->estado_consultado }}</small>
+                                    @if($olt->last_error)
+                                        <small class="d-block text-danger text-truncate" style="max-width: 220px;"
+                                               title="{{ $olt->last_error }}">{{ $olt->last_error }}</small>
+                                    @endif
                                 @else
                                     <span class="badge badge-light border">Sin consultar</span>
                                 @endif

@@ -86,6 +86,56 @@
                     </div>
                 </div>
             </div>
+
+            {{-- POR QUÉ NO CONECTA.
+                 Antes la ficha decía «Desconectado» y se acababa ahí:
+                 el motivo se perdía en el `catch` del controlador. Lo
+                 último que falló se guarda y se enseña aquí, y el botón
+                 vuelve a probar capa por capa —puerto, SSH,
+                 credenciales, SNMP— para decir cuál de las cuatro es. --}}
+            <div class="d-flex justify-content-between align-items-start flex-wrap mt-2 pt-2 border-top">
+                <div class="text-muted small mr-2" style="flex: 1 1 320px;">
+                    @if($olt->last_error)
+                        <i class="fas fa-exclamation-triangle text-danger"></i>
+                        <strong>Último fallo:</strong> {{ $olt->last_error }}
+                        @if($olt->status_checked_at)
+                            <span class="text-muted">({{ $olt->status_checked_at->diffForHumans() }})</span>
+                        @endif
+                    @else
+                        <i class="fas fa-stethoscope"></i>
+                        ¿Problemas con este equipo? El diagnóstico prueba el puerto, el SSH,
+                        las credenciales y el SNMP por separado.
+                    @endif
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger mt-1"
+                        id="btnDiagnosticar"
+                        data-url="{{ route('olts.diagnose', $olt) }}">
+                    <i class="fas fa-stethoscope"></i> Diagnosticar conexión
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {{-- Resultado del diagnóstico. Un modal y no una pantalla aparte:
+         se mira, se corrige en el equipo y se vuelve a probar sin
+         perder de vista las potencias que hay detrás. --}}
+    <div class="modal fade" id="modalDiagnostico" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-stethoscope mr-1"></i> Diagnóstico de {{ $olt->name }}
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body" id="cuerpoDiagnostico"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary" id="btnRepetirDiagnostico">
+                        <i class="fas fa-redo"></i> Volver a probar
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -705,6 +755,80 @@
                         '</div>'
                     );
                 });
+
+            /* ============================================================
+               Diagnóstico de la conexión
+
+               Cada paso trae su `detalle` (lo que dijo el equipo) y su
+               `consejo` (qué mirar). El consejo solo sale en los que
+               fallan: en los que van bien es ruido.
+               ============================================================ */
+            const $btnDiagnosticar = $('#btnDiagnosticar');
+            const $cuerpo = $('#cuerpoDiagnostico');
+
+            const ASPECTO = {
+                ok:       { clase: 'success',   icono: 'fa-check-circle'       },
+                fallo:    { clase: 'danger',    icono: 'fa-times-circle'       },
+                aviso:    { clase: 'warning',   icono: 'fa-exclamation-circle' },
+                omitido:  { clase: 'secondary', icono: 'fa-minus-circle'       }
+            };
+
+            function diagnosticar() {
+                $cuerpo.html(
+                    '<div class="text-center text-muted py-4">' +
+                    '  <span class="spinner-border spinner-border-sm"></span>' +
+                    '  Probando el equipo capa por capa. Puede tardar medio minuto si no responde.' +
+                    '</div>'
+                );
+
+                fetch($btnDiagnosticar.data('url'), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    }
+                })
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(pintarDiagnostico)
+                    .catch(function (estado) {
+                        $cuerpo.html(
+                            '<div class="alert alert-danger mb-0">' +
+                            'No se pudo ejecutar el diagnóstico' +
+                            (estado === 403 ? ': esta OLT no es de una sucursal a la que tenga acceso.' : '.') +
+                            '</div>'
+                        );
+                    });
+            }
+
+            function pintarDiagnostico(d) {
+                let html = '<div class="alert alert-' + (d.conecta ? 'success' : 'danger') + '">' +
+                           '<strong>' + escapar(d.resumen) + '</strong></div>';
+
+                d.pasos.forEach(function (paso) {
+                    const a = ASPECTO[paso.estado] || ASPECTO.omitido;
+
+                    html += '<div class="d-flex mb-3">' +
+                            '  <div class="mr-3"><i class="fas ' + a.icono + ' text-' + a.clase + ' fa-lg"></i></div>' +
+                            '  <div>' +
+                            '    <div class="font-weight-bold">' + escapar(paso.titulo) + '</div>' +
+                            '    <div class="text-muted small">' + escapar(paso.detalle) + '</div>' +
+                            (paso.consejo
+                                ? '<div class="small mt-1 p-2 bg-light border-left border-' + a.clase + '">' +
+                                  escapar(paso.consejo) + '</div>'
+                                : '') +
+                            '  </div>' +
+                            '</div>';
+                });
+
+                $cuerpo.html(html);
+            }
+
+            $btnDiagnosticar.on('click', function () {
+                $('#modalDiagnostico').modal('show');
+                diagnosticar();
+            });
+
+            $('#btnRepetirDiagnostico').on('click', diagnosticar);
 
             /* ============================================================
                Buscador y filtros de la rejilla de puertos
