@@ -14,6 +14,16 @@ class OltSshService
     private const SSH_LONG_TIMEOUT = 10;
 
     /**
+     * Minutos sin reintentar tras una credencial rechazada.
+     *
+     * Treinta es más que la cadencia del sondeo (5 min) y del orden de
+     * lo que tarda en levantarse el bloqueo de un equipo Huawei, así
+     * que no se encadena un bloqueo con el siguiente. No es un número
+     * sagrado: lo que importa es que sea bastante mayor que 5.
+     */
+    private const PAUSA_TRAS_RECHAZO = 30;
+
+    /**
      * Diálogo adaptativo con la consola de la OLT.
      *
      * En vez de suponer cómo va a responder cada modelo (algunos
@@ -232,10 +242,42 @@ class OltSshService
      */
     private function connectToOlt(Olt $olt): SSH2
     {
+        // NO SE REINTENTA UNA CREDENCIAL QUE EL EQUIPO ACABA DE
+        // RECHAZAR.
+        //
+        // `onts:autofind-cache` entra aquí cada cinco minutos, y la
+        // ficha y el listado cada vez que alguien los abre. Con la
+        // contraseña mal, eso es un intento fallido cada cinco minutos
+        // desde la misma IP: las OLT Huawei lo tratan como un ataque y
+        // bloquean el origen. A partir de ahí el equipo ni siquiera
+        // contesta al saludo SSH, y el síntoma que llega al operador
+        // —«la OLT dejó de responder»— no se parece en nada a la causa.
+        //
+        // Reintentar no puede funcionar: la contraseña no se arregla
+        // sola. Lo único que consigue el reintento es el bloqueo. La
+        // pausa se levanta al guardar la configuración de la OLT (que
+        // es cuando pudo cambiar la contraseña) o al diagnosticar a
+        // mano, que es cuando hay una persona mirando.
+        if ($olt->auth_failed_at && $olt->auth_failed_at->gt(now()->subMinutes(self::PAUSA_TRAS_RECHAZO))) {
+            throw new \Exception(
+                "La OLT {$olt->name} rechazó el usuario «{$olt->username}» "
+                . "({$olt->auth_failed_at->diffForHumans()}). Los reintentos automáticos están en "
+                . 'pausa para no provocar un bloqueo por intentos fallidos en el equipo: corrija la '
+                . 'contraseña en la configuración de la OLT, o pulse «Diagnosticar conexión».'
+            );
+        }
+
         $ssh = new SSH2($olt->ip_address, (int) $olt->ssh_port);
 
         if (!$ssh->login($olt->username, $olt->getPlainPassword())) {
+            $olt->forceFill(['auth_failed_at' => now()])->saveQuietly();
+
             throw new \Exception("No se pudo autenticar con la OLT {$olt->name}");
+        }
+
+        // Entró: si había una pausa, se levanta.
+        if ($olt->auth_failed_at) {
+            $olt->forceFill(['auth_failed_at' => null])->saveQuietly();
         }
 
         // Se consume el banner de bienvenida completo (puede ser

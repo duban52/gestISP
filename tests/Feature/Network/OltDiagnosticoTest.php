@@ -214,6 +214,87 @@ class OltDiagnosticoTest extends TestCase
         $this->assertStringContainsString('No se pudo autenticar', $olt->fresh()->last_error);
     }
 
+    // ==================== La pausa tras un rechazo ====================
+    //
+    // `onts:autofind-cache` entra por SSH cada cinco minutos, y la
+    // ficha y el listado cada vez que alguien los abre. Con la
+    // contraseña mal eso es un intento fallido cada cinco minutos
+    // desde la misma IP, y las OLT Huawei lo tratan como un ataque:
+    // bloquean el origen y dejan de contestar hasta al saludo SSH.
+    // El sistema se encerraba fuera él solo.
+
+    public function test_una_credencial_rechazada_pausa_los_reintentos(): void
+    {
+        $olt = $this->oltInalcanzable();
+        $olt->update(['auth_failed_at' => now()->subMinutes(5)]);
+
+        $this->get(route('api.olts.status', $olt))->assertOk();
+
+        $this->assertStringContainsString('pausa', $olt->fresh()->last_error);
+    }
+
+    public function test_la_pausa_se_levanta_sola_al_cabo_de_un_rato(): void
+    {
+        // Una pausa que no caduca es una OLT que no vuelve nunca,
+        // aunque alguien arregle la contraseña en el equipo.
+        $olt = $this->oltInalcanzable();
+        $olt->update(['auth_failed_at' => now()->subHours(2)]);
+
+        $this->get(route('api.olts.status', $olt))->assertOk();
+
+        // Sin pausa se intenta de verdad, y contra un puerto cerrado
+        // el motivo es el del fallo de conexión, no el de la pausa.
+        $this->assertStringNotContainsString('pausa', (string) $olt->fresh()->last_error);
+    }
+
+    public function test_guardar_la_configuracion_levanta_la_pausa(): void
+    {
+        // Es el momento en que pudo cambiar la contraseña: volver a
+        // probar es justo lo que hay que hacer.
+        $olt = $this->oltInalcanzable();
+        $olt->update(['auth_failed_at' => now()]);
+
+        $this->put(route('olts.update', $olt), [
+            'name' => $olt->name,
+            'ip_address' => $olt->ip_address,
+            'ssh_port' => $olt->ssh_port,
+            'telnet_port' => $olt->telnet_port,
+            'snmp_port' => $olt->snmp_port,
+            'username' => $olt->username,
+            'password' => 'la-nueva',
+            'brand' => $olt->brand,
+        ])->assertRedirect();
+
+        $this->assertNull($olt->fresh()->auth_failed_at);
+    }
+
+    public function test_la_ficha_avisa_de_que_los_reintentos_estan_en_pausa(): void
+    {
+        // Sin el aviso, «la OLT no se actualiza» parece que el panel se
+        // colgó, cuando está callado a propósito.
+        $olt = $this->oltInalcanzable();
+        $olt->update(['auth_failed_at' => now()]);
+
+        $this->get(route('olts.show', $olt))
+            ->assertOk()
+            ->assertSee('Reintentos en pausa', escape: false);
+    }
+
+    public function test_el_diagnostico_a_mano_no_respeta_la_pausa(): void
+    {
+        // La pausa frena los reintentos AUTOMÁTICOS. Aquí hay una
+        // persona esperando una respuesta: si el botón se negara a
+        // probar, no serviría para nada justo cuando más falta hace.
+        $olt = $this->oltInalcanzable();
+        $olt->update(['auth_failed_at' => now()]);
+
+        $respuesta = $this->post(route('olts.diagnose', $olt))->assertOk();
+
+        $pasos = collect($respuesta->json('pasos'))->keyBy('titulo');
+
+        $this->assertSame(DiagnosticoDeOlt::FALLO, $pasos['Puerto SSH']['estado']);
+    }
+
     public function test_al_volver_a_conectar_se_borra_el_motivo_viejo(): void
     {
         // Un motivo de ayer junto a una OLT que hoy responde manda a

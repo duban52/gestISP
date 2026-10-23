@@ -95,7 +95,18 @@
                  credenciales, SNMP— para decir cuál de las cuatro es. --}}
             <div class="d-flex justify-content-between align-items-start flex-wrap mt-2 pt-2 border-top">
                 <div class="text-muted small mr-2" style="flex: 1 1 320px;">
-                    @if($olt->last_error)
+                    @if($olt->auth_failed_at)
+                        {{-- Sin este aviso, «la OLT no se actualiza» parece que el
+                             panel se colgó, cuando en realidad está callado a
+                             propósito para no provocar un bloqueo en el equipo. --}}
+                        <i class="fas fa-pause-circle text-warning"></i>
+                        <strong>Reintentos en pausa:</strong> el equipo rechazó el usuario
+                        «{{ $olt->username }}» {{ $olt->auth_failed_at->diffForHumans() }}.
+                        Insistir cada cinco minutos con una credencial que el equipo rechaza es
+                        lo que acaba bloqueando la IP de este servidor.
+                        <a href="{{ route('olts.edit', $olt) }}">Corrija la contraseña</a>
+                        o diagnostique a mano.
+                    @elseif($olt->last_error)
                         <i class="fas fa-exclamation-triangle text-danger"></i>
                         <strong>Último fallo:</strong> {{ $olt->last_error }}
                         @if($olt->status_checked_at)

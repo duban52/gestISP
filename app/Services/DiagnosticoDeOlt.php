@@ -219,12 +219,45 @@ class DiagnosticoDeOlt
                 'titulo' => 'Sesión SSH',
                 'estado' => self::FALLO,
                 'detalle' => $this->enClaro($e),
-                'consejo' => 'El puerto responde pero no se completa el saludo SSH. Suele ser que '
-                    . 'en ese puerto hay otro servicio (telnet, web) o que el equipo corta la '
-                    . 'conexión por tener ya demasiadas sesiones abiertas: cierre las que haya en '
-                    . 'el equipo y reintente.',
+                'consejo' => $this->cortaAntesDeSaludar($e)
+                    // El puerto acepta la conexión y acto seguido la cierra, sin
+                    // mandar su identificación. Un servicio equivocado en ese
+                    // puerto no se comporta así: esto es el equipo rechazando
+                    // ACTIVAMENTE a quien llama.
+                    ? 'El equipo acepta la conexión y la corta antes de saludar. Casi siempre es '
+                        . 'una de dos: la OLT bloqueó la IP de este servidor por intentos de acceso '
+                        . 'fallidos (defensa contra ataques), o tiene ya ocupadas todas las sesiones '
+                        . 'que admite. Compruébelo en el equipo con «display ssh server session» y '
+                        . '«display attack-defense», y revise si hay una lista de IP autorizadas que '
+                        . 'no incluya este servidor. Si fue un bloqueo, suele levantarse solo en unos '
+                        . 'minutos — pero volverá a caer si la contraseña guardada sigue siendo la '
+                        . 'equivocada.'
+                    : 'El puerto responde pero no se completa el saludo SSH. Suele ser que en ese '
+                        . 'puerto hay otro servicio (telnet, web) en lugar del SSH: revise el número '
+                        . 'de puerto y, si hay una redirección en el router, a dónde apunta.',
             ];
         }
+    }
+
+    /**
+     * ¿El equipo aceptó la conexión y la cerró sin identificarse?
+     *
+     * Es la firma de un bloqueo o de un límite de sesiones, y hay que
+     * distinguirla de «en ese puerto no hay un SSH»: se parecen en la
+     * pantalla y no se arreglan en el mismo sitio ni por la misma
+     * persona.
+     */
+    private function cortaAntesDeSaludar(Throwable $e): bool
+    {
+        $mensaje = mb_strtolower($e->getMessage());
+
+        foreach (['identification string', 'connection reset', 'connection closed'] as $senal) {
+            if (str_contains($mensaje, $senal)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** ¿El usuario puede ejecutar algo, o entra y no le dejan hacer nada? */

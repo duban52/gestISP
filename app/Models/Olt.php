@@ -35,6 +35,9 @@ class Olt extends Model
         // se perdía en un `catch` que no miraba la excepción, y el
         // panel solo sabía decir «Desconectado».
         'last_error',
+        // Cuándo rechazó el equipo nuestras credenciales. Pausa los
+        // reintentos automáticos: ver OltSshService::connectToOlt().
+        'auth_failed_at',
         // ¿Publica una interfaz SNMP por cada ONT? Sin eso no hay
         // tráfico por ONT que medir. Lo averigua OntPoller.
         'onts_traffic_supported',
@@ -44,6 +47,7 @@ class Olt extends Model
         'active' => 'boolean',
         'status' => 'boolean',
         'status_checked_at' => 'datetime',
+        'auth_failed_at' => 'datetime',
         'ssh_port' => 'integer',
         'telnet_port' => 'integer',
         'snmp_port' => 'integer',

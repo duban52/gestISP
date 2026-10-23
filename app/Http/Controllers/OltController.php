@@ -232,6 +232,12 @@ class OltController extends Controller
             unset($validated['password']);
         }
 
+        // Guardar la configuración levanta la pausa de reintentos.
+        // Es el momento en que pudieron cambiar la contraseña, el
+        // usuario o el puerto, así que vuelve a tener sentido probar
+        // — y si no se tocaron, el siguiente rechazo la pone otra vez.
+        $validated['auth_failed_at'] = null;
+
         $olt->update($validated);
 
         return redirect()
