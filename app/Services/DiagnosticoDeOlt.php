@@ -58,6 +58,15 @@ class DiagnosticoDeOlt
      */
     public function ejecutar(Olt $olt): array
     {
+        // La pausa de reintentos frena el SONDEO AUTOMÁTICO. Aquí hay
+        // una persona que acaba de pulsar un botón para averiguar qué
+        // pasa: negarle la prueba sería inútil justo cuando más falta
+        // hace. Se levanta antes de empezar; si el equipo vuelve a
+        // rechazar la credencial, el propio intento la pone otra vez.
+        if ($olt->auth_failed_at) {
+            $olt->forceFill(['auth_failed_at' => null])->saveQuietly();
+        }
+
         $pasos = [];
 
         $pasos[] = $puerto = $this->puertoSsh($olt);
@@ -66,7 +75,7 @@ class DiagnosticoDeOlt
             $pasos[] = $sesion = $this->sesionSsh($olt);
 
             if ($sesion['estado'] === self::OK) {
-                $pasos[] = $this->aceptaComandos($olt, $sesion['ssh']);
+                $pasos[] = $this->aceptaComandos($olt);
             } else {
                 $pasos[] = $this->omitido(
                     'Responde a comandos',
@@ -89,9 +98,6 @@ class DiagnosticoDeOlt
         // de las ONTs. Una OLT con el SSH caído y el SNMP vivo sigue
         // dando la mitad de la información.
         $pasos[] = $this->snmp($olt);
-
-        // La clave `ssh` es el objeto de conexión, que no sale de aquí.
-        $pasos = array_map(fn ($p) => array_diff_key($p, ['ssh' => null]), $pasos);
 
         $conecta = collect($pasos)->every(fn ($p) => $p['estado'] !== self::FALLO);
 
@@ -197,12 +203,16 @@ class DiagnosticoDeOlt
                 ];
             }
 
+            // La sesión se cierra aquí: el paso siguiente abre la suya
+            // por el camino de producción. Dejarla abierta sería una
+            // sesión de más en un equipo que a veces las raciona.
+            $ssh->disconnect();
+
             return [
                 'titulo' => 'Sesión SSH',
                 'estado' => self::OK,
                 'detalle' => sprintf('Autenticado como «%s».', $olt->username),
                 'consejo' => null,
-                'ssh' => $ssh,
             ];
         } catch (\phpseclib3\Exception\NoSupportedAlgorithmsException $e) {
             return [
@@ -260,29 +270,36 @@ class DiagnosticoDeOlt
         return false;
     }
 
-    /** ¿El usuario puede ejecutar algo, o entra y no le dejan hacer nada? */
-    private function aceptaComandos(Olt $olt, SSH2 $ssh): array
+    /**
+     * ¿Responde a los comandos que el panel le manda?
+     *
+     * ESTE PASO EJECUTA EL CAMINO DE VERDAD, no una imitación.
+     *
+     * Antes hacía un `read()` suelto sobre la sesión, y eso daba un
+     * «contesta» alegre con un equipo cuyo panel seguía en
+     * «Desconectado»: autenticar y aceptar comandos son cosas
+     * distintas. Lo que el panel necesita es `enable` seguido de
+     * `display sysuptime` y `display temperature`, con el diálogo
+     * adaptativo que lee hasta el prompt — que es justo la parte
+     * frágil. Aproximarla aquí era garantizar un diagnóstico que dice
+     * que todo va bien mientras la pantalla dice lo contrario.
+     *
+     * Cuesta una segunda sesión SSH. En un botón que pulsa una persona
+     * para averiguar por qué no funciona, eso está bien pagado.
+     */
+    private function aceptaComandos(Olt $olt): array
     {
         try {
-            $ssh->setTimeout(self::ESPERA);
-            $salida = trim((string) $ssh->read());
-            $ssh->disconnect();
-
-            if ($salida === '') {
-                return [
-                    'titulo' => 'Responde a comandos',
-                    'estado' => self::AVISO,
-                    'detalle' => 'La sesión se abrió pero el equipo no devolvió ningún texto.',
-                    'consejo' => 'Puede ser un banner que tarda. Si el estado sigue en '
-                        . '«Desconectado», revise el perfil del usuario en la OLT: tiene que poder '
-                        . 'entrar en modo privilegiado («enable») y ejecutar «display».',
-                ];
-            }
+            $estado = app(OltSshService::class)->getOltStatus($olt);
 
             return [
                 'titulo' => 'Responde a comandos',
                 'estado' => self::OK,
-                'detalle' => 'El equipo contesta: ' . $this->recorte($salida),
+                'detalle' => sprintf(
+                    'El equipo contesta: uptime %s, temperatura %s.',
+                    $estado['uptime'] ?: 'sin dato',
+                    $estado['temperature'] ?: 'sin dato',
+                ),
                 'consejo' => null,
             ];
         } catch (Throwable $e) {
@@ -290,8 +307,12 @@ class DiagnosticoDeOlt
                 'titulo' => 'Responde a comandos',
                 'estado' => self::FALLO,
                 'detalle' => $this->enClaro($e),
-                'consejo' => 'Se entró pero el equipo no responde a los comandos. Revise que el '
-                    . 'usuario tenga nivel suficiente en la OLT.',
+                'consejo' => 'Se entra al equipo pero falla al pedirle los datos. Como la sesión '
+                    . 'SSH sí se abrió, lo que falla es el nivel del usuario o el diálogo con el '
+                    . 'equipo: compruebe que «' . $olt->username . '» puede ejecutar «enable» y '
+                    . '«display sysuptime» entrando a mano, y que la OLT no le pide cambiar la '
+                    . 'contraseña al entrar — un aviso así deja la sesión esperando una respuesta '
+                    . 'que nadie da.',
             ];
         }
     }
