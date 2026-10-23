@@ -165,14 +165,35 @@ class DiagnosticoDeOlt
             $ssh = new SSH2($olt->ip_address, (int) $olt->ssh_port, self::ESPERA);
 
             if (!$ssh->login($olt->username, $olt->getPlainPassword())) {
+                // QUÉ PIDE EL EQUIPO PARA DEJAR ENTRAR.
+                //
+                // Sin esto, «rechazó el usuario» tapa dos problemas muy
+                // distintos: una contraseña equivocada y un equipo que
+                // no quiere contraseña —quiere clave pública, o pide un
+                // segundo factor—. El primero se arregla aquí; el
+                // segundo no se arregla aquí en absoluto, y perseguir
+                // la contraseña es perder la tarde.
+                $metodos = $ssh->getAuthMethodsToContinue() ?: [];
+                $soloPorClave = $metodos && !array_intersect($metodos, ['password', 'keyboard-interactive']);
+
                 return [
                     'titulo' => 'Sesión SSH',
                     'estado' => self::FALLO,
-                    'detalle' => sprintf('El equipo rechazó el usuario «%s».', $olt->username),
-                    'consejo' => 'El puerto responde y el SSH negocia, así que lo que falla es la '
-                        . 'credencial: revise el usuario y vuelva a escribir la contraseña en la '
-                        . 'configuración de la OLT. Compruebe también que ese usuario no esté '
-                        . 'bloqueado por intentos fallidos en el propio equipo.',
+                    'detalle' => sprintf(
+                        'El equipo rechazó el usuario «%s».%s',
+                        $olt->username,
+                        $metodos ? ' Admite: ' . implode(', ', $metodos) . '.' : '',
+                    ),
+                    'consejo' => $soloPorClave
+                        ? 'El equipo NO acepta contraseña para este usuario: pide ' . implode(' o ', $metodos)
+                            . '. Cambiar la contraseña aquí no servirá de nada; hay que habilitar el '
+                            . 'acceso por contraseña en la OLT para el usuario de gestISP.'
+                        : 'El puerto responde y el SSH negocia, así que lo que falla es la '
+                            . 'credencial: revise el usuario y vuelva a escribir la contraseña en la '
+                            . 'configuración de la OLT. Compruebe también que ese usuario no esté '
+                            . 'bloqueado por intentos fallidos y que el equipo no tenga ya abiertas '
+                            . 'todas las sesiones que admite — muchas OLT solo permiten unas pocas a '
+                            . 'la vez y rechazan el resto como si fuera un fallo de credencial.',
                 ];
             }
 
