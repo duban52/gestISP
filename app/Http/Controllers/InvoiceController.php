@@ -501,7 +501,12 @@ class InvoiceController extends Controller
             // Las facturas marcadas a mano se acotan a las de la
             // sucursal: los ids vienen del navegador y nadie garantiza
             // que sean de aquí.
-            'ids' => $validado['ids']
+            //
+            // `?? []` y no a secas: jQuery NO envía los arrays vacíos,
+            // así que al generar por estado la clave `ids` no llega
+            // siquiera, y `$validado['ids']` reventaba con «Undefined
+            // array key» — un 500 en el camino más normal de todos.
+            'ids' => ($validado['ids'] ?? [])
                 ? Invoice::whereIn('id', $validado['ids'])
                     ->whereHas('contract', fn ($q) => $q->where('branch_id', $branchId))
                     ->pluck('id')

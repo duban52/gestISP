@@ -785,10 +785,32 @@
 
                         seguirPdf(res.url_estado);
                     })
-                    .fail(function () {
+                    // EL MOTIVO SE ENSEÑA, NO SE TIRA.
+                    //
+                    // Esto era un `.fail(function () {...})` sin
+                    // parametros que pintaba una frase fija: con un 500,
+                    // un 419 de sesion caducada o un 422 de validacion
+                    // la pantalla decia exactamente lo mismo, y no habia
+                    // forma de saber cual de los tres era sin abrir el
+                    // log del servidor.
+                    .fail(function (xhr) {
                         restaurarBotonPdf();
+
+                        var detalle = 'No se pudo encolar la generación del PDF.';
+
+                        if (xhr.status === 419) {
+                            detalle = 'La sesión caducó. Recargue la página y vuelva a intentarlo.';
+                        } else if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                            detalle = Object.values(xhr.responseJSON.errors).flat().join(' ');
+                        } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                            detalle = xhr.responseJSON.message;
+                        } else if (xhr.status) {
+                            detalle += ' (error ' + xhr.status + ')';
+                        }
+
                         $('#pdfProgresoTexto').html(
-                            '<span class="text-danger">No se pudo encolar la generación del PDF.</span>'
+                            '<span class="text-danger"><i class="fas fa-times-circle"></i> ' +
+                            $('<div>').text(detalle).html() + '</span>'
                         );
                     });
             }
