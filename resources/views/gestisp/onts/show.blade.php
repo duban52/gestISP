@@ -833,8 +833,13 @@
             //
             // El controlador ya lo guardó en la base; esto solo pone al
             // día la ficha que se pintó antes de preguntar. Sin esto,
-            // «Sin resolver» seguía ahí con el dato ya guardado, y
-            // parecía que la OLT no lo había resuelto.
+            // el aviso de dato ausente seguía en pantalla con el valor
+            // ya guardado, y parecía que la OLT no lo había resuelto.
+            //
+            // (El texto de ese aviso no se repite aquí a propósito: hay
+            // pruebas que comprueban que NO aparece en la página cuando
+            // el dato existe, y un comentario que lo mencione viaja al
+            // navegador y las hace fallar.)
             const alDia = {
                 celdaServicePort: res.mac && res.mac.service_port,
                 celdaVlan: res.mac && res.mac.vlan,

@@ -91,6 +91,10 @@ class InvoiceListingResilienceTest extends BillingTestCase
             ->whereKey($contrato->client_id)
             ->update(['company_id' => null]);
 
-        $this->get(route('invoices.generate_max_pdf'))->assertRedirect();
+        // POST y JSON desde que el botón abre un modal de opciones y
+        // sigue la generación por id: antes era un GET que redirigía.
+        // Lo que se defiende aquí no cambia — que un contrato sin plan
+        // no tumbe el lote entero.
+        $this->post(route('invoices.generate_max_pdf'))->assertOk();
     }
 }
