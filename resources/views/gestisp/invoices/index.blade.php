@@ -258,7 +258,30 @@
                     </button>
                 </div>
                 <div class="modal-body">
-                    <embed id="pdfViewer" src="" width="100%" height="500px" type="application/pdf">
+                    {{-- Mientras se genera. Con miles de facturas esto son
+                         minutos, y una ventana muda durante minutos se
+                         interpreta como que el sistema se colgó. --}}
+                    <div id="pdfProgreso" style="display:none;">
+                        <p id="pdfProgresoTexto" class="mb-2">Encolando la generación…</p>
+
+                        <div class="progress mb-3" style="height: 22px;">
+                            <div id="pdfProgresoBarra"
+                                 class="progress-bar progress-bar-striped progress-bar-animated"
+                                 role="progressbar" style="width: 0%;"
+                                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</div>
+                        </div>
+
+                        <p class="text-muted small mb-0">
+                            <i class="fas fa-info-circle"></i>
+                            Puede cerrar esta ventana y seguir trabajando: el PDF se sigue
+                            generando en el servidor y recibirá un aviso del navegador cuando
+                            esté listo.
+                        </p>
+                    </div>
+
+                    <div id="pdfVisor" style="display:none;">
+                        <embed id="pdfViewer" src="" width="100%" height="500px" type="application/pdf">
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <a id="downloadLink" href="" class="btn btn-success" download>
@@ -440,83 +463,148 @@
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
             });
 
-            // Funcionalidad existente para PDF masivo
-            $('#generatePdfButton').on('click', function(e) {
+            /* ==========================================================
+               PDF masivo de facturas pendientes
+
+               Antes esto encolaba el trabajo y acto seguido preguntaba
+               «¿hay algún PDF de esta sucursal?». Como SIEMPRE había
+               uno de alguna vez anterior, el visor se abría al instante
+               con el documento viejo mientras el nuevo seguía en la
+               cola — y con el filtro de sucursal roto, ese documento
+               viejo era una página en blanco.
+
+               Ahora se sigue POR ID la generación que se acaba de
+               pedir, se enseña su avance, y el encargo queda apuntado
+               en localStorage para que el aviso llegue aunque el
+               usuario se vaya a otra pantalla (lo sondea el JS global).
+               ========================================================== */
+            const CLAVE_PDF = 'gestisp_pdf_facturas';
+            let sondeoPdf = null;
+
+            function pintarProgresoPdf(estado) {
+                $('#pdfProgresoTexto').text(estado.texto);
+                $('#pdfProgresoBarra')
+                    .css('width', estado.porcentaje + '%')
+                    .attr('aria-valuenow', estado.porcentaje)
+                    .text(estado.porcentaje + '%');
+            }
+
+            function mostrarPdfListo(estado) {
+                $('#pdfProgreso').hide();
+                $('#pdfVisor').show();
+                $('#pdfViewer').attr('src', estado.pdfPath);
+                $('#downloadLink').attr('href', estado.pdfPath);
+            }
+
+            function mostrarFalloPdf(estado) {
+                $('#pdfProgresoTexto').html(
+                    '<span class="text-danger"><i class="fas fa-times-circle"></i> ' +
+                    $('<div>').text(estado.texto).html() + '</span>'
+                );
+                $('#pdfProgresoBarra').addClass('bg-danger').css('width', '100%').text('');
+            }
+
+            function restaurarBotonPdf() {
+                $('#generatePdfButton')
+                    .html('Generar PDF <i class="far fa-file-pdf"></i>')
+                    .removeClass('disabled');
+            }
+
+            function seguirPdf(url) {
+                clearInterval(sondeoPdf);
+
+                const mirar = function () {
+                    $.getJSON(url)
+                        .done(function (estado) {
+                            pintarProgresoPdf(estado);
+
+                            if (!estado.terminado) {
+                                return;
+                            }
+
+                            clearInterval(sondeoPdf);
+                            restaurarBotonPdf();
+
+                            if (estado.pdfPath) {
+                                mostrarPdfListo(estado);
+                            } else {
+                                mostrarFalloPdf(estado);
+                            }
+                        })
+                        .fail(function (xhr) {
+                            // 403/404: el informe ya no es alcanzable.
+                            // Insistir no lo va a arreglar.
+                            if (xhr.status === 403 || xhr.status === 404) {
+                                clearInterval(sondeoPdf);
+                                restaurarBotonPdf();
+                                localStorage.removeItem(CLAVE_PDF);
+                            }
+                        });
+                };
+
+                mirar();
+                sondeoPdf = setInterval(mirar, 2000);
+            }
+
+            $('#generatePdfButton').on('click', function (e) {
                 e.preventDefault();
 
-                // Cambiar el botón para mostrar que está procesando
-                const originalText = $(this).html();
-                $(this).html('<i class="fas fa-spinner fa-spin"></i> Generando PDF...');
-                $(this).addClass('disabled');
+                $(this).html('<i class="fas fa-spinner fa-spin"></i> Generando PDF...').addClass('disabled');
 
-                console.log("Iniciando proceso de generación de PDF...");
-
-                // La sucursal solo existe en panel consolidado; si no
-                // hay selector, el servidor la deduce como siempre.
-                let urlPdf = $(this).attr('href');
-                const sucursalPdf = $('#branch_id').val();
-
-                if (sucursalPdf) {
-                    urlPdf += (urlPdf.indexOf('?') === -1 ? '?' : '&') + 'branch_id=' + encodeURIComponent(sucursalPdf);
-                }
+                // El modal se abre YA, con la barra a cero: es lo que
+                // convierte una espera muda en una espera con estado.
+                $('#pdfVisor').hide();
+                $('#pdfProgreso').show();
+                $('#pdfProgresoBarra').removeClass('bg-danger').css('width', '0%').text('0%');
+                $('#pdfProgresoTexto').text('Encolando la generación…');
+                $('#pdfModal').modal('show');
 
                 $.ajax({
-                    url: urlPdf,
-                    method: 'GET',
-                    success: function(response) {
-                        console.log("PDF generado. Iniciando verificación del estado...");
-                        checkPdfStatus();
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error al generar el PDF:', error);
-
-                        // Restaurar el botón
-                        $('#generatePdfButton').html(originalText);
-                        $('#generatePdfButton').removeClass('disabled');
-
-                        // Mostrar error
-                        alert('Error al generar el PDF. Por favor, inténtelo de nuevo.');
+                    url: "{{ route('invoices.generate_max_pdf') }}",
+                    method: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}',
+                        // La sucursal solo existe en panel consolidado;
+                        // si no hay selector, el servidor la deduce.
+                        branch_id: $('#branch_id').val() || ''
                     }
-                });
+                })
+                    .done(function (res) {
+                        // Se apunta para que el JS global lo siga
+                        // aunque el usuario se vaya a otra pantalla.
+                        localStorage.setItem(CLAVE_PDF, JSON.stringify({
+                            id: res.id,
+                            url: res.url_estado
+                        }));
+
+                        seguirPdf(res.url_estado);
+                    })
+                    .fail(function () {
+                        restaurarBotonPdf();
+                        $('#pdfProgresoTexto').html(
+                            '<span class="text-danger">No se pudo encolar la generación del PDF.</span>'
+                        );
+                    });
             });
 
-            // Función para verificar el estado del PDF
-            function checkPdfStatus() {
-                console.log("Realizando solicitud AJAX para verificar el estado del PDF...");
+            // Si había una generación en marcha al entrar a esta
+            // pantalla, se retoma su seguimiento en vez de empezar otra.
+            (function () {
+                let encargo = null;
 
-                $.ajax({
-                    url: "{{ route('invoices.check-pdf-status') }}",
-                    method: 'GET',
-                    success: function(response) {
-                        console.log("Respuesta recibida:", response);
+                try {
+                    encargo = JSON.parse(localStorage.getItem(CLAVE_PDF));
+                } catch (err) {
+                    encargo = null;
+                }
 
-                        if (response.pdfPath) {
-                            console.log("PDF listo. Ruta del PDF:", response.pdfPath);
-
-                            // Restaurar el botón
-                            $('#generatePdfButton').html('Generar PDF <i class="far fa-file-pdf"></i>');
-                            $('#generatePdfButton').removeClass('disabled');
-
-                            // Mostrar el modal con el PDF
-                            $('#pdfViewer').attr('src', response.pdfPath + '?t=' + response.timestamp);
-                            $('#downloadLink').attr('href', response.pdfPath + '?t=' + response.timestamp);
-                            $('#pdfModal').modal({
-                                show: true,
-                                backdrop: 'static'
-                            });
-
-                            console.log("Modal disparado correctamente.");
-                        } else {
-                            console.log("PDF no está listo. Reintentando en 5 segundos...");
-                            setTimeout(checkPdfStatus, 5000);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error al verificar el estado del PDF:', error);
-                        setTimeout(checkPdfStatus, 5000);
-                    }
-                });
-            }
+                if (encargo && encargo.url) {
+                    $('#generatePdfButton')
+                        .html('<i class="fas fa-spinner fa-spin"></i> Generando PDF...')
+                        .addClass('disabled');
+                    seguirPdf(encargo.url);
+                }
+            })();
         });
     </script>
 @endsection

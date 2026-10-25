@@ -22,36 +22,72 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
 
     protected $branchId;
 
-    public function __construct($branchId)
+    /** El registro que sigue esta generación. */
+    protected int $reportId;
+
+    /**
+     * Mil facturas tardan. Que el trabajo muera a los 60 segundos por
+     * defecto dejaría el informe colgado en «generando» para siempre.
+     */
+    public $timeout = 1800;
+
+    public function __construct($branchId, int $reportId)
     {
         $this->branchId = $branchId;
+        $this->reportId = $reportId;
     }
 
     public function handle()
     {
+        $report = PdfReport::withoutGlobalScopes()->find($this->reportId);
+
+        if (!$report) {
+            return;
+        }
+
         try {
-            // Obtener las facturas pendientes de la sucursal específica
+            // LA SUCURSAL ES LA DE LA FACTURA, NO LA DEL CLIENTE.
+            //
+            // Esto filtraba por `contract.client.branch_id`, y un
+            // cliente puede tener la sucursal en NULO: son de la
+            // empresa, no de una sede concreta. Con eso no coincidía
+            // ninguna factura y el PDF salía con una sola página en
+            // blanco — sin error, sin aviso, y pareciendo que el
+            // generador estaba roto.
+            //
+            // La factura sabe de qué sucursal es, que además es la que
+            // pone el membrete y gasta el consecutivo.
             $invoices = Invoice::whereIn('status', [
                     InvoiceStatus::Pendiente->value,
                     InvoiceStatus::PendienteRiesgoCorte->value,
                 ])
-                ->whereHas('contract.client', function ($query) {
-                    $query->where('branch_id', $this->branchId);
-                })
-                ->with(['contract.client', 'invoice_items'])
+                ->whereHas('contract', fn ($q) => $q->where('branch_id', $this->branchId))
+                ->with(['contract.client', 'contract.branch', 'invoice_items'])
                 ->get();
 
-            // Registrar información en el log
-            Log::info("Generando PDF para facturas pendientes de la sucursal: {$this->branchId}");
+            Log::info("Generando PDF para facturas pendientes de la sucursal: {$this->branchId}", [
+                'informe' => $report->id,
+                'facturas' => $invoices->count(),
+            ]);
 
-            // Eliminar el PDF anterior si existe
-            $previousPdf = PdfReport::where('branch_id', $this->branchId)
-                ->orderBy('created_at', 'desc')
+            $report->update([
+                'status' => PdfReport::GENERANDO,
+                'total' => $invoices->count(),
+                'procesadas' => 0,
+            ]);
+
+            // EL PDF ANTERIOR NO SE BORRA TODAVÍA.
+            //
+            // Se borraba aquí, antes de generar nada. Si la generación
+            // fallaba —o si no había ni una factura que imprimir—, el
+            // usuario se quedaba sin el nuevo Y sin el viejo. Ahora se
+            // borra al final, cuando ya hay uno que lo sustituya.
+            $anterior = PdfReport::withoutGlobalScopes()
+                ->where('branch_id', $this->branchId)
+                ->where('id', '!=', $report->id)
+                ->whereNotNull('pdf_path')
+                ->orderByDesc('created_at')
                 ->first();
-            if ($previousPdf) {
-                Storage::disk('public')->delete($previousPdf->pdf_path);
-                Log::info("PDF anterior eliminado: {$previousPdf->pdf_path}");
-            }
 
             // Array para almacenar las rutas de los códigos de barras
             $barcodeUrls = [];
@@ -78,6 +114,22 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
             $dianes = [];
             $representacion = app(\App\Billing\Dian\GraphicRepresentation::class);
 
+            // DE DÓNDE SALE LA BARRA DE PROGRESO.
+            //
+            // Este bucle es el grueso de la espera: por cada factura
+            // genera un código de barras, lo escribe en disco y arma
+            // su representación gráfica DIAN. El render final de
+            // dompdf es un solo paso que no se puede partir, así que
+            // el porcentaje cubre la preparación y el último tramo se
+            // anuncia aparte. Es honesto: mide lo que de verdad lleva
+            // el tiempo, en vez de inventar un porcentaje bonito.
+            $hechas = 0;
+
+            // Guardar el avance en CADA factura serían mil escrituras
+            // en la tabla para una barra que nadie mira con esa
+            // precisión.
+            $cadaCuantas = max(1, (int) ceil($invoices->count() / 50));
+
             // Generar y almacenar los códigos de barras para cada factura
             foreach ($invoices as $invoice) {
                 $code = '0100' . $invoice->id . '000000' . $invoice->total; // Generar código único
@@ -94,6 +146,12 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
                 // Los datos DIAN de ESTA factura. Null en las internas,
                 // y entonces su bloque no se pinta.
                 $dianes[$invoice->id] = $representacion->para($invoice);
+
+                $hechas++;
+
+                if ($hechas % $cadaCuantas === 0 || $hechas === $invoices->count()) {
+                    $report->update(['procesadas' => $hechas]);
+                }
             }
 
             // El logo por RUTA DE DISCO, una por sucursal. Con
@@ -127,29 +185,55 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
             // Registrar éxito en el log
             Log::info("PDF generado correctamente: {$pdfPath}");
 
-            // Guardar la ruta del PDF en la base de datos
-            PdfReport::create([
-                'branch_id' => $this->branchId,
+            $report->update([
                 'pdf_path' => $pdfPath,
+                'status' => PdfReport::LISTO,
+                'finished_at' => now(),
             ]);
 
-            // Notificar al usuario que el PDF está listo
-            $this->notifyUser($pdfPath);
+            // AHORA sí se borra el anterior: ya hay uno que lo
+            // sustituye. Borrarlo al principio dejaba al usuario sin
+            // ninguno si la generación fallaba.
+            if ($anterior) {
+                Storage::disk('public')->delete($anterior->pdf_path);
+                $anterior->update(['pdf_path' => null]);
+                Log::info("PDF anterior eliminado: {$anterior->pdf_path}");
+            }
 
-        } catch (\Exception $e) {
-            // Registrar el error en el log
-            Log::error("Error al generar el PDF: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            // EL FALLO SE GUARDA DONDE LO VE QUIEN ESPERA.
+            //
+            // Antes solo iba al log: la pantalla seguía preguntando
+            // «¿hay PDF?», le contestaban que sí con el del mes
+            // pasado, y nadie se enteraba de que la generación había
+            // reventado.
+            $report->update([
+                'status' => PdfReport::FALLIDO,
+                'error' => mb_substr($e->getMessage(), 0, 500),
+                'finished_at' => now(),
+            ]);
 
-            // Relanzar la excepción para que Laravel la maneje
+            Log::error('Error al generar el PDF: ' . $e->getMessage());
+
             throw $e;
         }
     }
 
-    protected function notifyUser($pdfPath)
+    /**
+     * Cuando el trabajo muere sin pasar por el `catch`: se agotó el
+     * tiempo, se quedó sin memoria o el worker se reinició. Sin esto
+     * el informe se quedaba en «generando» para siempre y la pantalla
+     * giraba indefinidamente.
+     */
+    public function failed(\Throwable $e): void
     {
-        // Almacenar la ruta del PDF en la sesión para que el frontend pueda acceder a ella
-        session()->flash('pdfPath', asset("storage/{$pdfPath}"));
-        Log::info('Notificando al usuario sobre el PDF generado: ' . $pdfPath);
+        PdfReport::withoutGlobalScopes()
+            ->where('id', $this->reportId)
+            ->where('status', '!=', PdfReport::LISTO)
+            ->update([
+                'status' => PdfReport::FALLIDO,
+                'error' => mb_substr($e->getMessage(), 0, 500),
+                'finished_at' => now(),
+            ]);
     }
-
 }

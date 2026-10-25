@@ -462,7 +462,11 @@
                         <tr>
                             <th>Service Port</th>
                             <td id="celdaServicePort">
-                                @if($ont->service_port)
+                                {{-- `!== null` y no a secas: el service-port 0 es
+                                     válido —la primera ONT de una OLT nueva se lo
+                                     lleva— y con `@if($ont->service_port)` salía
+                                     «Sin resolver» teniéndolo bien guardado. --}}
+                                @if($ont->service_port !== null)
                                     {{ $ont->service_port }}
                                 @else
                                     {{-- No se expone por SNMP: lo trae la consulta de
@@ -843,7 +847,11 @@
 
                 // Sin valor se deja lo que había: la OLT no contestó a
                 // ese campo, y borrarlo sería perder un dato bueno.
-                if (celda && valor) {
+                //
+                // Se compara con null/undefined y NO por verdad: el
+                // service-port 0 es válido, y `if (valor)` lo habría
+                // descartado igual que hacía el PHP.
+                if (celda && valor !== null && valor !== undefined && valor !== '') {
                     celda.textContent = valor;
                 }
             });

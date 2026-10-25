@@ -465,34 +465,64 @@ class InvoiceController extends Controller
     /**
      * PDF Masivo
      */
+    /**
+     * Encola el PDF masivo y devuelve CON QUÉ seguirlo.
+     *
+     * Devolver el id del informe es lo que permite preguntar por ESTA
+     * generación. Antes no se devolvía nada y la pantalla preguntaba
+     * «¿hay algún PDF de esta sucursal?»: como siempre había uno de
+     * alguna vez anterior, abría el visor al instante con el documento
+     * viejo mientras el nuevo seguía en la cola.
+     */
     public function generatePendingInvoicesPdf(Request $request)
     {
         // El PDF masivo sale por sucursal, con su membrete y su
         // numeracion. En consolidado hay que decir de cual.
-        GeneratePendingInvoicesPdf::dispatch(
-            app(CurrentContext::class)->branchParaEscritura($request->input('branch_id')),
-        );
+        $branchId = app(CurrentContext::class)->branchParaEscritura($request->input('branch_id'));
 
-        return redirect()->route('invoices.index')
-            ->with('success', 'La generación del PDF de facturas pendientes ha sido encolada. No cierre ni recargue la página hasta ser notificado');
-    }
+        $informe = PdfReport::create([
+            'branch_id' => $branchId,
+            'user_id' => Auth::id(),
+            'status' => PdfReport::EN_COLA,
+        ]);
 
-    public function checkPdfStatus(Request $request)
-    {
-        $pdfReport = PdfReport::whereIn('branch_id', app(CurrentContext::class)->branchIds())
-            ->orderBy('created_at', 'desc')
-            ->first();
-
-        if ($pdfReport) {
-            return response()->json([
-                'pdfPath' => asset("storage/{$pdfReport->pdf_path}"),
-                'timestamp' => $pdfReport->created_at->timestamp,
-            ]);
-        }
+        GeneratePendingInvoicesPdf::dispatch($branchId, $informe->id);
 
         return response()->json([
-            'pdfPath' => null,
-            'message' => 'El PDF aún no está listo.',
+            'ok' => true,
+            'id' => $informe->id,
+            'url_estado' => route('invoices.check-pdf-status', $informe),
+            'mensaje' => 'El PDF se está generando. Puede seguir trabajando: le avisaremos cuando esté listo.',
+        ]);
+    }
+
+    /**
+     * En qué va una generación concreta.
+     *
+     * Se pide por id para no confundir el PDF que alguien acaba de
+     * pedir con el que quedó de la semana pasada.
+     */
+    public function checkPdfStatus(PdfReport $pdfReport)
+    {
+        abort_if(
+            !app(CurrentContext::class)->permiteSucursal($pdfReport->branch_id),
+            403,
+            'Ese informe no es de una sucursal a la que tenga acceso.',
+        );
+
+        return response()->json([
+            'id' => $pdfReport->id,
+            'estado' => $pdfReport->status,
+            'terminado' => $pdfReport->terminado(),
+            'porcentaje' => $pdfReport->porcentaje(),
+            'texto' => $pdfReport->enClaro(),
+            'total' => $pdfReport->total,
+            // Solo cuando de verdad hay archivo: un `asset()` sobre una
+            // ruta nula produce una URL que descarga una página de
+            // error con extensión .pdf.
+            'pdfPath' => $pdfReport->status === PdfReport::LISTO && $pdfReport->pdf_path
+                ? asset("storage/{$pdfReport->pdf_path}") . '?t=' . $pdfReport->updated_at->timestamp
+                : null,
         ]);
     }
 }

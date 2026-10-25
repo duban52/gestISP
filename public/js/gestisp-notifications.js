@@ -112,6 +112,86 @@
             });
     }
 
+    /* ==================================================================
+       El PDF masivo de facturas
+
+       Se genera en cola y puede tardar minutos con miles de facturas.
+       Esto vive en el JS GLOBAL, y no en la pantalla de facturas, por
+       un motivo concreto: quien lo pide tiene que poder irse a hacer
+       otra cosa. Si el seguimiento estuviera en esa página, salir de
+       ella lo mataría y el aviso no llegaría nunca.
+
+       El encargo se apunta en localStorage, así que sobrevive a la
+       navegación entre páginas y a recargar.
+       ================================================================== */
+
+    var CLAVE_PDF = 'gestisp_pdf_facturas';
+
+    function encargoPdf() {
+        try {
+            return JSON.parse(localStorage.getItem(CLAVE_PDF));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function olvidarEncargoPdf() {
+        localStorage.removeItem(CLAVE_PDF);
+    }
+
+    function avisarPdfListo(estado) {
+        if (!('Notification' in window) || Notification.permission !== 'granted') {
+            return;
+        }
+
+        var aviso = new Notification('GestISP — PDF de facturas', {
+            body: estado.pdfPath
+                ? 'El PDF está listo (' + estado.total + ' facturas). Pulse para descargarlo.'
+                : estado.texto,
+            tag: 'pdf-facturas-' + estado.id,
+        });
+
+        if (estado.pdfPath) {
+            aviso.onclick = function () {
+                window.focus();
+                window.open(estado.pdfPath, '_blank');
+            };
+        }
+    }
+
+    function sondearPdf() {
+        var encargo = encargoPdf();
+
+        if (!encargo || !encargo.url) {
+            return;
+        }
+
+        fetch(encargo.url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function (r) {
+                // El informe ya no existe (lo purgaron, o es de otra
+                // sucursal tras cambiar de contexto): se olvida en vez
+                // de sondear para siempre.
+                if (r.status === 403 || r.status === 404) {
+                    olvidarEncargoPdf();
+                    return null;
+                }
+
+                return r.ok ? r.json() : null;
+            })
+            .then(function (estado) {
+                if (!estado || !estado.terminado) {
+                    return;
+                }
+
+                olvidarEncargoPdf();
+                avisarPdfListo(estado);
+            })
+            .catch(function () {
+                // Un fallo de red puntual no borra el encargo: se
+                // reintenta en el siguiente ciclo.
+            });
+    }
+
     // Pedir permiso para los avisos del navegador (una sola vez).
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
@@ -119,4 +199,9 @@
 
     sondear();
     setInterval(sondear, INTERVALO_MS);
+
+    // El PDF se mira más a menudo que las órdenes: quien lo pidió está
+    // esperando, y 30 segundos de retraso en el aviso se notan.
+    sondearPdf();
+    setInterval(sondearPdf, 5000);
 })();

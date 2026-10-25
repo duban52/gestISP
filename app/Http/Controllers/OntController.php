@@ -643,13 +643,25 @@ class OntController extends Controller
      */
     private function ensureServicePort(Olt $olt, Ont $ont): void
     {
-        if (!empty($ont->service_port)) {
+        // CERO ES UN SERVICE-PORT VÁLIDO.
+        //
+        // La OLT numera los service-port desde 0, y la primera ONT que
+        // se da de alta en un equipo nuevo se lleva precisamente el 0.
+        // Esto comprobaba `!empty()` y `!$servicePort`: con el índice 0
+        // los dos dicen «no hay», así que la ONT se volvía a consultar
+        // en cada operación y acto seguido reventaba con «No se pudo
+        // obtener el service-port» — el dato estaba ahí, bien guardado,
+        // y aun así no se podía ni eliminar ni mover.
+        //
+        // La comprobación tiene que ser contra NULL, que es lo que de
+        // verdad significa «sin resolver».
+        if ($ont->service_port !== null) {
             return;
         }
 
         $servicePort = $this->oltSshService->resolveServicePort($olt, $ont);
 
-        if (!$servicePort) {
+        if ($servicePort === null) {
             throw new \RuntimeException(
                 'No se pudo obtener el service-port de esta ONT en la OLT. ' .
                 'Verifíquelo en el equipo antes de continuar.'

@@ -494,9 +494,14 @@ Route::get('/cash-register/summary', [CashRegisterController::class, 'summary'])
 // Descarga de PDF
 Route::get('/invoices/{id}/download-pdf', [InvoiceController::class, 'downloadInvoicePdf'])->name('invoices.download-pdf');
 //generacion de PDF másivo
-Route::get('invoices/generate_pdf', [InvoiceController::class, 'generatePendingInvoicesPdf'])->name('invoices.generate_max_pdf');
+// POST y no GET: encola la generacion de un PDF de miles de
+// facturas. Con GET, cualquier precarga del navegador —o un bot que
+// siga el enlace— lanzaba el trabajo entero sin que nadie lo pidiera.
+Route::post('invoices/generate_pdf', [InvoiceController::class, 'generatePendingInvoicesPdf'])->name('invoices.generate_max_pdf');
 //Consultar estado de generación de facturas pdf
-Route::get('check-pdf-status', [InvoiceController::class, 'checkPdfStatus'])->name('invoices.check-pdf-status');
+// Por id: se pregunta por LA generacion que se pidio, no por la
+// ultima que haya de la sucursal.
+Route::get('check-pdf-status/{pdfReport}', [InvoiceController::class, 'checkPdfStatus'])->name('invoices.check-pdf-status');
 
 // Ruta para exportar contratos a excel
 Route::get('/contracts/export', [ContractController::class, 'export'])->name('contracts.export');
