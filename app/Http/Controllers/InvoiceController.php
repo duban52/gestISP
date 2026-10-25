@@ -12,6 +12,7 @@ use App\Jobs\GeneratePendingInvoicesPdf;
 use App\Models\BillingRun;
 use App\Models\Contract;
 use App\Models\Invoice;
+use Illuminate\Validation\Rule;
 use App\Models\PdfReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -480,13 +481,41 @@ class InvoiceController extends Controller
         // numeracion. En consolidado hay que decir de cual.
         $branchId = app(CurrentContext::class)->branchParaEscritura($request->input('branch_id'));
 
+        // QUÉ FACTURAS ENTRAN.
+        //
+        // Los estados se validan contra el enum y no se meten crudos en
+        // el `whereIn`: lo que llega de un formulario no es de fiar, y
+        // un estado inventado produciría un PDF vacío sin explicación —
+        // que es justo el problema que esto viene a resolver.
+        $validado = $request->validate([
+            'estados' => ['nullable', 'array'],
+            'estados.*' => [Rule::in(array_column(InvoiceStatus::cases(), 'value'))],
+            'ids' => ['nullable', 'array'],
+            'ids.*' => ['integer'],
+        ], [
+            'estados.*.in' => 'Uno de los estados seleccionados no existe.',
+        ]);
+
+        $criterio = [
+            'estados' => $validado['estados'] ?? InvoiceStatus::payable(),
+            // Las facturas marcadas a mano se acotan a las de la
+            // sucursal: los ids vienen del navegador y nadie garantiza
+            // que sean de aquí.
+            'ids' => $validado['ids']
+                ? Invoice::whereIn('id', $validado['ids'])
+                    ->whereHas('contract', fn ($q) => $q->where('branch_id', $branchId))
+                    ->pluck('id')
+                    ->all()
+                : [],
+        ];
+
         $informe = PdfReport::create([
             'branch_id' => $branchId,
             'user_id' => Auth::id(),
             'status' => PdfReport::EN_COLA,
         ]);
 
-        GeneratePendingInvoicesPdf::dispatch($branchId, $informe->id);
+        GeneratePendingInvoicesPdf::dispatch($branchId, $informe->id, $criterio);
 
         return response()->json([
             'ok' => true,

@@ -26,15 +26,37 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
     protected int $reportId;
 
     /**
+     * Qué facturas entran.
+     *
+     * `estados`: los estados a incluir. `ids`: una selección concreta
+     * hecha a mano en el listado, que manda sobre los estados —si
+     * alguien marcó diez facturas, quiere esas diez y no las diez más
+     * lo que coincida con un estado.
+     *
+     * @var array{estados: array<int, string>, ids: array<int, int>}
+     */
+    protected array $criterio;
+
+    /**
      * Mil facturas tardan. Que el trabajo muera a los 60 segundos por
      * defecto dejaría el informe colgado en «generando» para siempre.
      */
     public $timeout = 1800;
 
-    public function __construct($branchId, int $reportId)
+    public function __construct($branchId, int $reportId, array $criterio = [])
     {
         $this->branchId = $branchId;
         $this->reportId = $reportId;
+
+        // Sin criterio se asume «las que deben dinero», que es lo que
+        // pide quien imprime facturas para cobrar. Antes estaba fijo a
+        // Pendiente y «riesgo de corte», y dejaba fuera a las
+        // VENCIDAS: en una cartera con mora —que es toda cartera real—
+        // el PDF salía casi vacío sin decir por qué.
+        $this->criterio = [
+            'estados' => $criterio['estados'] ?? InvoiceStatus::payable(),
+            'ids' => $criterio['ids'] ?? [],
+        ];
     }
 
     public function handle()
@@ -57,11 +79,19 @@ class GeneratePendingInvoicesPdf implements ShouldQueue
             //
             // La factura sabe de qué sucursal es, que además es la que
             // pone el membrete y gasta el consecutivo.
-            $invoices = Invoice::whereIn('status', [
-                    InvoiceStatus::Pendiente->value,
-                    InvoiceStatus::PendienteRiesgoCorte->value,
-                ])
+            $invoices = Invoice::query()
                 ->whereHas('contract', fn ($q) => $q->where('branch_id', $this->branchId))
+                // UNA SELECCIÓN A MANO MANDA SOBRE LOS ESTADOS.
+                //
+                // Si alguien marcó diez facturas en el listado, quiere
+                // esas diez. Cruzarlas además con un filtro de estado
+                // le quitaría de en medio justo la que marcó a
+                // propósito aunque estuviera pagada.
+                ->when(
+                    $this->criterio['ids'],
+                    fn ($q) => $q->whereIn('id', $this->criterio['ids']),
+                    fn ($q) => $q->whereIn('status', $this->criterio['estados']),
+                )
                 ->with(['contract.client', 'contract.branch', 'invoice_items'])
                 ->get();
 

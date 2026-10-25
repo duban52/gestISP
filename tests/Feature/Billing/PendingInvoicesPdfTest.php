@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Billing\Enums\InvoiceStatus;
 use App\Jobs\GeneratePendingInvoicesPdf;
 use App\Models\Invoice;
 use App\Models\PdfReport;
@@ -169,15 +170,97 @@ class PendingInvoicesPdfTest extends BillingTestCase
         $this->assertSame(100, $informe->porcentaje());
     }
 
+    // ==================== Qué entra: lo elige el usuario ====================
+
+    /**
+     * EL BUG QUE VACIABA EL PDF.
+     *
+     * Los estados estaban fijos a «Pendiente» y «riesgo de corte». Una
+     * cartera con mora —toda cartera real— tiene las facturas en
+     * VENCIDA, así que el PDF salía casi vacío y sin un solo aviso.
+     */
+    public function test_por_defecto_entran_tambien_las_vencidas(): void
+    {
+        $contrato = $this->createBillableContract();
+        $this->post(route('contracts.invoice', $contrato));
+
+        Invoice::where('contract_id', $contrato->id)
+            ->update(['status' => InvoiceStatus::Vencida->value]);
+
+        $informe = $this->generar();
+
+        $this->assertSame(1, $informe->total, 'La factura vencida se quedó fuera del PDF.');
+    }
+
+    public function test_se_puede_pedir_un_solo_estado(): void
+    {
+        $vencida = $this->facturaCon(InvoiceStatus::Vencida);
+        $this->facturaCon(InvoiceStatus::Pendiente);
+
+        $informe = $this->generar(criterio: ['estados' => [InvoiceStatus::Vencida->value]]);
+
+        $this->assertSame(1, $informe->total);
+        $this->assertNotNull($vencida);
+    }
+
+    /**
+     * Una selección a mano manda sobre los estados.
+     *
+     * Si alguien marcó una factura concreta, la quiere — aunque esté
+     * pagada y aunque no encaje en ningún filtro de estado.
+     */
+    public function test_la_seleccion_manual_manda_sobre_el_estado(): void
+    {
+        $pagada = $this->facturaCon(InvoiceStatus::Pagada);
+        $this->facturaCon(InvoiceStatus::Vencida);
+
+        $informe = $this->generar(criterio: ['ids' => [$pagada->id]]);
+
+        $this->assertSame(1, $informe->total);
+    }
+
+    public function test_un_estado_inventado_se_rechaza(): void
+    {
+        // Sin validar, un estado que no existe produce un PDF vacío
+        // sin explicación: justo lo que esto viene a arreglar.
+        $this->post(route('invoices.generate_max_pdf'), ['estados' => ['Inventado']])
+            ->assertSessionHasErrors('estados.0');
+    }
+
+    public function test_no_se_cuelan_facturas_de_otra_sucursal_por_id(): void
+    {
+        // Los ids vienen del navegador: marcar una factura ajena en el
+        // inspector no puede meterla en el PDF de esta sede.
+        $ajena = \App\Models\Branch::factory()->create();
+
+        $respuesta = $this->postJson(route('invoices.generate_max_pdf'), [
+            'ids' => [999999],
+        ])->assertOk();
+
+        $this->assertNotNull($respuesta->json('id'));
+    }
+
+    /** Una factura de este banco de pruebas, en el estado que se pida. */
+    private function facturaCon(InvoiceStatus $estado): Invoice
+    {
+        $contrato = $this->createBillableContract();
+        $this->post(route('contracts.invoice', $contrato));
+
+        $factura = Invoice::where('contract_id', $contrato->id)->firstOrFail();
+        $factura->update(['status' => $estado->value]);
+
+        return $factura;
+    }
+
     /** Lanza el trabajo de verdad y devuelve su informe. */
-    private function generar(?int $branchId = null): PdfReport
+    private function generar(?int $branchId = null, array $criterio = []): PdfReport
     {
         $informe = PdfReport::create([
             'branch_id' => $branchId ?? $this->branch->id,
             'status' => PdfReport::EN_COLA,
         ]);
 
-        (new GeneratePendingInvoicesPdf($branchId ?? $this->branch->id, $informe->id))->handle();
+        (new GeneratePendingInvoicesPdf($branchId ?? $this->branch->id, $informe->id, $criterio))->handle();
 
         return $informe->fresh();
     }

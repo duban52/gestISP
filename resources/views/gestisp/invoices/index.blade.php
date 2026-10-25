@@ -141,6 +141,15 @@
                 <table id="invoicesTable" class="table table-hover table-striped">
                     <thead>
                     <tr>
+                        {{-- Selección para el PDF masivo. Va primero porque es
+                             donde la gente la busca, y eso corre un puesto
+                             TODOS los índices de columnDefs de más abajo: si
+                             algún día se añade otra columna, hay que tocarlos
+                             igual. --}}
+                        <th class="col-seleccion text-center" style="width:32px;">
+                            <input type="checkbox" id="marcarTodas"
+                                   title="Marcar o desmarcar todo lo que se está viendo">
+                        </th>
                         <th>Sucursal</th>
                         <th>Grupo</th>
                         <th>ID</th>
@@ -158,6 +167,10 @@
                     <tbody>
                     @foreach($invoices as $invoice)
                         <tr>
+                            <td class="col-seleccion text-center">
+                                <input type="checkbox" class="marca-factura"
+                                       value="{{ $invoice->id }}">
+                            </td>
                             {{-- Solo se ve en panel consolidado; DataTables la
                                  oculta en los demas modos (ver el columnDef de
                                  mas abajo). Se pinta siempre para que los
@@ -248,6 +261,94 @@
     </div>
 
     <!-- Modal para notificar al usuario -->
+    {{-- ============================================================
+         Qué entra en el PDF masivo
+
+         Antes no se preguntaba: el trabajo tenía los estados fijos a
+         «Pendiente» y «riesgo de corte», y dejaba fuera a las
+         VENCIDAS. En una cartera con mora —que es toda cartera real—
+         eso significaba un PDF casi vacío, sin un solo aviso de por
+         qué. Preguntarlo hace visible una decisión que antes estaba
+         enterrada en el código.
+         ============================================================ --}}
+    <div class="modal fade" id="pdfOpcionesModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="far fa-file-pdf mr-1"></i> ¿Qué facturas van en el PDF?
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="custom-control custom-radio mb-2">
+                            <input type="radio" id="pdfModoEstados" name="pdfModo"
+                                   class="custom-control-input" value="estados" checked>
+                            <label class="custom-control-label" for="pdfModoEstados">
+                                Por estado de la factura
+                            </label>
+                        </div>
+
+                        <div id="pdfEstados" class="pl-4 mb-3">
+                            <div class="mb-2">
+                                <button type="button" class="btn btn-xs btn-outline-secondary" data-preset="deben">
+                                    Las que deben
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary" data-preset="vencidas">
+                                    Solo vencidas
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary" data-preset="pendientes">
+                                    Solo pendientes
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary" data-preset="todas">
+                                    Todos los estados
+                                </button>
+                            </div>
+
+                            @foreach(\App\Billing\Enums\InvoiceStatus::cases() as $estado)
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input pdf-estado"
+                                           id="pdfEstado{{ $loop->index }}"
+                                           value="{{ $estado->value }}"
+                                           @checked(in_array($estado->value, \App\Billing\Enums\InvoiceStatus::payable(), true))>
+                                    <label class="custom-control-label" for="pdfEstado{{ $loop->index }}">
+                                        {{ $estado->value }}
+                                    </label>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        <div class="custom-control custom-radio">
+                            <input type="radio" id="pdfModoSeleccion" name="pdfModo"
+                                   class="custom-control-input" value="seleccion">
+                            <label class="custom-control-label" for="pdfModoSeleccion">
+                                Solo las que marqué en el listado
+                                (<span id="pdfCuentaSeleccion">0</span>)
+                            </label>
+                        </div>
+                        <p class="text-muted small pl-4 mb-0">
+                            Marque las casillas de la primera columna. El buscador y los
+                            filtros de la tabla ayudan a encontrarlas.
+                        </p>
+                    </div>
+
+                    <div id="pdfSinNada" class="alert alert-warning mb-0" style="display:none;">
+                        No ha elegido ninguna factura: el PDF saldría vacío.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="pdfConfirmar">
+                        <i class="far fa-file-pdf"></i> Generar PDF
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="pdfModal" tabindex="-1" role="dialog" aria-labelledby="pdfModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
@@ -391,67 +492,85 @@
                 "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
 
                 // Configuración de ordenamiento
-                "order": [[2, "desc"]], // Ordenar por ID descendente por defecto
+                "order": [[3, "desc"]], // Ordenar por ID descendente por defecto
 
                 // Configuración de columnas
                 // Los índices se corrieron dos posiciones al agregar
-                // las columnas de contrato e identificación.
+                // las columnas de contrato e identificación, y una
+                // tercera al agregar la casilla de selección (0).
                 "columnDefs": [
+                    {
+                        // La casilla de selección del PDF: ni se ordena ni se
+                        // busca. Sin `searchable:false`, escribir en el
+                        // buscador de DataTables comparaba contra el HTML de
+                        // la casilla y devolvía filas sin sentido.
+                        "targets": [0],
+                        "orderable": false,
+                        "searchable": false,
+                        "className": "col-seleccion text-center"
+                    },
                     // La sucursal se pinta siempre para que los indices de
                     // columna no cambien con el modo de trabajo; DataTables
                     // la esconde cuando no hay varias sedes que distinguir.
-                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 0 },
+                    { visible: {{ $mostrarSucursal ? 'true' : 'false' }}, targets: 1 },
                     {
-                        "targets": [9], // Columna Total
+                        "targets": [10], // Columna Total
                         "type": "num-fmt", // Para ordenamiento numérico
                         "className": "text-right"
                     },
                     {
-                        "targets": [11], // Columna Acciones
+                        "targets": [12], // Columna Acciones
                         "orderable": false,
                         "searchable": false,
                         "className": "text-center"
                     },
                     {
-                        "targets": [7, 8], // Columnas de fechas
+                        "targets": [8, 9], // Columnas de fechas
                         "type": "date",
                         "className": "text-center"
                     },
                     {
-                        "targets": [10], // Columna Estado
+                        "targets": [11], // Columna Estado
                         "className": "text-center"
                     }
                 ],
 
                 // Botones de exportación
                 "dom": 'Bfrtip',
+                // La casilla de seleccion no se exporta: en un CSV o un
+                // Excel saldria como una columna vacia delante de todo.
                 "buttons": [
                     {
                         extend: 'copy',
                         text: '<i class="fas fa-copy"></i> Copiar',
-                        className: 'btn btn-secondary btn-sm'
+                        className: 'btn btn-secondary btn-sm',
+                        exportOptions: { columns: ':not(.col-seleccion)' }
                     },
                     {
                         extend: 'csv',
                         text: '<i class="fas fa-file-csv"></i> CSV',
-                        className: 'btn btn-success btn-sm'
+                        className: 'btn btn-success btn-sm',
+                        exportOptions: { columns: ':not(.col-seleccion)' }
                     },
                     {
                         extend: 'excel',
                         text: '<i class="fas fa-file-excel"></i> Excel',
-                        className: 'btn btn-success btn-sm'
+                        className: 'btn btn-success btn-sm',
+                        exportOptions: { columns: ':not(.col-seleccion)' }
                     },
                     {
                         extend: 'pdf',
                         text: '<i class="fas fa-file-pdf"></i> PDF',
                         className: 'btn btn-danger btn-sm',
                         orientation: 'landscape',
-                        pageSize: 'A4'
+                        pageSize: 'A4',
+                        exportOptions: { columns: ':not(.col-seleccion)' }
                     },
                     {
                         extend: 'print',
                         text: '<i class="fas fa-print"></i> Imprimir',
-                        className: 'btn btn-info btn-sm'
+                        className: 'btn btn-info btn-sm',
+                        exportOptions: { columns: ':not(.col-seleccion)' }
                     }
                 ]
             });
@@ -546,10 +665,95 @@
                 sondeoPdf = setInterval(mirar, 2000);
             }
 
+            /* ----- Selección de filas para el PDF ----- */
+
+            const tabla = $('#invoicesTable').DataTable();
+
+            function facturasMarcadas() {
+                // Por la API de DataTables y no por el DOM: las filas de
+                // las otras páginas no están en el documento, y
+                // $('.marca-factura:checked') solo vería la página actual.
+                return tabla.$('.marca-factura:checked').map(function () {
+                    return parseInt(this.value, 10);
+                }).get();
+            }
+
+            function refrescarCuenta() {
+                $('#pdfCuentaSeleccion').text(facturasMarcadas().length);
+            }
+
+            // Marca lo que se está VIENDO (filtro y búsqueda aplicados),
+            // no la tabla entera: si alguien buscó «MAZO» y pulsa la
+            // cabecera, quiere esas, no las mil.
+            $('#marcarTodas').on('change', function () {
+                const marcar = this.checked;
+
+                tabla.rows({ search: 'applied' }).nodes().to$()
+                    .find('.marca-factura').prop('checked', marcar);
+
+                refrescarCuenta();
+            });
+
+            $('#invoicesTable tbody').on('change', '.marca-factura', refrescarCuenta);
+
+            /* ----- El modal de opciones ----- */
+
+            const PRESETS = {
+                deben: @json(\App\Billing\Enums\InvoiceStatus::payable()),
+                vencidas: ['{{ \App\Billing\Enums\InvoiceStatus::Vencida->value }}'],
+                pendientes: [
+                    '{{ \App\Billing\Enums\InvoiceStatus::Pendiente->value }}',
+                    '{{ \App\Billing\Enums\InvoiceStatus::PendienteParcial->value }}',
+                    '{{ \App\Billing\Enums\InvoiceStatus::PendienteRiesgoCorte->value }}'
+                ],
+                todas: @json(array_column(\App\Billing\Enums\InvoiceStatus::cases(), 'value'))
+            };
+
+            $('[data-preset]').on('click', function () {
+                const elegidos = PRESETS[$(this).data('preset')] || [];
+
+                $('.pdf-estado').each(function () {
+                    this.checked = elegidos.indexOf(this.value) !== -1;
+                });
+
+                $('#pdfModoEstados').prop('checked', true);
+            });
+
+            function estadosMarcados() {
+                return $('.pdf-estado:checked').map(function () {
+                    return this.value;
+                }).get();
+            }
+
+            // El botón ya no genera: abre la pregunta. Lo que se genera
+            // se decide aquí y no en una constante del código.
             $('#generatePdfButton').on('click', function (e) {
                 e.preventDefault();
+                refrescarCuenta();
+                $('#pdfSinNada').hide();
+                $('#pdfOpcionesModal').modal('show');
+            });
 
-                $(this).html('<i class="fas fa-spinner fa-spin"></i> Generando PDF...').addClass('disabled');
+            $('#pdfConfirmar').on('click', function () {
+                const porSeleccion = $('#pdfModoSeleccion').is(':checked');
+                const ids = porSeleccion ? facturasMarcadas() : [];
+                const estados = porSeleccion ? [] : estadosMarcados();
+
+                // Generar un PDF vacío y esperar a que termine para
+                // descubrirlo es la peor forma de enterarse.
+                if ((porSeleccion && !ids.length) || (!porSeleccion && !estados.length)) {
+                    $('#pdfSinNada').show();
+                    return;
+                }
+
+                $('#pdfOpcionesModal').modal('hide');
+                lanzarPdf(estados, ids);
+            });
+
+            function lanzarPdf(estados, ids) {
+                $('#generatePdfButton')
+                    .html('<i class="fas fa-spinner fa-spin"></i> Generando PDF...')
+                    .addClass('disabled');
 
                 // El modal se abre YA, con la barra a cero: es lo que
                 // convierte una espera muda en una espera con estado.
@@ -566,7 +770,9 @@
                         _token: '{{ csrf_token() }}',
                         // La sucursal solo existe en panel consolidado;
                         // si no hay selector, el servidor la deduce.
-                        branch_id: $('#branch_id').val() || ''
+                        branch_id: $('#branch_id').val() || '',
+                        estados: estados,
+                        ids: ids
                     }
                 })
                     .done(function (res) {
@@ -585,7 +791,7 @@
                             '<span class="text-danger">No se pudo encolar la generación del PDF.</span>'
                         );
                     });
-            });
+            }
 
             // Si había una generación en marcha al entrar a esta
             // pantalla, se retoma su seguimiento en vez de empezar otra.
