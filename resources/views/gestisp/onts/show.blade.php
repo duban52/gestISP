@@ -432,13 +432,20 @@
                             <th style="width:40%">Serial</th>
                             <td>{{ $ont->sn }}</td>
                         </tr>
+                        {{-- Marca, modelo, VLAN y service-port los AVERIGUA la
+                             consulta de acceso (accessInfo), que corre por AJAX
+                             después de pintar esto y los guarda. Sin un id al que
+                             apuntar, la pantalla seguía enseñando el valor viejo
+                             —o «Sin resolver»— hasta que alguien recargaba, y eso
+                             se lee como «la OLT no lo resolvió» cuando en realidad
+                             ya estaba en la base. --}}
                         <tr>
                             <th>Marca</th>
-                            <td>{{ $ont->vendor ?: '—' }}</td>
+                            <td id="celdaMarca">{{ $ont->vendor ?: '—' }}</td>
                         </tr>
                         <tr>
                             <th>Modelo</th>
-                            <td>{{ $ont->model ?: '—' }}</td>
+                            <td id="celdaModelo">{{ $ont->model ?: '—' }}</td>
                         </tr>
                         <tr>
                             <th>OLT</th>
@@ -454,22 +461,27 @@
                         </tr>
                         <tr>
                             <th>Service Port</th>
-                            <td>
+                            <td id="celdaServicePort">
                                 @if($ont->service_port)
                                     {{ $ont->service_port }}
                                 @else
-                                    {{-- Las ONTs importadas llegan sin este dato:
-                                         no se expone por SNMP. Se consulta a la OLT
-                                         automáticamente cuando hace falta. --}}
+                                    {{-- No se expone por SNMP: lo trae la consulta de
+                                         acceso, o se resuelve al eliminar o mover la
+                                         ONT. El aviso NO dice «esta ONT se importó»
+                                         porque no tiene forma de saberlo: una ONT
+                                         activada desde aquí también aparece sin él si
+                                         todavía no se ha consultado el acceso, y ese
+                                         texto hacía pensar en un fallo de la
+                                         activación. --}}
                                     <span class="text-muted">Sin resolver</span>
                                     <i class="fas fa-info-circle text-info ml-1"
-                                       title="Esta ONT se importó desde la OLT. El service-port se consultará automáticamente la primera vez que se elimine o se mueva."></i>
+                                       title="Este dato no viaja por SNMP. Pulse «Consultar acceso» para traerlo de la OLT; también se resuelve solo la primera vez que se elimine o se mueva la ONT."></i>
                                 @endif
                             </td>
                         </tr>
                         <tr>
                             <th>VLAN</th>
-                            <td>{{ $ont->vlan }}</td>
+                            <td id="celdaVlan">{{ $ont->vlan }}</td>
                         </tr>
                         <tr>
                             <th>Descripción</th>
@@ -812,6 +824,29 @@
 
             msg.style.display = 'none';
             datos.style.display = 'block';
+
+            // --- Lo que esta consulta acaba de AVERIGUAR ---
+            //
+            // El controlador ya lo guardó en la base; esto solo pone al
+            // día la ficha que se pintó antes de preguntar. Sin esto,
+            // «Sin resolver» seguía ahí con el dato ya guardado, y
+            // parecía que la OLT no lo había resuelto.
+            const alDia = {
+                celdaServicePort: res.mac && res.mac.service_port,
+                celdaVlan: res.mac && res.mac.vlan,
+                celdaMarca: res.version && res.version['Vendor-ID'],
+                celdaModelo: res.version && res.version['Equipment-ID'],
+            };
+
+            Object.entries(alDia).forEach(([id, valor]) => {
+                const celda = document.getElementById(id);
+
+                // Sin valor se deja lo que había: la OLT no contestó a
+                // ese campo, y borrarlo sería perder un dato bueno.
+                if (celda && valor) {
+                    celda.textContent = valor;
+                }
+            });
 
             // --- LAN ---
             document.getElementById('lanPorts').innerHTML = res.lan.length
