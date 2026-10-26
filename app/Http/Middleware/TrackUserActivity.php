@@ -43,6 +43,14 @@ class TrackUserActivity
     private const RUTAS_DE_SONDEO = [
         'notifications.poll',
         'onts.import.status',
+        // El seguimiento del PDF masivo pregunta cada 5 segundos
+        // mientras haya una generación en marcha. Si contara como
+        // actividad, pedir un PDF dejaría la sesión abierta todo el
+        // tiempo que durase —y si el trabajo se quedara colgado, para
+        // siempre—: justo el agujero que esta lista existe para
+        // tapar, y además abierto por una pestaña que el usuario
+        // puede haber dejado olvidada.
+        'invoices.check-pdf-status',
     ];
 
     public function __construct(private readonly SessionTracker $tracker)

@@ -188,6 +188,36 @@ class SessionContextTest extends TestCase
         $this->assertSame($haceDiezMinutos, session('last_activity_at'));
     }
 
+    /**
+     * El seguimiento del PDF masivo tampoco cuenta como actividad.
+     *
+     * Pregunta cada 5 segundos mientras hay una generación en marcha.
+     * Si contara, pedir un PDF mantendría la sesión abierta todo el
+     * rato que durase —y, con un trabajo colgado, indefinidamente—
+     * desde una pestaña que el usuario puede haber dejado olvidada.
+     */
+    public function test_el_seguimiento_del_pdf_no_mantiene_viva_la_sesion(): void
+    {
+        config(['session.inactivity_timeout' => 15]);
+
+        $haceDiezMinutos = time() - (10 * 60);
+
+        $this->actingAs($this->user)->withSession([
+            'branch_id' => (string) $this->branch->id,
+            'current_role_id' => (string) $this->superRole->id,
+            'last_activity_at' => $haceDiezMinutos,
+        ]);
+
+        $informe = \App\Models\PdfReport::create([
+            'branch_id' => $this->branch->id,
+            'status' => \App\Models\PdfReport::GENERANDO,
+        ]);
+
+        $this->getJson(route('invoices.check-pdf-status', $informe));
+
+        $this->assertSame($haceDiezMinutos, session('last_activity_at'));
+    }
+
     public function test_la_navegacion_real_si_renueva_la_actividad(): void
     {
         config(['session.inactivity_timeout' => 15]);

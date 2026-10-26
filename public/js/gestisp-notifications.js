@@ -176,6 +176,17 @@
                     return null;
                 }
 
+                // SESIÓN CADUCADA: el encargo NO se olvida.
+                //
+                // El PDF se sigue generando en el servidor —va en
+                // cola, no depende de la sesión—, así que al volver a
+                // entrar este mismo sondeo lo retoma y el aviso llega
+                // entonces. Borrarlo aquí perdería el seguimiento de
+                // un trabajo que sí terminó.
+                if (r.status === 401 || r.status === 419) {
+                    return null;
+                }
+
                 return r.ok ? r.json() : null;
             })
             .then(function (estado) {

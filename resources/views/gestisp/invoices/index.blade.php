@@ -657,6 +657,26 @@
                                 clearInterval(sondeoPdf);
                                 restaurarBotonPdf();
                                 localStorage.removeItem(CLAVE_PDF);
+                                return;
+                            }
+
+                            // SESIÓN CADUCADA mientras se esperaba.
+                            //
+                            // Se deja de preguntar —no serviría de nada— pero
+                            // el encargo se CONSERVA: el PDF se sigue generando
+                            // en el servidor, y al volver a entrar esta misma
+                            // pantalla retoma el seguimiento donde lo dejó.
+                            //
+                            // Sin esto el sondeo seguía cada 2 segundos contra
+                            // un 401, en silencio y para siempre.
+                            if (xhr.status === 401 || xhr.status === 419) {
+                                clearInterval(sondeoPdf);
+                                restaurarBotonPdf();
+                                $('#pdfProgresoTexto').html(
+                                    '<span class="text-warning"><i class="fas fa-user-clock"></i> ' +
+                                    'La sesión caducó por inactividad. El PDF se sigue generando: ' +
+                                    'vuelva a entrar y lo encontrará aquí.</span>'
+                                );
                             }
                         });
                 };
