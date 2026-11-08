@@ -587,12 +587,60 @@ class OltSshService
             $out = $this->converse($ssh, "undo service-port {$ont->service_port}", true, self::SSH_LONG_TIMEOUT);
             Log::debug('DELETE ONT - undo service-port', ['output' => $out]);
 
+            // QUE ESTE FALLE NO DETIENE EL BORRADO.
+            //
+            // Es un paso de limpieza: si el service-port ya no existe
+            // —una eliminación anterior que se quedó a medias, o un
+            // índice desactualizado en la base— la OLT contesta
+            // «Failure» y, si eso abortara, la ONT quedaría atrapada
+            // para siempre sin forma de quitarla desde el panel. Se
+            // anota y se sigue: lo que de verdad importa es el paso 3.
+            if (preg_match('/failure|error/i', $out)) {
+                Log::warning('DELETE ONT - la OLT rechazó quitar el service-port; se continúa', [
+                    'olt' => $olt->name,
+                    'service_port' => $ont->service_port,
+                    'respuesta' => self::enUnaLinea($out),
+                ]);
+            }
+
             // 2. Entrar a la interfaz GPON
             $this->converse($ssh, "interface gpon {$interface}", false, self::SSH_LONG_TIMEOUT);
 
             // 3. Eliminar la ONT (también confirma con "y")
             $out = $this->converse($ssh, "ont delete {$port} {$ont->onu_id}", true, self::SSH_LONG_TIMEOUT);
             Log::debug('DELETE ONT - ont delete', ['output' => $out]);
+
+            // ESTE SÍ DECIDE.
+            //
+            // Nadie miraba la respuesta: se mandaba el comando y se
+            // daba por hecho que había funcionado. Si la OLT lo
+            // rechazaba, el controlador borraba igual la fila de la
+            // base y la ONT se quedaba viva en el equipo —dando
+            // servicio— pero sin existir ya en el sistema: un equipo
+            // fantasma que nadie vuelve a encontrar.
+            //
+            // Es la misma comprobación que ya hacen activar, reiniciar
+            // y habilitar en esta misma clase.
+            //
+            // SALVO QUE LA OLT DIGA QUE YA NO ESTÁ.
+            //
+            // «The ONT does not exist» no es un fallo: es exactamente
+            // el estado al que se quería llegar. Pasa cuando el equipo
+            // se quitó a mano de la OLT, o cuando un intento anterior
+            // sí llegó a borrarlo. Tratarlo como error dejaría la
+            // ficha atrapada en gestISP para siempre, sin forma de
+            // quitarla desde el panel.
+            if (self::laOltDiceQueYaNoEsta($out)) {
+                Log::info('DELETE ONT - la OLT dice que esa ONT ya no existe; se da por eliminada', [
+                    'olt' => $olt->name,
+                    'onu_id' => $ont->onu_id,
+                    'respuesta' => self::enUnaLinea($out),
+                ]);
+
+                return;
+            }
+
+            self::exigirQueLaOltAceptara($out, "eliminar la ONT {$ont->onu_id} del puerto {$interface}/{$port}");
 
             // 4. Salir
             $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
@@ -1464,6 +1512,24 @@ class OltSshService
         if (preg_match('/failure|error/i', $salida)) {
             throw new \Exception("La OLT rechazó {$que}: " . self::enUnaLinea($salida));
         }
+    }
+
+    /**
+     * ¿La OLT está diciendo que eso que se quiere borrar ya no está?
+     *
+     * Viene con forma de «Failure», pero para un borrado NO es un
+     * fallo: es el estado al que se quería llegar. Distinguirlo es lo
+     * que permite quitar del sistema una ONT que ya se desmontó del
+     * equipo a mano, en vez de dejarla atrapada en la ficha porque la
+     * OLT, con razón, dice que no la encuentra.
+     *
+     * Huawei lo redacta de varias formas según modelo y versión
+     * («The ONT does not exist», «no such ONT»), de ahí el patrón y
+     * no una comparación literal.
+     */
+    private static function laOltDiceQueYaNoEsta(string $salida): bool
+    {
+        return (bool) preg_match('/does\s*not\s*exist|no\s+such|not\s+found/i', $salida);
     }
 
     /** La respuesta de la consola, sin saltos, para caber en un aviso. */

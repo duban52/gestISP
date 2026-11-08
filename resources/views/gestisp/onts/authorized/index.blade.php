@@ -46,6 +46,23 @@
 
 @section('content')
 
+    {{-- EL ERROR VA APARTE Y PRIMERO.
+         No entra en la cadena de @elseif de abajo a propósito: esa
+         cadena solo pinta UN aviso, y un fallo no puede competir con
+         un «correcto» de otra acción.
+
+         Sin este bloque, eliminar una ONT que la OLT rechazaba
+         recargaba la página sin decir absolutamente nada: el motivo
+         viajaba en la sesión y nadie lo pintaba. Desde fuera parecía
+         que el botón no hacía nada. --}}
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible shadow-sm">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <h6 class="mb-1"><i class="fas fa-exclamation-triangle mr-1"></i> No se pudo completar la operación</h6>
+            <span>{{ session('error') }}</span>
+        </div>
+    @endif
+
     @if(session('success'))
         <div class="alert alert-success alert-dismissible shadow-sm">
             <button type="button" class="close" data-dismiss="alert">&times;</button>

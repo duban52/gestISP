@@ -27,6 +27,19 @@
 @endsection
 
 @section('content')
+
+    {{-- El motivo de un fallo se PINTA. Eliminar o mover una ONT puede
+         fallar en la OLT, y el controlador devuelve el porqué en
+         `session('error')`: sin este bloque la página recargaba igual
+         y parecía que el botón no había hecho nada. --}}
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible shadow-sm">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <h6 class="mb-1"><i class="fas fa-exclamation-triangle mr-1"></i> No se pudo completar la operación</h6>
+            <span>{{ session('error') }}</span>
+        </div>
+    @endif
+
     <div class="toque">
     @include('gestisp.partials.resultado-accion')
 

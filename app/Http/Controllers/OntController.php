@@ -683,7 +683,19 @@ class OntController extends Controller
 
             $this->oltSshService->deleteOnt($olt, $ont);
         } catch (\Exception $e) {
-            return back()->with('error', 'Error al eliminar la ONT: ' . $e->getMessage());
+            // LA ONT NO SE BORRA DE LA BASE SI LA OLT NO LA BORRÓ.
+            //
+            // Es deliberado: una fila eliminada aquí con el equipo
+            // todavía configurado allá es un cliente dando servicio
+            // que el sistema ya no conoce, y eso no se detecta hasta
+            // que alguien echa de menos el cobro.
+            return back()->with('error', sprintf(
+                'No se eliminó la ONT %s: %s La ONT sigue registrada en gestISP y en la OLT %s. '
+                . 'Compruebe que la OLT responde (puede diagnosticarla desde su ficha) y reintente.',
+                $ont->sn ?: $ont->id,
+                rtrim($e->getMessage(), '.') . '.',
+                $olt->name,
+            ));
         }
 
         // Limpiar el cpe_sn del contrato antes de eliminar la ONT
