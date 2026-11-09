@@ -562,7 +562,40 @@ class OltSshService
     /**
      * Elimina una ONT de la OLT via SSH
      */
-    public function deleteOnt(Olt $olt, Ont $ont): void
+    /**
+     * Quita una ONT de la OLT, bajando por pasos.
+     *
+     * POR QUÉ POR PASOS
+     * -----------------
+     * Antes esto exigía conocer el service-port antes de empezar, y
+     * si la OLT no lo reportaba el borrado se detenía ahí con un «No
+     * se pudo obtener el service-port». Pero el service-port es solo
+     * la PRIMERA limpieza: lo que de verdad quita la ONT del equipo
+     * es `ont delete`. Una ONT sin service-port —porque nunca se le
+     * creó, porque se borró a mano, o porque la tabla no lo
+     * devuelve— quedaba atrapada en el sistema para siempre, sin
+     * forma de eliminarla desde el panel.
+     *
+     * Ahora se baja escalón por escalón, y cada uno sabe seguir sin
+     * el anterior:
+     *
+     *   1. Si hay service-port, se quita. Si falla o no lo hay, se
+     *      anota y se sigue.
+     *   2. Se MIRA la ONT en su puerto PON. Si el equipo dice que no
+     *      la tiene, no hay nada que borrar allí.
+     *   3. Se borra con `ont delete`. Si la OLT dice que no existe,
+     *      es el estado al que se quería llegar.
+     *
+     * @return self::BORRADA_* según lo que se encontró, para que quien
+     *         llama pueda decirle al operador qué pasó de verdad.
+     */
+    /** La OLT la tenía y la quitó. */
+    public const BORRADA_EN_LA_OLT = 'borrada_en_la_olt';
+
+    /** La OLT ya no la tenía: no había nada que quitar allí. */
+    public const BORRADA_NO_ESTABA = 'no_estaba_en_la_olt';
+
+    public function deleteOnt(Olt $olt, Ont $ont): string
     {
         $interface = "0/{$ont->slot}";
         $port      = $ont->port;
@@ -581,32 +614,66 @@ class OltSshService
             $this->converse($ssh, 'enable', false, self::SSH_LONG_TIMEOUT);
             $this->converse($ssh, 'config', false, self::SSH_LONG_TIMEOUT);
 
-            // 1. Eliminar el service-port (pide confirmación → "y").
-            // El lector detecta el "(y/n)" en cualquier modelo y
-            // responde solo.
-            $out = $this->converse($ssh, "undo service-port {$ont->service_port}", true, self::SSH_LONG_TIMEOUT);
-            Log::debug('DELETE ONT - undo service-port', ['output' => $out]);
-
-            // QUE ESTE FALLE NO DETIENE EL BORRADO.
+            // ---- Paso 1: el service-port, SI LO HAY ----
             //
-            // Es un paso de limpieza: si el service-port ya no existe
-            // —una eliminación anterior que se quedó a medias, o un
-            // índice desactualizado en la base— la OLT contesta
-            // «Failure» y, si eso abortara, la ONT quedaría atrapada
-            // para siempre sin forma de quitarla desde el panel. Se
-            // anota y se sigue: lo que de verdad importa es el paso 3.
-            if (preg_match('/failure|error/i', $out)) {
-                Log::warning('DELETE ONT - la OLT rechazó quitar el service-port; se continúa', [
+            // `null` significa que no se conoce. Sin este reparo se
+            // mandaba «undo service-port » con el hueco vacío, que la
+            // consola rechaza y que además no dice nada útil.
+            if ($ont->service_port === null) {
+                Log::info('DELETE ONT - sin service-port conocido; se salta ese paso', [
                     'olt' => $olt->name,
-                    'service_port' => $ont->service_port,
-                    'respuesta' => self::enUnaLinea($out),
+                    'onu_id' => $ont->onu_id,
                 ]);
+            } else {
+                // Pide confirmación → "y". El lector detecta el
+                // "(y/n)" en cualquier modelo y responde solo.
+                $out = $this->converse($ssh, "undo service-port {$ont->service_port}", true, self::SSH_LONG_TIMEOUT);
+                Log::debug('DELETE ONT - undo service-port', ['output' => $out]);
+
+                // QUE ESTE FALLE NO DETIENE EL BORRADO.
+                //
+                // Es un paso de limpieza: si el service-port ya no
+                // existe —una eliminación anterior a medias, o un
+                // índice desactualizado en la base— la OLT contesta
+                // «Failure», y si eso abortara la ONT quedaría
+                // atrapada para siempre. Se anota y se sigue: lo que
+                // de verdad la quita es el paso 3.
+                if (preg_match('/failure|error/i', $out)) {
+                    Log::warning('DELETE ONT - la OLT rechazó quitar el service-port; se continúa', [
+                        'olt' => $olt->name,
+                        'service_port' => $ont->service_port,
+                        'respuesta' => self::enUnaLinea($out),
+                    ]);
+                }
             }
 
-            // 2. Entrar a la interfaz GPON
+            // ---- Paso 2: mirar si la ONT está en su puerto PON ----
+            //
+            // Preguntar antes de borrar permite distinguir «la quité»
+            // de «no estaba», y eso es lo que decide el mensaje que
+            // lee el operador. Sin esta consulta, una ONT que ya no
+            // está en el equipo y una que sí se acaba de quitar se
+            // comunican igual, y no son lo mismo: la primera venía
+            // arrastrando una inconsistencia que conviene saber.
             $this->converse($ssh, "interface gpon {$interface}", false, self::SSH_LONG_TIMEOUT);
 
-            // 3. Eliminar la ONT (también confirma con "y")
+            $info = $this->executeDisplayCommand($ssh, "display ont info {$port} {$ont->onu_id}");
+            Log::debug('DELETE ONT - display ont info', ['output' => self::enUnaLinea($info)]);
+
+            if (self::laOltDiceQueYaNoEsta($info)) {
+                Log::info('DELETE ONT - la OLT no tiene esa ONT en el puerto; no hay nada que borrar', [
+                    'olt' => $olt->name,
+                    'puerto' => "{$interface}/{$port}",
+                    'onu_id' => $ont->onu_id,
+                ]);
+
+                $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
+                $this->converse($ssh, 'quit', false, self::SSH_LONG_TIMEOUT);
+
+                return self::BORRADA_NO_ESTABA;
+            }
+
+            // ---- Paso 3: borrarla (confirma con "y") ----
             $out = $this->converse($ssh, "ont delete {$port} {$ont->onu_id}", true, self::SSH_LONG_TIMEOUT);
             Log::debug('DELETE ONT - ont delete', ['output' => $out]);
 
@@ -637,7 +704,7 @@ class OltSshService
                     'respuesta' => self::enUnaLinea($out),
                 ]);
 
-                return;
+                return self::BORRADA_NO_ESTABA;
             }
 
             self::exigirQueLaOltAceptara($out, "eliminar la ONT {$ont->onu_id} del puerto {$interface}/{$port}");
@@ -650,6 +717,8 @@ class OltSshService
                 'olt'    => $olt->name,
                 'onu_id' => $ont->onu_id,
             ]);
+
+            return self::BORRADA_EN_LA_OLT;
 
         } finally {
             $ssh->disconnect();

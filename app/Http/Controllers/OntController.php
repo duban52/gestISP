@@ -677,11 +677,22 @@ class OntController extends Controller
         $olt = Olt::findOrFail($ont->olt_id);
 
         try {
-            // Las ONTs importadas llegan sin service-port: se
-            // resuelve antes de que la OLT reciba el comando
-            $this->ensureServicePort($olt, $ont);
+            // SE INTENTA RESOLVER, PERO NO SE EXIGE.
+            //
+            // Antes esto llamaba a `ensureServicePort()`, que revienta
+            // si la OLT no lo reporta — y ahí moría el borrado con un
+            // «No se pudo obtener el service-port». Pero el
+            // service-port es solo la primera limpieza: lo que quita
+            // la ONT del equipo es `ont delete`. Exigirlo dejaba
+            // atrapadas en el sistema, para siempre, justo las ONTs
+            // que peor estaban: las que nunca llegaron a tenerlo.
+            //
+            // Mover una ONT es distinto y sigue exigiéndolo: allí el
+            // service-port se borra para volver a crearlo en el puerto
+            // nuevo, y sin él el servicio quedaría sin reconstruir.
+            $this->resolverServicePortSiSePuede($olt, $ont);
 
-            $this->oltSshService->deleteOnt($olt, $ont);
+            $resultado = $this->oltSshService->deleteOnt($olt, $ont);
         } catch (\Exception $e) {
             // LA ONT NO SE BORRA DE LA BASE SI LA OLT NO LA BORRÓ.
             //
@@ -706,7 +717,60 @@ class OntController extends Controller
 
         $ont->delete();
 
+        // Se dicen cosas distintas porque SON distintas. Que la OLT no
+        // tuviera la ONT significa que el sistema y el equipo llevaban
+        // tiempo descuadrados, y eso el operador quiere saberlo: puede
+        // haber más ONTs en el mismo estado.
+        if ($resultado === OltSshService::BORRADA_NO_ESTABA) {
+            return back()->with(
+                'success-delete',
+                sprintf(
+                    'La ONT %s se quitó de gestISP. La OLT %s ya no la tenía configurada, '
+                    . 'así que no hubo nada que borrar en el equipo.',
+                    $ont->sn ?: $ont->id,
+                    $olt->name,
+                ),
+            );
+        }
+
         return back()->with('success-delete', 'ONT eliminada correctamente.');
+    }
+
+    /**
+     * Resuelve el service-port si la OLT lo dice, y calla si no.
+     *
+     * Hermana tolerante de `ensureServicePort()`. La diferencia está
+     * en qué se hace cuando no se consigue: aquella detiene la
+     * operación —necesario al MOVER, donde el service-port hay que
+     * recrearlo— y esta sigue adelante, porque al BORRAR el
+     * service-port es una limpieza previa y no el objetivo.
+     */
+    private function resolverServicePortSiSePuede(Olt $olt, Ont $ont): void
+    {
+        if ($ont->service_port !== null) {
+            return;
+        }
+
+        try {
+            $servicePort = $this->oltSshService->resolveServicePort($olt, $ont);
+        } catch (\Exception $e) {
+            // Que no se pueda ni preguntar no es motivo para abortar:
+            // el borrado sabe seguir sin este dato. Si la OLT está de
+            // verdad inalcanzable, reventará en el paso siguiente y
+            // con un mensaje que habla de la conexión, que es el
+            // problema real.
+            Log::warning('No se pudo consultar el service-port antes de eliminar la ONT', [
+                'ont' => $ont->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if ($servicePort !== null) {
+            $ont->update(['service_port' => $servicePort]);
+            $ont->refresh();
+        }
     }
 
     /**

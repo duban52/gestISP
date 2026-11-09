@@ -194,6 +194,103 @@ class OntBorradoTest extends TestCase
         $this->assertFalse($metodo->invoke($servicio, 'Failure: The ONT is in use by a service port'));
     }
 
+    // ==================== Sin service-port también se borra ====================
+
+    /**
+     * EL CASO QUE BLOQUEABA EL BORRADO EN PRODUCCIÓN.
+     *
+     * «No se pudo obtener el service-port de esta ONT en la OLT» era
+     * el final del camino: la ONT quedaba atrapada en el sistema sin
+     * forma de quitarla desde el panel.
+     *
+     * Pero el service-port es solo la primera limpieza; lo que quita
+     * la ONT del equipo es `ont delete`. Exigirlo dejaba encalladas
+     * justo las ONTs que peor estaban: las que nunca llegaron a
+     * tenerlo.
+     */
+    public function test_sin_service_port_el_borrado_sigue_adelante(): void
+    {
+        $ont = $this->ont();
+        $ont->update(['service_port' => null]);
+
+        $this->mock(OltSshService::class, function ($mock) {
+            // La OLT no sabe decir el service-port...
+            $mock->shouldReceive('resolveServicePort')->andReturn(null);
+            // ...y aun así se intenta borrar la ONT, que es el paso
+            // que de verdad importa.
+            $mock->shouldReceive('deleteOnt')->once()->andReturn(OltSshService::BORRADA_EN_LA_OLT);
+        });
+
+        $this->delete(route('onts.destroy', $ont))
+            ->assertRedirect()
+            ->assertSessionHas('success-delete');
+
+        $this->assertDatabaseMissing('onts', ['id' => $ont->id]);
+    }
+
+    public function test_si_ni_se_puede_preguntar_el_service_port_tampoco_se_detiene(): void
+    {
+        $ont = $this->ont();
+        $ont->update(['service_port' => null]);
+
+        $this->mock(OltSshService::class, function ($mock) {
+            $mock->shouldReceive('resolveServicePort')->andThrow(new \Exception('timeout'));
+            $mock->shouldReceive('deleteOnt')->once()->andReturn(OltSshService::BORRADA_EN_LA_OLT);
+        });
+
+        $this->delete(route('onts.destroy', $ont))->assertSessionHas('success-delete');
+
+        $this->assertDatabaseMissing('onts', ['id' => $ont->id]);
+    }
+
+    /**
+     * Si la OLT no la tiene, se quita de la base y SE DICE.
+     *
+     * No es lo mismo que un borrado normal: significa que el sistema
+     * y el equipo llevaban tiempo descuadrados, y el operador querrá
+     * saberlo porque puede haber más ONTs igual.
+     */
+    public function test_si_la_olt_no_la_tiene_se_borra_de_la_base_y_se_explica(): void
+    {
+        $ont = $this->ont();
+
+        $this->mock(OltSshService::class, function ($mock) {
+            $mock->shouldReceive('deleteOnt')->once()->andReturn(OltSshService::BORRADA_NO_ESTABA);
+        });
+
+        $this->delete(route('onts.destroy', $ont))->assertRedirect();
+
+        $this->assertDatabaseMissing('onts', ['id' => $ont->id]);
+        $this->assertStringContainsString('ya no la tenía configurada', session('success-delete'));
+    }
+
+    /**
+     * Mover SÍ sigue exigiendo el service-port.
+     *
+     * Allí se borra para volver a crearlo en el puerto nuevo: sin él,
+     * el cliente se quedaría sin servicio en el destino. Relajar esa
+     * comprobación «por simetría» con el borrado sería un error caro.
+     */
+    public function test_mover_sigue_exigiendo_el_service_port(): void
+    {
+        $ont = $this->ont();
+        $ont->update(['service_port' => null]);
+
+        $this->mock(OltSshService::class, function ($mock) {
+            $mock->shouldReceive('resolveServicePort')->andReturn(null);
+            $mock->shouldNotReceive('moveOnt');
+        });
+
+        $this->post(route('onts.relocate', $ont), [
+            'ont_location' => '0/2/3',
+            'vlan' => 201,
+            'ont_lineprofile' => 1,
+            'ont_srvprofile' => 1,
+        ])->assertSessionHas('error');
+
+        $this->assertDatabaseHas('onts', ['id' => $ont->id]);
+    }
+
     // ==================== El camino bueno sigue igual ====================
 
     public function test_cuando_la_olt_acepta_la_ont_se_borra(): void
