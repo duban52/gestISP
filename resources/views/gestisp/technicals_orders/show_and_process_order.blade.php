@@ -460,6 +460,100 @@
                         <input type="hidden" name="closing_longitude" id="closing-longitude">
                         <input type="hidden" name="closing_accuracy_m" id="closing-accuracy">
                         <input type="hidden" name="closing_location_error" id="closing-location-error">
+
+                        {{-- ====================================================
+                             ¿Dónde queda el predio del cliente?
+
+                             Solo aparece en INSTALACIÓN y TRASLADO, y solo si
+                             el contrato no tiene punto todavía. En esos dos
+                             trabajos el técnico está en la vivienda, que es la
+                             única ocasión en que alguien está allí con un
+                             teléfono capaz de dar coordenadas.
+
+                             Se PREGUNTA, no se asume. El técnico puede estar
+                             cerrando desde la calle, desde el carro o al
+                             volver a la oficina, y guardar su posición como la
+                             de la casa del cliente sería peor que no guardar
+                             nada: un punto equivocado no se nota, porque se
+                             usa para sugerir la caja NAP más cercana y para
+                             comprobar que las órdenes se cierran donde está el
+                             servicio — y las dos cosas empiezan a mentir en
+                             silencio.
+
+                             Por eso «No definirla» es lo preseleccionado: no
+                             hacer nada es el comportamiento de siempre, y
+                             ubicar mal es peor que no ubicar.
+                             ==================================================== --}}
+                        @if($technicalOrder->puedeUbicarElPredio())
+                            <div class="card border-primary mt-3 mb-0">
+                                <div class="card-header bg-light py-2">
+                                    <strong><i class="fas fa-home mr-1"></i> Ubicación del predio del cliente</strong>
+                                    <small class="d-block text-muted">
+                                        Este contrato todavía no está ubicado en el mapa.
+                                    </small>
+                                </div>
+
+                                <div class="card-body py-2">
+                                    <div class="custom-control custom-radio mb-2">
+                                        <input type="radio" class="custom-control-input" id="predio-no"
+                                               name="ubicacion_predio" value="no" checked>
+                                        <label class="custom-control-label" for="predio-no">
+                                            No definirla ahora
+                                        </label>
+                                    </div>
+
+                                    {{-- Deshabilitado de salida: lo habilita el JS
+                                         cuando de verdad se obtuvo un punto. Ofrecer
+                                         «usar la ubicación del cierre» cuando el GPS
+                                         falló solo sirve para que alguien lo elija y
+                                         no pase nada. --}}
+                                    <div class="custom-control custom-radio mb-2">
+                                        <input type="radio" class="custom-control-input" id="predio-cierre"
+                                               name="ubicacion_predio" value="cierre" disabled>
+                                        <label class="custom-control-label" for="predio-cierre">
+                                            Usar la ubicación del cierre
+                                            <small class="text-muted d-block" id="predio-cierre-ayuda">
+                                                Disponible cuando se haya tomado la ubicación.
+                                            </small>
+                                        </label>
+                                    </div>
+
+                                    <div class="custom-control custom-radio mb-2">
+                                        <input type="radio" class="custom-control-input" id="predio-mapa"
+                                               name="ubicacion_predio" value="mapa">
+                                        <label class="custom-control-label" for="predio-mapa">
+                                            Marcarla en el mapa
+                                            <small class="text-muted d-block">
+                                                Para cuando el GPS no acierta o se cierra la orden desde otro sitio.
+                                            </small>
+                                        </label>
+                                    </div>
+
+                                    {{-- `collapse` y no un display:none propio: partials/leaflet-script
+                                         escucha `shown.bs.collapse` y es ahí donde crea el
+                                         mapa. Un mapa nacido en un contenedor oculto se dibuja
+                                         en una caja de cero píxeles y aparece gris. --}}
+                                    <div class="collapse" id="predio-mapa-bloque">
+                                        @include('gestisp.partials.location-picker', [
+                                            'mapId' => 'mapaPredioOrden',
+                                            'latitude' => old('predio_latitude'),
+                                            'longitude' => old('predio_longitude'),
+                                            'latitudeName' => 'predio_latitude',
+                                            'longitudeName' => 'predio_longitude',
+                                            'sourceName' => false,
+                                            'height' => '280px',
+                                            'allowClear' => true,
+                                            'busqueda' => collect([
+                                                $technicalOrder->contract?->address,
+                                                $technicalOrder->contract?->neighborhood,
+                                                $technicalOrder->contract?->municipality,
+                                            ])->filter()->implode(', '),
+                                            'help' => 'Toque el mapa sobre la vivienda del cliente, o arrastre el marcador para ajustarlo.',
+                                        ])
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                     @endif
                 </div>
 

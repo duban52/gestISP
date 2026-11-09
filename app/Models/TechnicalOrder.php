@@ -189,6 +189,41 @@ class TechnicalOrder extends Model
         return OrderDetailMap::clave($this->detail) === 'traslado de servicio';
     }
 
+    /**
+     * ¿Es la instalación del servicio?
+     *
+     * Por OrderDetailMap y no comparando texto, por lo mismo que
+     * `esTraslado()`: el detalle llega con y sin tilde y con sufijos.
+     */
+    public function esInstalacion(): bool
+    {
+        return OrderDetailMap::clave($this->detail) === 'instalacion de servicio';
+    }
+
+    /**
+     * ¿Se le puede ofrecer al técnico ubicar el predio con esta orden?
+     *
+     * Solo en una INSTALACIÓN o un TRASLADO, y solo si el contrato
+     * todavía no tiene punto. El motivo es que en esos dos trabajos el
+     * técnico está, por definición, en la vivienda del cliente: su
+     * posición en ese momento ES la del predio. En una incidencia
+     * también suele estarlo, pero no siempre —hay arreglos que se
+     * hacen en la caja o en el poste—, y en una administrativa no hay
+     * nadie en casa de nadie.
+     *
+     * Y solo si FALTA. Un contrato ya ubicado no se pisa desde aquí:
+     * la ubicación buena puede haberla puesto alguien sobre el mapa
+     * con más cuidado del que da un GPS de celular bajo un alero.
+     */
+    public function puedeUbicarElPredio(): bool
+    {
+        if (!$this->esInstalacion() && !$this->esTraslado()) {
+            return false;
+        }
+
+        return $this->contract !== null && !$this->contract->isGeolocated();
+    }
+
     public function hasClosingLocation(): bool
     {
         return $this->closing_latitude !== null && $this->closing_longitude !== null;

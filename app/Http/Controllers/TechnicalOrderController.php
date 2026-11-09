@@ -729,6 +729,20 @@ class TechnicalOrderController extends Controller
                 'nullable',
                 'exists:nap_ports,id',
             ],
+            // Ubicación del predio: solo se ofrece en instalación y
+            // traslado con el contrato sin ubicar (ver
+            // TechnicalOrder::puedeUbicarElPredio). Se valida la FORMA
+            // aquí; que la orden sea de las que corresponden se
+            // comprueba contra la base al aplicarla.
+            'ubicacion_predio' => 'nullable|in:no,cierre,mapa',
+            'predio_latitude' => [
+                Rule::requiredIf(fn () => $request->input('ubicacion_predio') === 'mapa'),
+                'nullable', 'numeric', 'between:-90,90',
+            ],
+            'predio_longitude' => [
+                Rule::requiredIf(fn () => $request->input('ubicacion_predio') === 'mapa'),
+                'nullable', 'numeric', 'between:-180,180',
+            ],
             'nap_no_registrada' => 'nullable|boolean',
             'nap_motivo' => [
                 Rule::requiredIf(fn () => $technicalOrder->esTraslado() && $request->boolean('nap_no_registrada')),
@@ -738,6 +752,8 @@ class TechnicalOrderController extends Controller
             'client_signature.required' => 'Falta la firma del cliente. Pídale que firme en pantalla antes de cerrar la orden.',
             'nap_port_id.required' => 'Indique en qué caja NAP y en qué puerto quedó el servicio trasladado.',
             'nap_motivo.required' => 'Explique por qué no se pudo registrar la caja NAP.',
+            'predio_latitude.required' => 'Marque el punto de la vivienda sobre el mapa, o elija otra opción.',
+            'predio_longitude.required' => 'Marque el punto de la vivienda sobre el mapa, o elija otra opción.',
         ]);
 
         // Materiales realmente reportados (se descartan las filas
@@ -806,6 +822,9 @@ class TechnicalOrderController extends Controller
             }
 
             $technicalOrder->update($orderData);
+
+            // ---- ¿El técnico marcó que ahí está el predio? ----
+            $this->ubicarElPredioSiLoPidio($request, $technicalOrder);
 
             // ---- Traslado: el servicio cambia de caja NAP ----
             $puertoLiberado = $this->reasignarPuertoNap($request, $technicalOrder);
@@ -1175,6 +1194,95 @@ class TechnicalOrderController extends Controller
      *
      * @return array<string, mixed>
      */
+    /**
+     * Guarda la ubicación del cierre como la del predio, si el técnico
+     * lo pidió.
+     *
+     * CUÁNDO SE OFRECE
+     * ----------------
+     * Solo en instalación y traslado, y solo si el contrato no tiene
+     * punto (ver TechnicalOrder::puedeUbicarElPredio). En esos dos
+     * trabajos el técnico está en la vivienda del cliente, y es la
+     * única ocasión en que alguien está allí con un teléfono capaz de
+     * dar coordenadas.
+     *
+     * POR QUÉ SE VUELVE A COMPROBAR TODO AQUÍ
+     * ---------------------------------------
+     * La casilla la pinta la vista solo cuando procede, pero una
+     * casilla es un dato del navegador: llega marcada si alguien la
+     * marca, y también si alguien la inventa. Las condiciones se
+     * comprueban de nuevo contra la base, porque las consecuencias no
+     * son visibles — un punto equivocado se usa para sugerir la caja
+     * NAP más cercana y para verificar que las órdenes se cierran
+     * donde está el servicio, y las dos cosas empiezan a mentir sin
+     * que nadie lo note.
+     *
+     * NO PISA UNA UBICACIÓN QUE YA EXISTA. Si entre que se abrió la
+     * pantalla y se cerró la orden alguien ubicó el contrato a mano
+     * sobre el mapa, gana ese punto: lo puso una persona mirando, no
+     * un GPS de celular bajo un alero.
+     */
+    private function ubicarElPredioSiLoPidio(Request $request, TechnicalOrder $technicalOrder): void
+    {
+        $modo = $request->input('ubicacion_predio');
+
+        if (!in_array($modo, ['cierre', 'mapa'], true)) {
+            return;
+        }
+
+        $technicalOrder->refresh()->loadMissing('contract');
+
+        if (!$technicalOrder->puedeUbicarElPredio()) {
+            return;
+        }
+
+        // DE DÓNDE SALE EL PUNTO.
+        //
+        // «cierre» es donde estaba el técnico; «mapa» es donde él dice
+        // que está la vivienda. La segunda existe porque la primera no
+        // siempre sirve: un GPS con poca señal, una orden que se cierra
+        // desde la calle, o un edificio donde el punto cae en el
+        // vecino. Quien estuvo allí sabe corregirlo mejor que el
+        // teléfono.
+        if ($modo === 'cierre') {
+            if (!$technicalOrder->hasClosingLocation()) {
+                return;
+            }
+
+            $latitud = (float) $technicalOrder->closing_latitude;
+            $longitud = (float) $technicalOrder->closing_longitude;
+        } else {
+            if (!$request->filled('predio_latitude') || !$request->filled('predio_longitude')) {
+                return;
+            }
+
+            $latitud = (float) $request->input('predio_latitude');
+            $longitud = (float) $request->input('predio_longitude');
+        }
+
+        try {
+            app(\App\Services\ContractGeolocator::class)->locate(
+                $technicalOrder->contract,
+                $latitud,
+                $longitud,
+                // Las dos quedan como «tomada al cerrar una orden en
+                // sitio»: lo que distingue este origen de los demás es
+                // QUIÉN la puso y CUÁNDO —el técnico, en la visita—, y
+                // eso vale igual si la marcó en el mapa estando allí.
+                Contract::LOCATION_SOURCE_ORDER,
+            );
+        } catch (\RuntimeException $e) {
+            // Una coordenada que el geolocalizador rechaza no puede
+            // tumbar el cierre de un trabajo que ya está hecho. El
+            // contrato se queda sin ubicar, que es como estaba.
+            Log::warning('No se pudo ubicar el predio desde el cierre de la orden', [
+                'orden' => $technicalOrder->id,
+                'contrato' => $technicalOrder->contract_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function closingLocationData(Request $request, TechnicalOrder $technicalOrder): array
     {
         if ($technicalOrder->hasClosingLocation()) {

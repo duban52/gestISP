@@ -85,20 +85,37 @@ class OntServicePortTest extends TestCase
         $this->assertDatabaseMissing('onts', ['sn' => 'HWTC-IMPORTADA']);
     }
 
-    public function test_no_elimina_si_la_olt_no_reporta_el_service_port(): void
+    /**
+     * ESTA PRUEBA CAMBIÓ DE EXPECTATIVA A PROPÓSITO.
+     *
+     * Antes exigía lo contrario: que sin service-port NO se eliminara.
+     * La razón era buena —«enviaría un comando incompleto al equipo»,
+     * un `undo service-port ` con el hueco vacío— pero la solución era
+     * la equivocada: detener el borrado entero.
+     *
+     * En producción eso dejó ONTs atrapadas sin forma de quitarlas del
+     * panel, que es peor que el problema que evitaba. El riesgo real
+     * se cerró donde tocaba: `deleteOnt()` SALTA ese paso cuando no hay
+     * service-port, en vez de mandar el comando a medias, y sigue con
+     * `ont delete`, que es lo que de verdad quita la ONT del equipo.
+     *
+     * Lo que se defiende ahora es que el borrado llegue a intentarse.
+     * Que no mande el comando incompleto lo cubre OntBorradoTest.
+     */
+    public function test_sin_service_port_el_borrado_no_se_detiene(): void
     {
         $this->mock(OltSshService::class, function ($mock) {
             $mock->shouldReceive('resolveServicePort')->once()->andReturn(null);
-            // deleteOnt NO debe ejecutarse: enviaría un comando
-            // incompleto al equipo
-            $mock->shouldNotReceive('deleteOnt');
+            // Se intenta igual: el service-port es una limpieza previa,
+            // no el objetivo.
+            $mock->shouldReceive('deleteOnt')->once()->andReturn(OltSshService::BORRADA_EN_LA_OLT);
         });
 
         $this->delete(route('onts.destroy', $this->ont))
             ->assertRedirect()
-            ->assertSessionHas('error');
+            ->assertSessionHas('success-delete');
 
-        $this->assertDatabaseHas('onts', ['sn' => 'HWTC-IMPORTADA']);
+        $this->assertDatabaseMissing('onts', ['sn' => 'HWTC-IMPORTADA']);
     }
 
     public function test_no_vuelve_a_consultar_si_la_ont_ya_tiene_service_port(): void

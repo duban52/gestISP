@@ -127,11 +127,63 @@ $(document).ready(function () {
         locationStatus.attr('class', 'alert py-2 px-3 small mb-0 ' + cssClass).html(html);
     }
 
+    /**
+     * La pregunta de "¿es esta la ubicacion del predio?".
+     *
+     * Solo la pinta Blade en instalaciones y traslados de un contrato
+     * sin ubicar; en el resto de ordenes no existe en la pagina. Y se
+     * esconde mientras no haya un punto de verdad: ofrecer guardar
+     * "la ubicacion actual" cuando no se pudo tomar ninguna solo
+     * sirve para que alguien marque la casilla y no pase nada.
+     */
+    const opcionCierre = $('#predio-cierre');
+    const ayudaCierre = $('#predio-cierre-ayuda');
+    const opcionNoDefinir = $('#predio-no');
+
+    function ofrecerUbicarElPredio(hayUbicacion, metros) {
+        if (opcionCierre.length === 0) {
+            return;
+        }
+
+        opcionCierre.prop('disabled', !hayUbicacion);
+
+        if (hayUbicacion) {
+            ayudaCierre.text('Tomada con el GPS, margen de error de ' + metros + ' m.');
+
+            return;
+        }
+
+        // Si el tecnico la habia elegido y luego reintento sin exito,
+        // dejarla elegida mandaria al servidor una peticion sin
+        // coordenadas. Se vuelve a "no definirla", que es lo unico
+        // cierto en ese momento.
+        if (opcionCierre.is(':checked')) {
+            opcionNoDefinir.prop('checked', true).trigger('change');
+        }
+
+        ayudaCierre.text('Disponible cuando se haya tomado la ubicación.');
+    }
+
+    // El mapa solo se despliega si se elige marcarlo a mano: ocupa
+    // media pantalla en un telefono y estorbaria en los otros dos
+    // casos.
+    //
+    // Se abre con `collapse` y no escondiendolo a mano porque
+    // partials/leaflet-script escucha `shown.bs.collapse`, y es ahi
+    // donde crea el mapa y le recalcula el tamano. Un mapa nacido
+    // dentro de un bloque oculto se dibuja en una caja de cero
+    // pixeles y aparece gris.
+    $('input[name="ubicacion_predio"]').on('change', function () {
+        $('#predio-mapa-bloque').collapse(this.value === 'mapa' ? 'show' : 'hide');
+    });
+
     function locationFailed(reason, hint) {
         locationInputs.latitude.val('');
         locationInputs.longitude.val('');
         locationInputs.accuracy.val('');
         locationInputs.error.val(reason);
+
+        ofrecerUbicarElPredio(false, 0);
 
         showLocationStatus(
             'alert-warning',
@@ -206,6 +258,8 @@ $(document).ready(function () {
                     '<i class="fas fa-map-marker-alt mr-1"></i> Ubicación tomada ' +
                     '<span class="text-muted">(margen de error: ' + accuracy + ' m)</span>'
                 );
+
+                ofrecerUbicarElPredio(true, accuracy);
             },
             function (error) {
                 if (settled) {
