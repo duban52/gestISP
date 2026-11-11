@@ -157,7 +157,13 @@ class BranchColumnTest extends TestCase
         $hayColumna = str_contains($html, '<th>Sucursal</th>');
 
         // ...pero DataTables puede estar escondiéndola.
-        $escondida = str_contains($html, '{ visible: false, targets: 0 }');
+        //
+        // Se busca el índice con una expresión y no fijo en 0: el
+        // número depende de cuántas columnas haya ANTES de la de
+        // sucursal, y añadir una (la casilla de selección del PDF
+        // masivo en facturas) lo corría. La prueba fallaba por un
+        // detalle de maquetación, no porque la columna se viera.
+        $escondida = (bool) preg_match('/visible:\s*false,\s*targets:\s*\d+/', $html);
 
         // Redes se pinta como tarjetas y lleva su propio distintivo.
         // Se busca por una clase propia y no por el icono: `fa-store`

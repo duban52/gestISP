@@ -6,6 +6,9 @@
 @endsection
 
 @section('content')
+
+    @include('gestisp.partials.alerta-error')
+
     <div class="callout callout-info">
         Tras crearla habrá que darle <strong>al menos una sucursal</strong>: una empresa
         sin sucursales no puede operar, porque nadie puede entrar a ella.

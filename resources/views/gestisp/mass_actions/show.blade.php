@@ -22,6 +22,9 @@
 @endsection
 
 @section('content')
+
+    @include('gestisp.partials.alerta-error')
+
     @include('gestisp.partials.resultado-accion')
 
     {{-- La cadena de la reversión: desde cualquiera de las dos acciones

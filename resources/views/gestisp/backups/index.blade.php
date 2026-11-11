@@ -21,6 +21,9 @@
 
 @section('content')
 
+    @include('gestisp.partials.alerta-error')
+
+
     @foreach(['success' => 'success', 'warning' => 'warning', 'error' => 'danger'] as $clave => $color)
         @if(session($clave))
             <div class="alert alert-{{ $color }} alert-dismissible">

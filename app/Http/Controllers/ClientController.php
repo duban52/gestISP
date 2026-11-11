@@ -465,12 +465,71 @@ class ClientController extends Controller
     /**
      * Remove the specified resource from storage.
      */
+    /**
+     * Elimina un cliente que no arrastre nada.
+     *
+     * POR QUÉ ESTA COMPROBACIÓN NO ES OPCIONAL
+     * ----------------------------------------
+     * Esto era `$client->delete()` a secas. En la base, la cadena de
+     * claves foráneas es:
+     *
+     *     clients → contracts            ON DELETE CASCADE
+     *               contracts → invoices          CASCADE
+     *                           technical_orders  CASCADE
+     *                           account_credits   CASCADE
+     *                           payment_retentions CASCADE
+     *
+     * Y `Client` no usa SoftDeletes. Es decir: borrar un cliente no
+     * daba un error — **se llevaba por delante, en silencio y sin
+     * confirmación, sus contratos, sus facturas (incluidas las
+     * electrónicas ya transmitidas a la DIAN, que son documentos
+     * fiscales que no se pueden desaparecer) y todo su historial.**
+     *
+     * Cuando la cadena sí chocaba con una clave que no permite el
+     * borrado, el resultado era un 500 sin explicación. Dos formas de
+     * fallar, las dos malas.
+     *
+     * La comprobación va aquí y no en la base porque cambiar las
+     * reglas de borrado de una base en producción es una migración
+     * arriesgada sobre datos vivos; esto cierra la puerta por la que
+     * se entra, que es lo urgente. Dejar el esquema coherente queda
+     * anotado como trabajo aparte.
+     */
     public function destroy(Client $client)
     {
-        //
+        $contratos = $client->contracts()->count();
+
+        if ($contratos > 0) {
+            return back()->with('error', sprintf(
+                'No es posible eliminar a %s porque tiene %s asociado%s. '
+                . 'Elimine o ceda %s antes de continuar: borrar el cliente se llevaría también '
+                . 'sus facturas y su historial.',
+                trim($client->name . ' ' . $client->last_name),
+                $contratos === 1 ? '1 contrato' : "{$contratos} contratos",
+                $contratos === 1 ? '' : 's',
+                $contratos === 1 ? 'ese contrato' : 'esos contratos',
+            ));
+        }
+
+        // Puede no tener contratos y aun así tener facturas: las de un
+        // contrato que se cedió, por ejemplo. Son documentos fiscales.
+        $facturas = \App\Models\Invoice::withoutGlobalScopes()
+            ->where('client_id', $client->id)
+            ->count();
+
+        if ($facturas > 0) {
+            return back()->with('error', sprintf(
+                'No es posible eliminar a %s porque tiene %s factura%s a su nombre. '
+                . 'Las facturas son documentos fiscales y no se pueden eliminar.',
+                trim($client->name . ' ' . $client->last_name),
+                $facturas,
+                $facturas === 1 ? '' : 's',
+            ));
+        }
+
         $client->delete();
 
-        return redirect()->action([ClientController::class, 'index'],  compact('client'))
+        return redirect()->action([ClientController::class, 'index'])
             ->with('success-delete', 'Cliente eliminado con éxito');
     }
 }

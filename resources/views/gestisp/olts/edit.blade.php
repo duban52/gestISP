@@ -8,6 +8,9 @@
 
 @section('content')
 
+    @include('gestisp.partials.alerta-error')
+
+
     {{-- Tambien los errores: antes esta pantalla solo mostraba los aciertos. --}}
     @include('gestisp.partials.resultado-accion')
 

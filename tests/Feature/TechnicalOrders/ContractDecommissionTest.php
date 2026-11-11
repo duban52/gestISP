@@ -221,7 +221,12 @@ class ContractDecommissionTest extends TestCase
         });
 
         $this->mock(OltSshService::class, function ($mock) {
-            $mock->shouldReceive('deleteOnt')->andReturnNull();
+            // `deleteOnt` devuelve POR QUÉ terminó —la quitó del equipo
+            // o el equipo ya no la tenía—, así que un doble que
+            // devuelva null rompe el tipo de retorno. Aquí da igual
+            // cuál de las dos: lo que se prueba es la baja del
+            // contrato, no el diálogo con la OLT.
+            $mock->shouldReceive('deleteOnt')->andReturn(OltSshService::BORRADA_EN_LA_OLT);
         });
     }
 

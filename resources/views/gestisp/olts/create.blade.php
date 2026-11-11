@@ -6,6 +6,9 @@
     </div>
 @endsection
 @section('content')
+
+    @include('gestisp.partials.alerta-error')
+
     <div class="card">
         <div class="card-body">
             <form method="POST" action="{{ route('olts.store') }}" enctype="multipart/form-data">

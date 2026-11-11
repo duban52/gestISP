@@ -7,6 +7,9 @@
 @endsection
 
 @section('content')
+
+    @include('gestisp.partials.alerta-error')
+
     {{--
         La pantalla de confirmación.
 

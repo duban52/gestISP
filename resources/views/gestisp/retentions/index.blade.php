@@ -8,6 +8,9 @@
 
 @section('content')
 
+    @include('gestisp.partials.alerta-error')
+
+
     {{-- ============================================================
          Explicación en pantalla: la mayoría de los cajeros no tiene
          por qué saber qué es una retención, y quien consulta este

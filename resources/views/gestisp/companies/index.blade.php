@@ -13,6 +13,9 @@
 @endsection
 
 @section('content')
+
+    @include('gestisp.partials.alerta-error')
+
     @includeWhen(session('success'), 'gestisp.companies._alerta', ['tipo' => 'success', 'texto' => session('success')])
 
     <div class="callout callout-info">

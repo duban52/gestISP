@@ -41,6 +41,9 @@
 
 @section('content')
 
+    @include('gestisp.partials.alerta-error')
+
+
     {{-- ---------- Resumen del arqueo ---------- --}}
     <div class="section-title">Resumen del arqueo</div>
 

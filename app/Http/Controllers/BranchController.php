@@ -240,8 +240,47 @@ class BranchController extends Controller
      * contratos, OLTs, etc.) la eliminación fallará por las llaves
      * foráneas de la base de datos.
      */
+    /**
+     * Elimina una sucursal que no tenga operación detrás.
+     *
+     * ESTO ERA `$branch->delete()` A SECAS.
+     *
+     * De `branches` colgaban en cascada los contratos, los clientes,
+     * las cajas, las secuencias de numeración autorizadas por la DIAN
+     * y —a través de los contratos— TODAS las facturas de la sede.
+     * Un clic borraba la operación completa de una sucursal sin un
+     * solo aviso.
+     *
+     * La migración que protege el esquema hace que la base lo rechace,
+     * pero un rechazo de la base llega como un error 500 ininteligible.
+     * Esto es la otra mitad: decir ANTES qué lo impide y cuánto hay.
+     *
+     * Se cuenta sin los scopes globales a propósito: el scope de
+     * empresa podría ocultar justo las filas que hacen peligroso el
+     * borrado, y entonces la comprobación diría que no hay nada.
+     */
     public function destroy(Branch $branch): RedirectResponse
     {
+        $loQueCuelga = collect([
+            'contratos' => \App\Models\Contract::withoutGlobalScopes()->where('branch_id', $branch->id)->count(),
+            'clientes' => \App\Models\Client::withoutGlobalScopes()->where('branch_id', $branch->id)->count(),
+            'cajas' => \App\Models\CashRegister::withoutGlobalScopes()->where('branch_id', $branch->id)->count(),
+        ])->filter();
+
+        if ($loQueCuelga->isNotEmpty()) {
+            $detalle = $loQueCuelga
+                ->map(fn ($cuantos, $que) => "{$cuantos} {$que}")
+                ->implode(', ');
+
+            return back()->with('error', sprintf(
+                'No es posible eliminar la sucursal «%s»: tiene %s. Eliminar una sucursal '
+                . 'se llevaría también sus facturas y su numeración autorizada por la DIAN, '
+                . 'que son documentos fiscales. Desactívela en vez de eliminarla.',
+                $branch->name,
+                $detalle,
+            ));
+        }
+
         $branch->delete();
 
         return redirect()

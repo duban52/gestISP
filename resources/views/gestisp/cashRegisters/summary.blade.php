@@ -9,6 +9,9 @@
 @endsection
 
 @section('content')
+
+    @include('gestisp.partials.alerta-error')
+
     {{-- ============================================================
          Cuadre entre puntos de cobro: todas las cajas de la
          sucursal abiertas en el rango, con sus totales, el

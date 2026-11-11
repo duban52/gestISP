@@ -158,19 +158,35 @@ class ConsolidatedFlowsTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    public function test_el_pdf_masivo_recibe_la_sucursal_por_la_url(): void
+    /**
+     * El PDF masivo ahora va por POST y contesta JSON.
+     *
+     * Antes era un GET que redirigía. Se cambió por dos motivos: un
+     * GET que encola el render de miles de facturas lo puede disparar
+     * una precarga del navegador, y el botón abre un modal de
+     * opciones que necesita saber el id de la generación para seguir
+     * su avance. Lo que esta prueba defiende no cambia: que en panel
+     * consolidado la sucursal llegue y se respete.
+     */
+    public function test_el_pdf_masivo_recibe_la_sucursal(): void
     {
-        // El botón va por AJAX GET y el JS le cuelga branch_id a la URL.
-        $this->get(route('invoices.generate_max_pdf', ['branch_id' => $this->norte->id]))
-            ->assertRedirect()
-            ->assertSessionHasNoErrors();
+        $respuesta = $this->postJson(route('invoices.generate_max_pdf'), [
+            'branch_id' => $this->norte->id,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('pdf_reports', [
+            'id' => $respuesta->json('id'),
+            'branch_id' => $this->norte->id,
+        ]);
     }
 
     public function test_el_pdf_masivo_sin_sucursal_avisa(): void
     {
-        $this->get(route('invoices.generate_max_pdf'))
-            ->assertRedirect()
-            ->assertSessionHasErrors('branch_id');
+        // En consolidado no hay sucursal activa: hay que decir de cuál
+        // se emite, porque el PDF lleva su membrete y su numeración.
+        $this->postJson(route('invoices.generate_max_pdf'))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('branch_id');
     }
 
     // ==================== Importación en dos pantallas ====================

@@ -24,6 +24,9 @@
 
 @section('content')
 
+    @include('gestisp.partials.alerta-error')
+
+
     @php
         $money = fn ($v) => '$' . number_format((float) $v, 2, ',', '.');
 

@@ -7,6 +7,9 @@
 @endsection
 
 @section('content')
+
+    @include('gestisp.partials.alerta-error')
+
     {{--
         Historial de todo lo que se ejecutó sobre muchos registros a la
         vez: importaciones, cortes y corridas de facturación.

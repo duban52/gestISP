@@ -67,6 +67,22 @@
             margin: 0 0 .6rem;
         }
         p.mensaje { font-size: 1rem; line-height: 1.55; color: #4a5568; margin: 0 0 1.1rem; }
+        .incidente {
+            margin-top: 1.5rem;
+            padding: .75rem 1rem;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-size: .9rem;
+            color: #495057;
+        }
+
+        .incidente code {
+            font-weight: 700;
+            letter-spacing: .5px;
+            color: #b02a37;
+        }
+
         ul.sugerencias {
             text-align: left;
             display: inline-block;
@@ -109,6 +125,18 @@
                     <li>{{ $sugerencia }}</li>
                 @endforeach
             </ul>
+        @endif
+
+        {{-- EL CÓDIGO DEL INCIDENTE.
+             Es lo único que ata «me salió un error» con la línea exacta
+             del log del servidor. Se enseña para que el usuario pueda
+             dictarlo; lo que NO se enseña nunca es el mensaje técnico,
+             el archivo ni la traza. --}}
+        @if(!empty($incidente))
+            <p class="incidente">
+                Código del incidente: <code>{{ $incidente }}</code><br>
+                <small>Si el problema persiste, comunique este código a soporte técnico.</small>
+            </p>
         @endif
 
         <div class="acciones">
