@@ -73,6 +73,42 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+        |----------------------------------------------------------------
+        | Incidentes por módulo
+        |----------------------------------------------------------------
+        |
+        | Los errores inesperados de clientes y de contratos se escriben
+        | ADEMÁS en su propio archivo (el manejador de excepciones decide
+        | cuál según el controlador). Siguen yendo también al log
+        | general: así un `grep ERR-XXXXXXXX laravel.log` encuentra
+        | cualquier incidente sin tener que saber de qué módulo era.
+        |
+        | Son `daily`, que es lo que les da la rotación: un archivo por
+        | día —gestisp-clients-2026-11-11.log— y a los 30 días el más
+        | viejo se borra solo. Un archivo único crecería sin límite, y
+        | en un servidor eso acaba siendo un disco lleno de madrugada.
+        |
+        | El nivel es `warning` y no el del log general: aquí solo se
+        | quiere lo que falló, no la telemetría.
+        |
+        */
+        'clientes' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/gestisp-clients.log'),
+            'level' => 'warning',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'contratos' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/gestisp-contracts.log'),
+            'level' => 'warning',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

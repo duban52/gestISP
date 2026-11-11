@@ -223,6 +223,96 @@ class ContractController extends Controller
     }
 
     /**
+     * Lo que el formulario de alta puede escribir en un contrato.
+     *
+     * Todo lo que no esté aquí —el estado, el número, el descuento,
+     * las fechas de facturación— tiene su propio camino, con sus
+     * propias comprobaciones, y no entra por el alta aunque venga en
+     * la petición. Ver el comentario de `store()`.
+     */
+    private const CAMPOS_DEL_ALTA = [
+        'branch_id', 'affinity_group_id', 'client_id', 'plan_id', 'user_id',
+        'department', 'municipality', 'neighborhood', 'address',
+        'home_type', 'social_stratum', 'permanence_clause',
+        'nap_port', 'cpe_sn', 'user_pppoe', 'password_pppoe',
+        'ssid_wifi', 'password_wifi', 'comment',
+    ];
+
+    /**
+     * El plan tiene que existir y estar disponible en la sucursal.
+     *
+     * Compartida entre el alta y el cambio de plan. Antes solo la
+     * tenía el alta: el modal de «Datos del servicio» escribía
+     * `plan_id` tal cual llegaba, así que por ahí se podía dejar el
+     * contrato SIN plan —que es justo lo que el alta impide, porque un
+     * contrato sin plan no factura—, ponerle un plan exclusivo de otra
+     * sede, o mandar un id inexistente y recibir un error 500 de clave
+     * foránea.
+     *
+     * `$planActual` es la excepción de siempre: guardar el modal sin
+     * tocar el plan no puede fallar porque el que ya tenía se retiró o
+     * es de cuando las reglas eran otras.
+     */
+    private function validarPlan(Request $request, int $branchId, ?int $planActual = null): void
+    {
+        $request->validate([
+            'plan_id' => [
+                'required',
+                // Los `where` anidados NO sobran: sin el de fuera, el
+                // `orWhere` se saldría del paréntesis y anularía la
+                // condición de la sucursal — cualquier plan valdría.
+                Rule::exists('plans', 'id')->where(
+                    fn ($q) => $q->where(function ($w) use ($branchId, $planActual) {
+                        $w->whereNull('branch_id')->orWhere('branch_id', $branchId);
+
+                        if ($planActual) {
+                            $w->orWhere('id', $planActual);
+                        }
+                    }),
+                ),
+            ],
+            'permanence_clause' => ['nullable', 'integer', 'min:0'],
+        ], [
+            'plan_id.required' => 'Elija el plan de servicio: sin plan el contrato no tiene precio '
+                . 'ni servicios que facturar.',
+            'plan_id.exists' => 'Ese plan no pertenece a la sucursal en la que se registra el contrato.',
+            'permanence_clause.integer' => 'La cláusula de permanencia va en meses, como número entero.',
+            'permanence_clause.min' => 'La cláusula de permanencia no puede ser negativa.',
+        ]);
+    }
+
+    /**
+     * Los datos técnicos, contra el tamaño real de sus columnas.
+     *
+     * Ninguno es obligatorio —un contrato se da de alta antes de
+     * instalarse— pero todos tienen un tope, y nadie lo comprobaba:
+     * `cpe_sn` es un varchar(20), y un serial de 21 caracteres pasaba
+     * de largo hasta MySQL, que respondía con un «Data too long» y la
+     * pantalla con un error 500. El técnico que pega un serial con
+     * espacios de más merece un mensaje, no una página de error.
+     */
+    private function validarDatosTecnicos(Request $request): void
+    {
+        $request->validate([
+            'cpe_sn' => ['nullable', 'string', 'max:20'],
+            'user_pppoe' => ['nullable', 'string', 'max:255'],
+            'password_pppoe' => ['nullable', 'string', 'max:255'],
+            'ssid_wifi' => ['nullable', 'string', 'max:255'],
+            'password_wifi' => ['nullable', 'string', 'max:255'],
+            'nap_port' => ['nullable', 'string', 'max:255'],
+            'comment' => ['nullable', 'string', 'max:255'],
+        ], [
+            'cpe_sn.max' => 'El serial del equipo no puede pasar de 20 caracteres. '
+                . 'Revise que no se haya pegado con espacios o texto de más.',
+            'user_pppoe.max' => 'El usuario PPPoE es demasiado largo (máximo 255 caracteres).',
+            'password_pppoe.max' => 'La contraseña PPPoE es demasiado larga (máximo 255 caracteres).',
+            'ssid_wifi.max' => 'El nombre de la red wifi es demasiado largo (máximo 255 caracteres).',
+            'password_wifi.max' => 'La contraseña del wifi es demasiado larga (máximo 255 caracteres).',
+            'comment.max' => 'El comentario no puede pasar de 255 caracteres.',
+        ]);
+    }
+
+    /**
      * Los datos de la residencia que la tabla exige.
      *
      * `neighborhood`, `address` y `home_type` son NOT NULL en
@@ -329,20 +419,8 @@ class ContractController extends Controller
         // Los dos `where` anidados NO sobran. Sin el de fuera, el
         // `orWhere` se saldria del parentesis y anularia la condicion
         // de la sucursal — cualquier plan valdria.
-        $request->validate([
-            'plan_id' => [
-                'required',
-                Rule::exists('plans', 'id')->where(
-                    fn ($q) => $q->where(
-                        fn ($w) => $w->whereNull('branch_id')->orWhere('branch_id', $branchId),
-                    ),
-                ),
-            ],
-        ], [
-            'plan_id.required' => 'Elija el plan de servicio: sin plan el contrato no tiene precio '
-                . 'ni servicios que facturar.',
-            'plan_id.exists' => 'Ese plan no pertenece a la sucursal en la que se registra el contrato.',
-        ]);
+        $this->validarPlan($request, $branchId);
+        $this->validarDatosTecnicos($request);
 
         // EL GRUPO DE CONTRATO.
         //
@@ -369,12 +447,48 @@ class ContractController extends Controller
         // Va en una transacción porque el generador bloquea la fila de
         // la sucursal para que dos altas simultáneas no repitan número.
         $contract = DB::transaction(function () use ($request) {
-            // Las coordenadas se excluyen del alta masiva: entran
-            // después por ContractGeolocator, que es quien anota QUIÉN
-            // ubicó, CUÁNDO y CON QUÉ, y lo deja en la trazabilidad.
-            $nuevo = Contract::create($request->except(['latitude', 'longitude', 'location_source']));
+            // SOLO LO QUE EL FORMULARIO DE ALTA TIENE DERECHO A ESCRIBIR.
+            //
+            // Esto era `$request->except([...coordenadas])`: todo lo
+            // demás que llegara en el POST entraba al contrato, y el
+            // `$fillable` incluye el estado, el número, el descuento y
+            // la fecha de inicio de facturación. Con una petición
+            // manipulada se podía crear un contrato que naciera
+            // «Activo» sin instalarse, con un descuento del 500 % —que
+            // la acción de descuentos rechaza porque deja la factura
+            // en negativo— o que no empezara a facturarse hasta 2099.
+            //
+            // Una lista de lo que SÍ se admite no envejece mal: un
+            // campo nuevo en el modelo queda fuera hasta que alguien
+            // decida a propósito que el alta puede escribirlo. Con la
+            // lista de exclusiones pasaba al revés.
+            //
+            // Las coordenadas siguen fuera: entran después por
+            // ContractGeolocator, que es quien anota QUIÉN ubicó,
+            // CUÁNDO y CON QUÉ, y lo deja en la trazabilidad.
+            $nuevo = Contract::create($request->only(self::CAMPOS_DEL_ALTA));
 
             app(ContractNumberGenerator::class)->asignar($nuevo);
+
+            // LA ORDEN DE INSTALACIÓN NACE CON EL CONTRATO, O NO NACE
+            // NINGUNO DE LOS DOS.
+            //
+            // Estaba fuera de la transacción. Si fallaba —y basta con
+            // que falte un dato obligatorio de la orden— el contrato
+            // quedaba creado y numerado pero sin orden de instalación:
+            // nadie lo tenía en su lista de pendientes y el cliente se
+            // quedaba esperando a un técnico que no sabía que existía.
+            TechnicalOrder::create([
+                'contract_id' => $nuevo->id,
+                // Hereda la del contrato: la orden es para instalar ESE
+                // servicio, no puede estar en otra sede.
+                'branch_id' => $nuevo->branch_id,
+                'created_by' => Auth::user()->id,
+                'type' => 'Servicio',
+                'status' => 'Pendiente',
+                'detail' => 'Instalación de servicio (creación automática)',
+                'initial_comment' => 'Instalación del servicio',
+            ]);
 
             return $nuevo;
         });
@@ -396,20 +510,6 @@ class ContractController extends Controller
                 $locationWarning = ' ' . $e->getMessage();
             }
         }
-
-        //Creación de orden automática al crear contrato
-
-        TechnicalOrder::create([
-            'contract_id' => $contract->id,
-            // Hereda la del contrato: la orden es para instalar ESE
-            // servicio, no puede estar en otra sede.
-            'branch_id' => $contract->branch_id,
-            'created_by' => Auth::user()->id,
-            'type' => 'Servicio',
-            'status' => 'Pendiente',
-            'detail' => 'Instalación de servicio (creación automática)',
-            'initial_comment' => 'Instalación del servicio'
-        ]);
 
         // Bienvenida al cliente por correo y WhatsApp. Va en cola:
         // no demora la creación del contrato. La orden de instalación
@@ -616,7 +716,22 @@ class ContractController extends Controller
      */
     public function update(Request $request, Contract $contract)
     {
-        if (isset($request->neighborhood) || isset($request->address) || isset($request->home_type) || isset($request->social_stratum) ){
+        // QUÉ FORMULARIO ES SE DECIDE POR LOS CAMPOS QUE TRAE, NO POR SI
+        // VIENEN RELLENOS.
+        //
+        // Esto usaba `isset()`, que es falso cuando el campo llega
+        // vacío. Los tres modales de la ficha comparten esta acción, y
+        // un modal con sus campos en blanco no se reconocía como suyo:
+        // la petición seguía de largo hasta la última rama, la de datos
+        // técnicos, que escribe lo que reciba. Guardar «Datos del
+        // servicio» con el plan y la permanencia vacíos dejaba en NULO
+        // el serial del equipo, el usuario y la clave PPPoE y el wifi
+        // del contrato — un formulario borrando los datos de otro, sin
+        // un solo aviso.
+        //
+        // Con `has()` cada modal cae en su rama aunque venga vacío, y
+        // es SU validación la que le dice qué falta.
+        if ($request->hasAny(['neighborhood', 'address', 'home_type', 'social_stratum'])) {
             // El mismo 500 que el alta: borrar el barrio en el modal
             // de residencia intentaba escribir NULL en una columna que
             // no lo admite.
@@ -630,7 +745,7 @@ class ContractController extends Controller
                 'department' => $request->department,
                 'municipality' => $request->municipality,
             ]);
-        }elseif (isset($request->plan_id) || isset($request->permanence_clause)){
+        } elseif ($request->hasAny(['plan_id', 'permanence_clause'])) {
             // El grupo se valida aparte porque cambiarlo NO es como
             // cambiar el plan: cambia por que camino saldra la factura
             // de este contrato de aqui en adelante. Tiene que ser de la
@@ -654,6 +769,12 @@ class ContractController extends Controller
                 'affinity_group_id.exists' => 'Ese grupo de afinidad no existe en esta empresa o está inactivo.',
             ]);
 
+            // El plan pasa por la MISMA regla que en el alta. Esta rama
+            // lo escribía tal cual llegaba: vacío dejaba el contrato sin
+            // plan —y sin plan no factura—, y un id inexistente era un
+            // error 500 de clave foránea.
+            $this->validarPlan($request, (int) $contract->branch_id, $contract->plan_id);
+
             $cambios = [
                 'plan_id' => $request->plan_id,
                 'permanence_clause' => $request->permanence_clause,
@@ -672,6 +793,10 @@ class ContractController extends Controller
             // responder quien lo decidio y cuando.
             $contract->update($cambios);
         }else{
+            // Contra el tamaño real de las columnas: un serial de 21
+            // caracteres en un varchar(20) era un error 500.
+            $this->validarDatosTecnicos($request);
+
             $contract->update([
                 'cpe_sn' => $request->cpe_sn,
                 'user_pppoe' => $request->user_pppoe,
@@ -763,9 +888,27 @@ class ContractController extends Controller
     /**
      * Remove the specified resource from storage.
      */
+    /**
+     * Los contratos no se eliminan.
+     *
+     * Este método estaba vacío: la ruta existía, y quien llegara a
+     * ella recibía una página en blanco sin saber si había pasado
+     * algo. No hay botón que la llame, pero una ruta que responde con
+     * nada es una pantalla en blanco esperando a que alguien la pise.
+     *
+     * Un contrato con historia —facturas, pagos, órdenes— no se borra:
+     * se RETIRA con una orden, que deja constancia de quién lo pidió y
+     * libera el puerto, la cuenta PPPoE y la ONT (ver
+     * ContractDecommissioner). La base además lo impide desde que las
+     * facturas dejaron de borrarse en cascada.
+     */
     public function destroy(Contract $contract)
     {
-        //
+        return back()->with(
+            'error',
+            'Los contratos no se eliminan: tienen facturas, pagos y órdenes que son su historial. '
+            . 'Para dar de baja este contrato, cree una orden de retiro de servicio.',
+        );
     }
 
     public function export()

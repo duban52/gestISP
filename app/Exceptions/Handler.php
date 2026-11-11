@@ -57,6 +57,35 @@ class Handler extends ExceptionHandler
     /** El identificador de este incidente, para log y pantalla. */
     private ?string $incidente = null;
 
+    /**
+     * Módulos con archivo de log propio (ver config/logging.php).
+     *
+     * @var array<string, string>  módulo => canal
+     */
+    private const CANALES = [
+        'clientes' => 'clientes',
+        'contratos' => 'contratos',
+    ];
+
+    /**
+     * De qué módulo es el controlador que falló.
+     *
+     * Se deduce del nombre del controlador y no de la URL: las rutas
+     * de este sistema mezclan prefijos (`gestisp/clients`,
+     * `contratos/{contract}/anticipo`, `contracts/{contract}/ceder`) y
+     * un mismo módulo vive bajo tres raíces distintas. El controlador
+     * es lo único que no engaña.
+     */
+    private function moduloDe(?string $accion): string
+    {
+        return match (true) {
+            $accion === null => 'general',
+            str_starts_with($accion, 'Client') => 'clientes',
+            str_starts_with($accion, 'Contract') => 'contratos',
+            default => 'general',
+        };
+    }
+
     public function register(): void
     {
         $this->reportable(function (Throwable $e) {
@@ -67,7 +96,21 @@ class Handler extends ExceptionHandler
                 return;
             }
 
-            Log::error($this->incidente() . ' ' . $e->getMessage(), $this->contexto($e));
+            $mensaje = $this->incidente() . ' ' . $e->getMessage();
+            $contexto = $this->contexto($e);
+
+            Log::error($mensaje, $contexto);
+
+            // Y ADEMÁS en el archivo de su módulo, si lo tiene. Se
+            // escribe en los dos a propósito: el general permite
+            // encontrar cualquier incidente por su código sin saber de
+            // qué módulo era; el del módulo permite vigilar solo
+            // clientes o solo contratos sin el ruido de todo lo demás.
+            if ($canal = self::CANALES[$contexto['modulo']] ?? null) {
+                // Un fallo al escribir el log del módulo no puede tapar
+                // el error original: ya quedó en el general.
+                rescue(fn () => Log::channel($canal)->error($mensaje, $contexto), report: false);
+            }
 
             // Ya queda registrado aquí: devolver false evita que el
             // manejador de Laravel lo escriba una segunda vez.
@@ -96,8 +139,15 @@ class Handler extends ExceptionHandler
     {
         $request = request();
 
+        // «ClientController@store»: el controlador y el método que
+        // estaban atendiendo la petición cuando falló.
+        $accion = $request?->route()?->getActionName();
+        $accion = $accion && $accion !== 'Closure' ? class_basename($accion) : null;
+
         $contexto = [
             'incidente' => $this->incidente(),
+            'modulo' => $this->moduloDe($accion),
+            'accion' => $accion,
             'excepcion' => $e::class,
             'archivo' => $e->getFile() . ':' . $e->getLine(),
             'ruta' => $request?->route()?->getName() ?: $request?->path(),

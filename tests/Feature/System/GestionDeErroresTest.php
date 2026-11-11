@@ -248,4 +248,93 @@ class GestionDeErroresTest extends TestCase
             'acciones masivas' => ['/gestion/acciones-masivas'],
         ];
     }
+
+    // ============ El código llega a la pantalla ============
+
+    /**
+     * La página de error enseña el código, y nada más que el código.
+     *
+     * Es la mitad que cierra el círculo: el identificador que queda en
+     * el log tiene que ser el mismo que lee el usuario, o no sirve
+     * para atar una cosa con la otra. Y lo que NO puede aparecer es el
+     * mensaje técnico: eso es información interna.
+     */
+    public function test_la_pagina_de_error_muestra_el_codigo_y_no_el_detalle_tecnico(): void
+    {
+        // En producción APP_DEBUG va apagado; con él encendido Laravel
+        // pinta su pantalla de depuración en vez de la nuestra.
+        config(['app.debug' => false]);
+
+        $registrado = null;
+
+        Log::listen(function ($mensaje) use (&$registrado) {
+            if (str_contains($mensaje->message, 'ERR-')) {
+                $registrado = $mensaje->context['incidente'] ?? null;
+            }
+        });
+
+        \Illuminate\Support\Facades\Route::get('/_boom-pagina', function () {
+            throw new \RuntimeException('SQLSTATE secreto: tabla interna rota');
+        })->middleware('web');
+
+        $respuesta = $this->get('/_boom-pagina')->assertStatus(500);
+
+        $this->assertNotNull($registrado);
+        $respuesta->assertSee($registrado, escape: false);
+        $respuesta->assertDontSee('SQLSTATE secreto', escape: false);
+        $respuesta->assertDontSee('RuntimeException', escape: false);
+    }
+
+    // ============ Cada módulo, su archivo ============
+
+    /**
+     * Un incidente de clientes queda TAMBIÉN en el log de clientes.
+     *
+     * Se comprueba contra el archivo de verdad y no contra un doble:
+     * lo que importa es que en el servidor exista un archivo que se
+     * pueda abrir con `tail`, con el código dentro.
+     */
+    public function test_un_incidente_de_clientes_queda_en_su_propio_archivo(): void
+    {
+        $archivo = storage_path('logs/gestisp-clients-' . now()->format('Y-m-d') . '.log');
+        @unlink($archivo);
+
+        Client::creating(function () {
+            throw new \RuntimeException('Fallo simulado al guardar el cliente');
+        });
+
+        $this->post(route('clients.store'), [
+            'document_type_code' => '13',
+            'identity_number' => '1042772330',
+            'name' => 'Juan',
+            'last_name' => 'Pérez',
+            'type_client' => 'Residencial',
+            'number_phone' => '3001234567',
+        ])->assertStatus(500);
+
+        $this->assertFileExists($archivo, 'No se creó el log del módulo de clientes.');
+
+        $contenido = file_get_contents($archivo);
+        @unlink($archivo);
+
+        $this->assertMatchesRegularExpression('/ERR-[A-Z0-9]{8}/', $contenido);
+        // Módulo, controlador y método: lo que permite ir directo al
+        // código sin leer la traza.
+        $this->assertStringContainsString('"modulo":"clientes"', $contenido);
+        $this->assertStringContainsString('ClientController@store', $contenido);
+    }
+
+    public function test_un_incidente_de_otro_modulo_no_ensucia_el_log_de_clientes(): void
+    {
+        $archivo = storage_path('logs/gestisp-clients-' . now()->format('Y-m-d') . '.log');
+        @unlink($archivo);
+
+        \Illuminate\Support\Facades\Route::get('/_boom-general', function () {
+            throw new \RuntimeException('Algo ajeno a clientes');
+        })->middleware('web');
+
+        $this->get('/_boom-general');
+
+        $this->assertFileDoesNotExist($archivo);
+    }
 }

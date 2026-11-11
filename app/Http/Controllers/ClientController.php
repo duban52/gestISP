@@ -329,9 +329,18 @@ class ClientController extends Controller
             ),
         ]);
 
-        $cliente = Client::create($request->all());
+        // EL CLIENTE Y SUS RESPONSABILIDADES FISCALES, JUNTOS O NINGUNO.
+        //
+        // Eran dos pasos sueltos. Si el segundo fallaba, el cliente
+        // quedaba creado sin sus responsabilidades, la pantalla daba
+        // un error, y al reintentar el formulario respondía «ya existe
+        // un cliente con ese documento»: el usuario no podía ni
+        // terminar el alta ni repetirla.
+        DB::transaction(function () use ($request) {
+            $cliente = Client::create($request->all());
 
-        $this->guardarResponsabilidades($cliente, $request);
+            $this->guardarResponsabilidades($cliente, $request);
+        });
 
         return redirect()->action([ClientController::class, 'create'])
             ->with('success-create', 'Cliente creado con éxito');
@@ -414,14 +423,30 @@ class ClientController extends Controller
             'municipality_dane_code' => 'nullable|string|max:5',
             'postal_code' => 'nullable|string|max:10',
             'country_code' => 'nullable|string|max:5',
+            // LOS DATOS DE CONTACTO, CON LAS MISMAS REGLAS QUE EN EL ALTA.
+            //
+            // Se escribían tal cual llegaban. `number_phone` es NOT
+            // NULL: borrar el teléfono y guardar era un error 500 con
+            // «Column 'number_phone' cannot be null» — el mismo fallo
+            // que el barrio del contrato, por la misma causa. Un
+            // teléfono de 21 caracteres, otro 500. Y un correo mal
+            // escrito se guardaba sin más, para descubrirlo el día que
+            // rebota la factura.
+            'number_phone' => 'required|string|max:20',
+            'aditional_phone' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
+        ], [
+            'number_phone.required' => 'Escriba el teléfono principal del cliente: es obligatorio.',
+            'number_phone.max' => 'El teléfono principal no puede pasar de 20 caracteres.',
+            'aditional_phone.max' => 'El teléfono adicional no puede pasar de 20 caracteres.',
+            'email.email' => 'El correo electrónico no tiene un formato válido. Revíselo o déjelo en blanco.',
         ]);
 
-        //Actualizar datos
-        $client->update([
-           'number_phone' => $request->number_phone,
-            'aditional_phone' => $request->aditional_phone,
-            'email' => $request->email,
-        ]);
+        // Solo se toca lo que vino en la petición. Antes, un formulario
+        // que mandara solo el teléfono dejaba en NULO el correo y el
+        // teléfono adicional: se borraban datos que nadie pidió borrar.
+        // Es el mismo criterio que los campos fiscales de más abajo.
+        $client->update($request->only(['number_phone', 'aditional_phone', 'email']));
 
         // Cada campo fiscal solo se toca si vino en la peticion: hay
         // formularios que comparten esta accion y no los incluyen, y
