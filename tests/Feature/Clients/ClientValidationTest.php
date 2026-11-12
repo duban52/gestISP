@@ -291,4 +291,131 @@ class ClientValidationTest extends TestCase
 
         $this->assertSame(0, Client::withoutGlobalScopes()->count());
     }
+
+    // ==================== El formulario, tal como se ve ====================
+
+    /**
+     * Tras un error, el formulario vuelve RELLENO y con el motivo.
+     *
+     * Casi ningún campo usaba `old()` ni pintaba su error: un correo
+     * mal escrito devolvía el formulario vacío y sin una palabra, que
+     * desde fuera es un botón que no hace nada.
+     */
+    public function test_tras_un_error_el_formulario_vuelve_relleno_y_dice_que_fallo(): void
+    {
+        $pagina = $this->followingRedirects()
+            ->from(route('clients.create'))
+            ->post(route('clients.store'), $this->datos(['email' => 'sin-arroba']))
+            ->assertOk();
+
+        // Lo que ya se había escrito sigue ahí...
+        $pagina->assertSee('value="Juan"', escape: false);
+        $pagina->assertSee('value="1042772330"', escape: false);
+        $pagina->assertSee('value="3001234567"', escape: false);
+        // ...y el campo culpable está señalado, con su mensaje.
+        $pagina->assertSee('is-invalid', escape: false);
+        $pagina->assertSee('El correo electrónico no tiene un formato válido', escape: false);
+    }
+
+    public function test_un_documento_repetido_se_explica_en_pantalla(): void
+    {
+        $this->post(route('clients.store'), $this->datos())->assertSessionHasNoErrors();
+
+        $this->followingRedirects()
+            ->from(route('clients.create'))
+            ->post(route('clients.store'), $this->datos())
+            ->assertOk()
+            ->assertSee('Ya existe un cliente con ese documento', escape: false);
+    }
+
+    /**
+     * La opción vacía del tipo de cliente manda vacío.
+     *
+     * No tenía `value`, así que el navegador enviaba su TEXTO y se
+     * guardaba «Seleccione una opción» como tipo de cliente.
+     */
+    public function test_no_se_puede_guardar_el_texto_de_la_opcion_vacia_como_tipo(): void
+    {
+        $this->get(route('clients.create'))
+            ->assertOk()
+            ->assertSee('<option value="">Seleccione una opción</option>', escape: false);
+
+        // Y aunque una página vieja todavía lo mande, el servidor no
+        // lo acepta.
+        $this->post(route('clients.store'), $this->datos(['type_client' => 'Seleccione una opción']))
+            ->assertSessionHasErrors('type_client');
+
+        $this->assertSame(0, Client::withoutGlobalScopes()->count());
+    }
+
+    // ==================== La pantalla de edición ====================
+
+    /**
+     * EL BOTÓN «ACTUALIZAR» NO PUEDE LLEVAR UN DELETE DENTRO.
+     *
+     * El formulario de eliminar estaba anidado en el de actualizar. El
+     * navegador descarta el `<form>` interior y sus campos pasan al
+     * exterior, que acababa enviando `_method=PUT` y `_method=DELETE`;
+     * PHP se queda con el último y la petición llegaba al borrado.
+     * Pulsar «Actualizar cliente» eliminaba al cliente.
+     *
+     * Se mira la página YA RENDERIZADA, con sus parciales dentro: lo
+     * que hay entre la apertura del formulario de actualizar y su
+     * primer `</form>` es exactamente lo que el navegador considera
+     * suyo, y ahí no puede haber ni otro formulario ni un DELETE.
+     */
+    public function test_el_formulario_de_actualizar_no_contiene_el_de_eliminar(): void
+    {
+        $cliente = $this->clienteCreado();
+
+        $html = $this->get(route('clients.edit', $cliente))->assertOk()->getContent();
+
+        $inicio = strpos($html, 'id="formCliente"');
+        $this->assertNotFalse($inicio, 'No se encontró el formulario de actualizar.');
+
+        $fin = strpos($html, '</form>', $inicio);
+        $suyo = substr($html, $inicio, $fin - $inicio);
+
+        $this->assertStringContainsString('value="PUT"', $suyo);
+        $this->assertStringNotContainsString('value="DELETE"', $suyo, 'El formulario de actualizar lleva un DELETE dentro.');
+        $this->assertStringNotContainsString('<form', $suyo, 'Hay un formulario dentro del de actualizar.');
+
+        // El de eliminar existe, pero APARTE.
+        $this->assertStringContainsString('id="formEliminarCliente"', $html);
+    }
+
+    public function test_guardar_bien_lo_dice_en_la_pantalla(): void
+    {
+        // La edición pintaba `success-update` y el controlador avisa
+        // con `success`: guardar bien no mostraba nada.
+        $cliente = $this->clienteCreado();
+
+        $this->followingRedirects()
+            ->from(route('clients.edit', $cliente))
+            ->put(route('clients.update', $cliente), ['number_phone' => '3110001122'])
+            ->assertOk()
+            ->assertSee('Datos del cliente actualizados', escape: false)
+            ->assertSee('value="3110001122"', escape: false);
+    }
+
+    public function test_un_cliente_con_contratos_no_ofrece_el_boton_de_eliminar(): void
+    {
+        // Mejor decirlo de entrada que dejar pulsar para descubrirlo.
+        $cliente = $this->clienteCreado();
+
+        \App\Models\Contract::factory()->create([
+            'branch_id' => $this->sucursal->id,
+            'client_id' => $cliente->id,
+            'plan_id' => \App\Models\Plan::factory()->create([
+                'branch_id' => $this->sucursal->id,
+                'user_id' => $this->usuario->id,
+            ])->id,
+            'user_id' => $this->usuario->id,
+        ]);
+
+        $this->get(route('clients.edit', $cliente))
+            ->assertOk()
+            ->assertSee('1 contrato', escape: false)
+            ->assertDontSee('id="formEliminarCliente"', escape: false);
+    }
 }

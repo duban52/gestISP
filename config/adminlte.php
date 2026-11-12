@@ -923,6 +923,20 @@ return [
                 ],
             ],
         ],
+        // Errores de las peticiones AJAX: un ayudante común para
+        // redactarlos (con el código del incidente) y el aviso de
+        // sesión caducada, que es el único que se da de forma global.
+        // Se carga en todas las páginas del panel.
+        'GestispErrores' => [
+            'active' => true,
+            'files' => [
+                [
+                    'type' => 'js',
+                    'asset' => true,
+                    'location' => 'js/gestisp-errores.js',
+                ],
+            ],
+        ],
         // Ajustes del modo oscuro para los componentes propios
         // (cabeceras de tabla, DataTables, Select2...), que AdminLTE
         // no cubre. Se carga siempre: dentro solo actúa bajo .dark-mode.

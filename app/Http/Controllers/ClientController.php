@@ -307,12 +307,24 @@ class ClientController extends Controller
             ],
             'name' => 'required|string|max:40',
             'last_name' => 'required|string|max:40',
-            'type_client' => 'required|string|max:40',
+            // El formulario viejo tenía la opción «Seleccione una opción»
+            // SIN `value`, y el navegador mandaba ese texto: se guardaba
+            // tal cual como tipo de cliente. La vista ya está corregida,
+            // pero una página abierta desde antes todavía puede enviarlo.
+            'type_client' => ['required', 'string', 'max:40', Rule::notIn(['Seleccione una opción'])],
             'number_phone' => 'required|string|max:20',
             'aditional_phone' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
             'birthday' => 'nullable|date',
         ], [
+            'type_client.required' => 'Elija el tipo de cliente.',
+            'type_client.not_in' => 'Elija el tipo de cliente.',
+            'identity_number.required' => 'El número de documento es obligatorio.',
+            'name.required' => 'Escriba los nombres del cliente.',
+            'last_name.required' => 'Escriba los apellidos del cliente.',
+            'number_phone.required' => 'Escriba el teléfono principal del cliente.',
+            'email.email' => 'El correo electrónico no tiene un formato válido. Revíselo o déjelo en blanco.',
+            'birthday.date' => 'La fecha de nacimiento no es una fecha válida.',
             'identity_number.unique' =>
                 'Ya existe un cliente con ese documento en esta empresa. '
                 . 'Búsquelo en el listado en vez de crearlo otra vez.',

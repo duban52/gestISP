@@ -60,15 +60,25 @@
                     <!--Formulario de paginación-->
                     <div class="col-md-2 mt-1 mb-1">
                         <label for="start_date" class="form-label">Cantidad de resultados</label>
-                        <form method="GET" action="{{ route('transactions.history') }}" class="form-inline">
-                            <select name="per_page" id="per_page" class="form-control mr-2" onchange="this.form.submit()">
-                                <option value="">Resultados por página</option>
-                                <option value="8" {{ request('per_page') == 12 ? 'selected' : '' }}>12</option>
-                                <option value="15" {{ request('per_page') == 20 ? 'selected' : '' }}>15</option>
-                                <option value="25" {{ request('per_page') == 25 ? 'selected' : '' }}>25</option>
-                                <option value="25" {{ request('per_page') == 50 ? 'selected' : '' }}>50</option>
-                            </select>
-                        </form>
+                        {{-- SIN <form> PROPIO. Aquí había un formulario dentro
+                             del formulario de filtros, y HTML no los admite
+                             anidados: el navegador descartaba la etiqueta de
+                             apertura y el </form> de este cerraba el DE FUERA.
+                             El botón «Filtrar», que viene después, quedaba
+                             fuera de todo formulario y no hacía nada; solo se
+                             filtraba al cambiar este desplegable.
+
+                             El select pertenece al formulario de filtros sin
+                             más, y `this.form.submit()` lo envía con el resto.
+
+                             De paso, las opciones mandaban valores cruzados:
+                             decía 12 y enviaba 8, decía 50 y enviaba 25. --}}
+                        <select name="per_page" id="per_page" class="form-control mr-2" onchange="this.form.submit()">
+                            <option value="">Resultados por página</option>
+                            @foreach([12, 15, 25, 50] as $cuantos)
+                                <option value="{{ $cuantos }}" @selected((int) request('per_page') === $cuantos)>{{ $cuantos }}</option>
+                            @endforeach
+                        </select>
                     </div>
 
                     <!-- Botones -->
