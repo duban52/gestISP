@@ -51,7 +51,9 @@ class WarehouseController extends Controller
      */
     public function index(): View
     {
-        $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+        // Administradores: todos los de sus sucursales. Los demás:
+        // solo los suyos. Ver Warehouse::scopeVisibles().
+        $warehouses = Warehouse::visibles()
             ->with(['user', 'creator', 'branch'])
             ->withCount('inventories')
             ->get();
@@ -91,6 +93,8 @@ class WarehouseController extends Controller
      */
     public function show(Warehouse $warehouse): View
     {
+        $this->exigirAlmacenVisible($warehouse);
+
         // Traer todo el inventario del almacén con su material (evita N+1)
         $inventories = $warehouse->inventories()->with('material')->get();
 
@@ -204,7 +208,7 @@ class WarehouseController extends Controller
      */
     public function edit(Warehouse $warehouse): View
     {
-        $this->exigirMismaSucursal($warehouse);
+        $this->exigirAlmacenVisible($warehouse);
 
         $warehouse->loadMissing('creator');
 
@@ -224,7 +228,7 @@ class WarehouseController extends Controller
      */
     public function update(Request $request, Warehouse $warehouse): RedirectResponse
     {
-        $this->exigirMismaSucursal($warehouse);
+        $this->exigirAlmacenVisible($warehouse);
 
         $validated = $this->validateWarehouse($request);
 
@@ -248,6 +252,8 @@ class WarehouseController extends Controller
      */
     public function destroy(Warehouse $warehouse): RedirectResponse
     {
+        $this->exigirAlmacenVisible($warehouse);
+
         // Bloquear la eliminación si hay inventario registrado
         if ($warehouse->inventories()->exists()) {
             return back()->with(
@@ -266,8 +272,11 @@ class WarehouseController extends Controller
     //Exportar inventario en PDF
 
     public function generatePdf(Warehouse $warehouse)
-
     {
+        // Esto no comprobaba NADA: con el id de cualquier almacén en la
+        // URL se descargaba su inventario, fuera de quien fuera y de la
+        // sucursal que fuera.
+        $this->exigirAlmacenVisible($warehouse);
 
         $costos = app(InventoryCosting::class);
 
@@ -306,18 +315,23 @@ class WarehouseController extends Controller
     }
 
     /**
-     * Corta el paso a almacenes de otra sucursal.
+     * Corta el paso a los almacenes que este usuario no puede ver.
      *
-     * El enlace de edición nunca los ofrece, pero la ruta acepta
+     * El listado solo enseña los suyos, pero las rutas aceptan
      * cualquier id: sin esto bastaba con cambiar el número en la URL
-     * para reasignarle el dueño al almacén de otra sede.
+     * para ver —o descargar en PDF— el inventario de otro técnico, el
+     * de la bodega general o el de otra sede. La ficha y el PDF no
+     * comprobaban nada en absoluto, ni siquiera la sucursal.
+     *
+     * Incluye la comprobación de sucursal que había antes: el scope
+     * `visibles()` empieza por ella.
      */
-    private function exigirMismaSucursal(Warehouse $warehouse): void
+    private function exigirAlmacenVisible(Warehouse $warehouse): void
     {
         abort_unless(
-            app(CurrentContext::class)->permiteSucursal($warehouse->branch_id),
+            $warehouse->esVisible(),
             403,
-            'Ese almacén pertenece a otra sucursal.',
+            'Ese almacén no está asignado a su usuario.',
         );
     }
 

@@ -79,12 +79,27 @@ class MaterialMovementController extends Controller
             ->pluck('supplier');
         // Con el DUEÑO: un usuario puede tener varios almacenes, y dos
         // «Furgoneta» sin más son indistinguibles en el desplegable.
-        $warehouses = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+        //
+        // DOS LISTAS, PORQUE NO SON LA MISMA PREGUNTA.
+        //
+        // De dónde SALE material solo puede ser un almacén que el
+        // usuario ve (los suyos, o todos si es administrador): sacar de
+        // un almacén es ver lo que tiene dentro. A dónde LLEGA en un
+        // traslado puede ser cualquiera de la sucursal: un técnico
+        // tiene que poder devolver material a la bodega aunque no vea
+        // lo que hay en ella. Solo se ofrece el nombre, nunca las
+        // existencias.
+        $warehouses = Warehouse::visibles()
             ->with('user')
             ->orderBy('description')
             ->get();
 
-        return view('gestisp.materials.movements.index', compact('materials', 'warehouses', 'proveedores'));
+        $almacenesDestino = Warehouse::whereIn('branch_id', app(CurrentContext::class)->branchIds())
+            ->with('user')
+            ->orderBy('description')
+            ->get();
+
+        return view('gestisp.materials.movements.index', compact('materials', 'warehouses', 'almacenesDestino', 'proveedores'));
     }
 
     /**
@@ -152,13 +167,23 @@ class MaterialMovementController extends Controller
                 // viaja con la existencia desde el almacén de origen, y
                 // en una salida no hay nada que costear.
                 'materials.*.purchase_unit_value' => 'nullable|numeric|min:0|max:99999999999.99',
+                // El ORIGEN tiene que ser un almacén que el usuario ve:
+                // un técnico solo saca de los suyos. Se comprueba aquí
+                // aunque el desplegable ya lo limite, porque el id llega
+                // del navegador.
                 'warehouse_origin_id'             => [
                     'nullable', 'required_if:type,Salida,Transferencia',
-                    Rule::exists('warehouses', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
+                    Rule::in(Warehouse::visibles()->pluck('id')->all()),
                 ],
+                // El DESTINO de un traslado puede ser cualquiera de la
+                // sucursal (devolver material a la bodega). El de una
+                // ENTRADA no: ingresar existencias en un almacén es
+                // tocar su inventario, y eso solo se hace en uno propio.
                 'warehouse_destination_id'        => [
                     'nullable', 'required_if:type,Entrada,Transferencia',
-                    Rule::exists('warehouses', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds()),
+                    $request->input('type') === 'Transferencia'
+                        ? Rule::exists('warehouses', 'id')->whereIn('branch_id', app(CurrentContext::class)->branchIds())
+                        : Rule::in(Warehouse::visibles()->pluck('id')->all()),
                 ],
                 'reason'                          => 'required|string|max:100',
                 // De quién se compró y con qué factura. Solo tienen
@@ -174,8 +199,10 @@ class MaterialMovementController extends Controller
                 'observations'                    => 'nullable|string|max:1000',
             ], [
                 'materials.*.material_id.exists' => 'Uno de los materiales no pertenece a esta sucursal.',
-                'warehouse_origin_id.exists' => 'El almacén de origen no pertenece a esta sucursal.',
+                'warehouse_origin_id.in' => 'Solo puede sacar material de un almacén asignado a su usuario.',
                 'warehouse_destination_id.exists' => 'El almacén de destino no pertenece a esta sucursal.',
+                'warehouse_destination_id.in' => 'Solo puede ingresar material en un almacén asignado a su usuario. '
+                    . 'Para entregar material a otro almacén, use una Transferencia.',
             ]);
 
             $movements = [];
@@ -571,20 +598,19 @@ class MaterialMovementController extends Controller
     }
 
     /**
-     * Impide consultar el stock de un almacén de otra sucursal.
+     * Impide consultar el stock de un almacén que el usuario no ve.
      *
      * Son endpoints JSON con el id en la URL: sin esto, cambiar el
      * número bastaba para leer las existencias y los seriales de otra
-     * sede desde la consola del navegador.
+     * sede —o, dentro de la misma, los de otro técnico o la bodega—
+     * desde la consola del navegador.
      */
     private function exigirAlmacenDeLaSucursal(int $warehouseId): void
     {
         abort_unless(
-            Warehouse::where('id', $warehouseId)
-                ->whereIn('branch_id', app(CurrentContext::class)->branchIds())
-                ->exists(),
+            Warehouse::visibles()->whereKey($warehouseId)->exists(),
             403,
-            'Ese almacén pertenece a otra sucursal.',
+            'Ese almacén no está asignado a su usuario.',
         );
     }
 
@@ -777,12 +803,16 @@ class MaterialMovementController extends Controller
 
         abort_if($movements->isEmpty(), 404, 'Ese movimiento no existe.');
 
-        $sucursales = app(CurrentContext::class)->branchIds();
+        // Que toque al menos UN almacén que el usuario ve. Con eso la
+        // sucursal queda comprobada de paso (`visibles()` empieza por
+        // ella) y un técnico no abre el movimiento de otro cambiando el
+        // número en la URL.
+        $visibles = Warehouse::visibles()->pluck('id')->all();
         $primero = $movements->first();
-        $suya = in_array($primero->warehouseOrigin?->branch_id, $sucursales, true)
-            || in_array($primero->warehouseDestination?->branch_id, $sucursales, true);
+        $suya = in_array($primero->warehouse_origin_id, $visibles)
+            || in_array($primero->warehouse_destination_id, $visibles);
 
-        abort_unless($suya, 403, 'Ese movimiento es de otra sucursal.');
+        abort_unless($suya, 403, 'Ese movimiento no toca ningún almacén asignado a su usuario.');
 
         return $movements;
     }
@@ -846,20 +876,23 @@ class MaterialMovementController extends Controller
      */
     private function applyFilters(Request $request): Builder
     {
-        $branchIds = app(CurrentContext::class)->branchIds();
-
         $query = MaterialMovement::query();
 
         // Alcance por sucursal: el movimiento pertenece a la sucursal
         // si su almacén de origen O el de destino son de ella.
         // El agrupamiento con where(closure) es imprescindible para
         // que el OR no rompa los demás filtros.
-        $query->where(function ($q) use ($branchIds) {
-            $q->whereHas('warehouseOrigin', function ($w) use ($branchIds) {
-                $w->whereIn('branch_id', $branchIds);
-            })->orWhereHas('warehouseDestination', function ($w) use ($branchIds) {
-                $w->whereIn('branch_id', $branchIds);
-            });
+        //
+        // Y además, para quien no es administrador, solo lo que toca
+        // UNO DE SUS almacenes: un técnico ve lo que entró y salió de
+        // su furgoneta —incluido lo que devolvió a la bodega—, no los
+        // movimientos de sus compañeros ni los de la bodega entre sí.
+        // `visibles()` ya incluye la condición de sucursal.
+        $visibles = Warehouse::visibles()->pluck('id');
+
+        $query->where(function ($q) use ($visibles) {
+            $q->whereIn('warehouse_origin_id', $visibles)
+                ->orWhereIn('warehouse_destination_id', $visibles);
         });
 
         // Búsqueda por campo (lista blanca)

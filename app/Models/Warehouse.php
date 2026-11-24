@@ -61,6 +61,66 @@ class Warehouse extends Model
         return $this->user_id === null;
     }
 
+    /**
+     * Roles que ven TODOS los almacenes de sus sucursales.
+     *
+     * Los demás —técnicos, auxiliares— solo ven los almacenes de los
+     * que son dueños (`user_id`): ni los de sus compañeros ni el
+     * general. Un técnico necesita saber qué lleva en su furgoneta, no
+     * cuánto hay en la bodega ni en la furgoneta del otro.
+     */
+    public const ROLES_QUE_VEN_TODOS = ['superadministrador', 'administrador'];
+
+    /**
+     * ¿El rol con el que se está trabajando ahora ve todos los almacenes?
+     *
+     * Se mira el rol ACTIVO de la sesión, no todos los roles que tenga
+     * el usuario: alguien que es administrador en una sede y técnico
+     * en otra trabaja como técnico cuando entra a esta. Es el mismo
+     * criterio que el menú (RoleBasedMenuFilter).
+     *
+     * Sin sesión —consola, colas— no hay rol activo y responde que no:
+     * esta regla es de pantallas, y fallar cerrado es lo seguro.
+     */
+    public static function laSesionVeTodos(): bool
+    {
+        $rol = \Spatie\Permission\Models\Role::find(session('current_role_id'));
+
+        return in_array($rol?->name, self::ROLES_QUE_VEN_TODOS, true);
+    }
+
+    /**
+     * Los almacenes que el usuario de la sesión puede ver.
+     *
+     * LA ÚNICA FUENTE DE ESTA REGLA. El listado, la ficha, el PDF, el
+     * desplegable de movimientos, los endpoints de existencias y el
+     * historial pasan todos por aquí. Repetirla en cada sitio es como
+     * uno se queda sin actualizar y por ahí se ve lo ajeno.
+     *
+     * Es un scope normal y no global a propósito: un scope global
+     * escondería almacenes también a los procesos que SÍ deben verlos
+     * todos —cerrar una orden técnica descuenta del almacén del
+     * técnico ASIGNADO, aunque la cierre la oficina—.
+     */
+    public function scopeVisibles($query)
+    {
+        $query->whereIn('branch_id', app(\App\Tenancy\CurrentContext::class)->branchIds());
+
+        if (!self::laSesionVeTodos()) {
+            // Sin `Auth::id()` (no debería pasar en una pantalla con
+            // login) esto no casa con nada: falla cerrado.
+            $query->where('user_id', \Illuminate\Support\Facades\Auth::id());
+        }
+
+        return $query;
+    }
+
+    /** ¿El usuario de la sesión puede ver ESTE almacén? */
+    public function esVisible(): bool
+    {
+        return static::visibles()->whereKey($this->getKey())->exists();
+    }
+
     /** Cómo se nombra su pertenencia en pantalla. */
     public function duenoVisible(): string
     {

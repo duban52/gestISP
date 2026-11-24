@@ -70,7 +70,12 @@
                     <label for="warehouse_destination_id">Almacén de Destino</label>
                     <select name="warehouse_destination_id" id="warehouse_destination_id" class="form-control">
                         <option value="">Seleccione...</option>
-                        @foreach ($warehouses as $warehouse)
+                        {{-- TODOS los de la sucursal, no solo los propios: un
+                             técnico tiene que poder devolver material a la
+                             bodega con una Transferencia. Solo se ve el
+                             nombre; sus existencias no. Si elige uno ajeno
+                             en una ENTRADA, el servidor lo rechaza. --}}
+                        @foreach ($almacenesDestino as $warehouse)
                             {{-- El dueno entre parentesis: un tecnico puede
                                  tener varios almacenes y hay que poder
                                  distinguir de cual se mueve el material. --}}

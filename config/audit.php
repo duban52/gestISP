@@ -72,13 +72,42 @@ return [
             'rx_power', 'status', 'metrics_history', 'catv_checked_at',
         ],
 
-        // Temperatura y uptime los refresca el sondeo de OLTs
+        // Temperatura y uptime los refresca el sondeo de OLTs; la hora
+        // de la consulta, el motivo del último fallo y la pausa tras
+        // una credencial rechazada, también: los escribe la consulta
+        // de estado en cada visita a la ficha o al listado.
         App\Models\Olt::class => [
             'temperature', 'uptime', 'status',
+            'status_checked_at', 'last_error', 'auth_failed_at',
         ],
 
+        // LO QUE LLENÓ EL DISCO DE PRODUCCIÓN.
+        //
+        // Esta lista decía `is_online`, `rx_bytes` y `tx_bytes`:
+        // columnas que YA NO EXISTEN. Se renombraron y la lista se
+        // quedó con los nombres viejos, así que no ignoraba nada. El
+        // sondeo de PPPoE escribe `connected`, `last_address` y
+        // `last_polled_at` en las 2.368 cuentas cada cinco minutos, y
+        // cada escritura acabó en la auditoría: 37,5 millones de filas
+        // y 21 GB en noviembre de 2026, que junto con los binlogs
+        // llenaron el disco y tumbaron el sitio.
+        //
+        // Hay una prueba (AuditTelemetryTest) que falla si el sondeo
+        // escribe un campo que no esté aquí.
         App\Models\PppoeAccount::class => [
-            'last_seen_at', 'is_online', 'rx_bytes', 'tx_bytes',
+            'connected', 'last_address', 'last_seen_at', 'last_polled_at',
+        ],
+
+        // Tráfico y potencia de cada puerto PON y cada uplink, que
+        // `olt:poll-ports` reescribe cada cinco minutos. El estado
+        // operativo (`oper_status`) NO está: que un puerto caiga es
+        // un hecho que sí interesa encontrar después.
+        App\Models\PonPort::class => [
+            'in_bps', 'out_bps', 'tx_power', 'measured_at', 'discovered_at',
+        ],
+
+        App\Models\OltUplink::class => [
+            'in_bps', 'out_bps', 'measured_at', 'discovered_at',
         ],
 
         // La sucursal seleccionada cambia sola al entrar al sistema
