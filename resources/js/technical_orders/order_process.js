@@ -627,4 +627,111 @@ $(document).ready(function () {
        porque no hay ningún error a la vista.
        ============================================================ */
     window.gestispOrderScriptLoaded = true;
+
+    /* ============================================================
+       FOTOS DE EVIDENCIA: se reducen ANTES de enviarlas
+
+       Un celular saca fotos de 3 a 6 MB. PHP admite por defecto 8 MB
+       para la petición ENTERA, así que con tres fotos y la firma el
+       servidor respondía «413 Content Too Large» y la orden no se
+       cerraba — después de que el técnico hubiera hecho el trabajo.
+
+       Aquí se redimensionan a 1600 px por el lado mayor y se guardan
+       en JPEG: una foto de 5 MB queda en unos 300 KB y sigue
+       sirviendo de evidencia. Se reemplazan los archivos del propio
+       <input> (DataTransfer), así que el formulario se envía igual
+       que siempre y el servidor no se entera.
+
+       Si el navegador no sabe hacerlo —o una foto no se puede leer—
+       se deja el archivo original: reducir es una ayuda, no una
+       condición. El servidor sigue validando tamaño y tipo.
+       ============================================================ */
+    const LADO_MAXIMO = 1600;
+    const CALIDAD_JPEG = 0.82;
+    const inputFotos = document.getElementById('images');
+    const botonEnviar = $('#images').closest('form').find('[type="submit"]');
+    let reduciendo = false;
+
+    function reducirFoto(archivo) {
+        return new Promise(function (resolver) {
+            if (!archivo.type || !archivo.type.startsWith('image/')) {
+                resolver(archivo);
+                return;
+            }
+
+            const url = URL.createObjectURL(archivo);
+            const imagen = new Image();
+
+            imagen.onload = function () {
+                URL.revokeObjectURL(url);
+
+                const escala = Math.min(1, LADO_MAXIMO / Math.max(imagen.width, imagen.height));
+                const lienzo = document.createElement('canvas');
+                lienzo.width = Math.round(imagen.width * escala);
+                lienzo.height = Math.round(imagen.height * escala);
+                lienzo.getContext('2d').drawImage(imagen, 0, 0, lienzo.width, lienzo.height);
+
+                lienzo.toBlob(function (blob) {
+                    // Si por lo que sea sale MÁS grande, se queda la original
+                    if (!blob || blob.size >= archivo.size) {
+                        resolver(archivo);
+                        return;
+                    }
+
+                    const nombre = archivo.name.replace(/\.[^.]+$/, '') + '.jpg';
+                    resolver(new File([blob], nombre, { type: 'image/jpeg', lastModified: Date.now() }));
+                }, 'image/jpeg', CALIDAD_JPEG);
+            };
+
+            // HEIC en navegadores que no lo pintan, o un archivo dañado
+            imagen.onerror = function () {
+                URL.revokeObjectURL(url);
+                resolver(archivo);
+            };
+
+            imagen.src = url;
+        });
+    }
+
+    if (inputFotos && window.DataTransfer && window.FileReader) {
+        inputFotos.addEventListener('change', function () {
+            const originales = Array.from(inputFotos.files || []);
+
+            if (!originales.length) {
+                return;
+            }
+
+            reduciendo = true;
+            botonEnviar.prop('disabled', true);
+
+            Promise.all(originales.map(reducirFoto)).then(function (reducidas) {
+                const nuevos = new DataTransfer();
+                reducidas.forEach(function (f) { nuevos.items.add(f); });
+                inputFotos.files = nuevos.files;
+
+                const antes = originales.reduce((t, f) => t + f.size, 0);
+                const despues = reducidas.reduce((t, f) => t + f.size, 0);
+                const mb = (b) => (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+
+                $('#images-resumen').remove();
+                $(inputFotos).after(
+                    '<small id="images-resumen" class="form-text text-muted">'
+                    + reducidas.length + ' foto(s) listas: ' + mb(despues)
+                    + (despues < antes ? ' (reducidas de ' + mb(antes) + ')' : '')
+                    + '</small>'
+                );
+            }).finally(function () {
+                reduciendo = false;
+                botonEnviar.prop('disabled', false);
+            });
+        });
+
+        // Por si alguien pulsa enviar mientras todavía se reducen
+        $(inputFotos).closest('form').on('submit', function (evento) {
+            if (reduciendo) {
+                evento.preventDefault();
+                alert('Espere un momento: se están preparando las fotos.');
+            }
+        });
+    }
 });

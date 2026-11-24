@@ -364,4 +364,42 @@ class UbicarPredioAlCerrarTest extends TestCase
 
         $this->assertFalse($contrato->refresh()->isGeolocated());
     }
+
+    // ==================== Las fotos de evidencia ====================
+
+    /**
+     * Las fotos tienen que ser fotos.
+     *
+     * La regla era `nullable|array` y nada más. Se guardan en el disco
+     * PÚBLICO y Laravel les pone la extensión según su contenido: un
+     * script subido como «foto» quedaba con su extensión en una carpeta
+     * que el servidor web sirve.
+     */
+    public function test_un_archivo_que_no_es_imagen_no_entra_como_evidencia(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $orden = $this->orden($this->contrato(), self::TRABAJO_EN_SITIO);
+
+        $script = \Illuminate\Http\UploadedFile::fake()->createWithContent('foto.php', '<?php echo "hola"; ?>');
+
+        $this->cerrar($orden, ['images' => [$script]])
+            ->assertSessionHasErrors('images.0');
+
+        $this->assertNotSame('Prefinalizada', $orden->refresh()->status);
+        $this->assertEmpty(\Illuminate\Support\Facades\Storage::disk('public')->allFiles());
+    }
+
+    public function test_una_foto_normal_si_entra(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $orden = $this->orden($this->contrato(), self::TRABAJO_EN_SITIO);
+
+        $this->cerrarDeVerdad($orden, [
+            'images' => [\Illuminate\Http\UploadedFile::fake()->image('caja-nap.jpg', 1600, 1200)],
+        ]);
+
+        $this->assertCount(1, json_decode($orden->refresh()->images, true));
+    }
 }

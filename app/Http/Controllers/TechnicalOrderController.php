@@ -704,7 +704,20 @@ class TechnicalOrderController extends Controller
             'material_id'            => 'nullable|array',
             'quantity'               => 'nullable|array',
             'serial_number'          => 'nullable|array',
-            'images'                 => 'nullable|array',
+            // LAS FOTOS TIENEN QUE SER FOTOS.
+            //
+            // Esto era `nullable|array` y nada más: no se miraba qué
+            // era cada archivo. Se guardan en el disco PÚBLICO —se
+            // sirven desde /storage— y Laravel les pone la extensión
+            // según su contenido, así que un .php subido como «foto»
+            // quedaba como .php en una carpeta que el servidor web
+            // sirve. `mimes` comprueba el contenido real, no el nombre.
+            //
+            // 10 MB por foto y 10 fotos: el navegador ya las reduce
+            // antes de enviarlas (order_process.js), esto es la red
+            // para cuando no pudo.
+            'images'                 => 'nullable|array|max:10',
+            'images.*'               => 'file|mimes:jpg,jpeg,png,webp,heic,heif|max:10240',
             // Obligatoria la primera vez. En una orden devuelta ya está
             // guardada la firma de cuando el cliente estaba delante:
             // exigirla otra vez dejaría al técnico sin poder corregir un
@@ -752,6 +765,9 @@ class TechnicalOrderController extends Controller
             'client_signature.required' => 'Falta la firma del cliente. Pídale que firme en pantalla antes de cerrar la orden.',
             'nap_port_id.required' => 'Indique en qué caja NAP y en qué puerto quedó el servicio trasladado.',
             'nap_motivo.required' => 'Explique por qué no se pudo registrar la caja NAP.',
+            'images.max' => 'Puede adjuntar como máximo 10 fotos por orden.',
+            'images.*.mimes' => 'Solo se pueden adjuntar fotos (JPG, PNG, WEBP o HEIC).',
+            'images.*.max' => 'Una de las fotos pesa más de 10 MB. Tómela con menos resolución o adjunte otra.',
             'predio_latitude.required' => 'Marque el punto de la vivienda sobre el mapa, o elija otra opción.',
             'predio_longitude.required' => 'Marque el punto de la vivienda sobre el mapa, o elija otra opción.',
         ]);
