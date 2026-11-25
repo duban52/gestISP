@@ -140,7 +140,7 @@ class NapBoxController extends Controller
         $aviso = $this->conectarAlimentacion($caja, $hilo);
 
         return redirect()->route('naps.show', $caja)
-            ->with('success', "Caja {$caja->code} creada con {$caja->capacity} puertos." . $aviso);
+            ->with('success', "Caja {$caja->etiqueta} creada con {$caja->capacity} puertos." . $aviso);
     }
 
     public function edit(NapBox $nap): View
@@ -194,7 +194,7 @@ class NapBoxController extends Controller
                 'No se puede eliminar: la caja tiene clientes conectados. Trasládelos primero.');
         }
 
-        $codigo = $nap->code;
+        $codigo = $nap->etiqueta;
         $nap->delete();
 
         $this->auditLogger->action(
@@ -233,11 +233,11 @@ class NapBoxController extends Controller
             sprintf(
                 'Marcó el puerto %d de la caja %s como %s',
                 $port->number,
-                $port->napBox->code,
+                $port->napBox->etiqueta,
                 NapPort::estadosEditables()[$validado['status']],
             ),
             [
-                'caja' => $port->napBox->code,
+                'caja' => $port->napBox->etiqueta,
                 'puerto' => $port->number,
                 'antes' => $anterior,
                 'ahora' => $validado['status'],
@@ -305,8 +305,8 @@ class NapBoxController extends Controller
 
             return [
                 'id' => $caja->id,
-                'codigo' => $caja->code,
-                'nombre' => $caja->name,
+                'codigo' => $caja->etiqueta,
+                'nombre' => $caja->etiqueta_secundaria,
                 'lat' => (float) $caja->latitude,
                 'lng' => (float) $caja->longitude,
                 'direccion' => $caja->address,
@@ -354,7 +354,7 @@ class NapBoxController extends Controller
 
         return response()->json($sugerencias->map(fn (NapSuggestion $sugerencia) => [
             'id' => $sugerencia->napBox->id,
-            'codigo' => $sugerencia->napBox->code,
+            'codigo' => $sugerencia->napBox->etiqueta,
             'direccion' => $sugerencia->napBox->address,
             'zona' => $sugerencia->napBox->zone?->name,
             'distancia_m' => round($sugerencia->distanceM),
@@ -398,8 +398,8 @@ class NapBoxController extends Controller
 
         return response()->json($cajas->map(fn (NapBox $caja) => [
             'id' => $caja->id,
-            'codigo' => $caja->code,
-            'nombre' => $caja->name,
+            'codigo' => $caja->etiqueta,
+            'nombre' => $caja->etiqueta_secundaria,
             'direccion' => $caja->address,
             'zona' => $caja->zone?->name,
             'disponibles' => $caja->puertosDisponibles(),

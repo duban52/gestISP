@@ -410,7 +410,7 @@ class ContractQuery
             'ont_olt' => (string) ($contrato->ont?->olt?->name ?? ''),
             'ont_potencia' => $contrato->ont?->rx_power ? $contrato->ont->rx_power . ' dBm' : '',
             'nap_port' => (string) $contrato->nap_port,
-            'nap_caja' => (string) ($contrato->napPort?->napBox?->code ?? ''),
+            'nap_caja' => (string) ($contrato->napPort?->napBox?->etiqueta ?? ''),
             'nap_numero' => $contrato->napPort ? (string) $contrato->napPort->number : '',
             'nap_zona' => (string) ($contrato->napPort?->napBox?->zone?->name ?? ''),
             'nap_pon' => (string) ($contrato->napPort?->napBox?->ponPort?->etiqueta ?? ''),

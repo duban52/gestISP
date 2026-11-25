@@ -28,7 +28,13 @@ class TechnicalOrderFinishedClient extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return $this->canales($notifiable, ['mail', 'whatsapp']);
+        // El detalle de la orden decide si va por WhatsApp (se
+        // configura en el catálogo de órdenes). El correo no cambia.
+        $deseados = \App\Models\TechnicalOrderDetail::avisaPorWhatsapp($this->order->detail)
+            ? ['mail', 'whatsapp']
+            : ['mail'];
+
+        return $this->canales($notifiable, $deseados);
     }
 
     public function toMail(object $notifiable): MailMessage

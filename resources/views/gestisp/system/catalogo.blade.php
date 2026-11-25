@@ -167,6 +167,7 @@
                                         <th>Deja el contrato en</th>
                                         <th class="text-center">Cuenta PPPoE</th>
                                         <th class="text-center">ONT</th>
+                                        <th class="text-center">WhatsApp</th>
                                         <th class="text-center">Activo</th>
                                         <th class="text-right" style="width: 120px;">Acciones</th>
                                     </tr>
@@ -191,6 +192,7 @@
                                             </td>
                                             <td class="text-center">@include('gestisp.system.partials.accion', ['accion' => $detalle->pppoe_action])</td>
                                             <td class="text-center">@include('gestisp.system.partials.accion', ['accion' => $detalle->ont_action])</td>
+                                            <td class="text-center">@include('gestisp.system.partials.si-no', ['valor' => $detalle->notify_whatsapp])</td>
                                             <td class="text-center">@include('gestisp.system.partials.si-no', ['valor' => $detalle->active])</td>
                                             <td class="text-right">
                                                 <button class="btn btn-sm btn-outline-primary btn-editar-detalle"
@@ -208,7 +210,7 @@
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="6" class="text-muted text-center py-3">Sin detalles.</td></tr>
+                                        <tr><td colspan="7" class="text-muted text-center py-3">Sin detalles.</td></tr>
                                     @endforelse
                                     </tbody>
                                 </table>

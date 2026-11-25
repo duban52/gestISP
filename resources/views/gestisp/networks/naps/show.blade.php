@@ -11,13 +11,13 @@
      ============================================================ --}}
 @extends('adminlte::page')
 
-@section('title', $nap->code)
+@section('title', $nap->etiqueta)
 
 @section('content_header')
     <div class="d-flex justify-content-between align-items-center flex-wrap">
         <h1 class="mb-0">
-            <i class="fas fa-box mr-2"></i>{{ $nap->code }}
-            @if($nap->name)<small class="text-muted">{{ $nap->name }}</small>@endif
+            <i class="fas fa-box mr-2"></i>{{ $nap->etiqueta }}
+            @if($nap->etiqueta_secundaria)<small class="text-muted">{{ $nap->etiqueta_secundaria }}</small>@endif
         </h1>
         <div>
             @can('naps.edit')
@@ -580,7 +580,7 @@
 
                 L.marker([{{ $nap->latitude }}, {{ $nap->longitude }}])
                     .addTo(mapa)
-                    .bindPopup('{{ $nap->code }}');
+                    .bindPopup('{{ $nap->etiqueta }}');
 
                 setTimeout(() => mapa.invalidateSize(), 200);
             @endif

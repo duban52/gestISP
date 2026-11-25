@@ -315,8 +315,8 @@ class OltStatistics
             ],
             'cajas' => $puerto->napBoxes->map(fn ($caja) => [
                 'id' => $caja->id,
-                'codigo' => $caja->code,
-                'nombre' => $caja->name,
+                'codigo' => $caja->etiqueta,
+                'nombre' => $caja->etiqueta_secundaria,
                 'ocupacion' => $caja->ocupacion(),
                 'url' => route('naps.show', $caja->id),
             ])->values(),

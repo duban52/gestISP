@@ -54,12 +54,12 @@ class OdnManager
                 'naps.created',
                 sprintf(
                     'Creó la caja %s de %d puertos en %s',
-                    $caja->code,
+                    $caja->etiqueta,
                     $caja->capacity,
                     $caja->address ?: 'sin dirección',
                 ),
                 [
-                    'caja' => $caja->code,
+                    'caja' => $caja->etiqueta,
                     'red' => $red->name,
                     'capacidad' => $caja->capacity,
                     'puerto_pon' => $caja->ponPort?->etiqueta,
@@ -118,8 +118,8 @@ class OdnManager
 
             $this->auditLogger->action(
                 'naps.capacity_changed',
-                sprintf('Cambió la capacidad de la caja %s de %d a %d puertos', $caja->code, $anterior, $nuevaCapacidad),
-                ['caja' => $caja->code, 'antes' => $anterior, 'ahora' => $nuevaCapacidad],
+                sprintf('Cambió la capacidad de la caja %s de %d a %d puertos', $caja->etiqueta, $anterior, $nuevaCapacidad),
+                ['caja' => $caja->etiqueta, 'antes' => $anterior, 'ahora' => $nuevaCapacidad],
                 $caja,
                 'red',
             );
@@ -194,7 +194,7 @@ class OdnManager
             throw new RuntimeException(sprintf(
                 'El puerto %d de la caja %s ya está ocupado por el contrato %s (%s).',
                 $puerto->number,
-                $puerto->napBox->code,
+                $puerto->napBox->etiqueta,
                 $ocupante->numero_visible,
                 trim(($ocupante->client?->name ?? '') . ' ' . ($ocupante->client?->last_name ?? '')) ?: 'sin cliente',
             ));
@@ -202,7 +202,7 @@ class OdnManager
 
         if ($puerto->status === NapPort::DANADO) {
             throw new RuntimeException(
-                "El puerto {$puerto->number} de la caja {$puerto->napBox->code} está marcado como dañado."
+                "El puerto {$puerto->number} de la caja {$puerto->napBox->etiqueta} está marcado como dañado."
             );
         }
 
@@ -213,7 +213,7 @@ class OdnManager
                 'nap_port_id' => $puerto->id,
                 // Se mantiene el texto legible en sintonía: es lo que
                 // ve quien abre la ficha sin entrar al módulo de redes.
-                'nap_port' => $puerto->napBox->code . ' / P' . $puerto->number,
+                'nap_port' => $puerto->napBox->etiqueta . ' / P' . $puerto->number,
             ]);
         });
 
@@ -223,15 +223,15 @@ class OdnManager
                 'Asignó el contrato %s al puerto %d de la caja %s%s',
                 $contrato->numero_visible,
                 $puerto->number,
-                $puerto->napBox->code,
-                $anterior ? ' (antes estaba en ' . $anterior->napBox->code . '/P' . $anterior->number . ')' : '',
+                $puerto->napBox->etiqueta,
+                $anterior ? ' (antes estaba en ' . $anterior->napBox->etiqueta . '/P' . $anterior->number . ')' : '',
             ),
             [
                 'contrato' => $contrato->numero_visible,
-                'caja' => $puerto->napBox->code,
+                'caja' => $puerto->napBox->etiqueta,
                 'puerto' => $puerto->number,
                 'puerto_anterior' => $anterior
-                    ? $anterior->napBox->code . '/P' . $anterior->number
+                    ? $anterior->napBox->etiqueta . '/P' . $anterior->number
                     : null,
             ],
             $contrato,
@@ -265,12 +265,12 @@ class OdnManager
             sprintf(
                 'Liberó el puerto %d de la caja %s (contrato %s)',
                 $puerto->number,
-                $puerto->napBox->code,
+                $puerto->napBox->etiqueta,
                 $contrato->numero_visible,
             ),
             [
                 'contrato' => $contrato->numero_visible,
-                'caja' => $puerto->napBox->code,
+                'caja' => $puerto->napBox->etiqueta,
                 'puerto' => $puerto->number,
             ],
             $contrato,

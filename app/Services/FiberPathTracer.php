@@ -145,7 +145,7 @@ class FiberPathTracer
                         ) ?: null,
                         'telefono' => $puerto->contract->client?->number_phone,
                         'direccion' => $puerto->contract->address,
-                        'caja' => $caja->code,
+                        'caja' => $caja->etiqueta,
                         'puerto' => $puerto->number,
                     ];
                 }
@@ -157,7 +157,7 @@ class FiberPathTracer
             'cajas' => $cajas->map(fn (NapBox $c) => [
                 'id' => $c->id,
                 'codigo' => $c->code,
-                'nombre' => $c->name,
+                'nombre' => $c->etiqueta_secundaria,
                 'direccion' => $c->address,
                 'zona' => $c->zone?->name,
                 'clientes' => $c->puertosOcupados(),

@@ -305,4 +305,67 @@ class CatalogTest extends TestCase
             ->assertOk()
             ->assertDontSee('Traslado de servicio');
     }
+
+    // ==================== Aviso por WhatsApp ====================
+
+    /** Los canales con los que saldrían los dos avisos al cliente. */
+    private function canalesDelAviso(string $detalle): array
+    {
+        $orden = new \App\Models\TechnicalOrder(['detail' => $detalle]);
+        $cliente = (new \Illuminate\Notifications\AnonymousNotifiable)
+            ->route('mail', 'cliente@example.com')
+            ->route('whatsapp', '+573001234567');
+
+        return [
+            (new \App\Notifications\TechnicalOrderCreatedClient($orden))->via($cliente),
+            (new \App\Notifications\TechnicalOrderFinishedClient($orden))->via($cliente),
+        ];
+    }
+
+    public function test_por_defecto_el_detalle_avisa_por_whatsapp(): void
+    {
+        foreach ($this->canalesDelAviso('Traslado de servicio') as $via) {
+            $this->assertContains(\App\Notifications\Channels\WhatsAppChannel::class, $via);
+            $this->assertContains('mail', $via);
+        }
+    }
+
+    public function test_un_detalle_sin_whatsapp_solo_avisa_por_correo(): void
+    {
+        TechnicalOrderDetail::paraDetalle('Traslado de servicio')->update(['notify_whatsapp' => false]);
+
+        foreach ($this->canalesDelAviso('Traslado de servicio') as $via) {
+            $this->assertSame(['mail'], $via);
+        }
+    }
+
+    public function test_un_detalle_escrito_a_mano_sigue_avisando(): void
+    {
+        foreach ($this->canalesDelAviso('Algo que no está en el catálogo') as $via) {
+            $this->assertContains(\App\Notifications\Channels\WhatsAppChannel::class, $via);
+        }
+    }
+
+    public function test_el_aviso_por_whatsapp_se_apaga_y_se_enciende_desde_el_catalogo(): void
+    {
+        $this->entrarComo('superadministrador');
+
+        $detalle = TechnicalOrderDetail::paraDetalle('Traslado de servicio');
+        $datos = [
+            'technical_order_type_id' => $detalle->technical_order_type_id,
+            'name' => $detalle->name,
+            'target_contract_status' => $detalle->target_contract_status,
+            'pppoe_action' => $detalle->pppoe_action,
+            'ont_action' => $detalle->ont_action,
+            'active' => 1,
+        ];
+
+        // Casilla desmarcada: el formulario no la envía.
+        $this->put(route('system.order_detail.update', $detalle), $datos)->assertSessionHasNoErrors();
+        $this->assertFalse($detalle->fresh()->notify_whatsapp);
+
+        $this->put(route('system.order_detail.update', $detalle), $datos + ['notify_whatsapp' => 1])
+            ->assertSessionHasNoErrors();
+        $this->assertTrue($detalle->fresh()->notify_whatsapp);
+    }
 }

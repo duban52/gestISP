@@ -144,6 +144,22 @@ class NapBox extends Model
     }
 
     /** Color del indicador según lo llena que esté. */
+    /**
+     * Cómo se nombra la caja EN TODAS PARTES: el nombre que le puso el
+     * usuario. El código es interno y solo se muestra si no hay nombre
+     * (o como dato secundario, ver `etiqueta_secundaria`).
+     */
+    public function getEtiquetaAttribute(): string
+    {
+        return filled($this->name) ? $this->name : (string) $this->code;
+    }
+
+    /** El código, al lado del nombre. Null si el nombre ya ES el código. */
+    public function getEtiquetaSecundariaAttribute(): ?string
+    {
+        return filled($this->name) && $this->name !== $this->code ? $this->code : null;
+    }
+
     public function getColorOcupacionAttribute(): string
     {
         return PonPort::colorDeOcupacion($this->ocupacion()['porcentaje']);

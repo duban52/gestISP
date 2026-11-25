@@ -297,7 +297,12 @@ class SystemCatalogController extends Controller
             'target_contract_status.exists' => 'Ese estado no existe en el catálogo o está desactivado.',
         ]);
 
-        return $datos + ['active' => $request->boolean('active')];
+        return $datos + [
+            'active' => $request->boolean('active'),
+            // Una casilla desmarcada no viaja en el formulario: sin
+            // `boolean()` apagarla no tendría efecto.
+            'notify_whatsapp' => $request->boolean('notify_whatsapp'),
+        ];
     }
 
     /**

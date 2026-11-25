@@ -1080,7 +1080,7 @@ class TechnicalOrderController extends Controller
                     'contrato' => $contrato->numero_visible,
                     'motivo' => $request->input('nap_motivo'),
                     'caja_anterior' => $contrato->napPort
-                        ? $contrato->napPort->napBox->code . '/P' . $contrato->napPort->number
+                        ? $contrato->napPort->napBox->etiqueta . '/P' . $contrato->napPort->number
                         : null,
                 ],
                 $technicalOrder,
@@ -1143,7 +1143,7 @@ class TechnicalOrderController extends Controller
 
         return [
             'id' => $puerto->id,
-            'caja' => $puerto->napBox?->code,
+            'caja' => $puerto->napBox?->etiqueta,
             'puerto' => $puerto->number,
             'direccion' => $puerto->napBox?->address,
         ];

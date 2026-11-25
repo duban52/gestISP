@@ -259,7 +259,7 @@
                             @foreach($cajasNap as $caja)
                                 <option value="{{ $caja->id }}"
                                     @selected((string) ($filtros['nap_box_id'] ?? '') === (string) $caja->id)>
-                                    {{ $caja->code }}@if($caja->name) — {{ $caja->name }}@endif
+                                    {{ $caja->etiqueta }}@if($caja->etiqueta_secundaria) — {{ $caja->etiqueta_secundaria }}@endif
                                 </option>
                             @endforeach
                         </select>

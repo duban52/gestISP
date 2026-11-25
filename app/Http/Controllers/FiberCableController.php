@@ -307,7 +307,7 @@ class FiberCableController extends Controller
             'cajas' => NapBox::deSucursal()->orderBy('code')->get()
                 ->map(fn (NapBox $c) => [
                     'id' => $c->id,
-                    'texto' => 'Caja ' . $c->code . ($c->name ? ' — ' . $c->name : ''),
+                    'texto' => 'Caja ' . $c->etiqueta . ($c->etiqueta_secundaria ? ' — ' . $c->etiqueta_secundaria : ''),
                 ])->all(),
         ];
     }

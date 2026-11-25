@@ -592,7 +592,7 @@ class OntController extends Controller
             return ' La caja NAP no se anotó: ' . $e->getMessage();
         }
 
-        return sprintf(' Queda en la caja %s, puerto %d.', $puerto->napBox->code, $puerto->number);
+        return sprintf(' Queda en la caja %s, puerto %d.', $puerto->napBox->etiqueta, $puerto->number);
     }
 
     /**

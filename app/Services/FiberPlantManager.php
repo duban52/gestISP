@@ -448,10 +448,10 @@ class FiberPlantManager
         $this->auditLogger->action(
             'naps.feed_changed',
             $hilo
-                ? sprintf('La caja %s pasa a alimentarse de %s', $caja->code, $hilo->etiqueta_completa)
-                : sprintf('Se quitó el hilo que alimentaba la caja %s', $caja->code),
+                ? sprintf('La caja %s pasa a alimentarse de %s', $caja->etiqueta, $hilo->etiqueta_completa)
+                : sprintf('Se quitó el hilo que alimentaba la caja %s', $caja->etiqueta),
             [
-                'caja' => $caja->code,
+                'caja' => $caja->etiqueta,
                 'hilo' => $hilo?->etiqueta_completa,
                 'hilo_anterior' => $anterior?->etiqueta_completa,
             ],

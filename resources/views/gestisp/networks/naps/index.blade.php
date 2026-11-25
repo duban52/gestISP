@@ -114,8 +114,8 @@
                     <thead class="thead-light">
                     <tr>
                         <th>Sucursal</th>
-                        <th>Código</th>
                         <th>Nombre</th>
+                        <th>Código</th>
                         <th>Dirección</th>
                         <th>Zona</th>
                         <th>Puerto PON</th>
@@ -137,12 +137,12 @@
                                  indices de columna no cambien segun el modo. --}}
                             <td>{{ $caja->network?->branch?->name ?: '—' }}</td>
                             <td>
-                                <a href="{{ route('naps.show', $caja) }}"><strong>{{ $caja->code }}</strong></a>
+                                <a href="{{ route('naps.show', $caja) }}"><strong>{{ $caja->etiqueta }}</strong></a>
                                 @if($caja->status !== 'operativa')
                                     <span class="badge badge-warning">{{ $caja->estado_legible }}</span>
                                 @endif
                             </td>
-                            <td>{{ $caja->name ?? '—' }}</td>
+                            <td>{{ $caja->code }}</td>
                             <td><small>{{ $caja->address ?? '—' }}</small></td>
                             <td>
                                 @if($caja->zone)

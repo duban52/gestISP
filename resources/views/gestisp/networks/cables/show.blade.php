@@ -209,7 +209,7 @@
                                         if ($hilo->napBox) {
                                             $conexiones->push([
                                                 'icono' => 'fa-box',
-                                                'texto' => 'Alimenta la caja ' . $hilo->napBox->code,
+                                                'texto' => 'Alimenta la caja ' . $hilo->napBox->etiqueta,
                                                 'url' => route('naps.show', $hilo->napBox),
                                             ]);
                                         }

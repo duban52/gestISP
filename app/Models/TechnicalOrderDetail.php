@@ -28,12 +28,13 @@ class TechnicalOrderDetail extends Model
 
     protected $fillable = [
         'technical_order_type_id', 'name', 'key', 'target_contract_status',
-        'pppoe_action', 'ont_action', 'color', 'active', 'sort_order',
+        'pppoe_action', 'ont_action', 'notify_whatsapp', 'color', 'active', 'sort_order',
     ];
 
     protected $casts = [
         'active' => 'boolean',
         'is_system' => 'boolean',
+        'notify_whatsapp' => 'boolean',
         'sort_order' => 'integer',
     ];
 
@@ -85,6 +86,19 @@ class TechnicalOrderDetail extends Model
     public static function catalogo()
     {
         return Cache::rememberForever(self::CACHE, fn () => self::orderBy('sort_order')->get()->keyBy('key'));
+    }
+
+    /**
+     * ¿Una orden con este detalle avisa al cliente por WhatsApp?
+     *
+     * Un detalle que no está en el catálogo —texto escrito a mano en
+     * órdenes antiguas— avisa, que es lo que hacía siempre: apagar un
+     * aviso tiene que ser una decisión de alguien, no la consecuencia
+     * de no encontrar una fila.
+     */
+    public static function avisaPorWhatsapp(?string $detalle): bool
+    {
+        return self::paraDetalle($detalle)?->notify_whatsapp ?? true;
     }
 
     /** ¿Este detalle dice EXPRESAMENTE qué hacer con algún equipo? */

@@ -757,8 +757,8 @@
                                                 @foreach($napBoxes as $caja)
                                                     <option value="{{ $caja->id }}"
                                                         @selected($contract->napPort?->nap_box_id === $caja->id)>
-                                                        {{ $caja->code }}
-                                                        @if($caja->name) — {{ $caja->name }} @endif
+                                                        {{ $caja->etiqueta }}
+                                                        @if($caja->etiqueta_secundaria) — {{ $caja->etiqueta_secundaria }} @endif
                                                         ({{ $caja->puertosDisponibles() }} libres)
                                                     </option>
                                                 @endforeach
@@ -843,7 +843,7 @@
                     <p class="col-6"><strong>NAP y puerto:</strong>
                         @if($contract->napPort)
                             <a href="{{ route('naps.show', $contract->napPort->nap_box_id) }}">
-                                {{ $contract->napPort->napBox->code }} / P{{ $contract->napPort->number }}
+                                {{ $contract->napPort->napBox->etiqueta }} / P{{ $contract->napPort->number }}
                             </a>
                         @else
                             {{ $contract->nap_port ?: '—' }}

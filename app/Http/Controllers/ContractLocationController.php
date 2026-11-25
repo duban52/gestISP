@@ -109,8 +109,8 @@ class ContractLocationController extends Controller
         return response()->json([
             'georreferenciado' => true,
             'sugerencias' => $suggestions->map(fn ($suggestion) => [
-                'caja' => $suggestion->napBox->code,
-                'nombre' => $suggestion->napBox->name,
+                'caja' => $suggestion->napBox->etiqueta,
+                'nombre' => $suggestion->napBox->etiqueta_secundaria,
                 'direccion' => $suggestion->napBox->address,
                 'zona' => $suggestion->napBox->zone?->name,
                 'distancia' => $suggestion->humanDistance(),

@@ -86,8 +86,8 @@ class ContractDiagnostics
 
         return [
             'caja_id' => $caja->id,
-            'caja' => $caja->code,
-            'nombre' => $caja->name,
+            'caja' => $caja->etiqueta,
+            'nombre' => $caja->etiqueta_secundaria,
             'puerto' => $puerto->number,
             'direccion' => $caja->address,
             'zona' => $caja->zone?->name,

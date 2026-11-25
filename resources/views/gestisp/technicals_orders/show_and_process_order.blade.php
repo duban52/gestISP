@@ -143,7 +143,7 @@
                         @foreach($napSuggestions as $sugerencia)
                             <tr @class(['table-success' => $loop->first && $sugerencia->hasRoom()])>
                                 <td>
-                                    <strong>{{ $sugerencia->napBox->code }}</strong>
+                                    <strong>{{ $sugerencia->napBox->etiqueta }}</strong>
                                     @if($sugerencia->napBox->zone)
                                         <br><small class="text-muted">{{ $sugerencia->napBox->zone->name }}</small>
                                     @endif
@@ -239,7 +239,7 @@
 
                         $cajasParaSelect = $napBoxes->map(fn ($caja) => [
                             'id' => $caja->id,
-                            'texto' => $caja->code
+                            'texto' => $caja->etiqueta
                                 . ($caja->zone ? ' — ' . $caja->zone->name : '')
                                 . ' (' . $caja->puertosDisponibles() . ' libres)',
                             'puertos' => $caja->ports
@@ -267,7 +267,7 @@
                             @if($technicalOrder->contract?->napPort)
                                 <p class="mb-2 small text-muted">
                                     Antes estaba en
-                                    <strong>{{ $technicalOrder->contract?->napPort->napBox->code }}</strong>,
+                                    <strong>{{ $technicalOrder->contract?->napPort->napBox->etiqueta }}</strong>,
                                     puerto {{ $technicalOrder->contract?->napPort->number }}.
                                 </p>
                             @endif
