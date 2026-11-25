@@ -167,7 +167,7 @@
                                         <th>Deja el contrato en</th>
                                         <th class="text-center">Cuenta PPPoE</th>
                                         <th class="text-center">ONT</th>
-                                        <th class="text-center">WhatsApp</th>
+                                        <th class="text-center">Avisa al cliente</th>
                                         <th class="text-center">Activo</th>
                                         <th class="text-right" style="width: 120px;">Acciones</th>
                                     </tr>

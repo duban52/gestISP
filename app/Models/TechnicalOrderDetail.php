@@ -89,14 +89,21 @@ class TechnicalOrderDetail extends Model
     }
 
     /**
-     * ¿Una orden con este detalle avisa al cliente por WhatsApp?
+     * ¿Una orden con este detalle avisa al cliente (correo y WhatsApp)?
+     *
+     * Apagado, el cliente no recibe NADA de esa orden: ni al crearla ni
+     * al cerrarla, por ningún canal. Los avisos al técnico no cambian.
+     *
+     * La columna se llama `notify_whatsapp` porque al principio solo
+     * apagaba WhatsApp; ya estaba en producción cuando pasó a cubrir
+     * también el correo, y renombrarla no valía una migración.
      *
      * Un detalle que no está en el catálogo —texto escrito a mano en
      * órdenes antiguas— avisa, que es lo que hacía siempre: apagar un
      * aviso tiene que ser una decisión de alguien, no la consecuencia
      * de no encontrar una fila.
      */
-    public static function avisaPorWhatsapp(?string $detalle): bool
+    public static function avisaAlCliente(?string $detalle): bool
     {
         return self::paraDetalle($detalle)?->notify_whatsapp ?? true;
     }

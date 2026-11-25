@@ -228,22 +228,21 @@
                         cliente. La baja definitiva es otra cosa: la decide un estado de baja.
                     </div>
 
-                    {{-- Avisar al cliente por WhatsApp al crear y al cerrar
-                         una orden de este tipo. Encendido por defecto: es
-                         lo que hacían todas hasta ahora. El correo no
-                         depende de esto. --}}
+                    {{-- Avisar al cliente (correo y WhatsApp) al crear y al
+                         cerrar una orden de este tipo. Encendido por
+                         defecto: es lo que hacían todas hasta ahora. --}}
                     <div class="form-group">
                         <div class="custom-control custom-switch">
                             <input type="checkbox" class="custom-control-input" id="detalle_whatsapp"
                                    name="notify_whatsapp" value="1" checked>
                             <label class="custom-control-label" for="detalle_whatsapp">
-                                <i class="fab fa-whatsapp text-success"></i>
-                                Avisar al cliente por WhatsApp
+                                <i class="fas fa-bell text-success"></i>
+                                Avisar al cliente
                             </label>
                         </div>
                         <small class="form-text text-muted">
-                            Cuando se crea y cuando se cierra una orden con este detalle.
-                            Apáguelo para trabajos que el cliente no necesita saber.
+                            Correo y WhatsApp, cuando se crea y cuando se cierra una orden con
+                            este detalle. Apagado, el cliente no recibe nada de esa orden.
                         </small>
                     </div>
 

@@ -301,6 +301,7 @@ class SystemCatalogController extends Controller
             'active' => $request->boolean('active'),
             // Una casilla desmarcada no viaja en el formulario: sin
             // `boolean()` apagarla no tendría efecto.
+            // «Avisar al cliente» (correo y WhatsApp); ver avisaAlCliente().
             'notify_whatsapp' => $request->boolean('notify_whatsapp'),
         ];
     }

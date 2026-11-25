@@ -374,7 +374,9 @@ class OdnTest extends TestCase
         $datos = $this->getJson(route('naps.map_data'))->assertOk()->json();
 
         $this->assertCount(1, $datos);
-        $this->assertSame('NAP001', $datos[0]['codigo']);
+        // Se muestra por el nombre que le puso el usuario; el código, al lado.
+        $this->assertSame('Parque', $datos[0]['codigo']);
+        $this->assertSame('NAP001', $datos[0]['nombre']);
         $this->assertEqualsWithDelta(25.0, $datos[0]['porcentaje'], 0.01);
         $this->assertSame(3, $datos[0]['disponibles']);
     }

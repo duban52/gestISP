@@ -306,7 +306,7 @@ class CatalogTest extends TestCase
             ->assertDontSee('Traslado de servicio');
     }
 
-    // ==================== Aviso por WhatsApp ====================
+    // ==================== Aviso al cliente ====================
 
     /** Los canales con los que saldrían los dos avisos al cliente. */
     private function canalesDelAviso(string $detalle): array
@@ -330,12 +330,12 @@ class CatalogTest extends TestCase
         }
     }
 
-    public function test_un_detalle_sin_whatsapp_solo_avisa_por_correo(): void
+    public function test_un_detalle_sin_aviso_no_le_manda_nada_al_cliente(): void
     {
         TechnicalOrderDetail::paraDetalle('Traslado de servicio')->update(['notify_whatsapp' => false]);
 
         foreach ($this->canalesDelAviso('Traslado de servicio') as $via) {
-            $this->assertSame(['mail'], $via);
+            $this->assertSame([], $via);
         }
     }
 
@@ -346,7 +346,7 @@ class CatalogTest extends TestCase
         }
     }
 
-    public function test_el_aviso_por_whatsapp_se_apaga_y_se_enciende_desde_el_catalogo(): void
+    public function test_el_aviso_al_cliente_se_apaga_y_se_enciende_desde_el_catalogo(): void
     {
         $this->entrarComo('superadministrador');
 
