@@ -173,7 +173,7 @@
 
                     <p class="mb-0">
                         <strong>Estado:</strong>
-                        <strong class="{{ $contract->status === 'Activo' ? 'text-success' : ($esBaja ? 'text-muted' : 'text-danger') }}"
+                        <strong class="badge badge-{{ \App\Models\ContractStatusOption::colorDe($contract->status) }}"
                                 @if($estadoActual?->description) title="{{ $estadoActual->description }}" @endif>
                             {{ $contract->status }}
                         </strong>

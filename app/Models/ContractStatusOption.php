@@ -54,6 +54,19 @@ class ContractStatusOption extends Model
         return Cache::rememberForever(self::CACHE, fn () => self::orderBy('sort_order')->get()->keyBy('name'));
     }
 
+    /**
+     * Color del badge de un estado: el que se configuró en el catálogo.
+     *
+     * LA ÚNICA FUENTE del color de un estado de contrato. Antes cada
+     * pantalla lo adivinaba por el texto («si dice activo, verde») y un
+     * estado nuevo —Exonerado— salía amarillo aunque en el catálogo se
+     * hubiera elegido azul. Un estado fuera del catálogo va en gris.
+     */
+    public static function colorDe(?string $nombre): string
+    {
+        return self::porNombre($nombre)?->color ?: 'secondary';
+    }
+
     /** El estado con ese nombre, o null si no está en el catálogo. */
     public static function porNombre(?string $nombre): ?self
     {

@@ -306,6 +306,23 @@ class CatalogTest extends TestCase
             ->assertDontSee('Traslado de servicio');
     }
 
+    public function test_el_listado_pinta_el_estado_con_el_color_del_catalogo(): void
+    {
+        $this->entrarComo('superadministrador');
+
+        ContractStatusOption::create([
+            'name' => 'Exonerado',
+            'color' => 'primary',
+            'bills' => false,
+            'active' => true,
+        ]);
+        $this->contrato(['status' => 'Exonerado']);
+
+        $this->get(route('contracts.index'))
+            ->assertOk()
+            ->assertSee('<span class="badge badge-primary">Exonerado</span>', false);
+    }
+
     // ==================== Aviso al cliente ====================
 
     /** Los canales con los que saldrían los dos avisos al cliente. */

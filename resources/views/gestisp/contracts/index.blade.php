@@ -54,12 +54,27 @@
          Filtros
          ============================================================ --}}
     <form method="GET" action="{{ route('contracts.index') }}" id="formFiltros">
-        <div class="card card-outline card-primary shadow-sm">
+        {{-- Plegado por defecto: la mayoría de las veces se entra a ver
+             el listado, no a filtrarlo. Se despliega con el botón +.
+             Si hay filtros aplicados, el
+             título dice cuántos, para que no queden escondidos. --}}
+        @php
+            $filtrosAplicados = collect($filtros)
+                ->except(['columnas', '_token', 'page', 'per_page'])
+                ->filter(fn ($v) => is_array($v) ? array_filter($v) !== [] : filled($v))
+                ->count();
+        @endphp
+        <div class="card card-outline card-primary shadow-sm collapsed-card">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-filter mr-1"></i> Filtros</h3>
+                <h3 class="card-title">
+                    <i class="fas fa-filter mr-1"></i> Filtros
+                    @if($filtrosAplicados > 0)
+                        <span class="badge badge-primary ml-1">{{ $filtrosAplicados }} aplicado(s)</span>
+                    @endif
+                </h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="Mostrar u ocultar los filtros">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -364,15 +379,8 @@
                                             @break
 
                                         @case('status')
-                                            <span class="badge badge-{{
-                                                // Las bajas en gris: no son una alerta, son
-                                                // un contrato terminado. Pintarlas de amarillo
-                                                // las hacia parecer algo pendiente de resolver.
-                                                \App\Billing\Enums\ContractStatus::esFinal($contract->status) ? 'secondary'
-                                                : (str_contains(strtolower($contract->status ?? ''), 'activo') ? 'success'
-                                                : (str_contains(strtolower($contract->status ?? ''), 'suspend') ? 'danger'
-                                                : (str_contains(strtolower($contract->status ?? ''), 'reconex') ? 'info' : 'warning')))
-                                            }}">{{ $contract->status }}</span>
+                                            {{-- El color es el del catálogo de estados. --}}
+                                            <span class="badge badge-{{ \App\Models\ContractStatusOption::colorDe($contract->status) }}">{{ $contract->status }}</span>
                                             @break
 
                                         @case('saldo_pendiente')

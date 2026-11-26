@@ -126,7 +126,7 @@
                                                     <td class="pl-4">{{ $contract->numero_visible }}</td>
                                                     <td>{{ $contract->neighborhood ?: '—' }}</td>
                                                     <td>{{ $contract->address ?: '—' }}</td>
-                                                    <td><span class="badge badge-secondary">{{ $contract->status }}</span></td>
+                                                    <td><span class="badge badge-{{ \App\Models\ContractStatusOption::colorDe($contract->status) }}">{{ $contract->status }}</span></td>
                                                     <td class="text-right pr-4">
                                                         <a href="{{ route('contracts.show', $contract) }}"
                                                            class="btn btn-xs btn-info">Detalles</a>

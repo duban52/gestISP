@@ -217,7 +217,7 @@
                                 <td>{{ trim(($contrato->client?->name ?? '') . ' ' . ($contrato->client?->last_name ?? '')) ?: '—' }}</td>
                                 <td><small>{{ $contrato->address }}</small></td>
                                 <td>
-                                    <span class="badge badge-{{ str_contains(strtolower($contrato->status ?? ''), 'activo') ? 'success' : 'warning' }}">
+                                    <span class="badge badge-{{ \App\Models\ContractStatusOption::colorDe($contrato->status) }}">
                                         {{ $contrato->status }}
                                     </span>
                                 </td>
