@@ -34,7 +34,24 @@
     <div class="card shadow-sm">
         <div class="card-header">
             <div class="row align-items-end">
-                <div class="col-md-4 form-group mb-0">
+                {{-- Buscador: parte del nombre, el código o la dirección;
+                     el mapa va a la caja y la abre. Las sugerencias son un
+                     <datalist> del navegador. --}}
+                <div class="col-md-3 form-group mb-0">
+                    <label class="mb-1" for="buscarCaja">Buscar caja</label>
+                    <div class="input-group">
+                        <input type="search" id="buscarCaja" class="form-control" list="listaCajas"
+                               placeholder="Nombre, código o dirección" autocomplete="off">
+                        <div class="input-group-append">
+                            <button type="button" id="btnBuscarCaja" class="btn btn-outline-secondary" title="Ubicar en el mapa">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <datalist id="listaCajas"></datalist>
+                    <small id="buscarCajaAviso" class="text-danger d-none">No hay ninguna caja con ese nombre.</small>
+                </div>
+                <div class="col-md-3 form-group mb-0">
                     <label class="mb-1">Red</label>
                     <select id="filtroRed" class="form-control">
                         <option value="">Todas las redes</option>
@@ -43,7 +60,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-4 form-group mb-0">
+                <div class="col-md-2 form-group mb-0">
                     <label class="mb-1">Mostrar</label>
                     <select id="filtroCupo" class="form-control">
                         <option value="">Todas</option>
@@ -119,6 +136,31 @@
             justify-content: center;
         }
 
+        /* Nombre de la caja, siempre visible al lado del círculo. Sutil a
+           propósito: texto pequeño sobre blanco translúcido, sin borde ni
+           flecha, para que se lea sin tapar el mapa. Con el mapa muy
+           alejado se esconde (`.sin-etiquetas`): serían solo ruido. */
+        .leaflet-tooltip.etiqueta-nap {
+            background: rgba(255, 255, 255, .85);
+            border: 0;
+            box-shadow: none;
+            border-radius: 3px;
+            padding: 0 4px;
+            color: #212529;
+            font-size: .72rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .leaflet-tooltip.etiqueta-nap::before { display: none; }
+        .sin-etiquetas .leaflet-tooltip.etiqueta-nap { display: none; }
+
+        /* La caja que se acaba de buscar late un momento. */
+        .marcador-nap.buscada { animation: pulso-nap 1s ease-out 3; }
+        @keyframes pulso-nap {
+            0%   { box-shadow: 0 0 0 0 rgba(0, 123, 255, .8); }
+            100% { box-shadow: 0 0 0 18px rgba(0, 123, 255, 0); }
+        }
+
         .nap-success { background: #28a745; }
         .nap-info    { background: #17a2b8; }
         .nap-warning { background: #ffc107; color: #212529; }
@@ -162,6 +204,17 @@
             mapa.addLayer(grupo);
 
             let cajas = [];
+            let marcadores = {};   // id de caja -> marcador, para el buscador
+
+            // Por debajo de este zoom no se pintan los nombres: el mapa
+            // quedaría lleno de texto encimado.
+            const ZOOM_ETIQUETAS = 14;
+
+            function alternarEtiquetas() {
+                $('#mapaRed').toggleClass('sin-etiquetas', mapa.getZoom() < ZOOM_ETIQUETAS);
+            }
+
+            mapa.on('zoomend', alternarEtiquetas);
 
             function colorDe(porcentaje) {
                 if (porcentaje >= 90) return 'danger';
@@ -180,6 +233,7 @@
                 });
 
                 grupo.clearLayers();
+                marcadores = {};
 
                 visibles.forEach(function (caja) {
                     const color = colorDe(caja.porcentaje);
@@ -193,24 +247,25 @@
 
                     const marcador = L.marker([caja.lat, caja.lng], { icon: icono });
 
-                    // Al pasar el puntero: lo que hace falta saber sin
-                    // tener que abrir la caja.
-                    marcador.bindTooltip(
-                        '<strong>' + escapar(caja.codigo) + '</strong>' +
-                        (caja.nombre ? '<br>' + escapar(caja.nombre) : '') +
-                        '<br>Ocupación: <strong>' + caja.porcentaje + '%</strong>' +
-                        ' (' + caja.ocupados + '/' + caja.capacidad + ')' +
-                        '<br>Libres: <strong>' + caja.disponibles + '</strong>' +
-                        (caja.zona ? '<br>Zona: ' + escapar(caja.zona) : ''),
-                        { direction: 'top', offset: [0, -12] },
-                    );
+                    // El nombre, siempre a la vista: no hay que pasar el
+                    // puntero para saber qué caja es. El detalle va en el
+                    // globo que se abre al hacer clic.
+                    marcador.bindTooltip(escapar(caja.codigo), {
+                        permanent: true,
+                        direction: 'right',
+                        offset: [15, 0],
+                        className: 'etiqueta-nap',
+                    });
 
                     marcador.bindPopup(
                         '<div style="min-width:190px">' +
-                        '<h6 class="mb-1">' + escapar(caja.codigo) + '</h6>' +
+                        '<h6 class="mb-1">' + escapar(caja.codigo) +
+                            (caja.nombre ? ' <small class="text-muted">' + escapar(caja.nombre) + '</small>' : '') + '</h6>' +
                         (caja.direccion ? '<div class="text-muted small">' + escapar(caja.direccion) + '</div>' : '') +
                         '<hr class="my-2">' +
-                        '<div><strong>' + caja.disponibles + '</strong> puertos libres de ' + caja.capacidad + '</div>' +
+                        '<div><strong>' + caja.disponibles + '</strong> puertos libres de ' + caja.capacidad +
+                            ' <span class="text-muted">(' + caja.porcentaje + '% ocupada)</span></div>' +
+                        (caja.zona ? '<div class="small text-muted">Zona: ' + escapar(caja.zona) + '</div>' : '') +
                         (caja.puerto_pon ? '<div class="small text-muted">PON ' + escapar(caja.puerto_pon) +
                             (caja.olt ? ' · ' + escapar(caja.olt) : '') + '</div>' : '') +
                         '<a href="' + caja.url + '" class="btn btn-sm btn-primary btn-block mt-2">Ver la caja</a>' +
@@ -218,6 +273,7 @@
                     );
 
                     grupo.addLayer(marcador);
+                    marcadores[caja.id] = marcador;
                 });
 
                 $('#contadorCajas').text(
@@ -229,7 +285,69 @@
                 if (visibles.length > 0) {
                     mapa.fitBounds(grupo.getBounds(), { padding: [40, 40], maxZoom: 16 });
                 }
+
+                alternarEtiquetas();
             }
+
+            /* ============================================================
+               Buscador de cajas
+               ============================================================ */
+            function llenarSugerencias() {
+                $('#listaCajas').html(cajas.map(function (c) {
+                    const extra = [c.nombre, c.direccion].filter(Boolean).join(' · ');
+                    return '<option value="' + escapar(c.codigo) + '">' + escapar(extra) + '</option>';
+                }).join(''));
+            }
+
+            // Sin mayúsculas ni tildes: "Parque Río" se encuentra con "parque rio".
+            function normalizar(v) {
+                return String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            }
+
+            function buscar() {
+                const texto = normalizar($('#buscarCaja').val());
+                $('#buscarCajaAviso').addClass('d-none');
+
+                if (!texto) return;
+
+                // Primero la coincidencia exacta (lo elegido en la lista);
+                // si no, la primera que contenga el texto.
+                const caja = cajas.find(c => normalizar(c.codigo) === texto || normalizar(c.nombre) === texto)
+                    || cajas.find(c => [c.codigo, c.nombre, c.direccion].some(v => normalizar(v).includes(texto)));
+
+                if (!caja) {
+                    $('#buscarCajaAviso').removeClass('d-none');
+                    return;
+                }
+
+                // Si el filtro de cupo la escondía, se quita: buscar una
+                // caja y no verla sería peor.
+                if (!marcadores[caja.id]) {
+                    $('#filtroCupo').val('');
+                    pintar();
+                }
+
+                const marcador = marcadores[caja.id];
+
+                grupo.zoomToShowLayer(marcador, function () {
+                    mapa.setView(marcador.getLatLng(), Math.max(mapa.getZoom(), 17));
+                    marcador.openPopup();
+
+                    const $circulo = $(marcador.getElement()).find('.marcador-nap');
+                    $circulo.removeClass('buscada');
+                    setTimeout(() => $circulo.addClass('buscada'), 10);
+                });
+            }
+
+            $('#btnBuscarCaja').on('click', buscar);
+            $('#buscarCaja').on('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); buscar(); }
+            });
+            // Elegir una opción de la lista ya es buscar.
+            $('#buscarCaja').on('input', function () {
+                const v = normalizar(this.value);
+                if (v && cajas.some(c => normalizar(c.codigo) === v)) buscar();
+            });
 
             function cargar() {
                 $('#cargandoMapa').show();
@@ -241,6 +359,7 @@
                     .then(r => r.json())
                     .then(function (datos) {
                         cajas = datos;
+                        llenarSugerencias();
                         pintar();
                     })
                     .catch(() => $('#contadorCajas').text('No se pudieron cargar las cajas.'))
